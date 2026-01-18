@@ -1,0 +1,22 @@
+# 繼承官方鏡像
+FROM runpod/comfyui:latest
+
+# 1. 強制抹除官方 Entrypoint，防止它執行那個卡住的 /start.sh
+ENTRYPOINT []
+
+# 2. 確保你的插件已經在映像檔裡裝好了
+WORKDIR /workspace/ComfyUI/custom_nodes
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git || (cd ComfyUI-Manager && git pull) && \
+    git clone https://github.com/rgthree/rgthree-comfy.git || (cd rgthree-comfy && git pull) && \
+    git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git || (cd ComfyUI-Impact-Pack && git pull)
+
+# 3. 複製你的路徑設定檔
+COPY extra_model_paths.yaml /workspace/ComfyUI/extra_model_paths.yaml
+
+# 4. 移除會導致衝突的數據庫文件 (確保萬無一失)
+RUN rm -f /workspace/filebrowser.db /workspace/runpod-slim/filebrowser.db
+
+# 5. 最終啟動指令：繞過所有官方邏輯，直接啟動服務
+ENV SHELL=/bin/bash
+WORKDIR /workspace/ComfyUI
+CMD ["/bin/bash", "-c", "python3 main.py --listen 0.0.0.0 --port 8188 & jupyter lab --allow-root --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --notebook-dir=/workspace"]
