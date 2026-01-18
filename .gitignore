@@ -1,0 +1,23 @@
+# --- Python 與環境相關 ---
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+.env
+requirements.txt.bak
+
+# --- ComfyUI 與模型相關 (避免上傳巨大的 LoRA) ---
+**/models/
+**/output/
+**/*.safetensors
+**/*.ckpt
+
+# --- RunPod 與測試產出 (忽略你提到的影片檔) ---
+**/*.mp4
+**/*.png
+**/*.jpg
+**/*.json
+!run_api.py  # 這是例外：確保你的 API 腳本不會被誤殺
+
+# --- 系統檔案 ---
+.DS_Store
+.vscode/
