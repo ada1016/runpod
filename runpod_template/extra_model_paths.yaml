@@ -1,0 +1,15 @@
+comfyui:
+    base_path: /workspace/temp/ 
+    checkpoints: models/checkpoints/
+    clip: models/clip/
+    clip_vision: models/clip_vision/
+    configs: models/configs/
+    controlnet: models/controlnet/
+    embeddings: models/embeddings/
+    diffusion_models: models/diffusion_models/
+    loras: models/loras/
+    upscale_models: models/upscale_models/
+    text_encoders: models/text_encoders
+    vae: models/vae/
+    unet: models/unet/
+    workflows: user/default/workflows/
