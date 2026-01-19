@@ -105,4 +105,7 @@ pkill -f main.py
 
 # 進入目錄並啟動 ComfyUI
 cd /workspace/ComfyUI
+# 在啟動 main.py 之前加入這行
+echo "正在強制修正環境依賴衝突..."
+/workspace/ComfyUI/venv/bin/python -m pip install --upgrade transformers tokenizers huggingface_hub packaging
 ./venv/bin/python main.py --listen 0.0.0.0 --port 8188 --preview-method auto
