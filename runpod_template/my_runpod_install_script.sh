@@ -32,7 +32,7 @@ fi
 
 # --- 第二部分：路徑與配置 (每次開機執行) ---
 echo "--- 正在更新模型路徑配置 (extra_model_paths.yaml) ---"
-wget https://raw.githubusercontent.com/ada1016/runpod_template/main/extra_model_paths.yaml -O /workspace/ComfyUI/extra_model_paths.yaml
+wget https://raw.githubusercontent.com/ada1016/runpod/runpod_template/main/extra_model_paths.yaml -O /workspace/ComfyUI/extra_model_paths.yaml
 
 echo "--- 正在預建模型子目錄以對齊 YAML 配置 ---"
 mkdir -p /workspace/temp/models/{checkpoints,clip,clip_vision,configs,controlnet,embeddings,diffusion_models,loras,upscale_models,vae,unet,text_encoders}
