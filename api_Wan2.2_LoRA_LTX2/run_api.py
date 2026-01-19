@@ -2,7 +2,7 @@ from generate_video_client import GenerateVideoClient
 
 # 1. 初始化 (保持不變)
 client = GenerateVideoClient(
-    runpod_endpoint_id="6x34mn7mvzz44f",
+    runpod_endpoint_id="ik04l9es0bpylx",
     runpod_api_key="rpa_G9Q9KKTZT2Z8256M8LN76WT4E9ONUCVA0LJ0FHHU569s66"
 )
 
@@ -20,7 +20,7 @@ lora_pairs = [
 # 3. 呼叫函數 (加入 lora_pairs 參數)
 result = client.create_video_from_image(
     image_path="./ComfyUI_00007_.png",
-    prompt="sks_ava, beautiful nude asian girl, perfect proportions, small firm breasts, hard pink nipples, completely exposed pussy, legs spread very wide in M-shape pose, both arms raised and stretched upward, wrists crossed above head, vulnerable and aroused expression, heavy breathing, glistening wet pussy, subtle hip thrusting motion, bedroom at night, warm dim lighting, cinematic depth of field, explicit genitals, ultra detailed anatomy, photorealistic, masterpiece",
+    prompt="sks_ava, A woman is lying on her back with her legs spread looking up at the viewer. She has black hair and is wearing a black lace bra and a pink lace thong. The woman pulls down her bra strap with her right hand as her firm perky breasts flop out and are fully visible.",
     negative_prompt="blurry, distorted",
     width=480,
     height=832,

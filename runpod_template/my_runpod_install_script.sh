@@ -51,7 +51,7 @@ if [ -n "$HF_TOKEN" ]; then
     # 1. 強制升級套件 (解決 1.3.2 過舊且缺少模組的問題)
     /workspace/ComfyUI/venv/bin/python -m pip install -U huggingface_hub -q
 
-    LORA_DIR="/workspace/temp/models/loras"
+    LORA_DIR="/workspace/loras"
     HF_REPO="ada1016/difusion-pipe-train"
     
     files=(
