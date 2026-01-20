@@ -5,4 +5,4 @@ python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip  # 建議先升級 pip
 pip install -r requirements.txt
-python run_api.py
+python run_api.py f01vlwxnwwqsp4 rpa_G9Q9KKTZT2Z8256M8LN76WT4E9ONUCVA0LJ0FHHU569s66
