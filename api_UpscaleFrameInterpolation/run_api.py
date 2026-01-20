@@ -1,20 +1,10 @@
-import sys
 from generate_video_client import GenerateVideoClient
 
-# 檢查是否有傳入參數，否則使用預設值
-endpoint_id = sys.argv[1] if len(sys.argv) > 1 else "ik04l9es0bpylx"
-api_key = sys.argv[2] if len(sys.argv) > 2 else "rpa_G9Q9KKTZT2Z8256M8LN76WT4E9ONUCVA0LJ0FHHU569s66"
-from generate_video_client import GenerateVideoClient
-
-# 1. 初始化 (使用從 shell 傳進來的變數)
+# 1. 初始化 (保持不變)
 client = GenerateVideoClient(
-    runpod_endpoint_id=endpoint_id,
-    runpod_api_key=api_key
+    runpod_endpoint_id="f01vlwxnwwqsp4",
+    runpod_api_key="rpa_G9Q9KKTZT2Z8256M8LN76WT4E9ONUCVA0LJ0FHHU569s66"
 )
-
-
-
-
 
 # 2. 定義新版 Release Note 提到的 LoRA Pairs
 # 這裡填入你放在 /workspace/temp/models/loras 裡的真實檔名
