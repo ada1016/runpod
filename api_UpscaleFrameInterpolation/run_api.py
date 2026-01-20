@@ -19,13 +19,10 @@ endpoint = runpod.Endpoint(endpoint_id)
 # 根據該鏡像的結構，通常需要傳入圖片/影片的 URL 以及放大倍率
 input_payload = {
     "input": {
-        "task_type": "upscale_and_interpolation",      # 任務類型：upscale 或 interpolation
-        "upscale_factor": 2,         # 放大倍率
-        "network_volume": True,
-        "video_path": "/workspace/temp/ava20070909.avi", 
-        "upscale_factor": 2
-        # 如果是補幀任務可能需要額外參數
-        # "fps_factor": 2, 
+        "task_type": "upscale_and_interpolation",
+        "upscale_factor": 2,
+        "video_path": "/runpod-volume/temp/clean_video.mp4",
+        "network_volume": true
     }
 }
 
@@ -74,4 +71,4 @@ def run_async_request():
 
 if __name__ == "__main__":
     # 建議大型影像處理使用非同步模式，避免 Connection Timeout
-    run_async_request()
+    run_sync_request()
