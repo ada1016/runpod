@@ -1,8 +1,9 @@
 To attach from Frida, workaround
+```shell
     LLDB console
     pgrep -i "GalaxyDefense"
     lldb -p 5123
-
+```
 Frida console
     frida -p 5123
 
@@ -21,10 +22,12 @@ These messages come from:  lua_load / luaL_loadbuffer (internals)
 
 
 the code to display app location
+```Frida
 (function() {
     var path = ObjC.classes.NSBundle.mainBundle().bundlePath().toString();
     console.log("[+] 遊戲完整路徑: " + path);
 })();
+```
 
 
 
