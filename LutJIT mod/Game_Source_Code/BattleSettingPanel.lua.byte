@@ -1,0 +1,457 @@
+local M = class("BattleSettingPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	tmpTab1 = Types.TMP_Text,
+	tmpTab2 = Types.TMP_Text,
+	imgTab1 = Types.Image,
+	imgTab2 = Types.Image,
+	goBattleInfo = Types.GameObject,
+	goEnemys = Types.GameObject,
+	tfRewardArea = Types.Transform,
+	tfWeapons = Types.Transform,
+	goNoRewards = Types.GameObject,
+	tfStatsParent = Types.Transform,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	goBigEnemyContent = Types.GameObject,
+	goBigEnemyTitle = Types.GameObject,
+	tmpBigEnemyTitle = Types.TMP_Text,
+	tmpEnemyTitle = Types.TMP_Text,
+	goBigEnemy = Types.GameObject,
+	tfDots = Types.Transform,
+	goHaveBigEnemy = Types.GameObject,
+	goNoBigEnemy = Types.GameObject,
+	goSmallEnemyContent = Types.GameObject,
+	goSmallEnemyTitle = Types.GameObject,
+	tmpSmallEnemyTitle = Types.TMP_Text,
+	goEnemy1 = Types.GameObject,
+	goEnemy2 = Types.GameObject,
+	goEnemy3 = Types.GameObject,
+	btnExit = Types.Button,
+	btnContinue = Types.Button,
+	btnSettings = Types.Button,
+	goCrisisZoneRewardTip = Types.GameObject
+}
+local ItemWidget = requireLua("ItemWidget")
+local EnemyWidget = requireLua("EnemyWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._rewards = {}
+	self._tfEnemiesContent = self._goEnemy1.transform.parent
+
+	EnemyWidget.noCreate(self._goBigEnemy)
+
+	self._goEnemies = {
+		self._goEnemy1,
+		self._goEnemy2,
+		self._goEnemy3
+	}
+	self._tfEnemiesContent = self._goEnemy1.transform.parent
+
+	for i = 1, #self._goEnemies do
+		EnemyWidget.noCreate(self._goEnemies[i])
+		self:setClickWithoutAction(self["_goEnemy" .. i]._btnClick, function ()
+			self["_goEnemy" .. i]:clickCallback()
+		end)
+	end
+
+	self:setClickWithoutAction(self._goBigEnemy._btnClick, function ()
+		self._goBigEnemy:clickCallback()
+	end)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClick(self._btnTab1, function ()
+		self:changeTab(1)
+	end)
+	self:setClick(self._btnTab2, function ()
+		self:changeTab(2)
+	end)
+	self:setClick(self._btnLeft, function ()
+		self:changeSelectBigEnemy(-1)
+	end)
+	self:setClick(self._btnRight, function ()
+		self:changeSelectBigEnemy(1)
+	end)
+	self:setClick(self._btnExit, function ()
+		UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+			_type = 2,
+			_content = SID.CONFIREM_EXIT_BATTLE,
+			_confirmCallback = function ()
+				self:closePanel()
+				BattleManager:forceSettleBattle(D.BattleResult.Lose, true)
+			end,
+			_cancelCallback = function ()
+			end
+		})
+	end)
+	self:setClick(self._btnContinue, function ()
+		BattleManager:revertStopTime()
+		self._panel:updateStop()
+		self:closePanel()
+	end)
+	self:setClick(self._btnClose, function ()
+		BattleManager:revertStopTime()
+		self._panel:updateStop()
+		self:closePanel()
+	end)
+	self:setClick(self._btnSettings, function ()
+		BattleManager:stopTime()
+		UIManager.openPanel(PrefabDefine.BattleProfilerPanel)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(battlepanel)
+	self._battleSession = BattleManager:getSession()
+	self._msId = self._battleSession._msId
+	self._msType = self._battleSession._msType
+	self._stats = self._battleSession:getBattleStats()
+	self._panel = battlepanel
+	self._tabIdx = nil
+
+	self:changeTab(1)
+end
+
+function M:closePanel()
+	V.__viewMissionInfoMsId = nil
+	V.__viewMissionInfoMsType = nil
+
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:showTab()
+end
+
+function M:changeTab(tabIdx)
+	if self._tabIdx == tabIdx then
+		return
+	end
+
+	self._tabIdx = tabIdx
+
+	self:updateSelectTab()
+	self:showTab()
+end
+
+function M:updateSelectTab()
+	if self._tabIdx == 1 then
+		self._imgTab1.color = Color.str2Static("1E3B3E")
+		self._tmpTab1.color = Color.str2Static("7ECDBC")
+		self._imgTab2.color = Color.str2Static("112022")
+		self._tmpTab2.color = Color.str2Static("4C897C")
+
+		LuaUnity.setTPSprite(self._imgTab1:GetComponent("Image"), "general/g_bg_10_2")
+		LuaUnity.setTPSprite(self._imgTab2:GetComponent("Image"), "general/g_bg_11_2")
+		self._goBattleInfo:SetActive(true)
+		self._goEnemys:SetActive(false)
+	else
+		self._imgTab2.color = Color.str2Static("1E3B3E")
+		self._tmpTab2.color = Color.str2Static("7ECDBC")
+		self._imgTab1.color = Color.str2Static("112022")
+		self._tmpTab1.color = Color.str2Static("4C897C")
+
+		LuaUnity.setTPSprite(self._imgTab1:GetComponent("Image"), "general/g_bg_10_2")
+		LuaUnity.setTPSprite(self._imgTab2:GetComponent("Image"), "general/g_bg_11")
+		self._goEnemys:SetActive(true)
+		self._goBattleInfo:SetActive(false)
+		self:initEnemy()
+	end
+end
+
+function M:showTab()
+	if self._tabIdx == 1 then
+		self:updateRewards()
+		self:updateDamage()
+	else
+		if self._msType == D.MissionType.SparkScout then
+			self._tmpEnemyTitle:SetLocalize(SID.STR_CURRENT_PERIOD_ENEMY)
+		else
+			self._tmpEnemyTitle:SetLocalize(SID.MISSION_ENEMY)
+		end
+
+		self:initEnemy()
+		self:updateSelectBigEnemy()
+	end
+end
+
+function M:changeSelectBigEnemy(offset)
+	if #self._bigEnemyCids == 0 then
+		return
+	end
+
+	self._bigEnemyIdx = self._bigEnemyIdx + offset
+
+	if self._bigEnemyIdx < 1 then
+		self._bigEnemyIdx = self._bigEnemyIdx + #self._bigEnemyCids
+	end
+
+	if self._bigEnemyIdx > #self._bigEnemyCids then
+		self._bigEnemyIdx = self._bigEnemyIdx - #self._bigEnemyCids
+	end
+
+	self:updateSelectBigEnemy()
+end
+
+function M:updateSelectBigEnemy()
+	if #self._bigEnemyCids == 0 then
+		return
+	end
+
+	local idx = self._bigEnemyIdx
+	local dotCount = self._tfDots.childCount
+	local max = math.max(dotCount, #self._bigEnemyCids)
+	local tempDot = self._tfDots:GetChild(0)
+
+	for i = 1, max do
+		if i <= #self._bigEnemyCids then
+			local tfDot = nil
+
+			if i <= dotCount then
+				tfDot = self._tfDots:GetChild(i - 1)
+
+				tfDot:SetActive(#self._bigEnemyCids > 1)
+			else
+				tfDot = GameObject.Instantiate(tempDot, self._tfDots)
+			end
+
+			if i == idx then
+				LuaUnity.setTPSprite(tfDot:GetComponent("Image"), "general/g_bg_24_2")
+			else
+				LuaUnity.setTPSprite(tfDot:GetComponent("Image"), "general/g_bg_24")
+			end
+		else
+			local tfDot = self._tfDots:GetChild(i - 1)
+
+			tfDot:SetActive(false)
+		end
+	end
+
+	self._goBigEnemy:init(self._bigEnemyCids[idx])
+end
+
+function M:initEnemy()
+	if self._initEnemy then
+		return
+	end
+
+	self._initEnemy = true
+	self._bigEnemyCids = {}
+	self._bigEnemyIdx = 1
+	local haveBoss = false
+	local haveElite = false
+	local showTitle = false
+	local smallEnemyScale = 1
+	self._enemyCids = {}
+
+	if self._msType == D.MissionType.SparkScout then
+		local enemies = P._playerActivitySparkScout:getBattleEnemies() or {}
+
+		for i = 1, #enemies do
+			local eData = enemies[i]
+
+			if eData[1] == 0 then
+				haveElite = true
+				self._bigEnemyCids[#self._bigEnemyCids + 1] = eData[2]
+			elseif eData[2] == 0 then
+				self._enemyCids[#self._enemyCids + 1] = eData[1]
+			end
+		end
+	elseif self._msType == D.MissionType.ArkRebuild then
+		local allEnemy = P._playerActivityArkRebuild:getMissionEnemiess(self._msId) or {}
+
+		for i = 1, #allEnemy do
+			local eid = allEnemy[i]
+			local isBoss = D._battleEnemyConfig[eid]._type == 3
+			local isElite = D._battleEnemyConfig[eid]._type == 2
+
+			if isBoss then
+				table.insert(self._bigEnemyCids, eid)
+
+				haveBoss = true
+			elseif isElite then
+				table.insert(self._bigEnemyCids, eid)
+
+				haveElite = true
+			else
+				table.insert(self._enemyCids, eid)
+			end
+		end
+	elseif self._msType == D.MissionType.CrisisZone then
+		showTitle = true
+
+		self._tmpSmallEnemyTitle:SetLocalize(SID.STR_ELITE_ORDINARY)
+		self._tmpBigEnemyTitle:SetLocalize(SID.STR_ELITE_COMMANDER)
+
+		self._goSmallEnemyContent:GetComponent("LayoutElement").preferredHeight = 200
+		smallEnemyScale = 0.8
+		local diff = P._playerCrisisZone:getDifficultyByMissionId(self._msId)
+		local allEnemy = D._missionCrisisEnemyByDifficulty[diff]
+		haveElite = true
+
+		for i = 1, #allEnemy do
+			local eid = allEnemy[i]
+			local isCommander = not D._battleEnemyConfig[eid]._originId
+
+			if isCommander then
+				table.insert(self._bigEnemyCids, eid)
+			else
+				table.insert(self._enemyCids, eid)
+			end
+		end
+	else
+		self._bossCid = P._playerMission:readBoss(self._msId, self._msType)
+		local haveBoss = self._bossCid ~= nil and self._bossCid ~= 0
+
+		if haveBoss then
+			table.insert(self._bigEnemyCids, self._bossCid)
+		end
+
+		self._eliteEnemyCids = lc.unique(P._playerMission:readElite(self._msId, self._msType) or {})
+		haveElite = self._eliteEnemyCids and #self._eliteEnemyCids > 0
+
+		if haveElite then
+			for i, v in ipairs(self._eliteEnemyCids) do
+				if not table.findArray(self._bigEnemyCids, v) then
+					table.insert(self._bigEnemyCids, v)
+				end
+			end
+		end
+
+		self._enemyCids = lc.unique(P._playerMission:readEnemy(self._msId, self._msType) or {})
+	end
+
+	self._goBigEnemyTitle:SetActive(showTitle)
+	self._goSmallEnemyTitle:SetActive(showTitle)
+	self._goBigEnemyContent:SetActive(haveBoss or haveElite)
+
+	if haveBoss or haveElite then
+		self._goBigEnemy:init(self._bigEnemyCids[1])
+	end
+
+	self._btnLeft:SetActive(#self._bigEnemyCids > 1)
+	self._btnRight:SetActive(#self._bigEnemyCids > 1)
+	self._goHaveBigEnemy:SetActive(haveBoss or haveElite)
+	self._goNoBigEnemy:SetActive(not haveBoss and not haveElite)
+
+	local goLine = self._tfEnemiesContent:GetChild(1).gameObject
+	local max = math.max(#self._enemyCids, #self._goEnemies)
+
+	for i = 1, max do
+		local widget = self._goEnemies[i]
+
+		if i <= #self._enemyCids then
+			if not self._goEnemies[i] then
+				GameObject.Instantiate(goLine, self._tfEnemiesContent)
+
+				widget = GameObject.Instantiate(self._goEnemies[1], self._tfEnemiesContent)
+
+				EnemyWidget.noCreate(widget)
+
+				self._goEnemies[i] = widget
+
+				self:setClickWithoutAction(self._goEnemies[i]._btnClick, function ()
+					self._goEnemies[i]:clickCallback()
+				end)
+			end
+
+			widget:init(self._enemyCids[i])
+			widget:setIconScale(smallEnemyScale)
+			widget:SetActive(true)
+
+			if i > 1 then
+				self._tfEnemiesContent:GetChild(2 * i - 1 - 2):SetActive(true)
+			end
+		else
+			widget:SetActive(false)
+
+			if i > 1 then
+				self._tfEnemiesContent:GetChild(2 * i - 1 - 2):SetActive(false)
+			end
+		end
+	end
+
+	if #self._enemyCids > 3 then
+		local cellWidth = 236.66666666666666
+		local contentWidth = 355
+
+		lc.setAnchoredPosition(self._tfEnemiesContent, cellWidth * (#self._enemyCids - 3) / 2 - cellWidth / 2, 0)
+	end
+end
+
+function M:updateDamage()
+	if self._msType == D.MissionType.SparkScout then
+		local otherSession = BattleManager:getSession(2)
+		local go = requireLua("SparkScoutStatsWidget_Setting", true).create(self._tfStatsParent)
+
+		lc.setAnchoredPosition(go, 0, 0)
+		go:updateUI(self._stats.weapons, otherSession:getBattleStats().weapons, self)
+	else
+		local go = requireLua("StatsWidget").createSetting(self._tfStatsParent)
+
+		lc.setAnchoredPosition(go, 0, 0)
+		go:updateUI(self._stats.weapons, self)
+	end
+end
+
+function M:updateRewards()
+	V.__viewMissionInfoMsId = self._msId
+	V.__viewMissionInfoMsType = self._msType
+	local rewards = {}
+
+	if self._msType == D.MissionType.Dome then
+		rewards = P._playerDome:getSettleRewards(self._msId - 1 + self._stats.level)
+	elseif self._msType == D.MissionType.ArkRebuild then
+		rewards = P._playerActivityArkRebuild:getSettleRewards(self._msId)
+	elseif self._msType == D.MissionType.CrisisZone then
+		rewards = P._playerCrisisZone:getSettleRewards(self._msId)
+	elseif self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite or self._msType == D.MissionType.GlobalDefense then
+		local wave = self._stats.level
+		rewards = P._playerMission:readMissionRewardsByWave(self._msId, self._msType, wave)
+	elseif self._msType == D.MissionType.SparkScout then
+		rewards = P._playerActivitySparkScout:getSettleRewards(self._msId)
+	end
+
+	self._goNoRewards:SetActive(#rewards == 0 and self._msType ~= D.MissionType.CrisisZone)
+	self._goCrisisZoneRewardTip:SetActive(self._msType == D.MissionType.CrisisZone)
+
+	if self._msType == D.MissionType.CrisisZone then
+		local sid = BattleManager._isTrainMode and SID.TIP_CRISIS_ZONE_PAUSE_BATTLE_REWWARD_TRAIN or SID.TIP_CRISIS_ZONE_PAUSE_BATTLE_REWWARD
+
+		self._goCrisisZoneRewardTip:GetComponent("TMP_Text"):SetLocalize(sid)
+	end
+
+	for i = 1, math.max(#self._rewards, #rewards) do
+		if i <= #rewards then
+			local reward = rewards[i]
+
+			if self._rewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._rewards[i] = goItemWidget
+
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			self._rewards[i]:SetActive(true)
+			self._rewards[i]:init(reward[1], reward[2])
+		else
+			self._rewards[i]:SetActive(false)
+		end
+	end
+end
+
+return M

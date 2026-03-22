@@ -1,0 +1,2914 @@
+local M = class("BattleSession")
+local table = table
+local math = math
+local lc = lc
+local requireLua = requireLua
+local BattleDefine = BattleDefine
+local BattlePropEnum = BattlePropEnum
+local BattleTriggerEnum = BattleTriggerEnum
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+local BattleEffectEnum = BattleEffectEnum
+local BattleMathLib = BattleMathLib
+local BattleEntityFactory = BattleEntityFactory
+local SimpleEntityFactory = requireLua("SimpleEntityFactory")
+local BattleActor = requireLua("BattleActor")
+local BuffEffectScope = BattleDefine.BuffEffectScope
+local BuffEffectWhen = BattleDefine.BuffEffectWhen
+local DamageReason = BattleDefine.DamageReason
+local DestroyReason = BattleDefine.DestroyReason
+local check_out_boundary = BattleMathLib.check_out_boundary
+local circle_circle_intersect = BattleMathLib.circle_circle_intersect
+local rectangle_circle_intersect_align_axis = BattleMathLib.rectangle_circle_intersect_align_axis
+local rectangle_circle_intersect_not_align_axis = BattleMathLib.rectangle_circle_intersect_not_align_axis
+local is_ray_segment_intersect = BattleMathLib.is_ray_segment_intersect
+local is_ray_circle_intersect = BattleMathLib.is_ray_circle_intersect
+local obb_circle_intersect = BattleMathLib.obb_circle_intersect
+local triangle_circle_intersect = BattleMathLib.triangle_circle_intersect
+local ring_circle_intersect = BattleMathLib.ring_circle_intersect
+local RECORD_OPERATION = false
+local S_DEFAULT_WEAPON_CID = 1
+local S_CLONE_GUARDIND_CID = 99
+local S_DOME_WEAPON_CID = 100
+local STEP_DURATION = 0.0167
+
+function M:ctor()
+	self._battleView = BattleView
+	self._battleBullets = table.new(64, 0)
+	self._battleEnemys = table.new(512, 0)
+	self._battleEnemyBullets = table.new(64, 0)
+	self._battleWeapons = table.new(0, 8)
+	self._slotWeapons = table.new(8, 0)
+	self._outRouges = table.new(8, 0)
+	self._weaponCount = 0
+	self._battleRangers = table.new(4, 0)
+	self._rangersMap = table.new(0, 4)
+	self._weaponRecordDmgs = table.new(0, 8)
+	self._eliteOrBossEnemys = table.new(4, 0)
+	self._step = 0
+	self._elapsedTime = 0
+	self._timeAccumulator = 0
+	self._screenLeftDownPos = Vector3.retain(0, 0, 0)
+	self._screenLeftTopPos = Vector3.retain(0, 0, 0)
+	self._screenRightTopPos = Vector3.retain(0, 0, 0)
+	self._screenRightDownPos = Vector3.retain(0, 0, 0)
+
+	self:initInstances()
+end
+
+function M:initInstances()
+	self._battleRandomLib = requireLua("BattleRandomLib").new()
+	self._battleEnemyGenerator = requireLua("BattleEnemyGenerator").create(self)
+	self._battleRouge = requireLua("BattleRouge").create(self)
+	self._battleEnemyFinder = requireLua("BattleEnemyFinder").create(self)
+	self._battleEnemyFactory = SimpleEntityFactory.create("BattleEnemy", 256)
+	self._battleEnemyBuffFactory = SimpleEntityFactory.create("BattleBuff", 4)
+	self._battleEnemyBulletFactory = SimpleEntityFactory.create("BattleEnemyBullet", 128)
+end
+
+function M:getRandomLib()
+	return self._battleRandomLib
+end
+
+function M:createOrGetEnemy(enemyId, enemyMetaId)
+	return self._battleEnemyFactory:getEntity(self)
+end
+
+function M:recycleEnemy(enemy)
+	self._battleEnemyFactory:putEntity(enemy)
+end
+
+function M:createOrGetEnemyBuff()
+	return self._battleEnemyBuffFactory:getEntity(self)
+end
+
+function M:recycleEnemyBuff(buff)
+	self._battleEnemyBuffFactory:putEntity(buff)
+end
+
+function M:createOrGetEnemyBullet()
+	return self._battleEnemyBulletFactory:getEntity(self)
+end
+
+function M:recycleEnemyBullet(enemyBullet)
+	self._battleEnemyBulletFactory:putEntity(enemyBullet)
+end
+
+function M:initBattleActor()
+	self:addWeapon(S_DEFAULT_WEAPON_CID, 1)
+
+	if self._battleActor._view then
+		self._battleActor._view:posEvent()
+	end
+end
+
+function M:initWeaponDome()
+	local cid = S_DOME_WEAPON_CID
+	local battleWeapon = self:createWeapon(S_DOME_WEAPON_CID)
+
+	battleWeapon:init(cid, 0)
+	battleWeapon:loadProps(self._weaponDatas.props[cid])
+	battleWeapon:loadSkinProps(self._skinDatas.props[cid])
+
+	self._battleWeapons[cid] = battleWeapon
+	self._battleDome = battleWeapon
+
+	self._battleRouge:tryPopRouge()
+
+	self._domeWeapon = battleWeapon
+
+	self:tryAddGemProps(battleWeapon, cid)
+	self:loadSkinSkills(battleWeapon, cid)
+	battleWeapon:loadEffects()
+end
+
+function M:initWeapons(weapons)
+	if weapons.fixes then
+		local count = 0
+		local singleId = 0
+
+		for i = 2, 5 do
+			if weapons.fixes[i] and weapons.fixes[i] > 0 then
+				self._battleRouge:recordRouge(weapons.fixes[i])
+				self:addWeapon(weapons.fixes[i], i)
+
+				singleId = weapons.fixes[i]
+				count = count + 1
+			end
+		end
+
+		if count == 1 then
+			local v1 = self:getEffect(20014)
+
+			if v1 then
+				local battleWepon = self._battleWeapons[singleId]
+
+				battleWepon._mainSkill:addProp(BattlePropEnum.SkillCdSpeedAddPer, v1)
+			end
+		end
+	end
+end
+
+function M:initRangers(rangers)
+	self._rangerTargetPosX = 0
+
+	if rangers == nil then
+		return
+	end
+
+	for i = 1, 2 do
+		if rangers[i] then
+			self:addRanger(rangers[i], i)
+		end
+	end
+end
+
+function M:addRanger(rangerData, index)
+	local rangerId = rangerData.id
+	local atk = rangerData.atk
+	local rangerBattleId = D._rangerConfig[rangerId]._battleId
+	local class = BattleDefine.BattleRangerClass[rangerBattleId] or "BattleRanger"
+	local battleRanger = requireLua(class).create(self)
+
+	battleRanger:init(rangerId, index)
+
+	battleRanger.atk = atk
+	battleRanger._levelProps = rangerData.levelProps
+	battleRanger._levelSkills = rangerData.levelSkills
+
+	battleRanger:initPosition(self._battleActor._targetX)
+
+	self._battleRangers[#self._battleRangers + 1] = battleRanger
+	self._rangersMap[rangerBattleId] = battleRanger
+	self._battleWeapons[rangerBattleId] = battleRanger
+
+	if battleRanger._view then
+		battleRanger._view:updateIKHand()
+		battleRanger._view:posEvent()
+	end
+
+	if battleRanger._activeRouge then
+		self._battleRouge:selectRouge(battleRanger._activeRouge)
+	end
+end
+
+function M:createWeapon(id)
+	return requireLua(BattleDefine.BattleBatteryClass[id]).create(self)
+end
+
+local function findEmptySlot(self)
+	for i = 2, 5 do
+		if self._slotWeapons[i] == nil then
+			return i
+		end
+	end
+end
+
+function M:addCloneAtor()
+	local cid = S_CLONE_GUARDIND_CID
+	local index = 99
+	local battleAtorClone = self:createWeapon(cid)
+
+	battleAtorClone:init(cid, index)
+
+	battleAtorClone._id = 1
+	battleAtorClone._firstCD = 0.1
+	battleAtorClone._isClone = true
+	self._battleWeapons[cid] = battleAtorClone
+	self._battleAtorClone = battleAtorClone
+
+	battleAtorClone:setTargetX(-self._battleActor._targetX)
+
+	if battleAtorClone._view then
+		battleAtorClone._view:posEvent()
+		battleAtorClone._view:updateMaterialParams()
+		Client.playBattleSound("se_Player_clone_1")
+	end
+
+	local skillsMapOrigin = self._battleActor._skillsMap
+
+	for sid, originSkill in pairs(skillsMapOrigin) do
+		local subSkill = battleAtorClone:addSkill(sid)
+
+		subSkill:copyOutPropsFromOrigin(originSkill)
+		subSkill:copyPropsFromOrigin(originSkill)
+		subSkill:copyTriggerOnsFromOrigin(originSkill)
+		subSkill:copyAttachBuffsFromOrigin(originSkill)
+	end
+
+	battleAtorClone:copyOutPropsFromOrigin(self._battleActor)
+	battleAtorClone:copyPropsFromOrigin(self._battleActor)
+	table.copy(self._battleActor._effectsMap, battleAtorClone._effectsMap)
+
+	if self._battleActor._delayShiftBooster then
+		battleAtorClone._delayShiftBooster = true
+	elseif self._battleActor._boostering then
+		battleAtorClone:shiftBooster()
+
+		battleAtorClone._boosterDuration = self._battleActor._boosterDuration
+	end
+
+	battleAtorClone._fireFlag = self._battleActor._fireFlag
+	battleAtorClone._effect153Actived = self._battleActor._effect153Actived
+end
+
+function M:addWeapon(cid, index)
+	if self._battleWeapons[cid] then
+		return
+	end
+
+	if cid == S_CLONE_GUARDIND_CID then
+		self:addCloneAtor()
+
+		return
+	end
+
+	index = index or findEmptySlot(self)
+	local battleWeapon = self:createWeapon(cid)
+
+	battleWeapon:init(cid, index)
+	battleWeapon:loadProps(self._weaponDatas.props[cid])
+	battleWeapon:loadSkinProps(self._skinDatas.props[cid])
+
+	if cid == S_DEFAULT_WEAPON_CID then
+		self._battleActor = battleWeapon
+
+		if self._battleActor._view then
+			self._battleActor._view:posEvent()
+		end
+	end
+
+	self._battleWeapons[cid] = battleWeapon
+	self._slotWeapons[index] = battleWeapon
+	self._weaponCount = self._weaponCount + 1
+
+	self._battleRouge:tryPopRouge()
+
+	if BattleManager:isMissionPVP() then
+		self:doSelectRouge(cid)
+
+		if self._pvpRogues[cid] then
+			for i = 1, #self._pvpRogues[cid] do
+				self:doSelectRouge(self._pvpRogues[cid][i])
+			end
+		end
+	end
+
+	if not BattleManager:isMissionPVP() and self._sessionView and index > 1 then
+		self._sessionView._tfWeaponContainers[index]:Find("empty"):SetActive(false)
+		self._sessionView._tfWeaponContainers[index]:Find("shadow"):SetActive(true)
+
+		local vfx = self._sessionView:createAndPlayVFX("General_weapon_birth", 2)
+
+		if vfx then
+			vfx:SetPosition(battleWeapon._position.x, battleWeapon._position.y, 0)
+		end
+	end
+
+	self:tryAddGemProps(battleWeapon, cid)
+	self:loadSkinSkills(battleWeapon, cid)
+	battleWeapon:loadEffects()
+end
+
+function M:loadSkinSkills(battleWeapon, cid)
+	local skills = self._skinDatas.skills
+	local skinRoleConfig = cid == 100 and D._skinDomeConfig or D._skinRoleConfig
+
+	for i = 1, #skills do
+		local s = skills[i]
+		local skinId = s[1]
+
+		if skinRoleConfig[skinId] and skinRoleConfig[skinId]._weapon == cid then
+			battleWeapon:loadSkinSkill(skinRoleConfig[skinId]._effect, skinRoleConfig[skinId]._skillLevelParam[s[2]])
+		end
+	end
+end
+
+function M:tryAddGemProps(battleWeapon, cid)
+	local opt = opt
+
+	opt.array_arg8:clear()
+
+	for k, v in pairs(self._stashProps) do
+		local effConfig = D._gemEffectConfig[k]
+
+		if effConfig._props and effConfig._weaponId == cid and effConfig._skillId then
+			if effConfig._skillId == 0 then
+				self:addGemProps(battleWeapon, effConfig._props, v)
+
+				opt.array_arg8[#opt.array_arg8 + 1] = k
+			else
+				local effectSkill = battleWeapon:getSkill(effConfig._skillId)
+
+				self:addGemProps(effectSkill, effConfig._props, v)
+
+				if effConfig._skillId == 1 then
+					local effectSkill = battleWeapon:getSkill(101)
+
+					self:addGemProps(effectSkill, effConfig._props, v)
+				end
+
+				if k == 209 then
+					local effectSkill = battleWeapon:getSkill(301)
+
+					self:addGemProps(effectSkill, effConfig._props, v)
+				elseif k == 607 then
+					local effectSkill = battleWeapon:getSkill(601)
+
+					effectSkill:addOutProp(effConfig._props[2], v[2])
+				end
+
+				opt.array_arg8[#opt.array_arg8 + 1] = k
+			end
+		end
+	end
+
+	for i = 1, #opt.array_arg8 do
+		local k = opt.array_arg8
+		self._stashProps[k] = nil
+	end
+end
+
+function M:addGemProps(battleSkill, effProps, effVals)
+	if type(effVals) == "table" then
+		for i = 1, #effProps do
+			local kk = effProps[i]
+			local vv = effVals[i]
+
+			battleSkill:addOutProp(kk, vv)
+		end
+	else
+		local kk = effProps[1]
+		local vv = effVals
+
+		battleSkill:addOutProp(kk, vv)
+	end
+end
+
+function M:getWeapon(cid)
+	return self._battleWeapons[cid]
+end
+
+function M:loadInputRougs()
+	local rouges = Client._config.input_rouge
+
+	for i = 1, #rouges do
+		self._battleRouge:stashRouge(rouges[i])
+	end
+end
+
+function M:isSkipView()
+	return self._battleView == nil
+end
+
+function M:clearTables()
+	table.clear(self._slotWeapons)
+	table.clear(self._battleBullets)
+	table.clear(self._battleEnemys)
+	table.clear(self._battleEnemyBullets)
+	table.clear(self._battleWeapons)
+end
+
+function M:initBattle(input)
+	self._battleInput = input
+	self._seed = input.seed
+	self._isGuideBattle = input.isGuideBattle
+
+	self._battleRandomLib:setSeed(self._seed)
+
+	self._msType = BattleManager:getMissionType()
+	self._msId = BattleManager:getMissionId()
+	self._stop = true
+	self._isPress = false
+	self._zoomScale = 1
+	self._lv = ConfusedNumber.create(1, "BattleLevel")
+
+	if self._msType == D.MissionType.Dome or self._msType == D.MissionType.CrisisZone then
+		self._lv:add(1)
+	end
+
+	self._maxLv = 1
+	self._exp = 0
+	self._levelExps = table.new(20, 0)
+	self._bulletId = 1
+	self._timeAccumulator = 0
+	self._curOpIndex = 1
+	self._enemyDestroyedCount = 0
+	self._nearestEnemy = nil
+	self._propsMap = table.new(0, 16)
+	self._effectsMap = table.new(0, 16)
+	self._stashProps = table.new(0, 16)
+	self._rebornRoguePopTime = 0
+	self._rebornRoguePop = true
+	self._result = nil
+	self._inRangeNearbyDome = 0
+	self._eliteOrBossNum = 0
+	self._waitingRougeQueue = table.new(5, 0)
+	self._battleRogueOptions = table.new(64, 0)
+
+	self:initForPvP()
+
+	self._decorations = input.decorations or {}
+
+	self:loadGems(input.gems or {})
+	self:loadEquips(input.equips or {})
+	self:loadWeapons(input.weapons or {})
+	self:loadSkins(input.skins or {})
+	self:loadEnemyProps(input.enemyProps or {})
+	self:loadModules(input.modules or {})
+	self:loadRanger(input.ranger or {})
+
+	self._pvpRogues = input.pvp_rogues or {}
+	self._pvpModules = input.pvp_modules or {}
+
+	self._battleRouge:init(self._msType, self._msId, self._isGuideBattle)
+	self._battleEnemyGenerator:init(self._msType, self._msId, self._isGuideBattle)
+
+	self._inputDefaultBlood = input.defaultBlood
+
+	self:initBlood(self._inputDefaultBlood)
+
+	self._maxLv = #self._levelExps
+
+	if self._msType == D.MissionType.Dome then
+		self._maxLv = self._maxLv * 2
+	elseif self._msType == D.MissionType.CrisisZone then
+		self._levelExps = D._globalConfig._crisis_zone_level_exp
+		self._maxLv = #self._levelExps * 2
+	else
+		self._maxLv = #self._levelExps
+	end
+
+	if not BattleManager:isMissionPVP() then
+		if self._highFrameFlag then
+			self._stepGrap = STEP_DURATION
+		else
+			self._stepGrap = STEP_DURATION * 2
+		end
+
+		self:addWeapon(S_DEFAULT_WEAPON_CID, 1)
+		self:initWeapons(input.weapons or {})
+		self:initRangers(input.ranger and input.ranger.rangers or {})
+		self:initWeaponDome()
+	else
+		self._stepGrap = STEP_DURATION * 2
+		self._missionEnemies = input.missionEnemies
+		self._matchData = input.match_data or {}
+		self._matchData.pvpWeapons = input.pvp_weapons or {}
+		self._matchData.gemEffects = input.gems.effects
+	end
+
+	self._battleRouge:tryPopRouge()
+	self:dealBeginRouge()
+
+	if input.rogues then
+		for i = 1, #input.rogues do
+			self:doSelectRouge(input.rogues[i])
+		end
+	end
+
+	self._domeImmuneDmgNum = self:getProp(BattlePropEnum.DomeImmuneDmgNum, 0)
+	self._domeInvincibleOnceEffected21 = false
+	self._domeInvincibleOnceEffected54 = false
+	self._skillRecordDmgs = table.new(0, 8)
+
+	if self._msType == D.MissionType.CrisisZone then
+		self._totalKillNum = 0
+		self._totalEnemyNum = #self._battleEnemyGenerator._eliteIds
+	end
+end
+
+function M:onHighFrameDitry()
+	if self._highFrameFlag then
+		self._stepGrap = STEP_DURATION
+	else
+		self._stepGrap = STEP_DURATION * 2
+	end
+end
+
+function M:getMatchData()
+	return self._matchData
+end
+
+function M:initBlood(defaultBlood)
+	self._maxBlood = defaultBlood or D._battleGlobalConfig._battle_player_initial_hp
+	self._maxBlood = self._maxBlood + self:getProp(BattlePropEnum.MaxHp, 0)
+	self._maxBlood = self._maxBlood * (100 + self:getProp(BattlePropEnum.MaxHpAddPer, 0)) / 100
+	self._blood = self._maxBlood
+	self._extraBlood = 0
+	self._extraBloodWithAcc = 0
+end
+
+function M:initForPvP()
+	self._pvpLoseCount = 0
+	self._pvpWinCount = 0
+	self._pvpWeaponIndex = 1
+	self._pvpResults = {}
+	self._pvpContinuousWin = 0
+	self._pvpDangerWinCount = 0
+	self._pvpMaxContWin = 0
+	self._pvpCrushWin = 0
+end
+
+function M:setPvPWeaponQueue(weapons)
+	self._pvpWeaponQueue = weapons
+end
+
+function M:pvpEnterRageTime()
+	local cnt = #self._battleEnemys
+
+	for i = 1, cnt do
+		local battleEnemy = self._battleEnemys[i]
+
+		if not battleEnemy._isToBeDestroyed then
+			battleEnemy._ignoreRegulateBuf = true
+
+			battleEnemy:addBuff(58, 999)
+		end
+	end
+end
+
+function M:pvpBeganRound()
+	self._step = 0
+	self._elapsedTime = 0
+	self._timeAccumulator = 0
+	self._isRageTime = false
+	self._isKillTime = false
+	self._isPress = false
+	self._inRangeNearbyDome = 0
+	self._eliteOrBossNum = 0
+
+	for i = 1, #self._pvpModules do
+		self:addEffect(self._pvpModules[i][1], self._pvpModules[i][2])
+	end
+
+	if BattleManager:pvpCurRound() == 1 then
+		-- Nothing
+	else
+		self._battleRouge._pool:init()
+		self:loadGems(self._battleInput.gems or {})
+		self:loadEquips(self._battleInput.equips or {})
+		self:initBlood(self._inputDefaultBlood)
+
+		self._domeImmuneDmgNum = self:getProp(BattlePropEnum.DomeImmuneDmgNum, 0)
+
+		if self._sessionView then
+			self._sessionView:domeImmuneNumEvent(true, self)
+		end
+	end
+
+	self._battleEnemyGenerator:onPvPRoundBegan()
+
+	local weapons = self._pvpWeaponQueue[self._pvpWeaponIndex]
+
+	for i = 1, 5 do
+		if weapons[i] and weapons[i] > 0 then
+			self:addWeapon(weapons[i], i)
+		end
+	end
+
+	self:initWeaponDome()
+
+	for i = 1, 3 do
+		local battleWeapon = self._slotWeapons[i]
+
+		if battleWeapon and battleWeapon.pvpBeganRound then
+			battleWeapon:pvpBeganRound()
+		end
+	end
+end
+
+function M:settlePvpEndRound(lose)
+	self._pvp29998Casted = nil
+	self._pvp29999Casted_20 = nil
+	self._pvp29999Casted_40 = nil
+	self._pvp29999Casted_60 = nil
+	self._domeInvincibleOnceEffected21 = false
+	self._domeInvincibleOnceEffected54 = false
+	self._domeInvincibleCD = nil
+	self._receiveDmgPool20010 = nil
+	self._effect453CalNum = nil
+	self._pvpWeaponIndex = self._pvpWeaponIndex + 1
+
+	if lose then
+		self._pvpLoseCount = self._pvpLoseCount + 1
+		self._pvpResults[#self._pvpResults + 1] = D.BattleResult.Lose
+		self._pvpLastResult = D.BattleResult.Lose
+		self._pvpContinuousWin = 0
+	else
+		self._pvpWinCount = self._pvpWinCount + 1
+		self._pvpContinuousWin = self._pvpContinuousWin + 1
+		self._pvpMaxContWin = math.max(self._pvpMaxContWin or 0, self._pvpContinuousWin or 0)
+		self._pvpResults[#self._pvpResults + 1] = D.BattleResult.Win
+		self._pvpLastResult = D.BattleResult.Win
+
+		if self:getLeftBattleHp() < 5 then
+			self._pvpDangerWinCount = self._pvpDangerWinCount + 1
+
+			if self:isMainSession() then
+				P._playerActivitySparkScout:recordBattleData(self._pvpWinCount, self._pvpCrushWin, self._pvpDangerWinCount)
+				SimpleEvent.emit("pvp.danger.win")
+			end
+		elseif self:getLeftBattleHp() == 100 then
+			self._pvpCrushWin = self._pvpCrushWin + 1
+
+			if self:isMainSession() then
+				P._playerActivitySparkScout:recordBattleData(self._pvpWinCount, self._pvpCrushWin, self._pvpDangerWinCount)
+				SimpleEvent.emit("pvp.crush.win")
+			end
+		end
+	end
+
+	if self._sessionView then
+		for i = 1, 3 do
+			local battleWeapon = self._slotWeapons[i]
+
+			if battleWeapon and battleWeapon.pvpEndRound then
+				battleWeapon:pvpEndRound()
+			end
+		end
+
+		self._sessionView:settlePvpEndRound(lose)
+	end
+end
+
+function M:cleanOnPvpEndRound()
+	self._battleActor = nil
+	self._battleDome = nil
+	self._battleAtorClone = nil
+
+	table.clear(self._effectsMap)
+	table.clear(self._stashProps)
+	table.clear(self._propsMap)
+	table.clear(self._battleBullets)
+	table.clear(self._battleEnemys)
+	table.clear(self._battleEnemyBullets)
+	table.clear(self._battleWeapons)
+	table.clear(self._slotWeapons)
+	table.clear(self._outRouges)
+
+	self._weaponCount = 0
+
+	table.clear(self._eliteOrBossEnemys)
+	self._battleEnemyFactory:cleanEntitys()
+	self._battleEnemyBuffFactory:cleanEntitys()
+	self._battleEnemyBulletFactory:cleanEntitys()
+	self._battleRouge._pool:clearPools(true)
+	self._battleRouge:clearStash()
+end
+
+function M:getExtraBlood()
+	return self._extraBlood + self._extraBloodWithAcc
+end
+
+function M:loadEnemyProps(props)
+	self._enemyProps = props
+end
+
+function M:getEquipedSkin(i)
+	return self._decorations[i]
+end
+
+function M:hasEnemyProp(type)
+	return self._enemyProps[type]
+end
+
+function M:getEnemyProp(type)
+	return self._enemyProps[type]
+end
+
+function M:dealBeginRouge()
+	local effPar = self:getEffect(26)
+
+	if effPar then
+		self:pushWaitingRouge(D.RougeType.Level_Chip, effPar)
+	end
+
+	local effPar = self:getEffect(20021)
+
+	if effPar then
+		for i = 1, effPar do
+			self:pushWaitingRouge(D.RougeType.Level_Chip, 1)
+		end
+	end
+
+	if self._msType == D.MissionType.Common then
+		-- Nothing
+	elseif self._msType == D.MissionType.Elite then
+		self:pushWaitingRouge(D.RougeType.Level)
+		self:pushWaitingRouge(D.RougeType.Level)
+	elseif self._msType == D.MissionType.GlobalDefense then
+		-- Nothing
+	elseif self._msType == D.MissionType.Dome then
+		for i = 1, P._playerDome:getExtraDrawCardCount() do
+			self:pushWaitingRouge(D.RougeType.Level)
+		end
+
+		self:pushWaitingRouge(D.RougeType.Dome)
+	elseif self._msType == D.MissionType.CrisisZone then
+		self:pushWaitingRouge(D.RougeType.Dome)
+	end
+
+	local skills = self._skinDatas.skills
+	local skinConfig = D._skinWeaponConfig
+
+	for i = 1, #skills do
+		local s = skills[i]
+		local skinId = s[1]
+
+		if skinConfig[skinId] then
+			local skinEffectCfg = D._skinEffectConfig[skinConfig[skinId]._effect]
+
+			if skinEffectCfg._activeRouge then
+				table.insert(self._outRouges, skinEffectCfg._activeRouge)
+			end
+
+			if skinEffectCfg._whenRouge == 1 then
+				self:doSelectRouge(skinEffectCfg._activeRouge)
+			end
+		end
+	end
+
+	for i = 1, #skills do
+		local s = skills[i]
+		local skinId = s[1]
+
+		if skinConfig[skinId] then
+			local skinEffectCfg = D._skinEffectConfig[skinConfig[skinId]._effect]
+
+			if skinEffectCfg._whenRouge == 2 then
+				if self:getWeapon(skinEffectCfg._weaponId) then
+					self:doSelectRouge(skinEffectCfg._activeRouge)
+				else
+					self._battleRouge:stashRouge(skinEffectCfg._activeRouge)
+				end
+			end
+		end
+	end
+
+	if self._msType == D.MissionType.Dome then
+		self:tryPopDomeCards()
+	end
+end
+
+function M:loadOutEffects(effects, conf)
+	effects = effects or {}
+
+	for k, v in pairs(effects) do
+		local effConfig = conf[k]
+
+		if effConfig._activeRouge then
+			local rougeNum = effConfig._rougeNum
+			local n = v
+
+			if rougeNum == 1 then
+				n = 1
+			end
+
+			for i = 1, n do
+				if effConfig._activeRouge then
+					table.insert(self._outRouges, effConfig._activeRouge)
+				end
+
+				self._battleRouge:stashRouge(effConfig._activeRouge)
+			end
+		end
+
+		if effConfig._props then
+			if effConfig._weaponId == nil or effConfig._weaponId == 0 then
+				for i = 1, #effConfig._props do
+					local k = effConfig._props[i]
+
+					if k == 227 then
+						self._propsMap[k] = (self._propsMap[k] or 0) + (type(v) == "number" and v or v[i])
+					else
+						self._propsMap[k] = type(v) == "number" and v or v[i]
+					end
+				end
+			else
+				self._stashProps[k] = v
+			end
+		end
+
+		if effConfig._effect then
+			self:addEffect(effConfig._effect, v)
+		end
+	end
+end
+
+function M:loadGems(gems)
+	local critRate = self._propsMap[BattlePropEnum.CritRate] or 0
+
+	self:loadOutEffects(gems.effects, D._gemEffectConfig)
+
+	local critRateAfter = self._propsMap[BattlePropEnum.CritRate] or 0
+	local critRateAdd = critRateAfter - critRate
+
+	if self._propsMap[BattlePropEnum.GemCritRateAddPer] then
+		self._propsMap[BattlePropEnum.CritRate] = critRateAfter + critRateAdd * self._propsMap[BattlePropEnum.GemCritRateAddPer] / 100
+	end
+end
+
+function M:loadModules(modules)
+	self:loadOutEffects(modules.effects, D._arkRebuildModuleConfig)
+end
+
+function M:loadRanger(ranger)
+	if ranger.effects then
+		for k, v in pairs(ranger.effects) do
+			self:addEffect(k, v)
+		end
+	end
+end
+
+function M:loadSkins(skins)
+	self._skinDatas = skins
+
+	if skins.props then
+		for k, v in pairs(skins.props[0]) do
+			self:addProp(k, v)
+		end
+	else
+		skins.props = {}
+	end
+
+	skins.skills = skins.skills or {}
+end
+
+function M:getEffect(k)
+	return self._effectsMap[k]
+end
+
+function M:removeEffect(k)
+	self._effectsMap[k] = nil
+end
+
+function M:addEffect(k, v)
+	if type(v) == "number" then
+		self._effectsMap[k] = (self._effectsMap[k] or 0) + v
+	else
+		self._effectsMap[k] = v
+	end
+end
+
+function M:getProp(k, defaultVal)
+	if self._propsMap then
+		return self._propsMap[k] or defaultVal
+	end
+
+	return defaultVal
+end
+
+function M:addProp(k, v)
+	if self._propsMap[k] == nil then
+		self._propsMap[k] = v
+	else
+		self._propsMap[k] = self._propsMap[k] + v
+	end
+end
+
+function M:loadEquips(equips)
+	equips.atks = equips.atks or {
+		[0] = 100
+	}
+	self._propsMap[BattlePropEnum.Atk] = equips.atks[0] or 0
+
+	for i = BattlePropEnum.AtkNatureGuard, BattlePropEnum.AtkNature5 do
+		if equips.atks[i] then
+			self._propsMap[i] = equips.atks[i]
+		end
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if equips.atks[i] then
+			self._propsMap[BattlePropEnum.WeaponAtkBegin + i] = equips.atks[i]
+		end
+	end
+end
+
+function M:loadWeapons(weapons)
+	self._weaponDatas = weapons
+
+	if weapons.props then
+		self._propsMap[BattlePropEnum.MaxHp] = (self._propsMap[BattlePropEnum.MaxHp] or 0) + weapons.props[D.WEAPON_DOME][BattlePropEnum.MaxHp]
+		self._propsMap[BattlePropEnum.MaxHpAddPer] = (self._propsMap[BattlePropEnum.MaxHpAddPer] or 0) + weapons.props[D.WEAPON_DOME][BattlePropEnum.MaxHpAddPer]
+		self._propsMap[BattlePropEnum.HpDmgReduce] = (self._propsMap[BattlePropEnum.HpDmgReduce] or 0) + weapons.props[D.WEAPON_DOME][BattlePropEnum.HpDmgReduce]
+		self._propsMap[BattlePropEnum.CritDmg] = (self._propsMap[BattlePropEnum.CritDmg] or 0) + weapons.props[0][BattlePropEnum.CritDmg]
+	else
+		weapons.props = {}
+	end
+
+	if weapons.effects then
+		for _, v in ipairs(weapons.effects) do
+			self:addEffect(v[1], v[2])
+			self._battleRouge:stashRouge(v[1])
+		end
+	end
+end
+
+function M:fieldZoomScale()
+	return self._zoomScale or 1
+end
+
+function M:setSessionView(sessionView)
+	self._sessionView = sessionView
+end
+
+function M:zoomField(scale)
+	self._zoomScale = scale or 1
+	self._screenEdgeX1 = BattleDefine.SCREEN_DEGE_X1 * scale
+	self._screenEdgeX2 = BattleDefine.SCREEN_DEGE_X2 * scale
+	self._screenEdgeY1 = BattleDefine.SCREEN_DEGE_Y1
+	self._enemyBornEdgeX1 = BattleDefine.ENEMY_BORN_DEGE_X1 * scale
+	self._enemyBornEdgeX2 = BattleDefine.ENEMY_BORN_DEGE_X2 * scale
+	self._battleFieldEdgeX1 = BattleDefine.BATTLE_FIELD_EDGE_X1 * scale
+	self._battleFieldEdgeX2 = BattleDefine.BATTLE_FIELD_EDGE_X2 * scale
+	self._battleFieldEdgeY1 = BattleDefine.BATTLE_FIELD_EDGE_Y1
+
+	if BattleManager:isMissionPVP() then
+		self._screenEdgeY2 = math.max(math.min(self._initialOrthographicSize * 2 * scale - self._cameraOffsetY, 20), 8)
+	else
+		self._screenEdgeY2 = math.max(math.min(self._initialOrthographicSize * 2 * scale - self._cameraOffsetY, 20 * scale), 15 * scale)
+	end
+
+	self._enemyBornEdgeY1 = self._screenEdgeY2
+	self._battleFieldEdgeY2 = self._screenEdgeY2
+
+	self._screenLeftDownPos:SetXYZ(self._screenEdgeX1, 1, 0)
+	self._screenLeftTopPos:SetXYZ(self._screenEdgeX1, self._screenEdgeY2, 0)
+	self._screenRightTopPos:SetXYZ(self._screenEdgeX2, self._screenEdgeY2, 0)
+	self._screenRightDownPos:SetXYZ(self._screenEdgeX2, 1, 0)
+end
+
+function M:updateScreenEdge(scale, y2)
+	local lx = self._screenEdgeX1 * scale
+	self._screenLeftDownPos.x = lx
+	self._screenLeftDownPos.y = 1
+	self._screenLeftTopPos.x = lx
+	self._screenLeftTopPos.y = y2
+	local rx = self._screenEdgeX2 * scale
+	self._screenRightTopPos.x = rx
+	self._screenRightTopPos.y = y2
+	self._screenRightDownPos.x = rx
+	self._screenRightDownPos.y = 1
+end
+
+function M:beHit(dt, enemy)
+	if self._domeWeapon:hasSkill(10021) then
+		self._domeWeapon:tryCastSkill(10021, enemy)
+	end
+
+	if dt < 0 and self._invincibleDuration then
+		return
+	end
+
+	if dt < 0 and self._blood <= 0 then
+		return
+	end
+
+	self:updateBlood(dt, enemy)
+end
+
+function M:updateBlood(dt, enemy)
+	if dt < 0 then
+		if self._domeInvincibleCD and self._domeInvincibleCD > 0 then
+			dt = 0
+		end
+
+		if self._effect10028Actived then
+			dt = 0
+		end
+	end
+
+	if enemy and enemy._type ~= BattleDefine.EnemyType.Boss and dt < 0 then
+		local param = self:getEffect(10005)
+
+		if param and self._battleRandomLib:randomTrue(param) then
+			dt = 0
+		end
+	end
+
+	if dt < 0 then
+		local reduce = self:getProp(BattlePropEnum.HpDmgReduce, 0)
+		dt = math.min(0, dt + reduce)
+	end
+
+	if dt < 0 then
+		local addPer = 0
+		local v1 = self:getEffect(20027)
+
+		if v1 then
+			local p = D.getBattleEffectParams(20027)
+			addPer = addPer + v1
+		end
+
+		local chipEffPar = self:getEffect(36)
+
+		if chipEffPar then
+			local p = D.getBattleEffectParams(36)
+
+			if self._blood / self._maxBlood <= p[1] / 100 then
+				addPer = addPer + chipEffPar
+			end
+		end
+
+		local battleRanger = self._rangersMap[209]
+
+		if battleRanger and battleRanger._isInChanneling then
+			local per = battleRanger._mainSkill:getProp(BattlePropEnum.BattlePropParam3, 0)
+			addPer = addPer + per
+		end
+
+		dt = dt - dt * addPer / 100
+	end
+
+	if enemy and enemy._cid ~= 3101 and enemy._cid ~= 2181 and dt < 0 then
+		if self._domeImmuneDmgNumWithModule and self._domeImmuneDmgNumWithModule > 0 then
+			self._domeImmuneDmgNumWithModule = self._domeImmuneDmgNumWithModule - 1
+
+			if self._sessionView then
+				self._sessionView:domeImmuneNumEvent(false, self)
+			end
+
+			return
+		end
+
+		if self._domeImmuneDmgNum > 0 then
+			self._domeImmuneDmgNum = self._domeImmuneDmgNum - 1
+
+			if self._sessionView then
+				self._sessionView:domeImmuneNumEvent(false, self)
+			end
+
+			if enemy then
+				local effPar = D.getBattleEffectParams(12)
+
+				if effPar then
+					local atk = self:getProp(BattlePropEnum.Atk, 0)
+
+					enemy:receiveDamage(atk * effPar[1] / 100, self:getWeapon(S_DOME_WEAPON_CID):mainSkill(), nil, , , true)
+				end
+			end
+
+			return
+		end
+	end
+
+	local v = self:getEffect(20009)
+
+	if v and dt < 0 then
+		dt = -math.min(self._maxBlood * v / 100, math.abs(dt))
+	end
+
+	if dt < 0 then
+		local battleWeapon = self:getWeapon(BattleSkillGroupEnum.Thunderbolt)
+
+		if battleWeapon then
+			local v = self:getEffect(453)
+
+			if v then
+				self._effect453CalNum = (self._effect453CalNum or 0) + math.abs(dt)
+
+				if self._effect453CalNum / self._maxBlood >= v / 100 then
+					self._effect453CalNum = self._effect453CalNum - self._maxBlood * v / 100
+
+					battleWeapon:extraCastSkill()
+				end
+			end
+		end
+	end
+
+	local backupBlood = self._blood
+
+	if self:getExtraBlood() > 0 then
+		if dt < 0 then
+			local n = -dt
+
+			if n > 0 then
+				self._extraBlood = self._extraBlood - n
+				n = 0
+
+				if self._extraBlood < 0 then
+					n = -self._extraBlood
+					self._extraBlood = 0
+				end
+			end
+
+			if n > 0 then
+				self._extraBloodWithAcc = self._extraBloodWithAcc - n
+				n = 0
+
+				if self._extraBloodWithAcc < 0 then
+					n = -self._extraBloodWithAcc
+					self._extraBloodWithAcc = 0
+				end
+			end
+
+			if n > 0 then
+				self._blood = self._blood - n
+				self._blood = math.max(self._blood, 0)
+			end
+		end
+	else
+		self._blood = math.max(self._blood + dt, 0)
+	end
+
+	self._blood = math.min(self._blood, self._maxBlood)
+	local lossBlood = backupBlood - self._blood
+
+	if lossBlood > 0 then
+		local v = self:getEffect(20010)
+
+		if v then
+			local p = D.getBattleEffectParams(20010)
+			self._receiveDmgPool20010 = (self._receiveDmgPool20010 or 0) + lossBlood
+
+			if self._receiveDmgPool20010 / self._maxBlood >= p[1] / 100 then
+				self._receiveDmgPool20010 = self._receiveDmgPool20010 - self._maxBlood * p[1] / 100
+
+				for i = 2, BattleDefine.BattleWeaponCount do
+					local battleWeapon = self._slotWeapons[i]
+
+					if battleWeapon then
+						battleWeapon._cd = 0
+					end
+				end
+			end
+		end
+
+		if self._battleDome._activedEffects[10028] then
+			local p = D.getBattleEffectParams(10028)
+
+			if self._effect10028ActivedCount == nil or self._effect10028ActivedCount < p[3] then
+				self._receiveDmgPool10028 = (self._receiveDmgPool10028 or 0) + lossBlood
+
+				if self._receiveDmgPool10028 / self._maxBlood >= p[1] / 100 then
+					self._receiveDmgPool10028 = self._receiveDmgPool10028 - self._maxBlood * p[1] / 100
+					self._effect10028Actived = true
+					self._effect10028CD = self._battleWeapons[100]._effect10028Param
+					self._effect10028Step = 0
+					self._effect1028RecvPer = p[2] / 100
+					self._effect10028ActivedCount = (self._effect10028ActivedCount or 0) + 1
+
+					if self._battleView then
+						self._effect10028VFX = self._sessionView:addVFX("Dome_140008_skill")
+					end
+				end
+			end
+		end
+	end
+
+	if not self._module20004Casted then
+		local v = self:getEffect(20024)
+
+		if v then
+			local p = D.getBattleEffectParams(20024)
+
+			if self._blood / self._maxBlood <= p[1] / 100 then
+				self._module20004Casted = true
+
+				self:pushWaitingRouge(D.RougeType.Level_Chip, 3)
+			end
+		end
+	end
+
+	local effPar = self:getEffect(21)
+
+	if effPar and not self._domeInvincibleOnceEffected21 then
+		local params = D.getBattleEffectParams(21)
+
+		if self._blood / self._maxBlood <= params[1] / 100 then
+			self._domeInvincibleOnceEffected21 = true
+			self._domeInvincibleCD = effPar
+
+			if self._sessionView then
+				self._sessionView:goldBloodEvent(self._domeInvincibleCD)
+			end
+		end
+	end
+
+	local effPar = self:getEffect(54)
+
+	if effPar and not self._domeInvincibleOnceEffected54 then
+		local params = D.getBattleEffectParams(54)
+
+		if self._blood / self._maxBlood <= params[1] / 100 then
+			self._domeInvincibleOnceEffected54 = true
+			self._domeInvincibleCD = effPar
+
+			if self._sessionView then
+				self._sessionView:goldBloodEvent(self._domeInvincibleCD)
+			end
+		end
+	end
+
+	if self._battleView then
+		self._battleView:showDamageTextOnPlayer(dt, nil, self)
+	end
+
+	if self._sessionView then
+		self._sessionView:bloodEvent()
+	end
+
+	self:checkBloodLessZero()
+end
+
+function M:checkBloodLessZero()
+	if self._blood > 0 then
+		return
+	end
+
+	local v = self:getEffect(20019)
+
+	if v then
+		self:removeEffect(20019)
+		self:rebornPlayer()
+
+		return
+	end
+
+	if self._battleView then
+		BattleManager:normalTime()
+		BattleManager:pauseBattle(true)
+
+		if not BattleManager:isMissionPVP() then
+			self._battleView._tfBulletContainer:SetActive(false)
+		end
+
+		AudioService:StopAllBattleSound()
+
+		if not BattleManager:isMissionPVP() then
+			MainGameRoot:showGlobalMask()
+			self._sessionView:doDomeDissolve(function ()
+				MainGameRoot:hideGlobalMask()
+				self:settleBattle(D.BattleResult.Lose)
+			end)
+		else
+			MainGameRoot:showGlobalMask()
+			self._sessionView:doDomeDissolve(function ()
+				MainGameRoot:hideGlobalMask()
+				BattleManager:settlePvpEndRound(self)
+			end)
+		end
+	else
+		self:settleBattle(D.BattleResult.Lose)
+	end
+end
+
+function M:takeRealyMaxHP(hpDitry)
+	self._blood = self._blood - hpDitry
+
+	if self._battleView then
+		self._battleView:showDamageTextOnPlayer(-hpDitry, nil, self)
+	end
+
+	if self._sessionView then
+		self._sessionView:bloodEvent()
+	end
+
+	self:checkBloodLessZero()
+end
+
+function M:isPress()
+	return self._isPress
+end
+
+function M:pauseBattle(pause)
+	self._stop = pause
+end
+
+function M:leaveBattle()
+	self._stop = true
+
+	self:clearTables()
+	self:clearPools()
+end
+
+function M:clearPools()
+	BattleEntityFactory:clearPools()
+end
+
+function M:isSettled()
+	return self._result ~= nil
+end
+
+function M:settleBattle(result, surrender)
+	if self._battleView then
+		BattleManager:normalTime()
+
+		if self._delayPlayMusicTimer then
+			lc.stopTimer(self._delayPlayMusicTimer)
+
+			self._delayPlayMusicTimer = nil
+		end
+	end
+
+	self._stop = true
+	self._result = result
+	local battleTime = math.ceil(self._elapsedTime * 100) / 100
+	local battleHp = nil
+	battleHp = (result ~= D.BattleResult.Win or self:getLeftBattleHp(result == D.BattleResult.Win)) and 0
+
+	if self._battleView then
+		self._battleView._tfBulletContainer:SetActive(false)
+		AudioService:StopAllBattleSound()
+	end
+
+	local isFirstPass = self._msId == P._playerMission:getMissionId()
+	local stats = self:getBattleStats(battleHp)
+
+	TaskHelper:increaseTaskValue(D.TaskType.KILL_ENEMY, self._enemyDestroyedCount)
+
+	if self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite then
+		local mainWeapon = 1
+		local mainWeaponLevel = 0
+
+		for _, data in pairs(stats.weapons) do
+			local cid = data.id
+			local stage = data.stage
+			local star = data.star
+			local level = (stage - 1) * D._globalConfig._rogue_upgrade_star_num + star + 1
+
+			if mainWeaponLevel < level then
+				mainWeapon = cid
+				mainWeaponLevel = level
+			end
+		end
+
+		P._playerMission:finishMission(self._msId, self._msType, result, battleHp, battleTime, math.min(self._maxLv, self:getLv()), mainWeapon, mainWeaponLevel)
+	elseif self._msType == D.MissionType.GlobalDefense then
+		P._playerGlobalDefense:finishMission(self._msId, self._msType, result, battleHp, battleTime, math.min(self._maxLv, self:getLv()))
+	elseif self._msType == D.MissionType.Dome then
+		local rougeSelectList = self._battleRouge:getRougeSelectList() or {}
+
+		for i = 1, #self._outRouges do
+			table.erase(rougeSelectList, self._outRouges[i])
+		end
+
+		P._playerDome:finishMission(self:getLv(), self._msType, result, battleHp, battleTime, rougeSelectList)
+		TaskHelper:increaseTaskValue(D.TaskType.CHALLENGE_DOME)
+	elseif self._msType == D.MissionType.ArkRebuild then
+		P._playerActivityArkRebuild:finishMission(self._msId, result)
+	elseif self._msType == D.MissionType.CrisisZone then
+		P._playerCrisisZone:finishMission(self._msId, result, battleHp, battleTime, self._totalKillNum)
+	elseif self._msType == D.MissionType.SparkScout then
+		P._playerActivitySparkScout:finishMission(self._msId, result, {
+			contWin = self._pvpMaxContWin or 0,
+			crushWin = self._pvpCrushWin or 0,
+			winCount = self._pvpWinCount,
+			dangerWinCount = self._pvpDangerWinCount or 0
+		})
+	end
+
+	if self._battleView then
+		local batteryCondition = {}
+
+		for i = 1, BattleDefine.BattleWeaponCount do
+			local battleWeapon = self._slotWeapons[i]
+
+			if battleWeapon then
+				batteryCondition[#batteryCondition + 1] = battleWeapon._id .. "-" .. self._battleRouge._pool:getWeaponTotalStar(battleWeapon._id)
+			end
+		end
+
+		Trace.AF_traceRouge("Rouge", table.concat(self._battleRouge:getRougeSelectList(), "|"), result == D.BattleResult.Win and 1 or 0, self._msType == D.MissionType.Elite and self._msId + 10000 or self._msId)
+
+		if surrender then
+			Trace.AF_traceStage("end", self._msType, self._msId, "surrender", self:getLv(), table.concat(batteryCondition, "|"), 0, BattleManager:getInputSpeed())
+			V.openBattleSettlePanel(self._msId, self._msType, result, stats)
+		else
+			Trace.AF_traceStage("end", self._msType, self._msId, result == D.BattleResult.Win and "win" or "lose", self:getLv(), table.concat(batteryCondition, "|"), 0, BattleManager:getInputSpeed())
+
+			if result == D.BattleResult.Win then
+				MainGameRoot:showGlobalMask()
+				lc.setTimer(function ()
+					MainGameRoot:hideGlobalMask()
+					V.openBattleSettlePanel(self._msId, self._msType, result, stats)
+				end, 1, true)
+
+				if (lc._isMobile or C._config.withUpload) and self._msType == D.MissionType.Common and isFirstPass then
+					P._playerMission:tryUploadRecommendData(self._msId, table.concat(batteryCondition, "|"), self._battleRouge:getRougeSelectList() or {})
+				end
+
+				if isFirstPass and self._msId >= 10001 and self._msId <= 10005 then
+					Trace.AF_traceKey(string.format("e_mission_complete_%d", self._msId - 10000))
+				end
+			else
+				V.openBattleSettlePanel(self._msId, self._msType, result, stats)
+			end
+		end
+	end
+
+	if lc._isCN then
+		Request.sendHeartBeatReq()
+	end
+
+	P:saveGameData(true)
+end
+
+function M:getBatteryCount()
+	return self._weaponCount - 1
+end
+
+function M:updateQuardTree()
+	if self._quadTree then
+		self._quadTree:clearObjs()
+
+		for i = 1, #self._battleEnemys do
+			self._quadTree:addObj(self._battleEnemys[i])
+		end
+	end
+end
+
+function M:elapsedTime()
+	return self._elapsedTime
+end
+
+function M:Update(dt)
+	if self._stop then
+		return
+	end
+
+	self._elapsedTime = self._elapsedTime + dt
+	self._timeAccumulator = self._timeAccumulator + dt
+
+	while self._stepGrap <= self._timeAccumulator do
+		self:step(self._stepGrap)
+
+		self._timeAccumulator = self._timeAccumulator - self._stepGrap
+
+		if not self._stop then
+			self:stepWaitingRouge()
+		end
+
+		if self._stop then
+			break
+		end
+	end
+end
+
+function M:pvpIsRangeTime()
+	return self._isRageTime
+end
+
+function M:pvpDrawTempRouge()
+	self._rougeIds = self._battleRouge:randomCardsInPool(1, 1, true)
+
+	if self._battleView then
+		local weapon = D._battleRougeCardConfig[self._rougeIds[1]]._belongWeapon
+		local battleWeapon = self:getWeapon(weapon)
+
+		if battleWeapon == nil then
+			local a = nil
+		end
+
+		local x = battleWeapon._position.x
+		local y = battleWeapon._position.y
+
+		SimpleEvent.emit("spark.rouge", self._index == 1 and self._rougeIds[1] or -self._rougeIds[1], x, y)
+	end
+
+	self:doSelectRouge(self._rougeIds[1])
+end
+
+function M:step(dt)
+	if self._stop then
+		return
+	end
+
+	self._step = self._step + 1
+
+	if BattleManager:isMissionPVP() then
+		if not self._isRageTime and D._battleGlobalConfig._battle_pvp_rage_time <= self._elapsedTime then
+			self._isRageTime = true
+
+			self:pvpEnterRageTime()
+
+			if self:isMainSession() then
+				SimpleEvent.emit("enter.rage.time")
+			end
+		end
+
+		if not self._isKillTime then
+			local v = self:getEffect(55)
+
+			if v then
+				if self._effect55Cd == nil then
+					self._effect55Cd = D.getBattleEffectParams(55)[1]
+				end
+
+				self._effect55Cd = self._effect55Cd - dt
+
+				if self._effect55Cd <= 0 then
+					self._effect55Cd = D.getBattleEffectParams(55)[1]
+
+					self:recoverBloodPer(v / 100)
+				end
+			end
+
+			if D._battleGlobalConfig._battle_pvp_kill_time <= self._elapsedTime then
+				self._isKillTime = true
+				self._killTimeHPCD = 1
+
+				if self:isMainSession() then
+					SimpleEvent.emit("enter.kill.time")
+				end
+			end
+		elseif self._killTimeHPCD then
+			self._killTimeHPCD = self._killTimeHPCD - dt
+
+			if self._killTimeHPCD <= 0 then
+				self._killTimeHPCD = 1
+
+				self:takeRealyMaxHP(D._battleGlobalConfig._battle_pvp_kill_time_loss_hp)
+			end
+		end
+
+		local v = self:getEffect(29998)
+
+		if v and not self._pvp29998Casted and self._elapsedTime >= 0.5 then
+			self._pvp29998Casted = true
+
+			self:pvpDrawTempRouge()
+		end
+
+		local v = self:getEffect(29999)
+
+		if v and self._index == 1 then
+			if not self._pvp29999Casted_20 and D._battleGlobalConfig._battle_pvp_bp_effect_parmas[1] <= self._elapsedTime then
+				self._pvp29999Casted_20 = true
+				local a = #self._battleEnemys
+				local b = BattleManager:getOppoEnemyNum(self)
+
+				if b <= a then
+					self:pvpDrawTempRouge()
+				end
+			end
+
+			if not self._pvp29999Casted_40 and D._battleGlobalConfig._battle_pvp_bp_effect_parmas[2] <= self._elapsedTime then
+				self._pvp29999Casted_40 = true
+				local a = #self._battleEnemys
+				local b = BattleManager:getOppoEnemyNum(self)
+
+				if b <= a then
+					self:pvpDrawTempRouge()
+				end
+			end
+
+			if not self._pvp29999Casted_60 and D._battleGlobalConfig._battle_pvp_bp_effect_parmas[3] <= self._elapsedTime then
+				self._pvp29999Casted_60 = true
+				local a = #self._battleEnemys
+				local b = BattleManager:getOppoEnemyNum(self)
+
+				if b <= a then
+					self:pvpDrawTempRouge()
+				end
+			end
+		end
+	end
+
+	if BattleDefine.ArkRebuildDuration <= self._elapsedTime and self._msType == D.MissionType.ArkRebuild then
+		self:settleBattle(D.BattleResult.Lose)
+
+		return
+	end
+
+	if BattleDefine.CrisisZoneDuration <= self._elapsedTime and self._msType == D.MissionType.CrisisZone then
+		self:settleBattle(D.BattleResult.Lose)
+
+		return
+	end
+
+	if BattleDefine.SparkScoutDuration <= self._elapsedTime and self._msType == D.MissionType.SparkScout then
+		BattleManager:pvpEndRound(self)
+
+		return
+	end
+
+	if not BattleManager:isMissionPVP() and self._result == nil and self._maxLv < self:getLv() and self:isAllEnemyDestroyed() and self._battleEnemyGenerator._enemyWaveStatus == 2 then
+		self:settleBattle(D.BattleResult.Win)
+
+		return
+	end
+
+	if self._domeInvincibleCD then
+		self._domeInvincibleCD = self._domeInvincibleCD - dt
+
+		if self._domeInvincibleCD <= 0 then
+			self._domeInvincibleCD = nil
+		end
+	end
+
+	if self._skillFinalDmgPerEffectCD then
+		self._skillFinalDmgPerEffectCD = self._skillFinalDmgPerEffectCD - dt
+
+		if self._skillFinalDmgPerEffectCD <= 0 then
+			self._skillFinalDmgPerEffectCD = nil
+			self._skillFinalDmgPer = nil
+		end
+	end
+
+	if self._invincibleDuration then
+		self._invincibleDuration = self._invincibleDuration - dt
+
+		if self._invincibleDuration <= 0 then
+			self._invincibleDuration = nil
+		end
+	end
+
+	if self._effect10028CD then
+		self._effect10028CD = self._effect10028CD - dt
+		self._effect10028Step = self._effect10028Step + dt
+
+		if self._effect10028CD <= 0 then
+			self._effect10028CD = nil
+			self._effect10028Actived = nil
+
+			if self._battleView and self._effect10028VFX then
+				self._battleView:removeVFX(self._effect10028VFX)
+
+				self._effect10028VFX = nil
+			end
+		end
+
+		if self._effect10028Step >= 1 then
+			self._effect10028Step = 0
+
+			self:recoverBloodPer(self._effect1028RecvPer)
+		end
+	end
+
+	self:updateQuardTree()
+	self:stepEnemy(dt)
+	self._battleEnemyGenerator:step(dt, self._elapsedTime)
+
+	if not self._rebornRoguePop and self._rebornRoguePopTime < self._elapsedTime then
+		self._rebornRoguePop = true
+
+		if self._battleView then
+			self:pushWaitingRouge(D.RougeType.Reborn)
+		end
+	end
+
+	self:stepWeapon(dt)
+	self:stepBullet(dt)
+	self:stepRanger(dt)
+
+	if self._enemy1110Buffets then
+		self:stepEnemy1110Buffets(dt)
+	end
+
+	self:clearDestroyMarkToEntity(self._battleBullets)
+	self:clearDestroyMarkToEntity(self._battleEnemys)
+	self:clearDestroyMarkToEntity(self._battleEnemyBullets)
+	self:findNearestEnemy()
+
+	local v1 = self:getEffect(20015)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20015)
+
+		if self._draw20015Count == nil or self._draw20015Count < p[2] then
+			self._elapsedTime20015 = (self._elapsedTime20015 or 0) + dt
+
+			if p[1] <= self._elapsedTime20015 then
+				self._draw20015Count = (self._draw20015Count or 0) + 1
+				self._elapsedTime20015 = 0
+
+				self:pushWaitingRouge(D.RougeType.Level_Chip, 3)
+			end
+		end
+	end
+end
+
+function M:stepWaitingRouge()
+	if #self._waitingRougeQueue > 0 then
+		self._stop = true
+
+		if self._result ~= nil then
+			return
+		end
+
+		local rogueData = self._waitingRougeQueue[1]
+		local rougeType, param1 = nil
+
+		if type(rogueData) == "table" then
+			rougeType = rogueData[1]
+			param1 = rogueData[2]
+		else
+			rougeType = rogueData
+		end
+
+		self._lastRougeSelectType = rougeType
+		self._lastRougeSelectCardNum = 3
+		self._lastRougeChooseNum = 1
+		local cantDropNewWeapon = false
+
+		if rougeType == D.RougeType.Level then
+			self._lastRougeSelectCardNum = 3
+		elseif rougeType == D.RougeType.Elite then
+			self._lastRougeSelectCardNum = 1
+			self._randomDeathDraw = self._battleRouge:randomDeathDraw()
+			cantDropNewWeapon = true
+		elseif rougeType == D.RougeType.Reborn then
+			self._lastRougeSelectCardNum = 1
+		elseif rougeType == D.RougeType.Dome then
+			self._lastRougeSelectCardNum = 4
+			self._lastRougeChooseNum = 2
+		elseif rougeType == D.RougeType.Level_Chip then
+			self._lastRougeSelectCardNum = param1
+		elseif rougeType == D.RougeType.Dome_Cards then
+			if self._battleView then
+				self._battleView:readySelectRouge(rougeType)
+			end
+
+			table.remove(self._waitingRougeQueue, 1)
+
+			return
+		end
+
+		self._rougeIds = self._battleRouge:randomCardsInPool(self._lastRougeSelectCardNum, self._lastRougeChooseNum, cantDropNewWeapon)
+
+		if self._battleView then
+			self._battleView:readySelectRouge(rougeType, self._lastRougeSelectCardNum, self._lastRougeChooseNum)
+		end
+
+		table.remove(self._waitingRougeQueue, 1)
+
+		return true
+	end
+
+	return false
+end
+
+function M:pushWaitingRouge(type, param)
+	if BattleManager:isMissionPVP() then
+		return
+	end
+
+	if self._result then
+		return
+	end
+
+	if not self._levelExps[self:getLv()] and self:isAllEnemyDestroyed() then
+		return
+	end
+
+	if self._msType == D.MissionType.ArkRebuild and type ~= D.RougeType.Level_Chip then
+		return
+	end
+
+	if type == D.RougeType.Dome_Cards then
+		table.insert(self._waitingRougeQueue, 1, type)
+	elseif type == D.RougeType.Level_Chip then
+		self._waitingRougeQueue[#self._waitingRougeQueue + 1] = {
+			type,
+			param
+		}
+	else
+		self._waitingRougeQueue[#self._waitingRougeQueue + 1] = type
+	end
+end
+
+function M:selectRogueCard(rogueId)
+	local index = table.findArray(self._rougeIds, rogueId)
+
+	self:addOperation(BattleDefine.OpType.rouge, index)
+	self:recordRogueOptions(index)
+	self:doSelectRouge(rogueId)
+
+	local weaponId = self._battleRouge:getWeaponIdByRogueId(rogueId)
+	local isMax = self._battleRouge._pool:isMaxStar(weaponId)
+	local isSuperStatus = self._battleWeapons[weaponId]._isSuper
+
+	if isMax and not isSuperStatus then
+		local level = P._playerArmory:getWeaponLevel(weaponId)
+		local superCardId = self._battleRouge._pool:getSuperCardId(weaponId)
+		local isSuperUnlock = superCardId and D._rougeUnlock[superCardId] and D._rougeUnlock[superCardId] <= level
+
+		if isSuperUnlock then
+			self:doSelectRouge(superCardId)
+		end
+	end
+
+	if self._lastRougeSelectType == D.RougeType.Elite then
+		self._rougeIds = self._battleRouge:randomCardsInPool(1, 1, true)
+	end
+end
+
+function M:selectRogueCardEnd()
+	if self._msType == D.MissionType.Dome then
+		self:tryPopDomeCards()
+	end
+end
+
+function M:recordRogueOptions(op)
+	if op == 0 and self._battleRogueOptions[#self._battleRogueOptions] == 0 then
+		return
+	end
+
+	self._battleRogueOptions[#self._battleRogueOptions + 1] = op
+
+	if op == 99 then
+		self._rougeIds = self._battleRouge:randomCardsInPool(self._lastRougeSelectCardNum, self._lastRougeChooseNum, false, true)
+	end
+end
+
+function M:doOperation(op)
+	if op._opType == BattleDefine.OpType.down then
+		self._isPress = true
+	elseif op._opType == BattleDefine.OpType.up then
+		self._isPress = false
+	elseif op._opType == BattleDefine.OpType.rouge then
+		if self._replay then
+			self:doSelectRouge(self._rougeIds[op._p1])
+		end
+	elseif op._opType == BattleDefine.OpType.push_rouge then
+		self:pushWaitingRouge(D.RougeType.Level)
+	elseif op._opType == BattleDefine.OpType.reborn then
+		self:rebornPlayer()
+	elseif op._opType == BattleDefine.OpType.move then
+		self._battleActor:setTargetX(op._p1 / 1000)
+
+		if self._battleAtorClone then
+			self._battleAtorClone:setTargetX(-op._p1 / 1000)
+		end
+
+		self:doRangerMove(op._p1 / 1000)
+	elseif op._opType == BattleDefine.OpType.move_y then
+		self._battleActor:setTargetY(op._p1 / 1000)
+
+		if self._battleAtorClone then
+			self._battleAtorClone:setTargetY(op._p1 / 1000)
+		end
+	end
+end
+
+function M:doRangerMove(actorX)
+	self._rangerTargetPosX = actorX
+end
+
+function M:doSelectRouge(rougeId, noRecord)
+	if not noRecord then
+		self._battleRouge:recordRouge(rougeId)
+	end
+
+	self._battleRouge:addRouge(rougeId)
+
+	if self._battleView and not BattleManager:isMissionPVP() then
+		local rougeCfg = D._battleRougeConfig[rougeId]
+		local battleWeapon = self:getWeapon(rougeCfg._belongWeapon)
+
+		if battleWeapon then
+			local vfx = self._sessionView:createAndPlayVFX("General_weapon_upgrade", 2)
+
+			if vfx then
+				vfx:SetPosition(battleWeapon._position.x, battleWeapon._position.y, 0)
+			end
+		end
+	end
+
+	if self._rougeIds then
+		table.clear(self._rougeIds)
+	end
+end
+
+function M:tryPopDomeCards()
+	local pool = self._battleRouge._pool
+	local cards = pool._domeCards
+
+	for i = 1, #cards do
+		local card = cards[i]
+
+		if pool._rogueCardsPool[card] then
+			local type = D._battleRougeCardConfig[card]._type
+			local weapon = D._battleRougeCardConfig[card]._belongWeapon
+
+			if type == 2 and pool:getWeaponTotalStar(weapon) % 4 == 3 then
+				self:pushWaitingRouge(D.RougeType.Dome_Cards)
+
+				return
+			elseif type ~= 2 and pool:getWeaponTotalStar(weapon) % 4 ~= 3 then
+				self:pushWaitingRouge(D.RougeType.Dome_Cards)
+
+				return
+			end
+		end
+	end
+end
+
+function M:doPopDomeCards(result)
+	local pool = self._battleRouge._pool
+	local cards = clone(pool._domeCards)
+
+	for i = 1, #cards do
+		local card = cards[i]
+
+		if pool._rogueCardsPool[card] then
+			local type = D._battleRougeCardConfig[card]._type
+			local weapon = D._battleRougeCardConfig[card]._belongWeapon
+
+			if type == 2 and pool:getWeaponTotalStar(weapon) % 4 == 3 then
+				table.erase(pool._domeCards, card)
+				table.insert(result, card)
+				self:doSelectRouge(card)
+				self:doPopDomeCards(result)
+
+				break
+			elseif type ~= 2 and pool:getWeaponTotalStar(weapon) % 4 ~= 3 then
+				table.erase(pool._domeCards, card)
+				table.insert(result, card)
+				self:doSelectRouge(card)
+				self:doPopDomeCards(result)
+
+				break
+			end
+		end
+	end
+end
+
+local S_TMP_OP = {
+	_opType = 1,
+	_p1 = 1
+}
+
+function M:addOperation(opType, p1)
+	S_TMP_OP._opType = opType
+	S_TMP_OP._p1 = p1
+
+	self:doOperation(S_TMP_OP)
+end
+
+function M:stepEnemy(dt)
+	if self._stepEnemyStop then
+		return
+	end
+
+	self._inRangeNearbyDome = 0
+	local cnt = #self._battleEnemys
+
+	for i = 1, cnt do
+		local battleEnemy = self._battleEnemys[i]
+
+		battleEnemy:step(dt, self._elapsedTime)
+
+		if battleEnemy._position.y <= BattleDefine.NEARBY_RANGE + 3 then
+			self._inRangeNearbyDome = self._inRangeNearbyDome + 1
+		end
+	end
+end
+
+function M:stepWeapon(dt)
+	for i = 1, BattleDefine.BattleWeaponCount do
+		local battleWeapon = self._slotWeapons[i]
+
+		if battleWeapon then
+			battleWeapon:step(dt, self._elapsedTime)
+		end
+	end
+
+	if self._domeWeapon then
+		self._domeWeapon:step(dt, self._elapsedTime)
+	end
+
+	if self._battleAtorClone then
+		self._battleAtorClone:step(dt, self._elapsedTime)
+	end
+end
+
+function M:stepRanger(dt)
+	self:stepRangerTarget()
+
+	for i = 1, BattleDefine.BattleRangerCount do
+		local battleRanger = self._battleRangers[i]
+
+		if battleRanger then
+			battleRanger:step(dt)
+		end
+	end
+end
+
+function M:stepRangerTarget()
+	local actorX = self._rangerTargetPosX
+	local followRange = 1
+
+	if self._battleRangers[2] and self._battleRangers[1] then
+		local p1X = self._battleRangers[1]:getPositionX()
+		local p2X = self._battleRangers[2]:getPositionX()
+		local displace1 = actorX - p1X
+		local displace2 = actorX - p2X
+
+		if math.sign(displace1) == math.sign(displace2) then
+			local abs1 = math.abs(displace1)
+			local abs2 = math.abs(displace2)
+
+			if abs2 < abs1 then
+				self._battleRangers[1]:setTargetX(actorX)
+
+				if abs1 < followRange + abs2 then
+					self._battleRangers[2]:setTargetX(actorX)
+				end
+			else
+				self._battleRangers[2]:setTargetX(actorX)
+
+				if abs2 < followRange + abs1 then
+					self._battleRangers[1]:setTargetX(actorX)
+				end
+			end
+		else
+			self._battleRangers[1]:setTargetX(actorX)
+			self._battleRangers[2]:setTargetX(actorX)
+		end
+	else
+		if self._battleRangers[1] then
+			self._battleRangers[1]:setTargetX(actorX)
+		end
+
+		if self._battleRangers[2] then
+			self._battleRangers[2]:setTargetX(actorX)
+		end
+	end
+end
+
+function M:assignBulletId()
+	local bulletId = self._bulletId
+	self._bulletId = self._bulletId + 1
+
+	return bulletId
+end
+
+function M:pushEnemyBullet(bullet)
+	self._battleEnemyBullets[#self._battleEnemyBullets + 1] = bullet
+end
+
+function M:pushBullet(bullet)
+	self._battleBullets[#self._battleBullets + 1] = bullet
+end
+
+function M:isAllEnemyDestroyed()
+	if #self._battleEnemys <= 0 then
+		return true
+	end
+
+	if self._enemy131001Count and #self._battleEnemys - self._enemy131001Count <= 0 then
+		return true
+	end
+
+	return false
+end
+
+function M:pushEnemy(enemy)
+	if enemy._type == BattleDefine.EnemyType.Boss then
+		SimpleEvent.emit("battle.boss.coming", enemy._cid)
+
+		if self._sessionView then
+			self._sessionView:zoomField()
+		end
+	end
+
+	self._battleEnemys[#self._battleEnemys + 1] = enemy
+
+	if enemy._originId == 131001 then
+		self._enemy131001Count = (self._enemy131001Count or 0) + 1
+	end
+end
+
+function M:getEnemy(id)
+	return self._battleEnemysMap[id]
+end
+
+function M:getLv()
+	return self._lv()
+end
+
+function M:onEnemyCreated(enemy)
+	if enemy._type == BattleDefine.EnemyType.Boss or enemy._type == BattleDefine.EnemyType.Elite then
+		self._eliteOrBossNum = self._eliteOrBossNum + 1
+
+		if self._msType ~= D.MissionType.CrisisZone or not D._battleEnemyConfig[enemy._cid]._originId then
+			self._eliteOrBossEnemys[#self._eliteOrBossEnemys + 1] = enemy
+		end
+	end
+end
+
+function M:onEnemyDestroyed(enemy)
+	if enemy._originId == 131001 then
+		self._enemy131001Count = (self._enemy131001Count or 0) - 1
+	end
+
+	self._enemyDestroyedCount = self._enemyDestroyedCount + 1
+
+	if enemy._originId ~= 131001 then
+		if not enemy._selfDestroy then
+			local effPar = self:getEffect(20026)
+
+			if effPar then
+				local p = D.getBattleEffectParams(20026)
+
+				if self._battleRandomLib:randomTrue(p[1]) then
+					local recv = self._maxBlood * effPar / 100
+
+					self:recoverBlood(recv)
+				end
+			end
+
+			local effPar = self:getEffect(20)
+
+			if effPar and (enemy._type == BattleDefine.EnemyType.Boss or enemy._type == BattleDefine.EnemyType.Elite) and not enemy._isSummon then
+				local recv = self._maxBlood / 100 * effPar
+
+				self:recoverBlood(recv)
+			end
+
+			local effPar = self:getEffect(22)
+
+			if effPar then
+				self:recoverBlood(effPar)
+			end
+		end
+	end
+
+	if enemy._type == BattleDefine.EnemyType.Elite or enemy._type == BattleDefine.EnemyType.Boss then
+		self._eliteOrBossNum = self._eliteOrBossNum - 1
+		local cnt = #self._eliteOrBossEnemys
+
+		for i = 1, cnt do
+			if self._eliteOrBossEnemys[i] == enemy then
+				self._eliteOrBossEnemys[i] = nil
+
+				break
+			end
+		end
+
+		table.removeNilValuesOutOrder(self._eliteOrBossEnemys, cnt)
+
+		if not enemy._isSummon then
+			if enemy._cid == 2182 then
+				self.__16leftKillNum = 0
+			elseif enemy._cid == 2202 then
+				self.__203leftKillNum = 0
+			elseif enemy._cid == 2103 then
+				self.__2103leftKillNum = enemy._childrenCount
+				enemy._childrenCount = nil
+			elseif self._msType ~= D.MissionType.CrisisZone then
+				self:pushWaitingRouge(D.RougeType.Elite)
+			end
+		elseif enemy._cid == 218203 then
+			self.__16leftKillNum = (self.__16leftKillNum or 0) + 1
+
+			if self.__16leftKillNum == 4 and self._msType ~= D.MissionType.CrisisZone then
+				self:pushWaitingRouge(D.RougeType.Elite)
+			end
+		elseif enemy._cid == 220201 then
+			self.__203leftKillNum = (self.__203leftKillNum or 0) + 1
+
+			if self.__203leftKillNum == 2 and self._msType ~= D.MissionType.CrisisZone then
+				self:pushWaitingRouge(D.RougeType.Elite)
+			end
+		elseif enemy._cid == 210301 then
+			self.__2103leftKillNum = self.__2103leftKillNum - 1
+
+			if self.__2103leftKillNum == 0 and self._msType ~= D.MissionType.CrisisZone then
+				self:pushWaitingRouge(D.RougeType.Elite)
+			end
+		end
+	end
+
+	if self._battleView and C._lastBattleMusic and enemy._type == BattleDefine.EnemyType.Boss then
+		local _, duration = enemy:destroyVfxPrefab()
+		self._delayPlayMusicTimer = lc.setTimer(function ()
+			C.playMusic(C._lastBattleMusic)
+
+			C._lastBattleMusic = nil
+		end, (duration or 5) / 3)
+	end
+
+	if enemy._giveExp > 0 or self._msType == D.MissionType.CrisisZone then
+		if enemy._giveExp > 0 then
+			self._exp = self._exp + enemy._giveExp
+		elseif self._msType == D.MissionType.CrisisZone and not enemy._isSummon then
+			self._exp = self._exp + 1
+			self._totalKillNum = self._totalKillNum + 1
+			local reward = P._playerCrisisZone:tryDropReward(enemy._id)
+
+			if self._battleView then
+				BattlePanel:updateCrisisZoneKillNum(self._totalKillNum, self._totalEnemyNum)
+
+				if reward then
+					SimpleEvent.emit("mission.crisis.reward", reward, enemy._position.x, enemy._position.y)
+				end
+			end
+		end
+
+		enemy._giveExp = 0
+		local toExp = self._levelExps[self:getLv()]
+
+		if self._msType == D.MissionType.Dome or self._msType == D.MissionType.CrisisZone then
+			toExp = self._levelExps[self:getLv() / 2]
+		end
+
+		if toExp and toExp <= self._exp then
+			local preLv = self:getLv()
+
+			self._lv:add(1)
+
+			if self._msType == D.MissionType.Dome or self._msType == D.MissionType.CrisisZone then
+				self._lv:add(1)
+			end
+
+			self._exp = self._exp - toExp
+
+			if not BattleManager:isMissionPVP() and self._maxLv < self:getLv() and self:isAllEnemyDestroyed() and self._battleEnemyGenerator._enemyWaveStatus == 2 then
+				self:settleBattle(D.BattleResult.Win)
+			elseif self._levelExps[self:getLv()] or self._msType == D.MissionType.Dome and self._levelExps[self:getLv() / 2] or self._msType == D.MissionType.CrisisZone and self._levelExps[self:getLv() / 2] then
+				if self._msType == D.MissionType.Dome or self._msType == D.MissionType.CrisisZone then
+					self:pushWaitingRouge(D.RougeType.Dome)
+				else
+					self:pushWaitingRouge(D.RougeType.Level)
+				end
+
+				local effPar = self:getEffect(19)
+
+				if effPar then
+					local recv = self._maxBlood / 100 * effPar
+
+					self:recoverBlood(recv)
+				end
+
+				for l = preLv + 1, self:getLv() do
+					for i = 1, #self._battleRangers do
+						local battleRanger = self._battleRangers[i]
+						local props = battleRanger._levelProps[l]
+						local hasUpgrade = false
+						local equipCid = nil
+
+						if props then
+							for j = 1, #props do
+								local prop = props[j]
+
+								if BattlePropEnum.DamageNature1Per <= prop[1] and prop[1] <= BattlePropEnum.DamageNature5Per then
+									for k = 1, #self._battleRangers do
+										self._battleRangers[k]:addOutProp(prop[1], prop[2])
+									end
+								elseif prop[1] == BattlePropEnum.Atk then
+									battleRanger.atk = battleRanger.atk + prop[2]
+								else
+									battleRanger:addOutProp(prop[1], prop[2])
+								end
+
+								equipCid = prop[3]
+								hasUpgrade = true
+							end
+						end
+
+						local skills = battleRanger._levelSkills[l]
+
+						if skills then
+							for j = 1, #skills do
+								local skill = skills[j]
+
+								self._battleRouge:selectRouge(skill[1])
+
+								equipCid = skill[2]
+								hasUpgrade = true
+							end
+						end
+
+						if hasUpgrade then
+							battleRanger:setUpgrade()
+
+							if self._battleView then
+								SimpleEvent.emit("battle.ranger.upgrade", i, equipCid, battleRanger._position.x)
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if self._battleView then
+			if self._maxLv < self:getLv() then
+				BattlePanel:updateLevel(self._maxLv, 1, 1)
+			else
+				BattlePanel:updateLevel(self:getLv(), self._exp, toExp)
+			end
+		end
+	end
+end
+
+function M:recoverBloodPer(per, battleSkill)
+	local recv = self._maxBlood * per
+
+	self:recoverBlood(recv, battleSkill)
+end
+
+function M:recoverBlood(recv, battleSkill)
+	if self._blood <= 0 then
+		return
+	end
+
+	local addPer = 0
+
+	if self:hasEnemyProp(BattleDefine.EnemyBuffType.XIUFU_YIZHI) then
+		local prop = self:getEnemyProp(BattleDefine.EnemyBuffType.XIUFU_YIZHI)
+		addPer = addPer + prop[1]
+	end
+
+	recv = math.ceil(recv - recv * addPer / 100)
+	local oldBlood = self._blood
+
+	if battleSkill and battleSkill._battleWeapon:getEffect(20901) then
+		local overflow = self._blood + recv - self._maxBlood
+
+		if overflow > 0 then
+			local extraBlood = overflow * battleSkill:getProp(BattlePropEnum.BattlePropParam2, 100) / 100
+			self._extraBloodWithAcc = (self._extraBloodWithAcc or 0) + extraBlood
+
+			if self._sessionView then
+				self._sessionView._goExtraHPBarFill:SetActive(true)
+			end
+		end
+	end
+
+	self._blood = math.min(self._blood + recv, self._maxBlood)
+
+	if self._battleView then
+		self._battleView:showDamageTextOnPlayer(recv, nil, self)
+	end
+
+	if self._sessionView then
+		self._sessionView:bloodEvent()
+	end
+end
+
+function M:stepBullet(dt)
+	local cnt = #self._battleBullets
+
+	for i = 1, cnt do
+		local battleBullet = self._battleBullets[i]
+
+		battleBullet:step(dt, self._elapsedTime)
+	end
+
+	local cnt = #self._battleEnemyBullets
+
+	for i = 1, cnt do
+		local enemyBullet = self._battleEnemyBullets[i]
+
+		enemyBullet:step(dt, self._elapsedTime)
+	end
+end
+
+local s_vec2 = Vector2.retain(0, 0)
+
+function M:isIntersectBetweenBulletAndEnemy(battleBullet, battleEnemy, last)
+	local position = s_vec2
+	local enemyPosition = battleEnemy._position
+
+	if last then
+		position.x = (battleBullet._lastPosition.x + battleBullet._position.x) * 0.5
+		position.y = (battleBullet._lastPosition.y + battleBullet._position.y) * 0.5
+	else
+		position.x = battleBullet._position.x
+		position.y = battleBullet._position.y
+	end
+
+	if battleBullet._detectType == 1 then
+		if circle_circle_intersect(position, enemyPosition, battleBullet._radius, battleEnemy._radius) then
+			return true
+		end
+	elseif battleBullet._detectType == 2 then
+		if rectangle_circle_intersect_not_align_axis(battleBullet._towardDir, position, battleBullet._size[1], enemyPosition, battleEnemy._radius) then
+			return true
+		end
+	elseif battleBullet._detectType == 3 then
+		if rectangle_circle_intersect_align_axis(position, enemyPosition, battleBullet._size, battleEnemy._radius) then
+			return true
+		end
+	elseif battleBullet._detectType == 6 then
+		opt.vec3_1:SetXYZ(position.x, position.y + battleBullet._size[2] / 2, 0)
+
+		if rectangle_circle_intersect_align_axis(opt.vec3_1, enemyPosition, battleBullet._size, battleEnemy._radius) then
+			return true
+		end
+	elseif battleBullet._detectType == 4 then
+		if not circle_circle_intersect(position, enemyPosition, math.max(battleBullet._size[1], battleBullet._size[2]) / 2, battleEnemy._radius) then
+			return false
+		end
+
+		local bullet_center_x = position.x
+		local bullet_center_y = position.y
+
+		return self:checkObbCircleIntersect(bullet_center_x, bullet_center_y, battleBullet, battleEnemy)
+	elseif battleBullet._detectType == 7 then
+		local bullet_center_x = (position.x + enemyPosition.x) / 2
+		local bullet_center_y = (position.y + enemyPosition.y) / 2
+
+		return self:checkObbCircleIntersect(bullet_center_x, bullet_center_y, battleBullet, battleEnemy)
+	elseif battleBullet._detectType == 8 then
+		local rad = math.rad(battleBullet._angle)
+		local bullet_center_x = position.x + battleBullet._size[2] / 2 * math.cos(rad)
+		local bullet_center_y = position.y + battleBullet._size[2] / 2 * math.sin(rad)
+
+		return self:checkObbCircleIntersect(bullet_center_x, bullet_center_y, battleBullet, battleEnemy)
+	elseif battleBullet._detectType == 5 then
+		local triangleArea = BattleMathLib.TriangleArea
+		triangleArea.A.x = position.x
+		triangleArea.A.y = position.y
+		local length = battleBullet._size[1]
+		local dtY = battleBullet._size[2] / 2
+		local quat = Quaternion.static(0, 0, 0, 0)
+
+		quat:SetEuler(0, 0, battleBullet._angle)
+
+		local x1, y1 = quat:MulVec3XYZ(length, dtY, 0)
+		triangleArea.B.x = position.x + x1
+		triangleArea.B.y = position.y + y1
+		local quat = Quaternion.static(0, 0, 0, 0)
+
+		quat:SetEuler(0, 0, battleBullet._angle)
+
+		local x1, y1 = quat:MulVec3XYZ(length, -dtY, 0)
+		triangleArea.C.x = position.x + x1
+		triangleArea.C.y = position.y + y1
+		local circleArea = BattleMathLib.CircleArea
+		circleArea.O.x = enemyPosition.x
+		circleArea.O.y = enemyPosition.y
+		circleArea.radius = battleEnemy._radius
+
+		if triangle_circle_intersect(triangleArea, circleArea) then
+			return true
+		end
+	elseif battleBullet._detectType == 9 then
+		local rInner = battleBullet._radius
+		local rOuter = battleBullet._radius + 0.5 * battleBullet._scale
+
+		if ring_circle_intersect(position, rInner, rOuter, enemyPosition, battleEnemy._radius) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:checkObbCircleIntersect(bullet_center_x, bullet_center_y, battleBullet, battleEnemy)
+	local obbArea = opt.OBBArea
+	obbArea.center[1] = bullet_center_x
+	obbArea.center[2] = bullet_center_y
+	obbArea.extents[1] = battleBullet._size[1] / 2
+	obbArea.extents[2] = battleBullet._size[2] / 2
+	obbArea.angle = battleBullet._angle + 90
+	local circleArea = opt.CircleArea
+	circleArea.center[1] = battleEnemy._position.x
+	circleArea.center[2] = battleEnemy._position.y
+	circleArea.radius = battleEnemy._radius
+
+	if obb_circle_intersect(obbArea, circleArea) then
+		return true
+	end
+
+	return false
+end
+
+function M:getAllEnemys()
+	return self._battleEnemys
+end
+
+function M:getEnemys(battleBullet)
+	local battleEnemys = nil
+
+	if self._quadTree and battleBullet and battleBullet._battleSkill._useOptimization then
+		opt.array_arg64:clear()
+		self._quadTree:retrieve(battleBullet, opt.array_arg64)
+
+		if #opt.array_arg64 == 0 then
+			return
+		end
+
+		battleEnemys = opt.array_arg64
+	else
+		battleEnemys = self._battleEnemys
+	end
+
+	return battleEnemys
+end
+
+function M:clearDestroyMarkToEntity(entitys)
+	local removedCount = 0
+	local cnt = #entitys
+
+	for i = 1, cnt do
+		local entity = entitys[i]
+
+		if entity._recycleTick == nil and entity._isToBeDestroyed and not entity._delayToDestroy then
+			entity:destroy()
+
+			entitys[i] = nil
+			removedCount = removedCount + 1
+		end
+
+		if entity._recycleTick then
+			entity._recycleTick = entity._recycleTick - 1
+
+			if entity._recycleTick == 0 then
+				entity._recycleTick = nil
+			end
+		end
+	end
+
+	if removedCount == cnt then
+		return
+	end
+
+	table.removeNilValuesOutOrder(entitys, cnt)
+end
+
+function M:enemyCanBeChoseAsTarget(enemy, weapon)
+	if not enemy:canBeChoseAsTarget() then
+		return false
+	end
+
+	if not self:isEnemyInBattleField(enemy) then
+		return
+	end
+
+	if weapon then
+		if enemy._invisibility and not weapon._defyInvisibility then
+			return
+		end
+
+		if weapon._id == 206 and not enemy:couldBeSwallow() then
+			return
+		end
+	end
+
+	return true
+end
+
+function M:findNearestEnemy()
+	self._nearestEnemy = self._battleEnemyFinder:findNearestEnemy()
+end
+
+function M:getEnemysInRange(center, range, weapon)
+	return self._battleEnemyFinder:getEnemysInRange(center, range, weapon)
+end
+
+function M:randomOneEnemyWithExcludeOne(excludeEnemy, battleWeapon)
+	return self._battleEnemyFinder:randomOneEnemyWithExcludeOne(excludeEnemy, battleWeapon)
+end
+
+function M:getEnemysInBetweenY(y1, y2)
+	return self._battleEnemyFinder:getEnemysInBetweenY(y1, y2)
+end
+
+function M:randomOneEnemyInRange(center, radius, excludeEnemys, weapon)
+	local allEnemys = self:getEnemysInRange(center, radius, weapon)
+
+	if #allEnemys == 0 then
+		return
+	end
+
+	return self:randomOneEnemyFromInput(allEnemys, excludeEnemys)
+end
+
+function M:randomOneEnemyFromInput(enemys, excludeEnemys)
+	for k = 1, 10 do
+		local i = self._battleRandomLib:randomMN(1, #enemys)
+		local enemy = enemys[i]
+
+		if enemy and (excludeEnemys == nil or excludeEnemys[enemy._id] == nil) then
+			return enemy
+		end
+	end
+end
+
+function M:randomOneEnemy(excludeEnemys, battleWeapon, findLv)
+	return self._battleEnemyFinder:randomOneEnemy(excludeEnemys, battleWeapon, findLv)
+end
+
+function M:isEnemyInBattleField(enemy)
+	local x, y = enemy:hitPosition()
+
+	return x >= self._screenEdgeX1 - 1 and x <= self._screenEdgeX2 + 1 and self._battleFieldEdgeY1 <= y and y <= self._battleFieldEdgeY2
+end
+
+function M:getLeftBattleHp(win)
+	if win then
+		return Mathf.Clamp(math.floor(self._blood / self._maxBlood * 100), 1, 100)
+	else
+		return Mathf.Clamp(math.floor(self._blood / self._maxBlood * 100), 0, 100)
+	end
+end
+
+function M:getBattleStats(hpPercent)
+	local result = {}
+
+	if hpPercent then
+		result.hpPercent = hpPercent
+	else
+		result.hpPercent = self:getLeftBattleHp()
+	end
+
+	result.weapons = {}
+	result.time = self._elapsedTime
+	result.level = math.min(self._maxLv, self:getLv())
+
+	if BattleManager:isMissionPVP() then
+		result.contWin = self._pvpMaxContWin or 0
+	end
+
+	for cid, dmg in pairs(self._weaponRecordDmgs) do
+		if cid < 100 then
+			local stage, star = self._battleRouge:getWeaponStage(cid)
+
+			table.insert(result.weapons, {
+				type = "weapon",
+				id = cid,
+				stage = stage,
+				star = star,
+				dmg = self._weaponRecordDmgs[cid].dmg,
+				dps = self._weaponRecordDmgs[cid].dps,
+				kill = self._weaponRecordDmgs[cid].kill
+			})
+		elseif cid == 100 and not BattleManager:isMissionPVP() then
+			table.insert(result.weapons, {
+				type = "dome",
+				stage = 1,
+				star = 0,
+				id = D.WEAPON_DOME,
+				dmg = self._weaponRecordDmgs[cid].dmg,
+				dps = self._weaponRecordDmgs[cid].dps,
+				kill = self._weaponRecordDmgs[cid].kill
+			})
+		end
+	end
+
+	for _, ranger in pairs(self._rangersMap) do
+		if ranger:getRecordDamage() > 0 then
+			local cid = ranger._cid
+			local stage = 1
+			local star = 1
+
+			table.insert(result.weapons, {
+				type = "ranger",
+				id = cid,
+				stage = stage,
+				star = star,
+				dmg = ranger:getRecordDamage(),
+				dps = ranger:getRecordDps()
+			})
+		end
+	end
+
+	table.sort(result.weapons, function (a, b)
+		if a.dps ~= b.dps then
+			return b.dps < a.dps
+		end
+
+		return a.id < b.id
+	end)
+
+	return result
+end
+
+function M:rebornPlayer()
+	local allEnemys = self:getEnemysInBetweenY(0, BattleDefine.DOME_POSY + 5)
+
+	for i = 1, #allEnemys do
+		local enemy = allEnemys[i]
+
+		if not enemy._isToBeDestroyed then
+			enemy:addBuff(21, 0.5, self._battleActor._mainSkill)
+		end
+	end
+
+	self._invincibleDuration = 3
+	self._blood = self._maxBlood
+
+	if self._battleView then
+		self._battleView:rebornEvent()
+	end
+
+	if self._sessionView then
+		self._sessionView:bloodEvent()
+	end
+
+	self._rebornRoguePop = false
+	self._rebornRoguePopTime = self._elapsedTime + 1
+end
+
+function M:limitEnemyPosition(x, y)
+	x = math.min(math.max(self._enemyBornEdgeX1, x), self._enemyBornEdgeX2)
+	y = math.min(math.max(BattleDefine.DOME_POSY + 0.1, y), self._enemyBornEdgeY1 + 1)
+
+	return x, y
+end
+
+function M:limitEnemyPositionX(x)
+	return math.min(math.max(self._enemyBornEdgeX1, x), self._enemyBornEdgeX2)
+end
+
+function M:limitEnemyPositionY(y)
+	return math.min(math.max(BattleDefine.DOME_POSY + 0.2, y), self._enemyBornEdgeY1 + 1)
+end
+
+function M:limitScreenPositionX(x)
+	return math.min(math.max(self._screenEdgeX1, x), self._screenEdgeX2)
+end
+
+function M:limitScreenPositionY(y)
+	return math.min(math.max(self._screenEdgeY1, y), self._screenEdgeY2)
+end
+
+function M:leftDownPos()
+	return self._screenLeftDownPos
+end
+
+function M:leftTopPos()
+	return self._screenLeftTopPos
+end
+
+function M:rightTopPos()
+	return self._screenRightTopPos
+end
+
+function M:rightDownPos()
+	return self._screenRightDownPos
+end
+
+function M:raySegmentIntersectWithLeftTopRight(o, dir, intersectPoint)
+	if is_ray_segment_intersect(o, dir, self._screenLeftDownPos, self._screenLeftTopPos, intersectPoint) then
+		return true
+	elseif is_ray_segment_intersect(o, dir, self._screenLeftTopPos, self._screenRightTopPos, intersectPoint) then
+		return true
+	elseif is_ray_segment_intersect(o, dir, self._screenRightTopPos, self._screenRightDownPos, intersectPoint) then
+		return true
+	end
+
+	return false
+end
+
+function M:raySegmentIntersect(o, dir, layer, reflectCount, intersectPoints, totalReflectCount)
+	dir:SetNormalize()
+
+	local normal = nil
+	local isIntersect = false
+	local intersectPoint = Vector2.new()
+
+	if layer ~= 1 and is_ray_segment_intersect(o, dir, self:leftDownPos(), self:leftTopPos(), intersectPoint) then
+		layer = 1
+		normal = Vector2.new(1, 0)
+		isIntersect = true
+	elseif layer ~= 2 and is_ray_segment_intersect(o, dir, self:leftTopPos(), self:rightTopPos(), intersectPoint) then
+		layer = 2
+		normal = Vector2.new(0, -1)
+		isIntersect = true
+	elseif layer ~= 3 and is_ray_segment_intersect(o, dir, self:rightTopPos(), self:rightDownPos(), intersectPoint) then
+		layer = 3
+		normal = Vector2.new(-1, 0)
+		isIntersect = true
+	elseif layer ~= 4 and is_ray_circle_intersect(o, dir, opt.vec2_1:Set(0, BattleDefine.DOME_CENTER), BattleDefine.DOME_RADIUS, intersectPoint) then
+		layer = 4
+		normal = Vector2.new(intersectPoint.x, intersectPoint.y - BattleDefine.DOME_CENTER)
+
+		normal:SetNormalize()
+
+		isIntersect = true
+	end
+
+	if isIntersect then
+		reflectCount = reflectCount + 1
+		local pos = intersectPoints[reflectCount]
+
+		if pos == nil then
+			pos = Vector2.retain(intersectPoint.x, intersectPoint.y)
+			intersectPoints[reflectCount] = pos
+		else
+			pos:Set(intersectPoint.x, intersectPoint.y)
+		end
+
+		if reflectCount == totalReflectCount + 1 then
+			return
+		end
+
+		local n = normal:Mul(Vector2.Dot(dir, normal) * 2)
+
+		dir:Sub(n)
+		self:raySegmentIntersect(pos, dir, layer, reflectCount, intersectPoints, totalReflectCount)
+	end
+end
+
+function M:enemy1110CastEffect(posX, param, width)
+	if self._enemy1110Buffets == nil then
+		self._enemy1110Buffets = table.new(32, 0)
+		self._enemy1110EffectVal = param
+	end
+
+	self._enemy1110Buffets[#self._enemy1110Buffets + 1] = {
+		posX,
+		5,
+		width
+	}
+end
+
+function M:stepEnemy1110Buffets(dt)
+	self._battleActor._tempFinalDmgPer = nil
+	local removedCount = 0
+	local cnt = #self._enemy1110Buffets
+
+	for i = 1, cnt do
+		local t = self._enemy1110Buffets[i][2] - dt
+		self._enemy1110Buffets[i][2] = t
+
+		if t <= 0 then
+			removedCount = removedCount + 1
+			self._enemy1110Buffets[i] = nil
+		elseif self._battleActor._tempFinalDmgPer == nil then
+			local posX = self._enemy1110Buffets[i][1]
+			local width = self._enemy1110Buffets[i][3] / 2
+
+			if posX >= self._battleActor._position.x - width and posX <= self._battleActor._position.x + width then
+				self._battleActor._tempFinalDmgPer = self._enemy1110EffectVal
+			end
+		end
+	end
+
+	if removedCount ~= cnt then
+		table.removeNilValuesOutOrder(self._enemy1110Buffets, cnt)
+	end
+
+	if removedCount > 0 then
+		for i = 2, 5 do
+			local weapon = self._slotWeapons[i]
+
+			if weapon then
+				weapon._tempFinalDmgPer = nil
+			end
+		end
+	end
+
+	local cnt = #self._enemy1110Buffets
+
+	for i = 2, 5 do
+		local weapon = self._slotWeapons[i]
+
+		if weapon and weapon._tempFinalDmgPer == nil then
+			local rangeX = BattleDefine.WeaponRangeX[i]
+
+			for j = 1, cnt do
+				local posX = self._enemy1110Buffets[j][1]
+
+				if rangeX[1] <= posX and posX <= rangeX[2] then
+					weapon._tempFinalDmgPer = self._enemy1110EffectVal
+
+					break
+				end
+			end
+		end
+	end
+end
+
+function M:isMainSession()
+	return self._index == 1
+end
+
+return M

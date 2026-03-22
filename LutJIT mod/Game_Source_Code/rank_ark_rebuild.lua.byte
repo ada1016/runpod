@@ -1,0 +1,282 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		{
+			c = 5,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset,
+			[-3] = 19863 - lc._encryptOffset,
+			[-4] = 19959 - lc._encryptOffset,
+			[-5] = 25856 - lc._encryptOffset
+		},
+		{
+			c = 5,
+			[-1] = 29855 - lc._encryptOffset,
+			[-2] = 11855 - lc._encryptOffset,
+			[-3] = 10055 - lc._encryptOffset,
+			[-4] = 9895 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		2,
+		2,
+		2,
+		dup._1536,
+		{
+			c = 5,
+			[-1] = 28855 - lc._encryptOffset,
+			[-2] = 11755 - lc._encryptOffset,
+			[-3] = 10045 - lc._encryptOffset,
+			[-4] = 9891 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		3,
+		3,
+		3,
+		dup._1536,
+		{
+			c = 5,
+			[-1] = 27855 - lc._encryptOffset,
+			[-2] = 11655 - lc._encryptOffset,
+			[-3] = 10035 - lc._encryptOffset,
+			[-4] = 9887 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		4,
+		4,
+		4,
+		dup._1536,
+		{
+			c = 5,
+			[-1] = 26855 - lc._encryptOffset,
+			[-2] = 11555 - lc._encryptOffset,
+			[-3] = 10025 - lc._encryptOffset,
+			[-4] = 9883 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		5,
+		5,
+		5,
+		dup._1536,
+		{
+			c = 5,
+			[-1] = 25855 - lc._encryptOffset,
+			[-2] = 11455 - lc._encryptOffset,
+			[-3] = 10015 - lc._encryptOffset,
+			[-4] = 9879 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		6,
+		6,
+		10,
+		dup._1536,
+		{
+			c = 5,
+			[-1] = 21855 - lc._encryptOffset,
+			[-2] = 11055 - lc._encryptOffset,
+			[-3] = 9975 - lc._encryptOffset,
+			[-4] = 9875 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		7,
+		11,
+		20,
+		{
+			c = 5,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset,
+			[-3] = 19863 - lc._encryptOffset,
+			[-4] = 19959 - lc._encryptOffset,
+			[-5] = 25858 - lc._encryptOffset
+		},
+		{
+			c = 5,
+			[-1] = 19855 - lc._encryptOffset,
+			[-2] = 10855 - lc._encryptOffset,
+			[-3] = 9955 - lc._encryptOffset,
+			[-4] = 9870 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		8,
+		21,
+		50,
+		{
+			c = 5,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset,
+			[-3] = 19863 - lc._encryptOffset,
+			[-4] = 19959 - lc._encryptOffset,
+			[-5] = 25859 - lc._encryptOffset
+		},
+		{
+			c = 5,
+			[-1] = 15855 - lc._encryptOffset,
+			[-2] = 10455 - lc._encryptOffset,
+			[-3] = 9915 - lc._encryptOffset,
+			[-4] = 9865 - lc._encryptOffset,
+			[-5] = 9856 - lc._encryptOffset
+		}
+	},
+	{
+		9,
+		51,
+		100,
+		{
+			c = 4,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset,
+			[-3] = 19863 - lc._encryptOffset,
+			[-4] = 19959 - lc._encryptOffset
+		},
+		{
+			c = 4,
+			[-1] = 13855 - lc._encryptOffset,
+			[-2] = 10255 - lc._encryptOffset,
+			[-3] = 9895 - lc._encryptOffset,
+			[-4] = 9860 - lc._encryptOffset
+		}
+	},
+	{
+		10,
+		101,
+		200,
+		{
+			c = 3,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset,
+			[-3] = 19863 - lc._encryptOffset
+		},
+		{
+			c = 3,
+			[-1] = 11855 - lc._encryptOffset,
+			[-2] = 10055 - lc._encryptOffset,
+			[-3] = 9875 - lc._encryptOffset
+		}
+	},
+	{
+		11,
+		201,
+		400,
+		{
+			c = 2,
+			[-1] = 19856 - lc._encryptOffset,
+			[-2] = 19857 - lc._encryptOffset
+		},
+		{
+			c = 2,
+			[-1] = 10855 - lc._encryptOffset,
+			[-2] = 9955 - lc._encryptOffset
+		}
+	},
+	{
+		12,
+		401,
+		9999,
+		{
+			c = 1,
+			[-1] = 19856 - lc._encryptOffset
+		},
+		{
+			c = 1,
+			[-1] = 10355 - lc._encryptOffset
+		}
+	}
+}
+local mapKeyIndex = {
+	k4797140 = 4,
+	k14126503 = 2,
+	k12956039 = 5,
+	k14125465 = 3,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k4797140 = 1,
+	k12956039 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -9855
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -9855
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

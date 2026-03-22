@@ -1,0 +1,174 @@
+local Types = Types
+local M = class("GameClock")
+_G.GameClock = M
+local UpdateBeat = UpdateBeat
+local Time = Time
+local Client = Client
+local math = math
+
+function M:Awake()
+end
+
+function M:Start()
+	if not self._updateHandler then
+		self._updateHandler = UpdateBeat:CreateListener(self.Update, self)
+	end
+
+	UpdateBeat:AddListener(self._updateHandler)
+	self:initTimeCallback()
+end
+
+function M:updateNowTime()
+	self._nowTimestamp = C.getCurTime() - 0.5
+end
+
+function M:updateCrossTimeCallback()
+	self:registerTimeCallback("time.day.cross", self._tomorrowZeroTimestamp, function ()
+		if not P then
+			return
+		end
+
+		local ct = C.getCurTime()
+		self._todayZeroTimestamp = C.getZeroTimestamp(self._nowTimestamp)
+		self._tomorrowZeroTimestamp = self._todayZeroTimestamp + D.DAY_SECONDS
+
+		if self._nextMonthOneZeroTimestamp <= ct then
+			self._nextMonthOneZeroTimestamp = C.getMonthFirstDayTimestamp(self._todayZeroTimestamp, 1)
+
+			P:monthReset(self._nextMonthOneZeroTimestamp)
+		end
+
+		if self._nextMondayZeroTimestamp <= ct then
+			self._nextMondayZeroTimestamp = C.getMondayTimestamp(self._todayZeroTimestamp, 1)
+
+			P:weekReset(self._nextMondayZeroTimestamp)
+		end
+
+		P:dailyReset(self._tomorrowZeroTimestamp)
+		self:updateCrossTimeCallback()
+	end)
+end
+
+function M:Update()
+	if P == nil then
+		return
+	end
+
+	local delta = Time.deltaTime
+	local unscaledDeltaTime = Time.unscaledDeltaTime
+	C._saveData.appRunTime = (C._saveData.appRunTime or 0) + unscaledDeltaTime
+
+	if self._nowTimestamp == nil then
+		self:updateNowTime()
+
+		self._todayZeroTimestamp = C.getZeroTimestamp(self._nowTimestamp)
+		self._tomorrowZeroTimestamp = C.getZeroTimestamp(self._nowTimestamp + D.DAY_SECONDS)
+		self._nextMondayZeroTimestamp = C.getMondayTimestamp(self._todayZeroTimestamp, 1)
+		self._nextMonthOneZeroTimestamp = C.getMonthFirstDayTimestamp(self._todayZeroTimestamp, 1)
+
+		self:updateCrossTimeCallback()
+	else
+		self:updateNowTime()
+	end
+
+	P._willDailyReset = self._tomorrowZeroTimestamp < self._nowTimestamp
+
+	P._playerAsset:update(unscaledDeltaTime, self._nowTimestamp)
+	P._playerActivity:update(unscaledDeltaTime, self._nowTimestamp)
+	P._playerRecord:checkAvatarFrameExpire()
+	P._playerRecord:checkAvatarExpire()
+	P._playerRecord:checkAvatarMedalExpire()
+
+	P._willDailyReset = false
+
+	self:updateTimeCallback(self._nowTimestamp)
+
+	if C._atUnionPage then
+		if self._nextHeartBeatCD == nil then
+			self._nextHeartBeatCD = 10
+		end
+
+		if self._nextHeartBeatCD then
+			self._nextHeartBeatCD = self._nextHeartBeatCD - unscaledDeltaTime
+
+			if self._nextHeartBeatCD <= 0 then
+				self._nextHeartBeatCD = 10
+
+				Request.sendHeartBeatReq()
+			end
+		end
+	else
+		self._nextHeartBeatCD = nil
+	end
+end
+
+function M:initTimeCallback()
+	self._timeCallback = {}
+	self._toBeRemoved = {}
+	self._removeTimeDirty = false
+end
+
+function M:removeTimeCallback(id)
+	self._toBeRemoved[id] = true
+	self._removeTimeDirty = true
+end
+
+function M:delayRemoveTimeCallback()
+	if not self._removeTimeDirty then
+		return
+	end
+
+	for id, v in pairs(self._toBeRemoved) do
+		if self._timeCallback[id] then
+			self._timeCallback[id] = nil
+		end
+	end
+end
+
+function M:clearTimeCallback()
+	for k, v in pairs(self._timeCallback) do
+		self._timeCallback[k] = nil
+	end
+end
+
+function M:registerTimeCallback(id, time, callback)
+	if self._timeCallback[id] == nil then
+		self._timeCallback[id] = {}
+	end
+
+	self._timeCallback[id].time = time
+	self._timeCallback[id].callback = callback
+	self._toBeRemoved[id] = nil
+end
+
+function M:updateTimeCallback(nowTimestamp)
+	for k, v in pairs(self._timeCallback) do
+		if v.time <= nowTimestamp then
+			self:removeTimeCallback(k)
+
+			if v.callback then
+				v.callback()
+			end
+		end
+	end
+
+	self:delayRemoveTimeCallback()
+end
+
+function M:activateHeartBeatSendCD()
+	self._heartBeatSendStatus = 0
+	self._lastHeartBeatTime = nil
+	self._nextHeartBeatCD = 5
+end
+
+function M:OnDestroy()
+	if self._updateHandler then
+		UpdateBeat:RemoveListener(self._updateHandler)
+
+		self._updateHandler = nil
+	end
+
+	self:clearTimeCallback()
+end
+
+return M

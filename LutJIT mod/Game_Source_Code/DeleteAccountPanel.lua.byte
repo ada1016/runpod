@@ -1,0 +1,26 @@
+local M = class("DeleteAccountPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnGo = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnGo, function ()
+		lc.openUrl(D.URL_EMAIL_TO)
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+end
+
+return M

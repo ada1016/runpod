@@ -1,0 +1,60 @@
+local M = class("ModuleListPanel", requireLua("BasePanel"))
+local ArkRebulidModuleListWidget = requireLua("ArkRebulidModuleListWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	tfOwnContainer = Types.Transform,
+	tfNotOwnContainer = Types.Transform,
+	tfBanContainer = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+end
+
+function M:init()
+	local moduleList = P._playerActivityArkRebuild:getModuleList()
+	local offCount = 0
+
+	for i = 1, #moduleList do
+		local widget = ArkRebulidModuleListWidget.create(self._tfOwnContainer)
+
+		widget:updateUI(moduleList[i], 1)
+		widget:showSwitch(self)
+
+		local isOff = P._playerActivityArkRebuild:isModuleOff(moduleList[i])
+
+		if isOff then
+			offCount = offCount + 1
+
+			widget.transform:SetSiblingIndex(offCount)
+		end
+	end
+
+	local _, moduleBanList = P._playerActivityArkRebuild:getBanData()
+
+	for i = 1, #D._arkRebuildModuleConfig do
+		if table.contains(moduleBanList, i) then
+			local widget = ArkRebulidModuleListWidget.create(self._tfBanContainer)
+
+			widget:updateUI(i, 3)
+		elseif not table.contains(moduleList, i) then
+			local cfg = D._arkRebuildModuleConfig[i]
+
+			if cfg._weight > 0 or i == 1 or i == 24 then
+				local widget = ArkRebulidModuleListWidget.create(self._tfNotOwnContainer)
+
+				widget:updateUI(i, 2)
+			end
+		end
+	end
+end
+
+return M

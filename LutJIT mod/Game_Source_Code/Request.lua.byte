@@ -1,0 +1,275 @@
+local M = {}
+
+declare("Request", M)
+
+local Network = Network
+local pb = pb
+local NetPack = NetPack
+local CURRENT_DT = 1
+
+local function packReqMsg(msgType, subMsg, callback, pbRespName)
+	local reqMsg = {
+		type = msgType
+	}
+
+	if msgType ~= "PB_TYPE_USER_LOGIN" and msgType ~= "PB_TYPE_USER_RELOGIN" then
+		reqMsg.dt = CURRENT_DT
+		Network._cbFuncs[CURRENT_DT] = callback
+		Network._cbRespNames[CURRENT_DT] = pbRespName
+
+		if pbRespName then
+			reqMsg.resp_msg_name = pbRespName
+		end
+
+		CURRENT_DT = CURRENT_DT + 1
+	end
+
+	if subMsg then
+		reqMsg.req = subMsg
+	end
+
+	if msgType ~= "PB_TYPE_HEART_BEAT" and msgType ~= "PB_TYPE_GAME_GUIDE_STEP" and C._stashedGuideStep and C._stashedGuideStep > 0 and D._guideConfig[C._stashedGuideStep]._syncServer == 1 then
+		reqMsg.guide_step = C._stashedGuideStep
+		C._stashedGuideStep = nil
+	end
+
+	return reqMsg
+end
+
+local function getLoginMsg()
+	local t = {
+		channel = "taptap",
+		device_id = lc.getUdid(),
+		uid = C._firebaseId,
+		version = C.getVersion(),
+		data_version = C._serverDataVersion
+	}
+
+	if not lc._isCN then
+		t.id = C._firebaseId
+	end
+
+	return t
+end
+
+function M.sendUserLogin()
+	local msgType = "PB_TYPE_USER_LOGIN"
+	local t = getLoginMsg()
+
+	Network._gameSocket:directlySendMsg(packReqMsg(msgType, pb.encode("r6.UserLoginReq", t)))
+end
+
+function M.sendUserRelogin()
+	local msgType = "PB_TYPE_USER_RELOGIN"
+	local t = getLoginMsg()
+
+	Network._gameSocket:directlySendMsg(packReqMsg(msgType, pb.encode("r6.UserLoginReq", t)))
+end
+
+function M.sendUserResetAccount()
+	local msgType = "PB_TYPE_USER_RESET_ACCOUNT"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType))
+end
+
+function M.sendDataDiff(diff)
+	local msgType = "PB_TYPE_SYNC_DATA_CHANGE"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.DocOperationReq", diff)))
+end
+
+function M.sendHeartBeatReq()
+	if Network._gameSocket:isStopAutoReconnect() then
+		return
+	end
+
+	local msgType = "PB_TYPE_HEART_BEAT"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType))
+end
+
+function M.sendCheckInputTextReq(text)
+	Network._gameSocket:sendMsg(packReqMsg("PB_TYPE_USER_VERIFY_TEXT", pb.encode("r6.StringReq", {
+		str = text
+	})))
+end
+
+function M.sendUserCommandResp(cmd)
+	Network._gameSocket:sendMsg(packReqMsg("PB_TYPE_USER_COMMAND", pb.encode("r6.StringReq", {
+		str = cmd
+	})))
+end
+
+function M.sendIAPStartReq(callback)
+	local msgType = "PB_TYPE_IAP_START"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, nil, callback))
+end
+
+function M.sendRegisterRanker(type, key, callback)
+	local msgType = "PB_TYPE_RANK_REGISTER_RANKER"
+	local t = {
+		type = type,
+		key = key ~= nil and tostring(key) or nil
+	}
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.RegisterRankerReq", t), callback))
+end
+
+function M.sendGetRankData(type, key, rankId, limit, callback)
+	local msgType = "PB_TYPE_RANK_GET_RANK_DATA"
+	local t = {
+		type = type,
+		key = key ~= nil and tostring(key) or nil,
+		rank_id = rankId,
+		limit = limit
+	}
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.GetRankDataReq", t), callback))
+end
+
+function M.sendUploadRankData(type, key, rankId, rankData, pos)
+	if C._forbidUpload then
+		return
+	end
+
+	local msgType = "PB_TYPE_RANK_UPLOAD_RANK_DATA"
+	local t = {
+		type = type,
+		key = key ~= nil and tostring(key) or nil,
+		rank_id = rankId,
+		rank_data = rankData,
+		pos = pos
+	}
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.UploadRankDataReq", t)))
+end
+
+function M.sendGetPlayerInfo(userId, callback)
+	local t = {
+		user_id = userId
+	}
+	local msgType = "PB_TYPE_RANK_GET_PLAYER_INFO"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.GetPlayerInfoReq", t), callback))
+end
+
+function M.sendUploadPlayerInfo(playerInfo)
+	local t = {
+		player_info = playerInfo
+	}
+	local msgType = "PB_TYPE_RANK_UPLOAD_PLAYER_INFO"
+
+	Network._gameSocket:sendMsg(packReqMsg(msgType, pb.encode("r6.UploadPlayerInfoReq", t)))
+end
+
+function M.sendUnionCreateReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_CREATE_UNION", pb.encode("r6.UnionCreateReq", NetPack.UnionCreateReqPack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionSearchReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_GET_UNION_LIST", pb.encode("r6.UnionListReq", NetPack.UnionSearchReqPack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionJoinReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_APPLY_UNION", pb.encode("r6.UnionApplyReq", NetPack.UnionApplyReqPack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionGetDetailReq(union_id)
+	if union_id then
+		local req = packReqMsg("PB_TYPE_SOCIAL_GET_UNION_DETAIL", pb.encode("r6.IntReq", {
+			i32 = union_id
+		}))
+		req.drop_after_fail = 1
+
+		Network._gameSocket:sendMsg(req)
+	else
+		local req = packReqMsg("PB_TYPE_SOCIAL_GET_PLAYER_UNION_DETAIL", pb.encode("r6.GetUnionDetailReq", {
+			my_info = NetPack.MemberInfoPack
+		}))
+		req.drop_after_fail = 1
+
+		Network._gameSocket:sendMsg(req)
+	end
+end
+
+function M.sendUnionLeaveReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_LEAVE_UNION")
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionGetLogReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_UNION_LOG")
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionEditReq()
+	local req = packReqMsg("PB_TYPE_SOCIAL_EDIT_UNION", pb.encode("r6.UnionCreateReq", NetPack.UnionSetupReqPack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionDealApplyReq(applier_ids, accepted)
+	local req = packReqMsg("PB_TYPE_SOCIAL_DEAL_UNION_APPLY", pb.encode("r6.UnionDealApplyReq", {
+		applier_ids = applier_ids,
+		accepted = accepted
+	}))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionKickMemberReq(id)
+	local req = packReqMsg("PB_TYPE_SOCIAL_KICK_MEMBER", pb.encode("r6.StringReq", {
+		str = id
+	}))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendUnionAdjuestRoleReq(id)
+	local req = packReqMsg("PB_TYPE_SOCIAL_UNION_APPOINT", pb.encode("r6.UnionAppointReq", NetPack.UnionAppointReq))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendJoinChatReq(pack)
+	local req = packReqMsg("PB_TYPE_SOCIAL_CHAT_LIST", pb.encode("r6.ChatListReq", pack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendGetChatListReq(pack)
+	local req = packReqMsg("PB_TYPE_SOCIAL_CHAT_LIST", pb.encode("r6.ChatListReq", pack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendChatReq(pack)
+	local req = packReqMsg("PB_TYPE_SOCIAL_CHAT", pb.encode("r6.ChatReq", pack))
+	req.drop_after_fail = 1
+
+	Network._gameSocket:sendMsg(req)
+end
+
+function M.sendMsgReq(pbType, reqMsgName, data, serverCallback, respMsgName)
+	Network._gameSocket:sendMsg(packReqMsg(pbType, pb.encode(reqMsgName, data), serverCallback, respMsgName))
+end

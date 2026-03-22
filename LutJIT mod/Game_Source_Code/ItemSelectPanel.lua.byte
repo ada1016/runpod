@@ -1,0 +1,297 @@
+local M = class("ItemSelectPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	goDesc = Types.GameObject,
+	txtDesc = Types.TMP_Text,
+	tfContainers = Types.Transform,
+	tfSeparate = Types.Transform,
+	goTemplate = Types.GameObject,
+	btnConfirm = Types.Button
+}
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._objWidgets = {}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnConfirm, function ()
+		self:handleConfirm()
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(cid, confirmCallback, params)
+	self._cid = cid
+	self._inputSelectOriginIdx, self._inputSelectItemId = P._playerAsset:getItemCustomSelectIdx(self._cid)
+	self._confirmCallback = confirmCallback
+	self._params = params or {}
+	self._notAllowCancel = self._params.notAllowCancel
+	local insideCids, insideNums = P._playerAsset:getInsideAssets(cid)
+	self._showDatas = {
+		{},
+		{}
+	}
+
+	if self:needHandleSparkScoutChip(cid) then
+		for i = 1, lc.lenTable(insideCids) do
+			local insideCid = insideCids[i]
+			local insideNum = insideNums[i]
+			local tb = nil
+
+			if D.isGem(insideCid) and P._playerActivitySparkScout:hasHigherQualityChip(insideCid, true) then
+				tb = self._showDatas[2]
+			else
+				tb = self._showDatas[1]
+			end
+
+			tb[#tb + 1] = {
+				insideCid,
+				insideNum,
+				i
+			}
+		end
+	else
+		for i = 1, lc.lenTable(insideCids) do
+			local insideCid = insideCids[i]
+			local insideNum = insideNums[i]
+			local tb = self._showDatas[1]
+			tb[#tb + 1] = {
+				insideCid,
+				insideNum,
+				i
+			}
+		end
+	end
+
+	if self._inputSelectItemId then
+		local canSelect = self:canSelectItem(self._inputSelectItemId)
+
+		if canSelect then
+			self._selectItemId = self._inputSelectItemId
+			self._selectOriginIdx = self._inputSelectOriginIdx
+		else
+			self._selectItemId = nil
+			self._selectOriginIdx = nil
+
+			P._playerAsset:setItemCustomSelectByIdx(self._cid, nil)
+		end
+	end
+
+	if C._config.debug then
+		self._txtTitle.text = self._txtTitle.text .. cid
+	end
+
+	self:updateDesc()
+	self:updateSubItems()
+end
+
+function M:updateDesc()
+	local showDesc = self._params.descFunc ~= nil
+
+	self._goDesc:SetActive(showDesc)
+
+	if showDesc then
+		self._params.descFunc(self._txtDesc)
+	end
+end
+
+function M:needHandleSparkScoutChip(cid)
+	if not P._inSparkScout then
+		return false
+	end
+
+	if D.isSparkChipCustom(cid) then
+		return true
+	end
+
+	return false
+end
+
+function M:updateSubItems()
+	local objCount = self._tfContainers.childCount
+	local canSelectCount = lc.lenTable(self._showDatas[1])
+	local canNotSelectCount = lc.lenTable(self._showDatas[2])
+	self._displayCount = canSelectCount + canNotSelectCount
+	local dataCount = self._displayCount
+
+	for i = 1, math.max(objCount, dataCount) do
+		local item = self._showDatas[1][i]
+		local canSelectThisItem = true
+
+		if not item then
+			item = self._showDatas[2][i - canSelectCount]
+			canSelectThisItem = false
+		end
+
+		local cid = item[1]
+		local num = item[2] or 1
+		local goWidget = self._objWidgets[i]
+
+		if i <= dataCount then
+			if not goWidget then
+				goWidget = GameObject.Instantiate(self._goTemplate, self._tfContainers)
+
+				lc.prefabVarPeer(goWidget)
+
+				local goItem = ItemWidget.noCreate(goWidget._goItem)
+				self._objWidgets[i] = goWidget
+
+				self:setClickWithoutAction(goWidget._btnClick, function ()
+					self:doChangeSelectItem(goWidget, i)
+				end)
+				self:setClickWithoutAction(goItem._btnClick, function ()
+					goItem:rewardclickCallback()
+				end)
+			end
+
+			goWidget._imgBg.enabled = i % 2 == 0
+
+			goWidget:SetActive(true)
+
+			goWidget._cid = cid
+
+			goWidget._goItem:init(cid, num)
+			goWidget._goCanSelectArea:SetActive(canSelectThisItem)
+
+			if D.isGem(cid) then
+				V.loadChipNameAndDesc(nil, goWidget._txtName, cid)
+			else
+				goWidget._txtName:SetLocalize(D.toNameSid(cid))
+			end
+
+			if D.isGem(cid) then
+				goWidget._txtDesc.gameObject:SetActive(false)
+			elseif D._itemConfig[cid]._type == D.ItemType.Skin then
+				goWidget._txtDesc.gameObject:SetActive(true)
+
+				local lv = P._playerSkin:getSkinLevel(cid)
+
+				if lv > 0 then
+					goWidget._txtDesc:SetLocalizeS(SID.STR_OWNED_STARNUM, string.format("%d<sprite name=\"star\">", lv))
+				else
+					goWidget._txtDesc:SetLocalize(SID.STR_NOT_OWN)
+				end
+			elseif D._itemConfig[cid]._type == D.ItemType.Ranger then
+				goWidget._txtDesc.gameObject:SetActive(true)
+
+				local lv = P._playerRanger:getRangerLevel(cid)
+				local color = math.ceil(lv / 5)
+				local leftLv = lv % 5
+
+				if lv == 0 then
+					goWidget._txtDesc:SetLocalize(SID.STR_NOT_OWN)
+				else
+					local colorStrs = {
+						"star",
+						"star_red",
+						"star_colorful"
+					}
+					local tmpStr = colorStrs[1]
+					color = Mathf.Clamp(color, 1, #colorStrs)
+					tmpStr = colorStrs[color]
+
+					if leftLv == 0 then
+						leftLv = 5
+					end
+
+					goWidget._txtDesc:SetLocalizeS(SID.STR_OWNED_STARNUM, string.format("%d%s", leftLv, D.getTMPSpriteRichText(tmpStr)))
+				end
+			else
+				goWidget._txtDesc.gameObject:SetActive(false)
+			end
+
+			goWidget._goSelect:SetActive(self._selectItemId and self._selectItemId == cid)
+
+			if self._selectItemId == cid then
+				self._goSelectObj = goWidget
+			end
+		elseif self._objWidgets[i] then
+			goWidget:SetActive(false)
+		end
+	end
+
+	self._tfSeparate:SetActive(canNotSelectCount > 0)
+
+	if canNotSelectCount > 0 then
+		self._tfSeparate:SetSiblingIndex(canSelectCount)
+	end
+end
+
+function M:doChangeSelectItem(goWidget, idx)
+	local canSelect, newSelectCid, num, originIdx = self:getItemIdInNewListByIdx(idx)
+
+	if not canSelect then
+		return
+	end
+
+	local lastSelectCid = self._selectItemId
+
+	if lastSelectCid then
+		if self._notAllowCancel and lastSelectCid == newSelectCid then
+			return
+		end
+
+		self._goSelectObj._goSelect:SetActive(false)
+
+		self._goSelectObj = nil
+		self._selectItemId = nil
+		self._selectOriginIdx = nil
+
+		if lastSelectCid == newSelectCid then
+			return
+		end
+	end
+
+	self._selectOriginIdx = originIdx
+	self._goSelectObj = goWidget
+	self._selectItemId = newSelectCid
+
+	goWidget._goSelect:SetActive(true)
+end
+
+function M:getItemIdInNewListByIdx(idx)
+	local item = self._showDatas[1][idx]
+	local canSelectThisItem = true
+	local canSelectCount = lc.lenTable(self._showDatas[1])
+
+	if not item then
+		item = self._showDatas[2][idx - canSelectCount]
+		canSelectThisItem = false
+	end
+
+	return canSelectThisItem, item[1], item[2], item[3]
+end
+
+function M:canSelectItem(itemId)
+	local ret = table.findArray(self._showDatas[1], function (value)
+		return value[1] == itemId
+	end)
+
+	return ret ~= nil
+end
+
+function M:handleConfirm()
+	if self._selectOriginIdx ~= self._inputSelectOriginIdx or self._selectItemId ~= self._inputSelectItemId then
+		P._playerAsset:setItemCustomSelectByIdx(self._cid, self._selectOriginIdx)
+	end
+
+	self:closePanel()
+end
+
+function M:closePanel()
+	if self._confirmCallback then
+		self._confirmCallback()
+	end
+
+	M.super.closePanel(self)
+end
+
+return M

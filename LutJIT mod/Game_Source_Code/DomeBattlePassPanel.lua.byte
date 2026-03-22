@@ -1,0 +1,52 @@
+local M = class("DomeBattlePassPanel", requireLua("BaseBattlePassPanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	imgExpProgress = Types.SlicedFilledImage,
+	textExpProgress = Types.TMP_Text,
+	textLevel = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	btnBuyLevel = Types.Button,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	btnBuyStep3 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goStep3Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	goLock3 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text,
+	textBuyStep3 = Types.TMP_Text,
+	goTopMask = Types.GameObject,
+	goBottomMask = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initOnce()
+	self._module = P._playerDomeBP
+	self._bpCfg = {
+		reddot = "city.home.special.domebattlepass",
+		widgetName = "BPRewardWidget_Dome",
+		e_levelChange = self._module._key_levelEvent,
+		e_expire = self._module._key_expireEvent,
+		missRewardTitleId = SID.TITLE_PREV_VALOR_REWARDS
+	}
+end
+
+function M:updateLevelExp()
+	local module = self._module
+	local maxLv = module:readMaxLevel()
+	local exp = module:getCurExp()
+	self._requiredExp = maxLv
+	self._exp = exp
+	self._imgExpProgress.fillAmount = self._exp / self._requiredExp
+	self._textExpProgress.text = self._exp .. " / " .. self._requiredExp
+	self._textLevel.text = self._level
+
+	self:updateBuyBtn()
+end
+
+return M

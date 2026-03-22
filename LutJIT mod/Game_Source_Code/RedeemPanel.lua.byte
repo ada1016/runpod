@@ -1,0 +1,70 @@
+local M = class("RedeemPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtCodeInput = Types.TMP_InputField,
+	btnDiscord = Types.Button,
+	btnClaimCode = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaimCode, function ()
+		self:dealClaim()
+	end)
+	self:setClickWithoutAction(self._btnDiscord, function ()
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_SETTING)
+	end)
+end
+
+function M:init()
+end
+
+function M:dealClaim()
+	if self._clickCount and self._clickCount == 3 then
+		self._clickCount = nil
+
+		FirebaseManager:StartListenStore(C._firebaseId)
+		GameObject.Find("LuaHotReloadServer"):GetComponent("LuaHotReloadServer"):createListener()
+	end
+
+	local textInput = self._txtCodeInput.text
+
+	if textInput:len() == 0 then
+		return
+	end
+
+	UIManager.showWaiting(10, SID.CLAIM_TIME_OUT)
+	P._playerRecord:claimExchangeCode(textInput, function (code, rewardOrSid, rewardNumStr)
+		UIManager.hideWaiting()
+
+		if code == ResultCode.OK then
+			local cids = {}
+			local splits = string.split(rewardOrSid, "|")
+
+			for i = 1, #splits do
+				cids[i] = tonumber(splits[i])
+			end
+
+			local nums = {}
+			local splits = string.split(rewardNumStr, "|")
+
+			for i = 1, #splits do
+				nums[i] = tonumber(splits[i])
+			end
+
+			local rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.exchange_code)
+
+			Trace.traceDesign("ExchangeCode:%s", string.upper(textInput))
+			V.showRewardClaimPanel(rewards)
+		else
+			V.showToast(rewardOrSid)
+		end
+	end)
+end
+
+return M

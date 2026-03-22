@@ -1,0 +1,69 @@
+local M = class("BattleBullet_Trajectory", requireLua("BattleBullet"))
+local SUPER = M.super
+local TrajectorySegment = requireLua("BattleBullet_TrajectorySegment")
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._bulletSegments = table.new(4, 0)
+end
+
+function M:createSegment()
+	local seg = TrajectorySegment.create(self)
+
+	seg:init(self._position.x, self._position.y)
+
+	self._bulletSegments[#self._bulletSegments + 1] = seg
+end
+
+function M:updateAngle(angle)
+	self:setDirByAngle(angle)
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+	table.clear(self._bulletSegments)
+
+	self._createFlag = true
+end
+
+function M:step(dt)
+	if self._createFlag then
+		self._createFlag = nil
+
+		self:createSegment()
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	local removedCount = 0
+	local cnt = #self._bulletSegments
+
+	for i = 1, cnt do
+		local seg = self._bulletSegments[i]
+
+		if seg._isToBeDestroyed then
+			self._bulletSegments[i] = nil
+			removedCount = removedCount + 1
+		else
+			seg:step(dt)
+		end
+	end
+
+	if removedCount ~= cnt then
+		table.removeNilValuesOutOrder(self._bulletSegments, cnt)
+	end
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+end
+
+function M:oneSegmentDestroyed(segment)
+end
+
+return M

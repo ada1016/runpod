@@ -1,0 +1,607 @@
+local M = class("ArkRebuildSpinPanel", requireLua("BasePanel"))
+M.args = {
+	goRes1 = Types.GameObject,
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	atorMain = Types.Animator,
+	btnLuckyIssue = Types.Button,
+	txtLuckyValue = Types.TMP_Text,
+	txtDrawLimit = Types.TMP_Text,
+	atorLight = Types.Animator,
+	atorLightCenter = Types.Animator,
+	tfSpinBody = Types.Transform,
+	tfRewards = Types.Transform,
+	atorArrow = Types.Animator,
+	tfArrow = Types.Transform,
+	goVfx = Types.GameObject,
+	imgLuckyBar = Types.Image,
+	txtRecoverTime = Types.TMP_Text,
+	btnDrawOne = Types.Button,
+	imgIconOne = Types.Image,
+	txtDrawOne = Types.TMP_Text,
+	txtOneCostNum = Types.TMP_Text,
+	btnDrawMulti = Types.Button,
+	imgIconMulti = Types.Image,
+	txtDrawMulti = Types.TMP_Text,
+	txtMultiCostNum = Types.TMP_Text,
+	goDrawOneSkip = Types.GameObject,
+	btnPurchase = Types.Button,
+	btnExchange = Types.Button,
+	btnSkipAnim = Types.Button,
+	goAnnounce = Types.GameObject,
+	btnClose = Types.Button
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._refreshTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnIssue, function ()
+		self:handleIssueBtn()
+	end)
+	self:setClick(self._btnLuckyIssue, function ()
+		if self._isRotating then
+			return
+		end
+
+		V.showBubbleTips({
+			desc = SID.ACTIVITY_LUCKYVALUE_TIPS2,
+			descParam = {
+				{
+					type = "int",
+					value = self._module:readMaxLucky(self._subType)
+				},
+				{
+					type = "sid",
+					value = D.toNameSid(self._module:readSpeicalCid(self._subType))
+				}
+			}
+		}, {
+			target = self._btnLuckyIssue.transform
+		})
+	end)
+	self:setClick(self._btnDrawOne, function ()
+		self:tryDealDraw(1)
+	end)
+	self:setClick(self._btnDrawMulti, function ()
+		self:tryDealDraw(self._module:readMultiDrawNum())
+	end)
+	self:setClick(self._btnSkipAnim, function ()
+		if self._isRotating then
+			return
+		end
+
+		self:dealSkipAnimBtn()
+	end)
+	self:setClick(self._btnPurchase, function ()
+		self:handleQuickExchangeBtn()
+	end)
+	self:setClick(self._btnExchange, function ()
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.ark_rebuild_key, P._playerActivity:getExchangGroup(D.ActivityType.ArkRebuild, 1))
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+	end)
+	self:on("ark_rebuild.lottery.expire", function ()
+		self:tryExpire()
+	end)
+	self:on("day.cross", function ()
+		self:tryExpire()
+		self:updateTimer()
+		self:updateCostBtns()
+		self:updateDot()
+	end)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+	M.super.closePanel(self)
+end
+
+local atorTimeScale = 0.01
+
+function M:init()
+	self._btnPurchase.dot:SetActive(false)
+	self._btnExchange.dot:SetActive(false)
+
+	self._module = P._playerArkRebuildLottery
+
+	self._atorLight:SetFloat("Speed", 1 * atorTimeScale)
+	self._atorLightCenter:SetFloat("Speed", 1 * atorTimeScale)
+
+	if not self._module:isOpening() then
+		return
+	end
+
+	local lbRes = LuaHelper.GetLuaBehaviour(self._goRes1)
+
+	lbRes:addPanel(self)
+	lbRes:updatePlus()
+
+	self._data = self._module:getCurrentData()
+	local lb = LuaHelper.GetLuaBehaviour(self._goAnnounce)
+
+	lb:init(self._module:getUploadActivityId())
+
+	if self._module:isEntered() then
+		V.resetAnimToEndFrame(self.gameObject:GetComponent("Animation"), "anim_arkSpin_appear")
+	else
+		self._module:tryEnter()
+		C.playSound("ui_Rebuild_canival_firstopen_1")
+		RedDotManager.update("city.home.arkProj")
+	end
+
+	self._tmpTitle:SetLocalize(SID.TITLE_ARK_CARNIVAL)
+
+	self._data = self._module:getCurrentData() or {}
+	self._startTime = self._data.startTime or 0
+	self._subType = self._data.subType
+	self._vfx = self._goVfx:GetComponent("UIParticle")
+	local dropId = self._module:getDrawDropId(self._subType)
+
+	self:initRewards(dropId)
+	self:updateUI()
+	self:openPanelTrace()
+end
+
+function M:openPanelTrace()
+	Trace.traceDesign("RebuildCarnival_Enter")
+end
+
+function M:initRewards(dropId)
+	local drops = DropHelper.readDropsById(dropId)
+	self._goRewards = {}
+
+	for i = 1, 10 do
+		local go = self._tfRewards:GetChild(i - 1).gameObject
+		self._goRewards[i] = go
+
+		SimpleItemWidget.noCreate(go)
+
+		local drop = drops[i]
+		local cid = drop._itemId
+		local num = drop._minNum
+
+		go:init(cid, num)
+		self:setClick(go._btnClick, function ()
+			go:rewardclickCallback()
+		end)
+	end
+end
+
+function M:updateUI()
+	self:updateSkip()
+	self:updateLuckyValue()
+	self:updateTimer()
+	self:updateCostBtns()
+	self:updateDrawLimit()
+end
+
+function M:addLuckyValue(withAnim)
+	self._oldLuckyValue = self._showLuckyValue
+	self._showLuckyValue = self._showLuckyValue + 1
+	self._txtLuckyValue.text = self._showLuckyValue
+	self._imgLuckyBar.fillAmount = self._showLuckyValue / self._module:readMaxLucky()
+end
+
+function M:updateLuckyValue(value)
+	self._showLuckyValue = value or self._module:getLuckyValue()
+	self._txtLuckyValue.text = self._showLuckyValue
+	self._imgLuckyBar.fillAmount = self._showLuckyValue / self._module:readMaxLucky()
+end
+
+function M:updateDrawLimit()
+	local limitStr = string.format("%d/%d", self._module:getLeftDrawNum(), self._module:getMaxDrawNum())
+
+	self._txtDrawLimit:SetLocalizeS(SID.TIP_ARK_CARNIVAL_LIMIT, limitStr)
+end
+
+function M:tryExpire()
+	if self._isRotating then
+		return
+	end
+
+	local ct = C.getCurTime()
+
+	if ct < self._data.endTime then
+		return
+	end
+
+	if self._expireDealed then
+		return
+	end
+
+	self._expireDealed = true
+
+	V.showMessageBox({
+		_type = 1,
+		_content = SID.TIP_EVENT_END,
+		_confirmCallback = function ()
+			UIManager.closeToPanelOrMain()
+		end
+	})
+end
+
+function M:tryDealDraw(drawNum)
+	if not self._module:isOpening() then
+		self:tryExpire()
+
+		return
+	end
+
+	Client.checkNetworkAsync(function ()
+		self:dealDraw(drawNum)
+	end)
+end
+
+function M:dealDraw(drawNum)
+	local costCid, costNum = self._module:readOneCost(self._subType)
+
+	if drawNum then
+		self._lastDrawNum = drawNum
+	else
+		drawNum = self._lastDrawNum or 1
+	end
+
+	if drawNum > 1 then
+		costCid, costNum = self._module:readMoreCost(self._subType)
+	end
+
+	local haveFree = self._module:haveFree()
+	local result, rewards, resultIdxs = nil
+
+	if drawNum == 1 and haveFree then
+		result, rewards, resultIdxs = self._module:tryFreeLottery()
+
+		self:updateTimer()
+
+		if result == ResultCode.OK then
+			self._resutlIdxList = resultIdxs
+			self._resultRewards = rewards
+
+			if self:getSkipAnim() then
+				self:dealSpinEnd()
+			else
+				self:startMultiTurn()
+			end
+
+			self:updateCostBtns()
+			self:updateDot()
+
+			return
+		end
+
+		return
+	end
+
+	local leftDrawNum = self._module:getLeftDrawNum()
+
+	if leftDrawNum < drawNum then
+		return V.showResultCode(ResultCode.THIS_TIME_NUM_MAX)
+	end
+
+	local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+		self:dealDrawCheck(drawNum)
+	end)
+
+	if not ret then
+		self:dealDrawCheck(drawNum)
+	end
+end
+
+function M:dealDrawCheck(drawNum)
+	local result, rewards, resultIdxs = self._module:tryLottery(drawNum > 1)
+
+	if result ~= ResultCode.OK then
+		local costCid, _ = self._module:readOneCost(self._subType)
+
+		if result == ResultCode.RESOURCE_NOT_ENOUGH and costCid == D.ResType.diamond then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, nil, D.PurchaseChannel.ArkRebuildLottery)
+
+			return
+		end
+
+		V.showResultCode(result)
+
+		return
+	end
+
+	self._resutlIdxList = resultIdxs
+	self._resultRewards = rewards
+
+	if self:getSkipAnim() then
+		self:dealSpinEnd()
+	else
+		self:startMultiTurn()
+	end
+end
+
+function M:startMultiTurn()
+	if self._isRotating then
+		return
+	end
+
+	MainGameRoot:showGlobalMask()
+
+	self._isRotating = true
+	self._curSpinIndex = 1
+	self._spinTotalCount = #self._resutlIdxList
+
+	self:playNextSpin()
+end
+
+function M:playNextSpin()
+	local rewardCount = 10
+	local baseCircle = 1080
+	local targetIdx = self._resutlIdxList[self._curSpinIndex]
+	self._targetIdx = targetIdx
+	self._isRotating = true
+	local anglePerSlot = 360 / rewardCount
+	local stopAngle = (rewardCount - targetIdx + 1) * anglePerSlot
+	local overshoot = 5
+	local finalAngle = baseCircle + stopAngle
+	local maxAngle = finalAngle + overshoot
+
+	self._atorLight:SetFloat("Speed", 200 * atorTimeScale)
+	self._atorLightCenter:SetFloat("Speed", 200 * atorTimeScale)
+
+	local seq = DOTween.Sequence():SetLink(self.gameObject)
+
+	if #self._resutlIdxList > 1 then
+		baseCircle = 360
+		seq.timeScale = 3
+
+		Client.playSound("ui_Rebuild_canival_spin_10")
+	else
+		Client.playSound("ui_Monopoly_spin_1")
+	end
+
+	self._seq = seq
+	local rotateTime = 2.2
+	local reboundTime = 0.15
+
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, -maxAngle), rotateTime, V.RotateMode_FastBeyond360):SetEase(V.EASE_OUT_CUBIC))
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, overshoot * 2), reboundTime, V.RotateMode_LocalAxisAdd):SetEase(V.EASE_IN_OUT_SINE))
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, -overshoot), reboundTime / 2, V.RotateMode_LocalAxisAdd):SetEase(V.EASE_IN_OUT_SINE))
+	seq:InsertCallback(2.7, function ()
+		self._vfx:Play()
+
+		if self._targetIdx == 1 then
+			self:updateLuckyValue(0)
+			C.playSound("ui_Draw_resultwin_1")
+		else
+			self:addLuckyValue(true)
+		end
+	end)
+	seq:AppendInterval(1)
+	seq:OnComplete(function ()
+		self._seq = nil
+
+		if self._curSpinIndex >= #self._resutlIdxList then
+			self:dealSpinEnd()
+		else
+			self._curSpinIndex = self._curSpinIndex + 1
+
+			self:playNextSpin()
+		end
+	end):OnUpdate(function ()
+		for i = 1, 10 do
+			self._goRewards[i].transform.up = Vector3.static(0, 1, 0)
+		end
+
+		if not self._seq then
+			return
+		end
+
+		local totalTime = self._seq:Duration()
+		local elapsedTime = self._seq:Elapsed()
+		local left = totalTime - elapsedTime
+
+		if elapsedTime < 2.5 and elapsedTime > 0.5 then
+			local newSpeed = 1 + 199 * (2.5 - elapsedTime) / 2
+
+			self._atorLight:SetFloat("Speed", newSpeed * atorTimeScale)
+			self._atorLightCenter:SetFloat("Speed", newSpeed * atorTimeScale)
+		elseif elapsedTime >= 2.5 then
+			self._atorLight:SetFloat("Speed", 1 * atorTimeScale)
+			self._atorLightCenter:SetFloat("Speed", 1 * atorTimeScale)
+		end
+	end)
+end
+
+function M:dealSpinEnd()
+	self:updateDrawLimit()
+	self:updateLuckyValue()
+	self:updateCostBtns()
+
+	local costCid, costNum = nil
+
+	if self._lastDrawNum == 1 then
+		costCid, costNum = self._module:readOneCost(self._subType)
+	else
+		costCid, costNum = self._module:readMoreCost(self._subType)
+	end
+
+	MainGameRoot:hideGlobalMask()
+
+	local leftDrawNum = self._module:getLeftDrawNum()
+
+	if leftDrawNum == 0 then
+		self._lastDrawNum = 0
+	elseif leftDrawNum < self._module:readMultiDrawNum() then
+		self._lastDrawNum = 1
+	end
+
+	UIManager.openPanel(PrefabDefine.LotteryRewardPanel, self._resultRewards, {
+		activityType = D.ActivityType.ArkRebuildLottery,
+		moreCostCid = costCid,
+		moreCostNum = costNum,
+		moreDrawNum = self._lastDrawNum,
+		extendBtnCallback = function ()
+			self:tryDealDraw(nil, true)
+		end
+	}, function ()
+		self._isRotating = false
+
+		if self:tryExpire() then
+			return
+		end
+	end)
+end
+
+function M:handleQuickExchangeBtn()
+	local exchangeId = self._module:readExchangeId()
+
+	UIManager.openPanel(PrefabDefine.ExchangeResourcePanel, exchangeId, {
+		titleSid = SID.BTN_PURCHASE,
+		exchangeLimitFunc = function ()
+			return self._module:getLeftExchangeNum()
+		end,
+		exchangeNumCheckFunc = function (exchangeCount)
+			return exchangeCount <= self._module:getLeftExchangeNum()
+		end,
+		exchangeDealFunc = function (exchangeCount)
+			self._module:recordExchangeRes(exchangeCount)
+		end
+	})
+end
+
+function M:updateTimeText()
+	if not self._module:isOpening() then
+		V.formatLeftTime(self._textExpireTime, 0, 2)
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(0))
+
+		return
+	end
+
+	local haveFree = self._module:haveFree()
+	local ct = Client.getCurTime()
+
+	if not haveFree then
+		local dt = math.max(0, self._dayEndTime - ct)
+
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(dt))
+	end
+
+	local endTime = self._data.endTime
+	local d, h, m, s = C.getTimeEndArgs(endTime - ct)
+
+	if d >= 2 then
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:updateTimer()
+	lc.stopTimer(self._refreshTimer)
+
+	if not self._module:isOpening() then
+		return
+	end
+
+	local endTime = self._data.endTime
+	local leftTime = endTime - C.getCurTime()
+	local haveFree = self._module:haveFree()
+
+	self._txtRecoverTime.gameObject:SetActive(D.DAY_SECONDS < leftTime and not haveFree)
+
+	self._dayEndTime = Client.getZeroTimestamp(C.getCurTime(), 1)
+
+	self:updateTimeText()
+
+	self._refreshTimer = lc.setInterval(function ()
+		self:updateTimeText()
+	end, 1)
+end
+
+function M:handleIssueBtn()
+	if self._isRotating then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.ActivityArkLotteryDescPanel, self._module, D.ActivityPersistUID[D.ActivityType.ArkRebuildLottery])
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:dealSkipAnimBtn()
+	local newValue = self:getSkipAnim() and 0 or 1
+
+	lc.setIntKeyValue("ark_rebuild_lottery" .. self._startTime, newValue)
+	self:updateSkip()
+end
+
+function M:getSkipAnim()
+	return lc.getIntKeyValue("ark_rebuild_lottery" .. self._startTime, 0) == 1
+end
+
+function M:updateSkip()
+	local isSkip = self:getSkipAnim()
+
+	self._btnSkipAnim.transform:GetChild(1):SetActive(isSkip)
+end
+
+function M:updateCostBtns()
+	if not self._module:isOpening() then
+		return
+	end
+
+	local multiDrawNum = self._module:readMultiDrawNum()
+	local tmpDiamondStr = D.getTMPSpriteRichText("item_small_10002")
+	local haveFree = self._module:haveFree()
+
+	self._imgIconOne.gameObject:SetActive(not haveFree)
+
+	if haveFree then
+		self._txtOneCostNum:SetLocalize(SID.STR_FREE)
+	else
+		local costCid, costNum = self._module:readOneCost(self._subType)
+		self._txtOneCostNum.text = tmpDiamondStr .. costNum
+	end
+
+	self._btnDrawOne.dot:SetActive(haveFree)
+	self._txtDrawOne:SetLocalize(SID.DRAW_NUM, 1)
+	self._txtDrawMulti:SetLocalize(SID.DRAW_NUM, multiDrawNum)
+
+	local leftDrawNum = self._module:getLeftDrawNum()
+
+	self._btnDrawMulti:SetActive(multiDrawNum <= leftDrawNum)
+
+	local costCid, costNum = self._module:readMoreCost(self._subType)
+	self._txtMultiCostNum.text = tmpDiamondStr .. costNum
+
+	V.setBtnStyle(self._btnDrawOne, haveFree and V.BTN_STYLE.blue or V.BTN_STYLE.green)
+
+	if self._module:getLeftDrawNum() < multiDrawNum then
+		local tfSkip = self._goDrawOneSkip.transform.parent:GetChild(1):GetChild(0)
+
+		lc.setAnchoredPosition(tfSkip, 100, 2)
+	end
+
+	self._btnDrawMulti:SetActive(multiDrawNum <= self._module:getLeftDrawNum())
+end
+
+function M:updateDot()
+	RedDotManager.update("city.home.arkProj")
+end
+
+function M:OnFocus()
+	self:updateDot()
+end
+
+return M

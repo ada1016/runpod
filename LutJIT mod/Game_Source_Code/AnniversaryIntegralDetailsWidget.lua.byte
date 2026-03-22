@@ -1,0 +1,27 @@
+local M = class("AnniversaryIntegralDetailsWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversaryIntegralDetailsWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtName, data)
+	V.loadAvatar(self._tfAvatar, data.avatar, data.avatarFrame)
+
+	self._txtScore.text = "+" .. data.rankValue
+end
+
+return M

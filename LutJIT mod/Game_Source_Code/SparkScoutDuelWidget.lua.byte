@@ -1,0 +1,40 @@
+local M = class("SparkScoutDuelWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutDuelWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	lc.prefabVarPeer(go._goGradeWidget)
+
+	return go
+end
+
+function M:init(data)
+end
+
+function M:updateUI(duelData)
+	local showGroup = P._playerActivitySparkScout:canShowSparkScoutRankGroup(duelData)
+
+	V.setPlayerNameByRankData(self._txtPlayerName, duelData, showGroup)
+	V.loadSparkScoutGrades(self, duelData)
+
+	local otherGradeId = duelData.gradeId
+
+	V.loadSparkGradeWidget(self._goGradeWidget, otherGradeId)
+
+	local gradeId = P._playerActivitySparkScout:getCurGradeId()
+	local winAddScore = P._playerActivitySparkScout:calcWinScore(gradeId, otherGradeId)
+
+	self._txtWinScore:SetLocalize(SID.TIP_SPARK_SCOUT_DUEL_SCOUT, winAddScore)
+end
+
+return M

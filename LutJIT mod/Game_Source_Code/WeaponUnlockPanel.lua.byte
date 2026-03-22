@@ -1,0 +1,24 @@
+local M = class("WeaponUnlockPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	imgIcon = Types.Image,
+	txtWeaponName = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(weapon)
+	LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/weapon_%d", weapon), true, true)
+	self._txtWeaponName:SetLocalize(D._weaponConfig[weapon]._skillNameSid)
+
+	self._btnMask.enabled = false
+
+	lc.delayFunc(1, function ()
+		self._btnMask.enabled = true
+	end, self.gameObject)
+	Client.playSound("ui_Toast_1")
+end
+
+return M

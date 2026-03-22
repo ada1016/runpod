@@ -1,0 +1,802 @@
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local M = class("BattleBattery_Dome", requireLua("BattleBattery"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._activedEffects = table.new(0, 4)
+end
+
+function M:onEffectDitry(id)
+	if id == 10001 then
+		local param = D.getBattleEffectParams(10001)
+		local count = param[1]
+		local castSkill = self:getSkill(10001)
+		local offsetAngle = 9
+
+		for i = 1, count do
+			local bullet = castSkill:createBullet()
+			local dtAngle = offsetAngle * (i - (1 + count) / 2)
+			local x, y = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS + 0.6, dtAngle + 90)
+
+			bullet:setPos(x, y + BattleDefine.DOME_CENTER)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+end
+
+function M:step(dt)
+	if self._skill1004CD then
+		self._skill1004CD = self._skill1004CD - dt
+	end
+
+	if self._skinSkillsCD then
+		for id, t in pairs(self._skinSkillsCD) do
+			self._skinSkillsCD[id] = t - dt
+
+			if self._skinSkillsCD[id] <= 0 and id ~= 10021 then
+				self:tryCastSkill(id)
+			end
+		end
+	end
+
+	if self._effect10022CD then
+		self._effect10022CD = self._effect10022CD - dt
+
+		if self._effect10022CD <= 0 then
+			self._effect10022CD = D.getBattleEffectParams(10022)[1]
+			self._battleSession._extraBlood = self._battleSession._maxBlood * self._effect10022Param / 100
+
+			if self._battleView then
+				self._sessionView:bloodEvent()
+
+				local vfx = self._sessionView:addVFX("Dome_140002_skill_birth", self._battleView._tfWeaponContainer)
+
+				self._battleView:delayRemoveVFX(vfx, 1)
+			end
+		end
+	end
+
+	if self._effect10031CD then
+		self._effect10031CD = self._effect10031CD - dt
+
+		if self._effect10031CD <= 0 then
+			self._effect10031CD = D.getBattleEffectParams(10031)[1]
+
+			opt.array_arg32:clear()
+
+			local cnt = self._effect10031Param
+			local grap = (self._battleSession._screenEdgeX2 - 1) * 2 / cnt
+			local castSkill = self:getSkill(10032)
+
+			for i = 1, cnt do
+				local bullet = castSkill:createBullet()
+				local x = grap * (i - (1 + cnt) / 2)
+				local y = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER, BattleDefine.DOME_RADIUS, x)
+
+				bullet:setPos(x, y - 1)
+
+				bullet._dir[1] = 0
+				bullet._dir[2] = 1
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		end
+	end
+
+	if self._module20011CD then
+		self._module20011CD = self._module20011CD - dt
+
+		if self._module20011CD <= 0 then
+			self._module20011CD = self._module20011NeedCD
+			local dt = self._battleSession._maxBlood * self._battleSession:getEffect(20011) / 100
+
+			self._battleSession:updateBlood(dt)
+
+			if self._battleView then
+				Client.playBattleSound("se_Mod_skill_19")
+			end
+		end
+	end
+
+	if self._molule20016CD then
+		self._molule20016CD = self._molule20016CD - dt
+
+		if self._molule20016CD <= 0 then
+			self._molule20016CD = self._module20016NeedCD
+
+			if self._battleView then
+				local vfx = self._sessionView:createAndPlayVFX("Ark_Modskill_25", 3.3333333333333335)
+
+				if vfx then
+					vfx:SetPosition(0, 9, 0)
+				end
+			end
+
+			self._molule20016CD_2 = 1.3
+		end
+	end
+
+	if self._molule20016CD_2 then
+		self._molule20016CD_2 = self._molule20016CD_2 - dt
+
+		if self._molule20016CD_2 <= 0 then
+			self._molule20016CD_2 = nil
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed then
+					local totalDmg = enemy._maxHp * self._molule20016Param / 100
+					enemy._hp = math.max(enemy._hp - totalDmg, 0)
+
+					if enemy._view then
+						enemy._view:hpEvent(-totalDmg)
+					end
+				end
+			end
+		end
+	end
+
+	if self._molule20017CD then
+		self._molule20017CD = self._molule20017CD - dt
+
+		if self._molule20017CD <= 0 then
+			self._molule20017CD = self._module20017NeedCD
+
+			if self._battleView then
+				local vfx = self._sessionView:createAndPlayVFX("Ark_Modskill_26", 3.3333333333333335)
+
+				if vfx then
+					vfx:SetPosition(0, 9, 0)
+				end
+			end
+
+			self._molule20017CD_2 = 1.3
+		end
+	end
+
+	if self._molule20017CD_2 then
+		self._molule20017CD_2 = self._molule20017CD_2 - dt
+
+		if self._molule20017CD_2 <= 0 then
+			self._molule20017CD_2 = nil
+			local p = D.getBattleEffectParams(20017)
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed then
+					enemy:addBuff(p[2], p[3])
+					enemy:addBuff(p[4], p[5])
+				end
+			end
+		end
+	end
+
+	if self._molule20018CD then
+		self._molule20018CD = self._molule20018CD - dt
+
+		if self._molule20018CD <= 0 then
+			self._molule20018CD = self._module20018NeedCD
+			self._battleSession._domeImmuneDmgNumWithModule = (self._battleSession._domeImmuneDmgNumWithModule or 0) + self._molule20018Param
+
+			if self._sessionView then
+				self._sessionView:domeImmuneNumEvent(true, self._battleSession)
+			end
+		end
+	end
+
+	if self._molule20025CD then
+		self._molule20025CD = self._molule20025CD - dt
+
+		if self._molule20025CD <= 0 then
+			self._molule20025CD = self._module20025NeedCD
+
+			self._battleSession:addProp(BattlePropEnum.DmgAddPer, self._molule20025Param)
+
+			if self._battleView then
+				self._sessionView:createAndPlayVFX("Ark_Modskill_31", 2)
+			end
+		end
+	end
+
+	if self._molule20029CD then
+		self._molule20029CD = self._molule20029CD - dt
+
+		if self._molule20029CD <= 0 then
+			self._molule20029CD = nil
+			local a = table.new(8, 0)
+			local slotWeapons = self._battleSession._slotWeapons
+
+			for i = 1, 5 do
+				if slotWeapons[i] then
+					a[#a + 1] = i
+				end
+			end
+
+			local p = D.getBattleEffectParams(20029)
+			local n = math.min(p[2], #a)
+
+			for i = 1, n do
+				local index = self._battleRandomLib:randomOne(a)
+
+				table.remove(a, index)
+
+				local weapon = slotWeapons[index]
+
+				weapon:addInheritProps(BattlePropEnum.DmgAddPer, self._molule20029Param)
+
+				if weapon._view and weapon._view._ark38 == nil then
+					local vfx = self._sessionView:addVFX("Ark_Modskill_38", weapon._view._obj.transform)
+					weapon._view._ark38 = vfx
+				end
+			end
+		end
+	end
+
+	if self._molule20030CD then
+		self._molule20030CD = self._molule20030CD - dt
+
+		if self._molule20030CD <= 0 then
+			self._molule20030CD = nil
+			local a = table.new(8, 0)
+			local slotWeapons = self._battleSession._slotWeapons
+
+			for i = 1, 5 do
+				if slotWeapons[i] then
+					a[#a + 1] = i
+				end
+			end
+
+			local p = D.getBattleEffectParams(20030)
+			local n = math.min(p[2], #a)
+
+			for i = 1, n do
+				local index = self._battleRandomLib:randomOne(a)
+
+				table.remove(a, index)
+
+				local weapon = slotWeapons[index]
+
+				weapon._mainSkill:addProp(BattlePropEnum.SkillCdSpeedAddPer, self._molule20030Param)
+
+				if weapon._view and weapon._view._ark39 == nil then
+					local vfx = self._sessionView:addVFX("Ark_Modskill_39", weapon._view._obj.transform)
+					weapon._view._ark39 = vfx
+				end
+			end
+		end
+	end
+end
+
+function M:loadSkinSkill(effectId, param)
+	local skinEffect = D._skinEffectConfig[effectId]
+	self._activedEffects[effectId] = true
+
+	if skinEffect._skillId then
+		if self._skinSlillsParam == nil then
+			self._skinSlillsParam = table.new(0, 4)
+		end
+
+		self._skinSlillsParam[skinEffect._skillId] = param
+	end
+
+	if skinEffect._activeRouge then
+		self._battleSession._battleRouge:addRouge(skinEffect._activeRouge)
+	end
+
+	if effectId == 10022 then
+		self._effect10022Param = param
+		self._effect10022CD = D.getBattleEffectParams(10022)[1]
+		self._battleSession._extraBlood = self._battleSession._maxBlood * param / 100
+
+		if self._sessionView then
+			self._sessionView._goExtraHPBarFill:SetActive(true)
+		end
+	elseif effectId == 10024 then
+		self._10024bullets = table.new(4, 0)
+	elseif effectId == 10026 then
+		self:addSkill(skinEffect._skillId)
+	elseif effectId == 10028 then
+		self._effect10028Param = param
+	elseif effectId == 10027 then
+		self:addSkill(skinEffect._skillId)
+
+		local skill = self:getSkill(skinEffect._skillId)
+
+		skill:addProp(BattlePropEnum.LiveDuration, param + 1)
+
+		self._left = true
+	elseif effectId == 10030 then
+		self:addSkill(skinEffect._skillId)
+
+		self._effect10030Param = param
+		local skill = self:getSkill(10030)
+		local skinEffectCfg = D._skinEffectConfig[10030]
+		local effectParams = skinEffectCfg._effectParams
+		self._effectParams = effectParams
+	elseif effectId == 10031 then
+		self:addSkill(skinEffect._skillId)
+
+		self._effect10031Param = param
+		self._effect10031CD = D.getBattleEffectParams(10031)[1]
+	end
+end
+
+function M:addSkill(id)
+	SUPER.addSkill(self, id)
+
+	if self._skinSkillsCD == nil then
+		self._skinSkillsCD = table.new(0, 4)
+	end
+
+	self._skinSkillsCD[id] = 0
+
+	if id == 10021 then
+		local skill = self:getSkill(id)
+		skill._dmgRate = skill._dmgRate * self._skinSlillsParam[id] / 100
+		self._skinSkillsCD[id] = skill._cd or 0
+	elseif id == 10024 then
+		local skill = self:getSkill(id)
+
+		skill:addProp(BattlePropEnum.KnockbackIntensityUpAddPer, self._skinSlillsParam[id])
+
+		self._skinSkillsCD[id] = skill._cd or 0
+	elseif id == 10027 then
+		local skill = self:getSkill(id)
+		self._skinSkillsCD[id] = skill._cd or 0
+	elseif id == 10028 then
+		local skill = self:getSkill(id)
+		self._skinSkillsCD[id] = skill._cd or 0
+	elseif id == 10029 then
+		local skill = self:getSkill(id)
+		self._skinSkillsCD[id] = skill._cd or 0
+	elseif id == 10030 then
+		local skill = self:getSkill(id)
+		self._skinSkillsCD[id] = skill._cd or 0
+		local skinEffectCfg = D._skinEffectConfig[10030]
+		skill._dmgRate = skill._dmgRate * skinEffectCfg._effectParams[1] / 100
+	end
+end
+
+function M:loadEffects()
+	local v1 = self._battleSession:getEffect(20007)
+
+	if v1 then
+		self._battleSession._extraBlood = self._battleSession._maxBlood * v1 / 100
+
+		if self._sessionView then
+			self._sessionView._goExtraHPBarFill:SetActive(true)
+		end
+	end
+
+	local v1 = self._battleSession:getEffect(20011)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20011)
+		self._module20011CD = p[1]
+		self._module20011NeedCD = self._module20011CD
+	end
+
+	local v1 = self._battleSession:getEffect(20016)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20016)
+		self._molule20016Param = v1
+		self._molule20016CD = p[1]
+		self._module20016NeedCD = self._molule20016CD
+		self._molule20016SkillId = p[2]
+	end
+
+	local v1 = self._battleSession:getEffect(20017)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20017)
+		self._molule20017Param = v1
+		self._molule20017CD = p[1]
+		self._module20017NeedCD = self._molule20017CD
+		self._molule20017SkillId = p[2]
+	end
+
+	local v1 = self._battleSession:getEffect(20018)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20018)
+		self._molule20018Param = v1
+		self._molule20018CD = p[1]
+		self._module20018NeedCD = self._molule20018CD
+	end
+
+	local v1 = self._battleSession:getEffect(20025)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20025)
+		self._molule20025Param = v1
+		self._molule20025CD = p[1]
+		self._module20025NeedCD = self._molule20025CD
+	end
+
+	local v1 = self._battleSession:getEffect(20029)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20029)
+		self._molule20029Param = v1
+		self._molule20029CD = p[1]
+	end
+
+	local v1 = self._battleSession:getEffect(20030)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20030)
+		self._molule20030Param = v1
+		self._molule20030CD = p[1]
+	end
+end
+
+function M:isEffectActived(effectId)
+	return self._activedEffects
+end
+
+function M:castSkill1004()
+	if self._skill1004CD and self._skill1004CD > 0 then
+		return
+	end
+
+	local param = D.getBattleEffectParams(10004)
+	self._skill1004CD = param[1]
+	local castSkill = self:getSkill(10004)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(0, BattleDefine.DOME_CENTER)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+end
+
+function M:hasEffect10004()
+	return self:hasEffect(10004)
+end
+
+function M:tryCastSkill1004()
+	if self:getEffect(10004) == nil then
+		return
+	end
+
+	self:castSkill1004()
+end
+
+function M:hasEffect(effectId)
+	return self:getEffect(effectId) ~= nil
+end
+
+function M:hasSkill(skillId)
+	if self._skinSkillsCD == nil then
+		return false
+	end
+
+	if self._skinSkillsCD[skillId] then
+		return true
+	end
+
+	return false
+end
+
+local _10024_INDEX = {
+	3,
+	2,
+	4,
+	1
+}
+
+function M:tryCastSkill(skillId, enemy)
+	if self._skinSkillsCD == nil or self._skinSkillsCD[skillId] == nil then
+		return
+	end
+
+	if self._skinSkillsCD[skillId] > 0 then
+		return
+	end
+
+	if skillId == 10021 then
+		if enemy and not enemy._isToBeDestroyed then
+			local castSkill = self:getSkill(skillId)
+			local rate = castSkill:getProp(BattlePropEnum.BattlePropParam1, 0)
+
+			if self._battleRandomLib:randomTrue(rate) then
+				local bullet = castSkill:createBullet()
+				local y = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER, BattleDefine.DOME_RADIUS, enemy._position.x)
+
+				bullet:setPos(enemy._position.x, y)
+				bullet:setDirByAngle(90)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+
+				self._skinSkillsCD[skillId] = 0
+			end
+		end
+	elseif skillId == 10023 then
+		if self._battleSession._nearestEnemy then
+			local castSkill = self:getSkill(skillId)
+			local enemy = self._battleSession._nearestEnemy
+			local atkRange = castSkill:getProp(BattlePropEnum.AtkRange, 0)
+
+			if enemy._position.y <= BattleDefine.DOME_POSY + atkRange then
+				local bullet = castSkill:createBullet()
+
+				bullet:setPos(enemy._position.x, enemy._position.y)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+
+				self._skinSkillsCD[skillId] = castSkill._cd
+			end
+		end
+	elseif skillId == 10024 then
+		if self._battleSession._nearestEnemy then
+			local enemy = self._battleSession._nearestEnemy
+
+			if enemy._position.y <= BattleDefine.DOME_POSY + 0.8 then
+				local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(opt.vec2_1:Set(0, BattleDefine.DOME_CENTER), BattleDefine.DOME_RADIUS + 2, self)
+				local enemy = self._battleRandomLib:randomOne(allEnemys)
+
+				if enemy then
+					local castSkill = self:getSkill(skillId)
+					local bullet = castSkill:createBullet()
+					local angle = BattleMathLib.angle(enemy._position, opt.vec2_1:Set(0, BattleDefine.DOME_CENTER))
+					local brx, bry = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS - 1, angle)
+					bry = bry + BattleDefine.DOME_CENTER
+
+					bullet:setPos(brx, bry)
+					bullet:setDirByAngle(angle)
+
+					if bullet._view then
+						bullet._view:posEvent()
+					end
+
+					self._skinSkillsCD[skillId] = castSkill._cd
+				end
+			end
+		end
+	else
+		if skillId == 10025 then
+			local index = -1
+
+			for i = 1, 4 do
+				if self._10024bullets[_10024_INDEX[i]] == nil then
+					index = _10024_INDEX[i]
+
+					break
+				end
+			end
+
+			if index == -1 then
+				return
+			end
+
+			self._skinSkillsCD[skillId] = self._skinSlillsParam[skillId]
+			local castSkill = self:getSkill(10025)
+			local bullet = castSkill:createBullet()
+			bullet._dmgDelay = 1.5
+			local offsetAngle = 9
+			local dtAngle = offsetAngle * (index - 2.5)
+			local x, y = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS + 0.6, dtAngle + 90)
+
+			bullet:setPos(x, y + BattleDefine.DOME_CENTER)
+
+			bullet._10025Index = index
+
+			if bullet._view then
+				bullet._view:posEvent()
+				Client.playBattleSound("se_Dome_4_jet")
+				bullet._view._obj:SetActive(false)
+			end
+
+			self._10024bullets[index] = bullet
+
+			if bullet._view then
+				local vfx = self._sessionView:createAndPlayVFX("Dome_140004_skill", 1)
+
+				if vfx then
+					local left = index == 3 or index == 4
+					local posx, posy = self._sessionView:getGunMuzzlePositionXY(4, left)
+
+					vfx:SetPosition(posx, posy, 0)
+
+					if left then
+						vfx:GetComponent("Animator"):SetTrigger("right")
+					else
+						vfx:GetComponent("Animator"):SetTrigger("left")
+					end
+
+					vfx.transform:DOMove(Vector3.static(bullet._position.x, bullet._position.y, 0), 0.6666666666666666):OnComplete(function ()
+						vfx:SetActive(false)
+
+						if bullet._view._obj then
+							bullet._view._obj:SetActive(true)
+						end
+					end)
+
+					local battleDomeAdapter = self._sessionView:getDomeAdapter()
+
+					if battleDomeAdapter and battleDomeAdapter._style == 4 then
+						if left then
+							battleDomeAdapter._vfxMuzzleLeft:Play()
+						else
+							battleDomeAdapter._vfxMuzzleRight:Play()
+						end
+					end
+				end
+			end
+
+			return
+		end
+
+		if skillId == 10027 then
+			local castSkill = self:getSkill(skillId)
+			local bullet = castSkill:createBullet()
+
+			bullet:setPos(0, BattleDefine.DOME_CENTER)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+
+			self._skinSkillsCD[skillId] = castSkill._cd
+		elseif skillId == 10028 then
+			if self._battleSession._nearestEnemy then
+				local enemy = self._battleSession._nearestEnemy
+
+				if enemy._position.y <= BattleDefine.DOME_POSY + 4 then
+					local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(opt.vec2_1:Set(0, BattleDefine.DOME_CENTER), BattleDefine.DOME_RADIUS + 4, self)
+					local enemy = self._battleRandomLib:randomOne(allEnemys)
+
+					if enemy then
+						local castSkill = self:getSkill(skillId)
+						local bullet = castSkill:createBullet()
+						local x = enemy._position.x
+						local y = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER, BattleDefine.DOME_RADIUS, x)
+
+						bullet:setPos(x, y)
+
+						if bullet._view then
+							bullet._view._obj:SetPosition(x, y, 0)
+						end
+
+						self._skinSkillsCD[skillId] = castSkill._cd
+					end
+				end
+			end
+		elseif skillId == 10029 then
+			if self._battleSession._nearestEnemy == nil then
+				return
+			end
+
+			local castSkill = self:getSkill(skillId)
+			local maxY = BattleDefine.DOME_POSY + castSkill:getProp(BattlePropEnum.BallisticSpeed) * 1.5
+
+			if maxY < self._battleSession._nearestEnemy._position.y then
+				return
+			end
+
+			local count1 = 0
+			local count2 = 0
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed and enemy._position.y < maxY then
+					if enemy._position.x < 0 then
+						count1 = count1 + 1
+					else
+						count2 = count2 + 1
+					end
+				end
+			end
+
+			if count1 > 10 and count2 > 10 then
+				self._left = self._battleRandomLib:randomTrue()
+			elseif count2 < count1 then
+				self._left = true
+			else
+				self._left = false
+			end
+
+			local bullet = castSkill:createBullet()
+
+			if self._left then
+				bullet:setPos(-2.2, 1.2)
+				bullet:setDirByAngle(105)
+
+				if bullet._showObj then
+					bullet._showObj:GetChild(0):SetLocalScale(-1, 1, 1)
+				end
+			else
+				bullet:setPos(2.2, 1.2)
+				bullet:setDirByAngle(75)
+
+				if bullet._showObj then
+					bullet._showObj:GetChild(0):SetLocalScale(1, 1, 1)
+				end
+			end
+
+			bullet._towardDir:SetXYZ(0, 1, 0)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+
+			self._skinSkillsCD[skillId] = castSkill._cd
+			local battleDomeAdapter = self._sessionView:getDomeAdapter()
+
+			if battleDomeAdapter and battleDomeAdapter._style == 7 then
+				if self._left then
+					battleDomeAdapter._aniMain:Play("Huo_Left_140007")
+				else
+					battleDomeAdapter._aniMain:Play("Huo_Right_140007")
+				end
+			end
+		elseif skillId == 10030 and self._battleSession._nearestEnemy then
+			local castSkill = self:getSkill(skillId)
+			self._skinSkillsCD[10030] = castSkill._cd
+			local count = self._effect10030Param
+
+			for i = 1, count do
+				local bullet = castSkill:createBullet()
+
+				bullet:setStart(i, count)
+			end
+
+			if self._sessionView then
+				local battleDomeAdapter = self._sessionView:getDomeAdapter()
+
+				if battleDomeAdapter and battleDomeAdapter._style == 10 then
+					battleDomeAdapter.transform:GetChild(0):SetActive(false)
+				end
+
+				if battleDomeAdapter and battleDomeAdapter._goReadyAtk then
+					battleDomeAdapter._goReadyAtk:SetActive(true)
+				end
+			end
+		end
+	end
+end
+
+function M:bulletDestroyed(bullet)
+	if bullet._battleSkill._id == 10025 then
+		self._10024bullets[bullet._10025Index] = nil
+		bullet._10025Index = nil
+	elseif bullet._battleSkill._id == 10030 and self._sessionView then
+		local battleDomeAdapter = self._sessionView:getDomeAdapter()
+
+		if battleDomeAdapter and battleDomeAdapter._style == 10 then
+			battleDomeAdapter.transform:GetChild(0):SetActive(true)
+		end
+	end
+end
+
+return M

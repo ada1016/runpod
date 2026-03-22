@@ -1,0 +1,700 @@
+local M = class("SparkScoutChangeGradePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	animGrade = Types.Animation,
+	tfGradeContainer = Types.Transform,
+	imgGrade = Types.Image,
+	txtGrade = Types.TMP_Text,
+	cgCloseTips = Types.CanvasGroup,
+	txtScore1 = Types.TMP_Text,
+	txtScore2 = Types.TMP_Text,
+	txtScore3 = Types.TMP_Text,
+	txtScore4 = Types.TMP_Text,
+	txtWinOrLoseScore = Types.TMP_Text,
+	txtContinuousWinScore = Types.TMP_Text,
+	txtKillScore = Types.TMP_Text,
+	tfBarVfx = Types.Transform,
+	cgGradeStarAndScore = Types.CanvasGroup,
+	goDuelDouble = Types.GameObject,
+	tfStarArea = Types.Transform,
+	txtPgs = Types.TMP_Text,
+	imgPgs = Types.SlicedFilledImage,
+	btnBG = Types.Button
+}
+local SparkScoutDuelWidget = requireLua("SparkScoutDuelWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._timers = {}
+	self._txtAddScores = {
+		self._txtScore1,
+		self._txtScore2,
+		self._txtScore3,
+		self._txtScore4
+	}
+	self._txtAddScores = {}
+	self._tfAddScores = {}
+	local tfAlTxt = self._txtScore1.transform.parent
+
+	for i = 1, tfAlTxt.childCount - 1 do
+		self._tfAddScores[i] = tfAlTxt:GetChild(i)
+		self._txtAddScores[i] = tfAlTxt:GetChild(i):GetComponent("TMP_Text")
+	end
+
+	for i = 1, #self._tfAddScores do
+		self._tfAddScores[i]:SetActive(false)
+	end
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClickWithoutAction(self._btnBG, function ()
+		self:closePanel()
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:closePanel()
+	if not self._animEnd then
+		self._animEnd = true
+
+		self:tryJumpAnim()
+
+		return
+	end
+
+	if self._jumped and C.getCurTime() < self._jumpTs + 1 then
+		return
+	end
+
+	if self._async then
+		self._async:Stop()
+
+		self._async = nil
+	end
+
+	self._module:clearOldGradeData()
+	self._module:clearScoreChangeData()
+
+	if P._playerActivitySparkScout:getLastSettleResult() == D.BattleResult.Quit and not P._playerActivitySparkScout:isBeta() then
+		V.showToast(SID.TIP_SPARK_SCOUT_REWARD_ALREADY_RECIVED)
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	if self._async then
+		self._async:Stop()
+
+		self._async = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+function M:init(test)
+	self._isTest = test
+	self._module = P._playerActivitySparkScout
+	local oldGradeData = self._module:getOldGradeData()
+	oldGradeData = oldGradeData or self._module:genGradeData()
+
+	if self._isTest then
+		oldGradeData = {
+			score = 709010,
+			gradeId = 709,
+			gradeStar = 99,
+			grade = 6,
+			subGrade = 1,
+			gradeScore = 8
+		}
+	end
+
+	self._goDuelDouble:SetActive(false)
+
+	self._showGradeData = clone(oldGradeData)
+	self._finalGradeData = self._module:genGradeData()
+
+	self:initGrade()
+	self:playGradeAnim()
+end
+
+function M:initGrade()
+	for i = 1, #self._tfAddScores do
+		lc.setSizeDelta(self._tfAddScores[i], 347, 0)
+	end
+
+	local gradeId = self._showGradeData.gradeId
+	local cfg = self._module:getGradeCfgById(gradeId)
+
+	V.loadSparkGradeTitle(self._txtGrade, gradeId)
+	self:updateGrade(gradeId)
+	self:updateGradeScoreBar(self._showGradeData.gradeScore, cfg._score)
+
+	self._cgCloseTips.alpha = 0
+	self._changeData = self._module:getScoreChangeData()
+
+	if self._isTest then
+		self._changeData = {
+			winOrLose = 100,
+			continuous = 40,
+			continuousNum = 40,
+			isDuel = true,
+			crush = 60,
+			duel = 10,
+			dangerWinCount = 3,
+			crushNum = 30,
+			dangerWinAddScore = 30,
+			completeWin = true,
+			completeWinAddScore = 10,
+			totalScore = 10
+		}
+	end
+
+	self._changeData.dangerWinCount = self._changeData.dangerWinCount or 0
+
+	self:updateScoreChangeData()
+
+	self._animData = {
+		[#self._animData + 1] = {
+			time = 1,
+			animType = "interval"
+		}
+	}
+	self._showAddScoreIdx = 1
+
+	self:tryCalAnimDataByScore(self._changeData.winOrLose, true)
+
+	if self._changeData.completeWin then
+		self._showAddScoreIdx = self._showAddScoreIdx + 1
+
+		self:tryCalAnimDataByScore(self._changeData.completeWinAddScore, true)
+	elseif self._changeData.littleLose then
+		self._showAddScoreIdx = self._showAddScoreIdx + 1
+
+		self:tryCalAnimDataByScore(self._changeData.littleLoseScore, true)
+	end
+
+	if self._changeData.dangerWinCount > 0 then
+		self._showAddScoreIdx = self._showAddScoreIdx + 1
+
+		self:tryCalAnimDataByScore(self._changeData.dangerWinAddScore, true)
+	end
+
+	if self._changeData.crushNum > 0 then
+		self._showAddScoreIdx = self._showAddScoreIdx + 1
+
+		self:tryCalAnimDataByScore(self._changeData.crushNum, true)
+	end
+
+	if self._changeData.continuous > 0 then
+		self._showAddScoreIdx = self._showAddScoreIdx + 1
+
+		self:tryCalAnimDataByScore(self._changeData.continuous, true)
+	end
+
+	if self._changeData.isDuel then
+		self._animData[#self._animData + 1] = {
+			animType = "duel"
+		}
+	end
+
+	self:tryCalAnimDataByScore(self._changeData.duel)
+end
+
+function M:updateScoreChangeData()
+	local changeData = self._changeData
+	self._showTxtData = {}
+	local score1 = changeData.winOrLose or 0
+	local littleLose = changeData.littleLose
+	local completeWin = changeData.completeWin
+	local scoreRate = 1
+	local txtIdx = 0
+
+	if score1 > 0 then
+		txtIdx = txtIdx + 1
+
+		self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} +{1}", SID.STR_SUCCESSFUL, score1 * scoreRate)
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score1
+		}
+	else
+		txtIdx = txtIdx + 1
+
+		self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} -{1}", SID.STR_FAIL, math.abs(score1))
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score1
+		}
+	end
+
+	if completeWin then
+		txtIdx = txtIdx + 1
+		local score = math.abs(changeData.completeWinAddScore or 0)
+
+		self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} +{1}", SID.STR_COMPLETE_WIN, score)
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score
+		}
+	elseif littleLose then
+		txtIdx = txtIdx + 1
+		local score = math.abs(changeData.littleLoseScore or 0)
+
+		self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} +{1}", SID.STR_LITTLE_LOSE, score)
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score
+		}
+	end
+
+	local score3 = changeData.crushNum or 0
+
+	if score3 > 0 then
+		local crush = changeData.crush or 1
+		txtIdx = txtIdx + 1
+
+		if crush == 1 then
+			self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} +{1}", SID.STR_CRUSH_WIN, score3 * scoreRate)
+		else
+			self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0}x{1} +{2}", SID.STR_CRUSH_WIN, crush, score3 * scoreRate)
+		end
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score3
+		}
+	end
+
+	local score4 = changeData.dangerWinAddScore or 0
+
+	if score4 > 0 then
+		local count = changeData.dangerWinCount or 1
+		txtIdx = txtIdx + 1
+
+		if count == 1 then
+			self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0} +{1}", SID.STR_COMEBACK, score4 * scoreRate)
+		else
+			self._txtAddScores[txtIdx]:SetLocalizeCustomStr("{0}x{1} +{2}", SID.STR_COMEBACK, count, score4 * scoreRate)
+		end
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score4
+		}
+	end
+
+	local score2 = changeData.continuous or 0
+
+	if score2 > 0 then
+		txtIdx = txtIdx + 1
+
+		self._txtAddScores[txtIdx]:SetLocalizeComplexStr("{0} +{1}", {
+			{
+				sid = -SID.STR_CONTINUOUS_SUCCESS,
+				vi = changeData.continuousNum
+			},
+			{
+				vi = score2 * scoreRate
+			}
+		})
+
+		self._showTxtData[#self._showTxtData + 1] = {
+			score = score2
+		}
+	end
+end
+
+function M:updateGrade(gradeId)
+	local goGrade = self._tfGradeContainer:GetChild(0).gameObject
+
+	if self._oldGradeWidgetName then
+		goGrade.name = self._oldGradeWidgetName
+	end
+
+	V.loadSparkGradeIcon(self._tfGradeContainer, self._currentShowGrade, gradeId, true)
+
+	local goGrade = self._tfGradeContainer:GetChild(0).gameObject
+	self._oldGradeWidgetName = goGrade.name
+	goGrade.name = "GradeWidget"
+	self._currentShowGrade = gradeId
+
+	V.loadSparkScoutGradeStar(self._tfStarArea, gradeId, true)
+end
+
+function M:playChangeGradeAnim(gradeId1, gradeId2)
+	if gradeId1 == gradeId2 then
+		return
+	end
+
+	local g1, sg1, gs1 = self._module:parseGradeId(gradeId1)
+	local g2, sg2, gs2 = self._module:parseGradeId(gradeId2)
+
+	if g1 < g2 then
+		self._animGrade:Play("anim_sparkscout_grade_upbig")
+		Client.playSound("ui_Dome_rankup_2")
+	elseif g1 == g2 and sg1 < sg2 then
+		self._animGrade:Play("anim_sparkscout_grade_up")
+		Client.playSound("ui_Dome_rankup_1")
+	else
+		self._animGrade:Play("anim_sparkscout_grade_down")
+		Client.playSound("ui_Dome_rankdown_1")
+	end
+end
+
+function M:updateGradeScoreBar(current, max)
+	self._txtPgs.text = string.format("%d/%d", current, max)
+	self._imgPgs.fillAmount = current / max
+end
+
+function M:getScrollTime(from, to, max)
+	return math.max((to - from) / max * 1, 0.3)
+end
+
+function M:doBarChange(from, to, max, scrollTime)
+	self._txtPgs:DOCounterWithFix(from, to, scrollTime, 0, "", string.format("/%d", max))
+
+	self._imgPgs.fillAmount = from / max
+
+	self._imgPgs:DOFillAmount(to / max, scrollTime)
+end
+
+function M:tryJumpAnim()
+	self._jumped = true
+	self._jumpTs = C.getCurTime()
+
+	for i, v in pairs(self._timers) do
+		lc.stopTimer(v)
+
+		self._timers[i] = nil
+	end
+
+	local gradeData = self._finalGradeData
+	local gradeId = gradeData.gradeId
+	local gradeStar = gradeData.gradeStar
+	local gradeScore = gradeData.gradeScore
+
+	V.loadSparkGradeTitle(self._txtGrade, gradeId)
+
+	local goGrade = self._tfGradeContainer:GetChild(0).gameObject
+
+	if self._oldGradeWidgetName then
+		goGrade.name = self._oldGradeWidgetName
+	end
+
+	V.loadSparkGradeIcon(self._tfGradeContainer, self._currentShowGrade, gradeId, true)
+
+	local goGrade = self._tfGradeContainer:GetChild(0).gameObject
+	self._oldGradeWidgetName = goGrade.name
+	goGrade.name = "GradeWidget"
+
+	self._cgGradeStarAndScore:DOKill()
+
+	self._cgGradeStarAndScore.alpha = 1
+
+	for i = 1, self._tfStarArea.childCount - 1 do
+		local tfStar = self._tfStarArea:GetChild(i - 1)
+
+		tfStar:GetComponent("Animation"):Stop()
+	end
+
+	V.loadSparkScoutGradeStar(self._tfStarArea, gradeId, true)
+	DOTween.Kill(self._txtPgs.gameObject)
+	DOTween.Kill(self._imgPgs.gameObject)
+
+	for i = 1, self._showAddScoreIdx do
+		self._tfAddScores[i]:SetActive(true)
+		lc.setSizeDelta(self._tfAddScores[i], 347, 44)
+	end
+
+	local cfg = self._module:getGradeCfgById(gradeId)
+
+	self:updateGradeScoreBar(gradeScore, cfg._score)
+	V.resetAnimToStartFrame(self._animGrade)
+
+	if self._changeData.isDuel then
+		self._goDuelDouble:SetActive(true)
+		V.resetAnimToEndFrame(self._goDuelDouble:GetComponent("Animation"), "anim_sparkscout_double")
+		self:showDoubleText(true)
+	end
+
+	self._cgCloseTips.alpha = 0
+
+	self._cgCloseTips:DOFade(1, 0.5):SetLink(self.gameObject):SetDelay(1)
+end
+
+function M:playGradeAnim()
+	self._cgGradeStarAndScore.alpha = 0
+
+	self._cgGradeStarAndScore:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._async = requireLua("LuaCoroutineAsync").New("AsyncGradeAnim")
+	local animData = self._animData
+
+	for i = 1, #animData do
+		local data = animData[i]
+		local type = data.animType
+
+		if type == "interval" then
+			self._async:Ok(function (ok, no)
+				self._timers.interval = lc.setTimer(function ()
+					return ok()
+				end, data.time)
+			end)
+		elseif type == "showAddScore" then
+			self._async:Ok(function (ok, no)
+				if self._changeData.totalScore > 0 then
+					Client.playSound("ui_Weekmid_rankup_text_1")
+				else
+					Client.playSound("ui_Weekmid_rankdown_text_1")
+				end
+
+				self:showScoreTxt(data.showIdx)
+
+				self._timers.showAddScore = lc.setTimer(function ()
+					return ok()
+				end, 0.5)
+			end)
+		elseif type == "changeScore" then
+			self._async:Ok(function (ok, no)
+				local scrollTime = self:getScrollTime(data.fromScore, data.toScore, data.maxScore)
+
+				self:doBarChange(data.fromScore, data.toScore, data.maxScore, scrollTime)
+
+				self._timers.changeScore = lc.setTimer(function ()
+					return ok()
+				end, scrollTime + 0.5)
+			end)
+		elseif type == "changeStar" then
+			self._async:Ok(function (ok, no)
+				V.loadSparkGradeTitle(self._txtGrade, data.toGradeId)
+
+				local showStarAnim = false
+
+				if data.toGradeId < self._module:getFinalGrade() then
+					showStarAnim = true
+				end
+
+				local isMaxStar = self._module:getMaxStarGradeId() <= data.toGradeId
+
+				if data.fromGradeId < data.toGradeId then
+					self:updateGrade(data.toGradeId)
+
+					if not isMaxStar then
+						self:updateGradeScoreBar(0, data.maxScore)
+					end
+
+					if showStarAnim then
+						self._tfStarArea:GetChild(data.toGradeId % 10 - 1):GetComponent("Animation"):Play("anim_sparkscout_gradestar_1")
+						Client.playSound("ui_Weekmid_star_add_1")
+					end
+				else
+					self:updateGradeScoreBar(data.maxScore, data.maxScore)
+
+					if showStarAnim then
+						self:updateGrade(data.fromGradeId)
+						self._tfStarArea:GetChild(data.fromGradeId % 10 - 1):GetComponent("Animation"):Play("anim_sparkscout_gradestar_2")
+						Client.playSound("ui_Weekmid_star_reduce_1")
+					else
+						self:updateGrade(data.toGradeId)
+					end
+				end
+
+				self._timers.changeStar = lc.setTimer(function ()
+					return ok()
+				end, 0.6666666666666666)
+			end)
+		elseif type == "changeGrade" then
+			local scoreAreaAlphaPlayed = false
+
+			self._async:Ok(function (ok, no)
+				local play = self:playChangeGradeAnim(data.fromGradeId, data.toGradeId)
+				scoreAreaAlphaPlayed = true
+
+				self._cgGradeStarAndScore:DOFade(0, 0.3):SetLink(self.gameObject)
+
+				self._timers.changeGrade1 = lc.setTimer(function ()
+					return ok()
+				end, 0.6666666666666666)
+			end):Ok(function (ok, no)
+				V.loadSparkGradeTitle(self._txtGrade, data.toGradeId)
+
+				if data.fromGradeId < data.toGradeId then
+					self:updateGrade(data.toGradeId)
+					self:updateGradeScoreBar(0, data.maxScore)
+				else
+					self:updateGrade(self._module:getLastGradeId(data.fromGradeId))
+					self:updateGradeScoreBar(data.maxScore, data.maxScore)
+				end
+
+				self._cgGradeStarAndScore:DOFade(1, 0.3):SetLink(self.gameObject)
+
+				self._timers.changeGrade2 = lc.setTimer(function ()
+					return ok()
+				end, 0.6666666666666666)
+			end)
+		elseif type == "duel" then
+			self._async:Ok(function (ok, no)
+				self._goDuelDouble:SetActive(true)
+				self._tfAddScores[1].parent:GetComponent("Animation"):Play()
+				self:showDoubleText()
+
+				self._timers.duel = lc.setTimer(function ()
+					return ok()
+				end, 0.6)
+			end)
+		end
+	end
+
+	self._async:Ok(function (ok, no)
+		self:dealAnimEnd()
+
+		return ok()
+	end)
+end
+
+function M:showDoubleText(jump)
+	for i = 1, self._showAddScoreIdx do
+		local fullTxt = self._txtAddScores[i].text
+		local args = string.split(fullTxt, "+")
+
+		if args[1] then
+			if jump then
+				DOTween.Kill(self._txtAddScores[i].gameObject)
+
+				self._txtAddScores[i].text = args[1] .. "+" .. self._showTxtData[i].score * 2
+			else
+				self._txtAddScores[i]:DOCounterWithFix(self._showTxtData[i].score, self._showTxtData[i].score * 2, 1, 0, args[1] .. "+", "")
+			end
+		end
+	end
+end
+
+function M:dealAnimEnd()
+	self._animEnd = true
+
+	self._cgCloseTips:DOFade(1, 0.5):SetLink(self.gameObject)
+end
+
+function M:tryCalAnimDataByScore(scoreNum, addShowTest)
+	scoreNum = scoreNum or 0
+	local animData = self._animData
+	local data = self._showGradeData
+
+	if addShowTest then
+		animData[#animData + 1] = {
+			animType = "showAddScore",
+			showIdx = self._showAddScoreIdx
+		}
+	end
+
+	if self._module:getMaxStarGradeId() <= data.gradeId then
+		return
+	end
+
+	local originScore = data.gradeScore
+	local originGradeId = data.gradeId
+	data.gradeScore = data.gradeScore + scoreNum
+	local cfg = self._module:getGradeCfgById(data.gradeId)
+
+	if cfg._score <= data.gradeScore then
+		if not addShowTest then
+			originScore = 0
+		end
+
+		data.gradeScore = data.gradeScore - cfg._score
+		data.gradeId = self._module:getNextGradeId(originGradeId)
+		animData[#animData + 1] = {
+			animType = "changeScore",
+			fromScore = originScore,
+			toScore = cfg._score,
+			maxScore = cfg._score
+		}
+		local isChangeStar = self._module:readGradeById(data.gradeId) == self._module:readGradeById(originGradeId) and self._module:readShowSubGrade(data.gradeId) == self._module:readShowSubGrade(originGradeId)
+		animData[#animData + 1] = {
+			animType = isChangeStar and "changeStar" or "changeGrade",
+			fromGradeId = originGradeId,
+			toGradeId = data.gradeId,
+			maxScore = self._module:getGradeCfgById(data.gradeId)._score
+		}
+
+		if self._module:getMaxStarGradeId() <= data.gradeId then
+			data.gradeScore = cfg._score
+
+			return
+		end
+	elseif data.gradeScore < 0 then
+		if not addShowTest then
+			originScore = cfg._score
+		end
+
+		if originGradeId == self._module:getBaseGradeId() then
+			data.gradeScore = 0
+		else
+			data.gradeScore = data.gradeScore + cfg._score
+			data.gradeId = self._module:getLastDownGradeId(originGradeId)
+		end
+
+		animData[#animData + 1] = {
+			animType = "changeScore",
+			toScore = 0,
+			fromScore = originScore,
+			maxScore = cfg._score
+		}
+		local isChangeStar = self._module:readGradeById(data.gradeId) == self._module:readGradeById(originGradeId) and self._module:readShowSubGrade(data.gradeId) == self._module:readShowSubGrade(originGradeId)
+
+		if originGradeId ~= data.gradeId then
+			animData[#animData + 1] = {
+				animType = isChangeStar and "changeStar" or "changeGrade",
+				fromGradeId = originGradeId,
+				toGradeId = data.gradeId,
+				maxScore = self._module:getGradeCfgById(data.gradeId)._score
+			}
+		end
+	else
+		local lastData = animData[#animData]
+		local fromScore = originScore
+
+		if lastData.animType == "changeGrade" or lastData.animType == "changeStar" then
+			if lastData.fromGradeId < lastData.toGradeId then
+				fromScore = 0
+			else
+				fromScore = cfg._score
+			end
+		end
+
+		if fromScore ~= data.gradeScore then
+			animData[#animData + 1] = {
+				animType = "changeScore",
+				fromScore = fromScore,
+				toScore = data.gradeScore,
+				maxScore = cfg._score
+			}
+		end
+
+		return
+	end
+
+	if data.gradeScore >= 0 or data.gradeScore < 0 then
+		self:tryCalAnimDataByScore()
+	end
+end
+
+function M:showGradeChange()
+end
+
+function M:showScoreTxt(idx, delay)
+	delay = delay or 0
+	local txtAddScore = self._txtAddScores[idx]
+	local tfScore = self._tfAddScores[idx]
+	local punch = Vector3.new(0.5, 0.5, 0)
+	local duration = 0.5
+	local vibrato = 10
+	local elasticity = 0.8
+
+	tfScore:SetActive(true)
+end
+
+return M

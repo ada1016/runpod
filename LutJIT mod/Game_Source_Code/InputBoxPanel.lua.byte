@@ -1,0 +1,91 @@
+local M = class("InputBoxPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	ator = Types.Animator,
+	title = Types.TMP_Text,
+	input = Types.TMP_InputField,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	btnSure = Types.Button,
+	textSure = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		self:doConfirm()
+		self:closePanel()
+	end)
+	self:setClick(self._btnCancel, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnSure, function ()
+		if self._fcSure then
+			self._fcSure()
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(param)
+	self._fcComfirm = param._confirmCallback
+	self._fcCancel = param._cancelCallback
+	self._fcSure = nil
+
+	if type(param) == "string" then
+		self._title.text = ""
+		self._content.text = param
+
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	elseif type(param) == "number" then
+		self._title.text = ""
+
+		self._content:SetLocalize(param)
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	else
+		if param._title then
+			if type(param._title) == "string" then
+				self._title.text = param._title
+			else
+				self._title:SetLocalize(param._title)
+			end
+		else
+			self._title.text = ""
+		end
+
+		if param._type == 1 then
+			self._btnSure:SetActive(true)
+			self._btnConfirm:SetActive(false)
+			self._btnCancel:SetVisible(false)
+		else
+			self._btnSure:SetActive(false)
+			self._btnConfirm:SetActive(true)
+			self._btnCancel:SetActive(true)
+		end
+	end
+end
+
+function M:doConfirm()
+	if self._fcComfirm then
+		self._fcComfirm(self._input.text)
+	end
+end
+
+return M

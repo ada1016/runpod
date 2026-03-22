@@ -1,0 +1,9 @@
+local M = class("PlayerBattlePassArkRebuild", requireLua("PlayerBattlePassActivityBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.ArkRebuild
+	self._bpLevelCfg = D._battlePassArkRebuildConfig
+	self._bpLogWay = D.LogWay.ark_rebuild_bp
+end
+
+return M

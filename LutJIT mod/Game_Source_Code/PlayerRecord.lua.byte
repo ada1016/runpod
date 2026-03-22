@@ -1,0 +1,666 @@
+local M = class("PlayerRecord")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.removeAd = self._meta.removeAd or false
+	self._meta.dailyAdRebornNum = self._meta.dailyAdRebornNum or self:readMaxDailyAdRebornNum()
+	self._meta.dailyDiamondRebornNum = self._meta.dailyDiamondRebornNum or self:readMaxDailyDiamondRebornNum()
+	self._meta.dailyAdDoubleNum = self._meta.dailyAdDoubleNum or self:readMaxDailyAdDoubleNum()
+	self._meta.firstMissionChipDrop = self._meta.firstMissionChipDrop or 1
+	self._meta.firstGlobalDefenseMissionEpicEquipDrop = self._meta.firstGlobalDefenseMissionEpicEquipDrop or 1
+	self._meta.firstGlobalDefenseMissionLegendEquipDrop = self._meta.firstGlobalDefenseMissionLegendEquipDrop or 1
+	self._meta.energyRecoverRecordTime = self._meta.energyRecoverRecordTime or 0
+	self._meta.dailyEnergySweepNum = ConfusedNumber.create(self._meta.dailyEnergySweepNum or self:readEnergySweepNum(), "Main_Sweep")
+	self._meta.dailyAdEnergySweepNum = ConfusedNumber.create(self._meta.dailyAdEnergySweepNum or self:readAdEnergySweepNum(), "Main_Sweep_Ad")
+	self._meta.fastSweepIdx = 1
+	self._meta.changeNameCount = self._meta.changeNameCount or 0
+	self._meta.eliteDrawNum = self._meta.eliteDrawNum or 0
+	self._meta.meetNewEnemy = self._meta.meetNewEnemy or {}
+	self._avatarFlags = lc.assignTable(meta, "avatarFlags")
+	self._avatarExpireTimes = lc.assignTable(meta, "avatarExpireTimes")
+	self._avatarFrameFlags = lc.assignTable(meta, "avatarFrameFlags")
+	self._avatarFrameExpireTimes = lc.assignTable(meta, "avatarFrameExpireTimes")
+	self._avatarMedalFlags = lc.assignTable(meta, "avatarMedalFlags")
+	self._avatarMedalExpireTimes = lc.assignTable(meta, "avatarMedalExpireTimes")
+	self._meta.battleSpeedUpCache = self._meta.battleSpeedUpCache or false
+	self._meta.onlineDay = self._meta.onlineDay or 1
+	self._meta.onlineTime = self._meta.onlineTime or 0
+	self._meta.dailyResetTime = self._meta.dailyResetTime or C.getTodayZeroTimestamp(1)
+	self._meta.weekResetTime = self._meta.weekResetTime or C.getMondayTimestamp(C.getTodayZeroTimestamp(), 1)
+	self._meta.monthResetTime = self._meta.monthResetTime or C.getMonthFirstDayTimestamp(C.getTodayZeroTimestamp(), 1)
+	local fixMonthReset = math.floor((self._meta.monthResetTime + 10) / 86400) * 86400
+
+	if fixMonthReset ~= self._meta.monthResetTime then
+		self._meta.monthResetTime = fixMonthReset
+	end
+
+	self._exchangeCodeHistory = lc.assignTable(meta, "exchangeCodeHistory")
+	self._meta.linkRewardClaimed = self._meta.linkRewardClaimed or false
+	self._meta.linkAppleRewardClaimed = self._meta.linkAppleRewardClaimed or false
+	self._activityPurchaseHistory = lc.assignTable(meta, "activityPurchaseHistory")
+	self._meta.challengeEnterArkRebuildFlag = self._meta.challengeEnterArkRebuildFlag or false
+	self._meta.moreRewardJumpDiscord = self._meta.moreRewardJumpDiscord or false
+	self._meta.moreRewardJumpFacebook = self._meta.moreRewardJumpFacebook or false
+end
+
+function M:start()
+	if P._playerRight:isSVIP() then
+		self:changeFastSweep2Max()
+	else
+		self:changeFastSweep2One()
+	end
+end
+
+function M:dailyReset()
+	self._meta.dailyAdRebornNum = self:readMaxDailyAdRebornNum()
+	self._meta.dailyDiamondRebornNum = self:readMaxDailyDiamondRebornNum()
+	self._meta.dailyAdDoubleNum = self:readMaxDailyAdDoubleNum()
+
+	self._meta.dailyEnergySweepNum:reset2Value(self:readEnergySweepNum())
+	self._meta.dailyAdEnergySweepNum:reset2Value(self:readAdEnergySweepNum())
+	self:addOnlineDay()
+end
+
+function M:checkAvatarFrameExpire()
+	if next(self._avatarFrameExpireTimes) then
+		local expiredAvatarFrames = self:getAllExpiredAvatarFrames()
+
+		if #expiredAvatarFrames > 0 then
+			for i = 1, #expiredAvatarFrames do
+				P._playerAsset:decreaseAssetNum(expiredAvatarFrames[i], 1, "avatar_frame_expire")
+				self:removeAvatarFrameExpired(expiredAvatarFrames[i])
+
+				if P._playerProfile:getAvatarFrame() == expiredAvatarFrames[i] then
+					P._playerProfile:setAvatarFrame(nil)
+				end
+
+				SimpleEvent.emit("avatarFrame.expire")
+			end
+		end
+	end
+end
+
+function M:checkAvatarExpire()
+	if next(self._avatarExpireTimes) then
+		local expiredAvatars = self:getAllExpiredAvatars()
+
+		if #expiredAvatars > 0 then
+			for i = 1, #expiredAvatars do
+				P._playerAsset:decreaseAssetNum(expiredAvatars[i], P._playerAsset:getAssetNum(expiredAvatars[i]), "avatar_expire")
+				self:removeAvatarExpired(expiredAvatars[i])
+
+				if P._playerProfile:getAvatar() == expiredAvatars[i] then
+					P._playerProfile:setAvatar(1)
+				end
+
+				SimpleEvent.emit("avatar.expire")
+			end
+		end
+	end
+end
+
+function M:checkAvatarMedalExpire()
+	if next(self._avatarMedalExpireTimes) then
+		local expiredAvatarMedals = self:getAllExpiredAvatarMedals()
+
+		if #expiredAvatarMedals > 0 then
+			for i = 1, #expiredAvatarMedals do
+				P._playerAsset:decreaseAssetNum(expiredAvatarMedals[i], 1, "avatar_medal_expire")
+				self:removeAvatarMedalExpired(expiredAvatarMedals[i])
+
+				if P._playerProfile:getAvatarMedal() == expiredAvatarMedals[i] then
+					P._playerProfile:setAvatarMedal(nil)
+				end
+
+				SimpleEvent.emit("avatarMedal.expire")
+			end
+		end
+	end
+end
+
+function M:recordActivityPurchase(aid, value)
+	self._activityPurchaseHistory[aid] = self:getActivityPurchase(aid) + value
+end
+
+function M:getActivityPurchase(aid)
+	return self._activityPurchaseHistory[aid] or 0
+end
+
+function M:getDailyAdRebornNum()
+	return self._meta.dailyAdRebornNum
+end
+
+function M:recordAdReborn()
+	self._meta.dailyAdRebornNum = self._meta.dailyAdRebornNum - 1
+end
+
+function M:readMaxDailyAdRebornNum()
+	return D._globalConfig._battle_daily_ad_reborn_num
+end
+
+function M:recordDiamondReborn()
+	self._meta.dailyDiamondRebornNum = self._meta.dailyDiamondRebornNum - 1
+end
+
+function M:getDailyDiamondRebornNum()
+	return self._meta.dailyAdRebornNum
+end
+
+function M:readMaxDailyDiamondRebornNum()
+	return D._globalConfig._battle_daily_diamond_reborn_num
+end
+
+function M:getDailyAdDoubleNum()
+	return self._meta.dailyAdDoubleNum
+end
+
+function M:recordAdDouble()
+	self._meta.dailyAdDoubleNum = self._meta.dailyAdDoubleNum - 1
+end
+
+function M:readMaxDailyAdDoubleNum()
+	return D._globalConfig._mission_ad_double_limit
+end
+
+local subEnemyId = 100000
+
+function M:isNewEnemy(enemyId)
+	if subEnemyId < enemyId then
+		return false
+	end
+
+	if enemyId > 2000 and enemyId < 3000 and D._battleEnemyConfig[enemyId - 1000] then
+		return false
+	end
+
+	return self._meta.meetNewEnemy[enemyId] == nil
+end
+
+function M:recordNewEnemyId(enemyId)
+	if subEnemyId < enemyId then
+		return
+	end
+
+	self._meta.meetNewEnemy[enemyId] = 1
+end
+
+function M:getEliteDrawNum()
+	return self._meta.eliteDrawNum
+end
+
+function M:recordEliteDrawCard()
+	self._meta.eliteDrawNum = self._meta.eliteDrawNum + 1
+end
+
+function M:readEnergyRecoverTime()
+	return D._globalConfig._player_energy_recover_speed[1]
+end
+
+function M:readEnergyRecoverMaxNum()
+	return D._globalConfig._player_default_energy
+end
+
+function M:readEnergyRecoverNum()
+	return D._globalConfig._player_energy_recover_speed[2]
+end
+
+function M:recordRecoverTime(ct)
+	self._meta.energyRecoverRecordTime = ct or C.getCurTime()
+end
+
+function M:getNextRecoverTime()
+	if self._meta.energyRecoverRecordTime == 0 then
+		return 0
+	end
+
+	return self._meta.energyRecoverRecordTime + self:readEnergyRecoverTime()
+end
+
+function M:getRecordRecoverTime()
+	return self._meta.energyRecoverRecordTime
+end
+
+function M:readEnergySweepNum()
+	return D._globalConfig._player_energy_sweep_num
+end
+
+function M:readAdEnergySweepNum()
+	return D._globalConfig._player_energy_ad_sweep_num
+end
+
+function M:recordEnergySweepNum()
+	self._meta.dailyEnergySweepNum = self._meta.dailyEnergySweepNum - 1
+end
+
+function M:recordAdEnergySweepNum()
+	self._meta.dailyAdEnergySweepNum = self._meta.dailyAdEnergySweepNum - 1
+end
+
+function M:getLeftEnergySweepNum()
+	return self._meta.dailyEnergySweepNum()
+end
+
+function M:getLeftAdEnergySweepNum()
+	return self._meta.dailyAdEnergySweepNum()
+end
+
+function M:getFastSweepNum()
+	local limit = D._globalConfig._fast_sweep_energy_num_limit
+
+	if not P._playerAsset:isAssetEnough(D.ResType.energy, limit) then
+		return 1
+	end
+
+	return D._globalConfig._fast_sweep_num_list[lc.numberClamp(self._meta.fastSweepIdx, 1, lc.lenTable(D._globalConfig._fast_sweep_num_list))]
+end
+
+function M:changeFastSweep()
+	local idx = self._meta.fastSweepIdx
+
+	if lc.lenTable(D._globalConfig._fast_sweep_num_list) < idx + 1 then
+		self._meta.fastSweepIdx = 1
+	else
+		self._meta.fastSweepIdx = idx + 1
+	end
+end
+
+function M:changeFastSweep2One()
+	self._meta.fastSweepIdx = 1
+end
+
+function M:changeFastSweep2Max()
+	self._meta.fastSweepIdx = lc.lenTable(D._globalConfig._fast_sweep_num_list)
+end
+
+function M:syncFastSweepIdx()
+	local limit = D._globalConfig._fast_sweep_energy_num_limit
+
+	if P._playerRight:isSVIP() and P._playerAsset:isAssetEnough(D.ResType.energy, limit) then
+		self:changeFastSweep2Max()
+	else
+		self:changeFastSweep2One()
+	end
+end
+
+function M:getChangeNameCount()
+	return self._meta.changeNameCount
+end
+
+function M:incChangeNameCount()
+	self._meta.changeNameCount = self._meta.changeNameCount + 1
+end
+
+function M:flagAvatar(avatar)
+	table.insert(self._avatarFlags, avatar)
+	SimpleEvent.emit("avatar.flag.dirty")
+end
+
+function M:getAvatarFlags()
+	return self._avatarFlags
+end
+
+function M:getAllExpiredAvatars()
+	local avatars = {}
+
+	for avatar, expireTime in pairs(self._avatarExpireTimes) do
+		if expireTime < C.getCurTime() then
+			avatars[#avatars + 1] = avatar
+		end
+	end
+
+	return avatars
+end
+
+function M:setAvatarExpired(avatar, time)
+	self._avatarExpireTimes[avatar] = time
+end
+
+function M:getAvatarExpired(avatar)
+	return self._avatarExpireTimes[avatar]
+end
+
+function M:removeAvatarExpired(avatar)
+	self._avatarExpireTimes[avatar] = nil
+
+	table.erase(self._avatarFlags, avatar)
+end
+
+function M:isAvatarUnlocked(avatar)
+	if avatar <= D.MAX_WEAPON_ID then
+		return P._playerArmory:isWeaponUnlocked(avatar)
+	end
+
+	return P._playerAsset:isAssetEnough(avatar, 1)
+end
+
+function M:isNewAvatar(avatar)
+	return self:isAvatarUnlocked(avatar) and not table.contains(self._avatarFlags, avatar)
+end
+
+function M:hasNewAvatar()
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if self:isAvatarUnlocked(i) and not table.contains(self._avatarFlags, i) then
+			return true
+		end
+	end
+
+	for i = D.AVATAR_BEGIN, D.AVATAR_END do
+		if self:isAvatarUnlocked(i) and not table.contains(self._avatarFlags, i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:flagAvatarFrame(avatarFrame)
+	table.insert(self._avatarFrameFlags, avatarFrame)
+	SimpleEvent.emit("avatarFrame.flag.dirty")
+end
+
+function M:getAvatarFrameFlags()
+	return self._avatarFrameFlags
+end
+
+function M:getAllExpiredAvatarFrames()
+	local frames = {}
+
+	for avatarFrame, expireTime in pairs(self._avatarFrameExpireTimes) do
+		if expireTime < C.getCurTime() then
+			frames[#frames + 1] = avatarFrame
+		end
+	end
+
+	return frames
+end
+
+function M:setAvatarFrameExpired(avatarFrame, time)
+	self._avatarFrameExpireTimes[avatarFrame] = time
+end
+
+function M:getAvatarFrameExpired(avatarFrame)
+	return self._avatarFrameExpireTimes[avatarFrame]
+end
+
+function M:removeAvatarFrameExpired(avatarFrame)
+	self._avatarFrameExpireTimes[avatarFrame] = nil
+
+	table.erase(self._avatarFrameFlags, avatarFrame)
+end
+
+function M:isAvatarFrameUnlocked(avatarFrame)
+	return P._playerAsset:isAssetEnough(avatarFrame, 1)
+end
+
+function M:isNewAvatarFrame(avatarFrame)
+	return avatarFrame and self:isAvatarFrameUnlocked(avatarFrame) and not table.contains(self._avatarFrameFlags, avatarFrame)
+end
+
+function M:hasNewAvatarFrame()
+	for i = D.AVATAR_FRAME_BEGIN, D.AVATAR_FRAME_END do
+		if self:isAvatarFrameUnlocked(i) and not table.contains(self._avatarFrameFlags, i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:flagAvatarMedal(avatarMedal)
+	table.insert(self._avatarMedalFlags, avatarMedal)
+	SimpleEvent.emit("avatarMedal.flag.dirty")
+end
+
+function M:getAvatarMedalFlags()
+	return self._avatarMedalFlags
+end
+
+function M:getAllExpiredAvatarMedals()
+	local medals = {}
+
+	for avatarMedal, expireTime in pairs(self._avatarMedalExpireTimes) do
+		if expireTime < C.getCurTime() then
+			medals[#medals + 1] = avatarMedal
+		end
+	end
+
+	return medals
+end
+
+function M:setAvatarMedalExpired(avatarMedal, time)
+	self._avatarMedalExpireTimes[avatarMedal] = time
+end
+
+function M:getAvatarMedalExpired(avatarMedal)
+	return self._avatarMedalExpireTimes[avatarMedal]
+end
+
+function M:removeAvatarMedalExpired(avatarMedal)
+	self._avatarMedalExpireTimes[avatarMedal] = nil
+
+	table.erase(self._avatarMedalFlags, avatarMedal)
+end
+
+function M:isAvatarMedalUnlocked(avatarMedal)
+	return P._playerAsset:isAssetEnough(avatarMedal, 1)
+end
+
+function M:isNewAvatarMedal(avatarMedal)
+	return avatarMedal and self:isAvatarMedalUnlocked(avatarMedal) and not table.contains(self._avatarMedalFlags, avatarMedal)
+end
+
+function M:hasNewAvatarMedal()
+	for i = D.AVATAR_MEDAL_BEGIN, D.AVATAR_MEDAL_END do
+		if self:isAvatarMedalUnlocked(i) and not table.contains(self._avatarMedalFlags, i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:hasFirstMissionDrop()
+	return self._meta.firstMissionChipDrop == 1
+end
+
+function M:removeFirstMissionDrop()
+	self._meta.firstMissionChipDrop = 0
+end
+
+function M:hasFirstGlobalDefenseMissionEpicEquipDrop()
+	return self._meta.firstGlobalDefenseMissionEpicEquipDrop == 1
+end
+
+function M:removeFirstGlobalDefenseMissionEpicEquipDrop()
+	self._meta.firstGlobalDefenseMissionEpicEquipDrop = 0
+end
+
+function M:hasFirstGlobalDefenseMissionLegendEquipDrop()
+	return self._meta.firstGlobalDefenseMissionLegendEquipDrop == 1
+end
+
+function M:removeFirstGlobalDefenseMissionLegendEquipDrop()
+	self._meta.firstGlobalDefenseMissionLegendEquipDrop = 0
+end
+
+function M:recordBattleSpeedUp(speedUp)
+	self._meta.battleSpeedUpCache = speedUp or false
+end
+
+function M:isBattleSpeedUp()
+	return self._meta.battleSpeedUpCache
+end
+
+function M:setEliteRedDot(dot)
+	if dot == self:getEliteRedDot() then
+		return
+	end
+
+	self._meta.eliteReddotClicked = dot
+
+	SimpleEvent.emit("elite.dot")
+end
+
+function M:getEliteRedDot()
+	return self._meta.eliteReddotClicked
+end
+
+function M:getOnlineDay()
+	return self._meta.onlineDay
+end
+
+function M:addOnlineDay()
+	self._meta.onlineDay = self._meta.onlineDay + 1
+end
+
+function M:getOnlineTime()
+	return self._meta.onlineTime + C.getCurTime() - C._enterForegroundTime
+end
+
+function M:addOnlineTime(time)
+	self._meta.onlineTime = self._meta.onlineTime + time
+end
+
+function M:getRecordOnlineTime()
+	return self._meta.recordOnlineTime or 0
+end
+
+function M:setRecordOnlineTime(time)
+	self._meta.recordOnlineTime = time
+end
+
+function M:getDailyResetTime()
+	return self._meta.dailyResetTime
+end
+
+function M:setDailyResetTime(t)
+	self._meta.dailyResetTime = t
+end
+
+function M:getWeekResetTime()
+	return self._meta.weekResetTime
+end
+
+function M:setWeekResetTime(t)
+	self._meta.weekResetTime = t
+end
+
+function M:getMonthResetTime()
+	return self._meta.monthResetTime
+end
+
+function M:setMonthResetTime(t)
+	self._meta.monthResetTime = t
+end
+
+function M:claimExchangeCode(code, callback)
+	code = string.upper(code)
+
+	if table.contains(self._exchangeCodeHistory, code) then
+		callback(ResultCode.EXCHANGE_CODE_CLAIMED, SID.TIP_EXCHANGE_CODE_CLAIMED)
+
+		return
+	end
+
+	if not D._exchangeCodeConfig then
+		local doc = "exchange_code"
+
+		if not lc._isRelease then
+			doc = "dev_" .. doc
+		end
+
+		LuaHelper.queryDocData("codes", doc, function (jsonStr)
+			if jsonStr ~= "" then
+				jsonStr = string.unicodeToUtf8(jsonStr)
+				local tbl = LuaTableJson.decodeFromLuaJson(jsonStr)
+				D._exchangeCodeConfig = tbl
+
+				self:claimExchangeCode(code, callback)
+			end
+		end)
+	else
+		for c, cfg in pairs(D._exchangeCodeConfig) do
+			if string.upper(c) == code then
+				local startTimeSplits = string.split(cfg._startTime, "|")
+				local startTime = Client.getDateTimestamp(startTimeSplits[1], startTimeSplits[2], startTimeSplits[3])
+				local now = C.getCurTime()
+				local endTimeSplits = string.split(cfg._endTime, "|")
+				local endTime = Client.getDateTimestamp(endTimeSplits[1], endTimeSplits[2], endTimeSplits[3])
+
+				if lc._appVersion < lc.versionStr2Number(cfg._version) and lc._isRelease then
+					callback(ResultCode.EXCHANGE_CODE_INVALID, {
+						SID.TIP_UPGRADE_VERSION,
+						cfg._version
+					})
+				elseif startTime <= now and now <= endTime then
+					table.insert(self._exchangeCodeHistory, code)
+					Trace.traceDesign("RedeemSuccess:%s", code)
+					callback(ResultCode.OK, cfg._rewardCids, cfg._rewardNums)
+				else
+					callback(ResultCode.EXCHANGE_CODE_EXPIRED, SID.TIP_EXCHANGE_CODE_EXPIRED)
+				end
+
+				return
+			end
+		end
+
+		callback(ResultCode.EXCHANGE_CODE_INVALID, SID.TIP_EXCHANGE_CODE_INVALID)
+	end
+end
+
+function M:claimLinkReward()
+	self._meta.linkRewardClaimed = true
+end
+
+function M:isLinkRewardClaimed()
+	return self._meta.linkRewardClaimed
+end
+
+function M:claimAppleLinkReward()
+	self._meta.linkRewardClaimed = true
+end
+
+function M:isAppleLinkRewardClaimed()
+	return self._meta.linkRewardClaimed
+end
+
+function M:hasChallengeEnterArkRebuildFlag()
+	return self._meta.challengeEnterArkRebuildFlag
+end
+
+function M:setChallengeEnterArkRebuildFlag(flag)
+	self._meta.challengeEnterArkRebuildFlag = flag
+end
+
+function M:isFacebookJumped()
+	return self._meta.moreRewardJumpFacebook
+end
+
+function M:tryClaimFacebookJumpedRewards()
+	if self:isFacebookJumped() then
+		return
+	end
+
+	self._meta.moreRewardJumpFacebook = true
+
+	P._playerAsset:increaseAssetNum(D._globalConfig._more_reward_jump[1], D._globalConfig._more_reward_jump[2], D.LogWay.more_reward_jump)
+end
+
+function M:isDiscordJumped()
+	return self._meta.moreRewardJumpDiscord
+end
+
+function M:tryClaimDiscordJumpedRewards()
+	if self:isDiscordJumped() then
+		return
+	end
+
+	self._meta.moreRewardJumpDiscord = true
+
+	P._playerAsset:increaseAssetNum(D._globalConfig._more_reward_jump[1], D._globalConfig._more_reward_jump[2], D.LogWay.more_reward_jump)
+end
+
+return M

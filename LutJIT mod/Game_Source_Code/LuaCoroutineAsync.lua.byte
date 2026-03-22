@@ -1,0 +1,137 @@
+local Async = {
+	mIter = 0,
+	mStopped = false,
+	mFlag = "ok",
+	mName = "name",
+	mArgs = {},
+	mCaller = {},
+	mErrorFn = function (err)
+	end,
+	__index = Async
+}
+
+declare("LuaCoroutineAsync", Async)
+
+function Async.Copy(src)
+	if type(src) == "table" then
+		local ret = {}
+
+		for k, v in pairs(src) do
+			ret[k] = Async.Copy(v)
+		end
+
+		return ret
+	end
+
+	return src
+end
+
+function Async.Bind(fn, ...)
+	local params = {
+		...
+	}
+
+	return function (...)
+		local args = {}
+
+		for i, v in ipairs(params) do
+			table.insert(args, v)
+		end
+
+		for i, v in ipairs({
+			...
+		}) do
+			table.insert(args, v)
+		end
+
+		return fn(unpack(args))
+	end
+end
+
+function Async:Next(flag, ...)
+	self.mArgs = {
+		...
+	}
+	self.mFlag = flag
+	local status = self.mCo and coroutine.status(self.mCo) or "dead"
+
+	if status == "dead" then
+		local fn = Async.Bind(self.Exec, self)
+		self.mCo = coroutine.create(fn)
+
+		coroutine.resume(self.mCo)
+	elseif status == "suspended" then
+		coroutine.resume(self.mCo)
+	elseif status == "running" then
+		return true
+	end
+
+	return false
+end
+
+function Async:Reg(flag, func)
+	assert(type(flag) == "string")
+	assert(type(func) == "function")
+	table.insert(self.mCaller, {
+		mFunc = func,
+		mFlag = flag
+	})
+
+	if #self.mCaller - self.mIter == 1 then
+		self:Next(self.mFlag, unpack(self.mArgs))
+	end
+
+	return self
+end
+
+function Async:Exec()
+	while not self.mStopped and self.mIter < #self.mCaller do
+		local caller = self.mCaller[self.mIter + 1]
+
+		if self.mFlag == caller.mFlag then
+			local stat, ret = xpcall(caller.mFunc, self.mErrorFn, Async.Bind(self.Next, self, "ok"), Async.Bind(self.Next, self, "no"), unpack(self.mArgs))
+
+			if not stat then
+				-- Nothing
+			end
+
+			if not ret then
+				coroutine.yield(self.mCo)
+			end
+		end
+
+		self.mIter = self.mIter + 1
+	end
+end
+
+function Async:Stop()
+	self.mStopped = true
+end
+
+function Async:Ok(func)
+	return self:Reg("ok", func)
+end
+
+function Async:No(func)
+	return self:Reg("no", func)
+end
+
+function Async:Error(fn)
+	self.mErrorFn = fn
+end
+
+function Async.New(name, ...)
+	local instance = setmetatable({}, Async)
+	instance.mName = name
+	instance.mArgs = {
+		...
+	}
+	instance.mFlag = "ok"
+	instance.mCaller = {}
+	instance.mIter = 0
+	instance.mCo = nil
+
+	return instance
+end
+
+return Async

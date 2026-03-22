@@ -1,0 +1,50 @@
+local M = class("BattleBullet_SlowfieldDrone", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+
+function M:step(dt)
+	if not self._battleWeapon:isInAtkingStage() then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._bullet502 then
+		self._bullet502._position.y = self._bullet502._position.y + self._speed * dt
+
+		if self._maxY <= self._bullet502._position.y then
+			self._speed = -math.abs(self._speed)
+		elseif self._bullet502._position.y <= self._minY then
+			self._speed = math.abs(self._speed)
+		end
+
+		if self._view then
+			self._bullet502._view:posEvent()
+		end
+	end
+end
+
+function M:stepMove()
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+	self:removeBullet502()
+end
+
+function M:initBullet502(bullet)
+	self._bullet502 = bullet
+	self._speed = 1
+	self._minY = self._position.y - self._size[2] / 2
+	self._maxY = self._position.y + self._size[2] / 2
+end
+
+function M:removeBullet502()
+	if self._bullet502 then
+		self._bullet502:markToBeDestroyed()
+	end
+end
+
+return M

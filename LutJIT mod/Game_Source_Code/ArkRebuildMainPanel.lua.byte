@@ -1,0 +1,1011 @@
+local M = class("ArkRebuildMainPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	atorMain = Types.Animator,
+	btnAllReward = Types.Button,
+	btnReward = Types.Button,
+	pgsExp = Types.SlicedFilledImage,
+	txtExp = Types.TMP_Text,
+	tfMilestoneStars = Types.Transform,
+	imgNextReward = Types.Image,
+	txtNextRewardNum = Types.TMP_Text,
+	tmpMission = Types.TMP_Text,
+	btnMission = Types.Button,
+	btnMissionIssue = Types.Button,
+	tfArkContainer = Types.Transform,
+	tfEnemy = Types.Transform,
+	tfModes = Types.Transform,
+	tfWeaponCardsArea = Types.Transform,
+	btnRank = Types.Button,
+	btnStore = Types.Button,
+	btnExit = Types.Button,
+	goCanUpgradeAtk = Types.GameObject,
+	goCanUpgradeAtkDot = Types.GameObject,
+	txtCurAtk = Types.TMP_Text,
+	btnUpgradeAtk = Types.Button,
+	btnWeapons = Types.Button,
+	btnEnter = Types.Button,
+	btnOffline = Types.Button,
+	btnCloseWeapons = Types.Button,
+	btnCloseWeaponsBg = Types.Button,
+	btnOpenWeaponsBg = Types.Button,
+	tfModulesContainer = Types.Transform,
+	goNoModule = Types.GameObject,
+	btnViewModule = Types.Button,
+	tfDeckContainer = Types.Transform,
+	tfCardsContainer = Types.Transform,
+	goSelcetedContainer = Types.GameObject,
+	goSelcetedWeapon = Types.GameObject,
+	goEmptyArea = Types.GameObject,
+	btnSelectedBg = Types.Button,
+	imgWeapon1 = Types.Image,
+	imgWeapon2 = Types.Image,
+	imgWeapon4 = Types.Image,
+	imgWeapon5 = Types.Image,
+	btnLoadout = Types.Button,
+	txtLoadoutId = Types.TMP_Text,
+	txtLoadoutName = Types.TMP_Text
+}
+local ArkWeaponCardWidget = requireLua("ArkWeaponCardWidget")
+local ArkRebulidModuleWidget = requireLua("ArkRebulidModuleWidget")
+local INDEX_MAP = {
+	4,
+	2,
+	1,
+	3,
+	5
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnIssue, function ()
+		self:handleIssueBtn()
+	end)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnAllReward, function ()
+		self:handleShowAllRewardBtn()
+	end)
+	self:setClickWithoutAction(self._btnReward, function ()
+		self:handleShowRewardBtn()
+	end)
+	self:setClick(self._btnMissionIssue, function ()
+		self:handleMissionIssueBtn()
+	end)
+	self:setClick(self._btnEnter, function ()
+		self:handleStartBtn()
+	end)
+	self:setClick(self._btnUpgradeAtk, function ()
+		self:handleUpgradeAtk()
+	end)
+	self:setClick(self._btnRank, function ()
+		V.checkRankVersion(function ()
+			local limits = P._playerActivityArkRebuild:readCurrentCfg()._limitScore
+
+			if P._playerActivityArkRebuild:getCurMission() % 10000 <= limits[#limits] then
+				V.showToast({
+					SID.ARK_REBUILD_RANK_TOAST1,
+					limits[#limits]
+				})
+
+				return
+			end
+
+			self:handleRankBtn()
+		end)
+	end)
+	self:setClick(self._btnStore, function ()
+		self:handleStoreBtn()
+	end)
+	self:setClick(self._btnWeapons, function ()
+		self:handleWeaponBtn()
+	end)
+	self:setClick(self._btnCloseWeapons, function ()
+		self:cancelReplacing()
+		self:handleCloseWeaponBtn()
+	end)
+	self:setClick(self._btnCloseWeaponsBg, function ()
+		self:cancelReplacing()
+		self:handleCloseWeaponBtn()
+	end)
+	self:setClick(self._btnOpenWeaponsBg, function ()
+		self:handleWeaponBtn()
+	end)
+	self:setClick(self._btnOffline, function ()
+		self:handleOfflineBtn()
+	end)
+	self:setClickWithoutAction(self._btnSelectedBg, function ()
+		self:cancelReplacing()
+	end)
+	self:setClick(self._btnViewModule, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildModuleListPanel)
+	end)
+	self:setClick(self._btnLoadout, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildLoadoutPanel, function (i)
+			P._playerActivityArkRebuild:setCurLoadout(i)
+			self:updateLoadout()
+			self:updateAtk()
+		end)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.ark_rebuild_gold or cid == D.ResType.ark_rebuild_sp_gold then
+			self._goCanUpgradeAtk:SetActive(P._playerActivityArkRebuild:canUpgradeAtk() and P._playerActivityArkRebuild:getAtkLevel() > 1)
+			self._goCanUpgradeAtkDot:SetActive(P._playerActivityArkRebuild:canUpgradeAtk() and P._playerActivityArkRebuild:getAtkLevel() <= 1)
+		end
+	end)
+	self:on("ark_rebuild.weapon.dirty", function ()
+		self:updateWeapons()
+	end)
+	self:on("ark_rebuild.weapon.card.dirty", function (weapon)
+		self:updateWeapons()
+	end)
+	self:on("ark_rebuild.module.dirty", function ()
+		self:updateModules()
+		self:updateAtk()
+	end)
+	self:on("day.cross", function ()
+		self:tryExpire()
+	end)
+	self:on("ark_rebuild.mission.dirty", function ()
+		self:updateMilestoneRewards()
+		self:updateMission()
+	end)
+	self:on("ark_rebulid.rank_reward", function ()
+		self._expireDealed = true
+
+		UIManager.hideWaiting()
+		UIManager.closeToPanelOrMain()
+		UIManager.openPanel(PrefabDefine.ArkRebuildSettlementRewardPanel)
+	end)
+	self:on("ark_rebulid.rank_fail", function ()
+		UIManager.hideWaiting()
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_confirmCallback = function ()
+				UIManager.closeToPanelOrMain()
+			end
+		})
+	end)
+	self:on("ark_rebuild.loadout.change", function ()
+		self:initCards()
+		self:updateAtk()
+	end)
+end
+
+function M:closePanel(enterBattle)
+	if not enterBattle then
+		ArkShipManager:exitMain()
+		Client.playMusic("music_city")
+
+		P._inArkRebulid = false
+
+		P._playerActivityArkRebuild:recordPlayTime()
+	end
+
+	lc.stopTimer(self._secondTimer)
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+	self:tryExpire()
+	self:dealBackMainPop()
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return
+	end
+
+	if P._playerActivityArkRebuild:isExpired() or P._playerActivityArkRebuild:isSettleClaimed() then
+		self._expireDealed = true
+
+		UIManager.closeToPanelOrMain(self.__prefabArg.id)
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.TIP_EVENT_END,
+			_confirmCallback = function ()
+				if P._playerActivityArkRebuild:isSettleClaimed() then
+					self:closePanel()
+				else
+					UIManager.showWaiting(30, SID.NETWORK_NOTREACHABLE)
+					P._playerActivityArkRebuild:trySettle()
+				end
+			end
+		})
+
+		return
+	end
+end
+
+local pushPanels = {}
+
+function M:dealBackMainPop()
+	table.clear(pushPanels)
+
+	if self._expireDealed then
+		return
+	end
+
+	if Client._config.noPopFacePanel then
+		return
+	end
+
+	if self._from == "mainBtn" then
+		local showTime = P._playerArkRebuildOffline:getRecordOfflineTime() + P._playerArkRebuildOffline:readOfflineShowTime()
+
+		if showTime < Client.getCurTime() and P._playerActivityArkRebuild:getCurMission() > 40001 then
+			table.insert(pushPanels, {
+				PrefabDefine.ArkRebuildOfflineRewardPanel
+			})
+		end
+	end
+
+	for i = 1, #pushPanels do
+		local data = pushPanels[i]
+
+		if not UIManager.isPanelPushed(data[1]) then
+			UIManager.pushPanel(unpack(data))
+		end
+	end
+
+	UIManager.popPanel()
+end
+
+function M:initPrefabVar()
+	self._imgNormalEnemies = {
+		self._tfEnemy:Find("Common"):GetChild(0):GetChild(0):GetComponent("Image"),
+		self._tfEnemy:Find("Common"):GetChild(1):GetChild(0):GetComponent("Image"),
+		self._tfEnemy:Find("Common"):GetChild(2):GetChild(0):GetComponent("Image"),
+		self._tfEnemy:Find("Common"):GetChild(3):GetChild(0):GetComponent("Image")
+	}
+	self._imgEliteEnemies = {
+		self._tfEnemy:Find("Elite"):GetChild(0):GetChild(0):GetComponent("Image"),
+		self._tfEnemy:Find("Elite"):GetChild(1):GetChild(0):GetComponent("Image"),
+		self._tfEnemy:Find("Elite"):GetChild(2):GetChild(0):GetComponent("Image")
+	}
+	self._goDeckWeapons = {}
+	self._goAllWeapons = {}
+
+	for i = 1, 5 do
+		local weaponObj = self._tfDeckContainer:GetChild(i - 1).gameObject
+
+		ArkWeaponCardWidget.noCreate(weaponObj)
+
+		local realIdx = INDEX_MAP[i]
+		self._goDeckWeapons[realIdx] = weaponObj
+
+		self:setClick(weaponObj._btnUnlock, function ()
+			self:handleWeaponSlotUnlock(i)
+		end)
+		self:setClick(weaponObj._btnClick, function ()
+			if self._replacingId then
+				self:downCard(realIdx)
+
+				return
+			end
+
+			if self._deck[realIdx] then
+				if not self._weaponDisplaying then
+					self:handleWeaponBtn()
+				end
+
+				if not weaponObj._editing then
+					if self._editingWeapon then
+						self._editingWeapon._anim:Play("anim_arkCardClick2")
+
+						self._editingWeapon._editing = false
+					end
+
+					weaponObj._editing = true
+
+					weaponObj._anim:Play("anim_arkCardClick")
+
+					if INDEX_MAP[i] == D.WEAPON_GATLIN then
+						weaponObj._btnUp:SetActive(false)
+					else
+						weaponObj._txtUpOrDown:SetLocalize(SID.STR_UNEQUIP)
+					end
+
+					self._editingWeapon = weaponObj
+				else
+					self._editingWeapon = nil
+					weaponObj._editing = false
+
+					weaponObj._anim:Play("anim_arkCardClick2")
+				end
+			end
+		end)
+		self:setClick(weaponObj._btnUp, function ()
+			self._editingWeapon = nil
+			weaponObj._editing = false
+
+			weaponObj._anim:Play("anim_arkCardClick2")
+
+			local clip = weaponObj._anim:get_Item("anim_arkCardClick2")
+			clip.time = clip.length
+
+			weaponObj._anim:Sample()
+			weaponObj._anim:Stop()
+			self:downCard(INDEX_MAP[i])
+		end)
+		self:setClick(weaponObj._btnEdit, function ()
+			local id = self._deck[INDEX_MAP[i]]
+			self._editingWeapon = nil
+			weaponObj._editing = false
+
+			weaponObj._anim:Play("anim_arkCardClick2")
+			UIManager.openPanel(PrefabDefine.ActivityArkRebuildCardsEditPanel, id, function ()
+				self:updateWeapons()
+			end)
+		end)
+	end
+
+	ArkWeaponCardWidget.noCreate(self._goSelcetedWeapon)
+
+	self._goModules = {}
+end
+
+function M:init(from, goArk)
+	self._from = from
+
+	self:createGoArk(goArk)
+
+	local data = P._playerActivity:getArkRebuildData()
+	self._auid = data.uid
+	self._id = data.id
+	self._subType = data.subType
+	self._aData = data
+
+	self._tmpTitle:SetLocalize(P._playerActivity:readNameSid(D.ActivityType.ArkRebuild))
+	self:initCards()
+	self:updateLoadout()
+	self:updateAtk()
+	self:updateMilestoneRewards()
+	self:updateMission()
+	self:updateModules()
+	self:updateExpireTime()
+	lc.setTimer(function ()
+		self:checkSelectingCard()
+	end, 0.1)
+	self:updateReddots()
+
+	P._inArkRebulid = true
+
+	P._playerActivityArkRebuild:recordEnterArkRebuildTime()
+	Client.playMusic("music_ark_main")
+end
+
+function M:initCards()
+	self._deck = P._playerActivityArkRebuild:getWeaponSlots()
+	self._deck[1] = D.WEAPON_GATLIN
+	self._len = 5
+	self._cards = P._playerActivityArkRebuild:getCards()
+	self._replacingId = nil
+
+	self:updateWeapons()
+end
+
+function M:initRewards()
+end
+
+function M:updateLoadout()
+	local curLoadout = P._playerActivityArkRebuild:getCurLoadout()
+	self._txtLoadoutId.text = curLoadout
+	local loadoutName = P._playerActivityArkRebuild:getLoadoutName(curLoadout)
+
+	if loadoutName then
+		self._txtLoadoutName.text = loadoutName
+	else
+		self._txtLoadoutName:SetLocalize(SID.STR_LOADOUT_X, curLoadout)
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local data = P._playerActivity:getArkRebuildData()
+
+	if not data then
+		return
+	end
+
+	local targetTime = data.endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds)
+end
+
+function M:updateReddots()
+	local cond1 = P._playerBPArkRebuild:haveUnclaimRewards()
+	local cond2 = P._playerActivityArkRebuild:hasOpenPackDot()
+
+	self._btnStore.dot:SetVisible(cond1 or cond2)
+	self._btnOffline.dot:SetVisible(P._playerArkRebuildOffline:getOfflineTime() > 3600 and self._msId > 40001)
+
+	if not P._playerActivityArkRebuild:isWeaponSlotUnlock(2) and P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_gold, P._playerActivityArkRebuild:readWeaponUnlockCost(2)) then
+		self._goDeckWeapons[2]._goDot:SetActive(true)
+	end
+end
+
+function M:updateMilestoneRewards()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local curExp = P._playerActivityArkRebuild:getCurMilestoneExp()
+	local rewardsCfg = P._playerActivityArkRebuild:readMilestoneCfg(self._subType)
+	local milestoneCnt = #rewardsCfg
+	local claimIdx = 0
+
+	for i = 1, milestoneCnt do
+		if rewardsCfg[i]._exp <= curExp then
+			claimIdx = i
+		else
+			break
+		end
+	end
+
+	for i = 1, self._tfMilestoneStars.childCount do
+		self._tfMilestoneStars:GetChild(i - 1):GetChild(0):SetActive(i <= claimIdx)
+	end
+
+	local leftNum = 0
+	local rightNum = 0
+
+	if claimIdx < milestoneCnt then
+		if claimIdx == 0 then
+			leftNum = 0
+			rightNum = rewardsCfg[1]._exp
+		else
+			leftNum = rewardsCfg[claimIdx]._exp
+			rightNum = rewardsCfg[claimIdx + 1]._exp
+		end
+	else
+		local lastMilestoneCond = rewardsCfg[milestoneCnt]._exp
+		leftNum = rewardsCfg[milestoneCnt - 1]._exp
+		rightNum = rewardsCfg[milestoneCnt]._exp
+	end
+
+	self._pgsExp.fillAmount = curExp / rightNum
+	self._txtExp.text = string.format("%d/%d", curExp, rightNum)
+	local targetCfg = rewardsCfg[math.min(milestoneCnt, claimIdx + 1)]
+	local cid = targetCfg._cids[1]
+	local num = targetCfg._nums[1]
+	self._showRewardNum = num
+	self._showRewardCid = cid
+
+	LuaUnity.setTPSprite(self._imgNextReward, D.toSprite(cid), true)
+
+	self._txtNextRewardNum.text = num
+end
+
+function M:updateMission()
+	self._msId = P._playerActivityArkRebuild:getCurMission()
+	self._msType = D.MissionType.ArkRebuild
+
+	if not P._playerMission:isMissionExist(self._msId, self._msType) then
+		self._msId = self._msId - 1
+	end
+
+	local enemyIds = P._playerActivityArkRebuild:getMissionEnemiess(self._msId)
+	local len = #enemyIds
+
+	if len == 1 then
+		self._tfEnemy:Find("Common"):SetActive(true)
+		self._tfEnemy:Find("Elite"):SetActive(false)
+
+		for i = 1, 4 do
+			V.loadEnemySprite(self._imgNormalEnemies[i], enemyIds[1])
+		end
+	elseif len == 2 then
+		self._tfEnemy:Find("Common"):SetActive(false)
+		self._tfEnemy:Find("Elite"):SetActive(true)
+		V.loadEnemySprite(self._imgEliteEnemies[1], enemyIds[1])
+		V.loadEnemySprite(self._imgEliteEnemies[2], enemyIds[2])
+		V.loadEnemySprite(self._imgEliteEnemies[3], enemyIds[1])
+	else
+		self._tfEnemy:Find("Common"):SetActive(true)
+		self._tfEnemy:Find("Elite"):SetActive(false)
+		V.loadEnemySprite(self._imgNormalEnemies[1], enemyIds[1])
+		V.loadEnemySprite(self._imgNormalEnemies[2], enemyIds[2])
+		V.loadEnemySprite(self._imgNormalEnemies[3], enemyIds[3])
+		V.loadEnemySprite(self._imgNormalEnemies[4], enemyIds[1])
+	end
+
+	V.loadMissionTitleText(self._tmpMission, self._msId, self._msType)
+end
+
+function M:updateAtk()
+	self._goCanUpgradeAtk:SetActive(P._playerActivityArkRebuild:canUpgradeAtk() and P._playerActivityArkRebuild:getAtkLevel() > 1)
+	self._goCanUpgradeAtkDot:SetActive(P._playerActivityArkRebuild:canUpgradeAtk() and P._playerActivityArkRebuild:getAtkLevel() == 1)
+
+	self._txtCurAtk.text = P._playerActivityArkRebuild:getAtk()
+end
+
+function M:updateWeapons()
+	local left2RightList = {}
+	local remainCards = clone(self._cards)
+	remainCards[D.WEAPON_GATLIN] = 1
+
+	for _, weapon in pairs(self._goAllWeapons) do
+		weapon:SetActive(false)
+	end
+
+	local emptySlot = nil
+
+	for i = 1, self._len do
+		local realIdx = INDEX_MAP[i]
+		local card = self._goDeckWeapons[realIdx]
+		local isUnlock = P._playerActivityArkRebuild:isWeaponSlotUnlock(i)
+
+		if isUnlock then
+			local id = self._deck[realIdx]
+			left2RightList[i] = id
+
+			if id then
+				remainCards[id] = remainCards[id] - 1
+
+				card._tfBtnArea:SetVisible(false)
+				card:SetActive(true)
+				card:updateUI(id, P._playerActivityArkRebuild:getWeaponStar(id))
+				card:setFront()
+				card._tfBtnArea:SetVisible(false)
+
+				card._editing = false
+
+				if i ~= 3 then
+					self["_imgWeapon" .. i]:SetActive(true)
+					V.loadWeaponIcon(self["_imgWeapon" .. i], id, true)
+				end
+
+				if P._playerActivityArkRebuild:getWeaponInvalidCards(id) then
+					card:showTip(SID.TIP_ARK_REBUILD_CARD_INVALID_5)
+				else
+					card:showTip(nil)
+				end
+			else
+				emptySlot = emptySlot or realIdx
+
+				card:SetActive(true)
+				card:setBack()
+				card._goDot:SetActive(false)
+				card._tfBtnArea:SetVisible(false)
+
+				if i ~= 3 then
+					self["_imgWeapon" .. i]:SetActive(false)
+				end
+
+				card:showTip(nil)
+			end
+		else
+			card._tfBtnArea:SetVisible(false)
+
+			if P._playerActivityArkRebuild:isPreWeaponSlotUnlock(i) then
+				local cost = P._playerActivityArkRebuild:readWeaponUnlockCost(i)
+
+				card:setLock(cost)
+			else
+				card:setLock(0)
+			end
+
+			if i ~= 3 then
+				self["_imgWeapon" .. i]:SetActive(false)
+			end
+		end
+	end
+
+	local count = 0
+	local hasWeaponCardDot = false
+
+	for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		local id = D.WEAPON_ORDER[i]
+
+		if remainCards[id] and remainCards[id] > 0 then
+			count = count + 1
+			local pos = count <= 5 and count + 5 or count - 5
+			local card = self._goAllWeapons[id] or ArkWeaponCardWidget.create(self._tfCardsContainer:GetChild(pos - 1))
+
+			card:SetParent(self._tfCardsContainer:GetChild(pos - 1))
+			lc.setAnchoredPosition(card, 0, 0, 0)
+
+			self._goAllWeapons[id] = card
+
+			card._tfBtnArea:SetVisible(false)
+			card:SetActive(true)
+			card:updateUI(id, P._playerActivityArkRebuild:getWeaponStar(id))
+			card:setFront()
+			self:setClick(card._btnUp, function ()
+				if emptySlot then
+					card._anim:Play("anim_arkCardClick2")
+
+					local clip = card._anim:get_Item("anim_arkCardClick2")
+					clip.time = clip.length
+
+					card._anim:Sample()
+					card._anim:Stop()
+				end
+
+				self:upCard(emptySlot, id)
+			end)
+			self:setClick(card._btnEdit, function ()
+				UIManager.openPanel(PrefabDefine.ActivityArkRebuildCardsEditPanel, id, function ()
+					self:updateWeapons()
+				end)
+
+				self._editingWeapon = nil
+				card._editing = false
+
+				card._anim:Play("anim_arkCardClick2")
+			end)
+
+			local line = count <= 5 and 1 or 2
+
+			self:setClick(card._btnClick, function ()
+				if not card._editing then
+					if self._editingWeapon then
+						self._editingWeapon._anim:Play("anim_arkCardClick2")
+
+						self._editingWeapon._editing = false
+					end
+
+					card._editing = true
+
+					card._anim:Play("anim_arkCardClick")
+
+					self._editingWeapon = card
+
+					if line > 1 then
+						self._tfCardsContainer:DOLocalMoveY(342, 0.3):SetEase(V.EASE_OUT_SINE)
+					else
+						self._tfCardsContainer:DOLocalMoveY(192, 0.3):SetEase(V.EASE_OUT_SINE)
+					end
+				else
+					self._editingWeapon = nil
+					card._editing = false
+
+					card._anim:Play("anim_arkCardClick2")
+				end
+			end)
+
+			hasWeaponCardDot = hasWeaponCardDot or P._playerActivityArkRebuild:hasWeaponCardDot(id)
+		end
+	end
+
+	self._goEmptyArea:SetActive(count == 0)
+	self._btnWeapons.dot:SetVisible(emptySlot ~= nil and count > 0 or hasWeaponCardDot)
+
+	if count <= 5 then
+		lc.setSizeDelta(self._tfCardsContainer, 810, 384)
+	else
+		lc.setSizeDelta(self._tfCardsContainer, 810, 534)
+	end
+
+	ArkShipManager:syncWeapons(left2RightList)
+end
+
+function M:checkSelectingCard()
+	local selectingData = P._playerActivityArkRebuild:getSelectingCardData()
+
+	if selectingData ~= nil and #selectingData > 0 then
+		UIManager.openPanel(PrefabDefine.ArkRebuildSelectPanel)
+	end
+end
+
+function M:updateModules()
+	local count = 0
+	local modules = P._playerActivityArkRebuild:getModuleList()
+
+	for i = 1, #modules do
+		local module = nil
+
+		if not self._goModules[i] then
+			module = ArkRebulidModuleWidget.create(self._tfModulesContainer)
+
+			module:updateUI(modules[i])
+
+			self._goModules[i] = module
+
+			self:setClick(module._btnClick, function ()
+				if P._playerActivityArkRebuild:isNewModule(modules[i]) then
+					module._goNew:SetActive(false)
+					P._playerActivityArkRebuild:removeNewModule(modules[i])
+				end
+
+				UIManager.openPanel(PrefabDefine.ModuleDetailPanel, modules[i])
+			end)
+		else
+			module = self._goModules[i]
+		end
+
+		module.transform:SetSiblingIndex(count)
+		module._goNew:SetActive(P._playerActivityArkRebuild:isNewModule(modules[i]))
+		LuaUnity.setTPSprite(module._imgIcon, string.format("weekend/Module-%d", modules[i]))
+
+		count = count + 1
+	end
+
+	self._goNoModule:SetActive(count == 0)
+end
+
+function M:upCard(slot, cardId)
+	if slot == nil then
+		if self._replacingId == nil then
+			self._replacingId = cardId
+
+			self._goSelcetedWeapon:updateUI(cardId, P._playerActivityArkRebuild:getWeaponStar(cardId))
+			self._goSelcetedContainer:SetActive(true)
+			self._tfCardsContainer:SetActive(false)
+
+			for i = 1, 5 do
+				local realIdx = INDEX_MAP[i]
+
+				if self._deck[realIdx] and self._deck[realIdx] ~= D.WEAPON_GATLIN and self._goDeckWeapons[realIdx] then
+					self._goDeckWeapons[realIdx]._anim:Play("anim_cardShake")
+				end
+			end
+		else
+			self:cancelReplacing()
+		end
+
+		return
+	end
+
+	P._playerActivityArkRebuild:setWeaponSlot(slot, cardId)
+	self:updateAtk()
+	Client.playSound("ui_Ark_card_use_1")
+	self:updateWeapons()
+end
+
+function M:downCard(index)
+	if self._replacingId then
+		if index == 1 then
+			V.showToast(SID.TIP_GUARDIAN_CAN_NOT_REPLACE)
+
+			return
+		else
+			P._playerActivityArkRebuild:setWeaponSlot(index, self._replacingId)
+			self:cancelReplacing()
+			self:updateWeapons()
+		end
+	else
+		if index == 1 then
+			V.showToast(SID.TIP_GUARDIAN_CAN_NOT_REPLACE)
+
+			return
+		end
+
+		P._playerActivityArkRebuild:setWeaponSlot(index, nil)
+		self:updateWeapons()
+	end
+
+	self:updateAtk()
+	Client.playSound("ui_Ark_card_use_1")
+end
+
+function M:cancelReplacing()
+	if self._replacingId then
+		self._replacingId = nil
+
+		self._goSelcetedContainer:SetActive(false)
+		self._tfCardsContainer:SetActive(true)
+
+		for i = 1, 5 do
+			local realIdx = INDEX_MAP[i]
+
+			if self._deck[realIdx] and self._deck[realIdx] ~= D.WEAPON_GATLIN and self._goDeckWeapons[realIdx] then
+				self._goDeckWeapons[realIdx]._anim:Stop()
+				lc.setLocalRotation(self._goDeckWeapons[realIdx], 0, 0, 0)
+			end
+		end
+	end
+end
+
+function M:createGoArk(goArk)
+	if self._goArk then
+		return
+	end
+
+	MainGameRoot:setBlackBG(false)
+
+	if goArk then
+		self._goArk = goArk
+
+		self._atorMain:Play("enter_slow")
+	else
+		self._goArk = V.createArkShip(MainGameRoot._tfScene)
+
+		ArkShipManager:enterMain()
+		self._atorMain:Play("enter")
+	end
+end
+
+function M:handleWeaponSlotUnlock(i)
+	local realIdx = INDEX_MAP[i]
+	local id = self._deck[realIdx]
+	local code, param = P._playerActivityArkRebuild:checkUnlockWeaponSlot(i)
+
+	if code ~= ResultCode.OK then
+		if code ~= ResultCode.NOT_MEET_CONDITION then
+			V.showResultCode(code, param)
+		end
+
+		return
+	end
+
+	local function dealFunc()
+		local code, param = P._playerActivityArkRebuild:tryUnlockWeaponSlot(i)
+
+		if code ~= ResultCode.OK then
+			if code ~= ResultCode.NOT_MEET_CONDITION then
+				V.showResultCode(code, param)
+			end
+
+			return
+		end
+
+		Client.playSound("ui_Ark_slot_unlock_1")
+		self:updateWeapons()
+		self:updateAtk()
+	end
+
+	local cost = P._playerActivityArkRebuild:readWeaponUnlockCost(i)
+	local showConfirm = V.tryShowConfirm("ark_rebuild_unlock_weapon", dealFunc, SID.TIP_USE_RESOURCE_UNLOCK_CONFIRM, D.getTMPSpriteRichText(string.format("item_small_%d", D.ResType.ark_rebuild_gold)) .. cost, D.ResType.ark_rebuild_gold)
+
+	if not showConfirm then
+		dealFunc()
+	end
+
+	self._goDeckWeapons[i]._goDot:SetActive(false)
+	self:updateAtk()
+end
+
+function M:handleShowAllRewardBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildMilestonePanel, self._subType)
+end
+
+function M:handleShowRewardBtn()
+	if not self._showRewardCid then
+		return
+	end
+
+	V.showItemInfoPanel(self._showRewardCid, self._showRewardNum)
+end
+
+function M:handleIssueBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildDescPanel, self._id)
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:handleRankBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildRankPanel)
+end
+
+function M:handleStoreBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildStorePanel)
+end
+
+function M:handleStartBtn()
+	if P._playerActivityArkRebuild:isExpired() then
+		self:closePanel()
+		V.showToast(SID.TIP_EVENT_END)
+
+		return
+	end
+
+	for _, weapon in pairs(P._playerActivityArkRebuild:getWeaponSlots()) do
+		if P._playerActivityArkRebuild:getWeaponInvalidCards(weapon) then
+			V.showToast(SID.TIP_ARK_REBUILD_CARD_INVALID_5)
+
+			return
+		end
+	end
+
+	if not D._missionArkRebuildConfig[P._playerActivityArkRebuild:getCurMission()] then
+		V.showToast(SID.TIP_ARK_REBUILD_MAX_STAGE)
+
+		return
+	end
+
+	P._playerActivityArkRebuild:startMission()
+
+	InputBattleData = {
+		msType = D.MissionType.ArkRebuild,
+		msId = P._playerActivityArkRebuild:getCurMission(),
+		defaultBlood = P._playerActivityArkRebuild:getDomeHp()
+	}
+
+	V.switchBetweenMainAndBattleScene("ark_rebuild", "battle")
+	ArkShipManager:enterBattle()
+	self._atorMain:Play("hide")
+	P:setMsType(D.MissionType.ArkRebuild)
+end
+
+function M:handleUpgradeAtk()
+	UIManager.openPanel(PrefabDefine.ArkRebuildImproveATKPanel, function ()
+		self:updateAtk()
+	end)
+end
+
+function M:handleAllRewardsBtn()
+end
+
+function M:handleMissionIssueBtn()
+	UIManager.openPanel(PrefabDefine.MissionInfoPanel, self._msId, self._msType)
+end
+
+function M:handleWeaponCardClick(cardIdx)
+end
+
+function M:handleWeaponBtn()
+	ArkShipManager:openShip()
+
+	self._weaponDisplaying = true
+
+	self._atorMain:Play("choose_weapon")
+	self._tfCardsContainer:SetLocalPosition(0, 192, 0)
+	self._btnCloseWeaponsBg:SetActive(true)
+	self._btnOpenWeaponsBg:SetActive(false)
+end
+
+function M:handleCloseWeaponBtn()
+	ArkShipManager:closeShip()
+
+	self._weaponDisplaying = false
+
+	self._atorMain:Play("common")
+
+	if self._editingWeapon then
+		self._editingWeapon._anim:Play("anim_arkCardClick2")
+
+		self._editingWeapon._editing = false
+		self._editingWeapon = nil
+	end
+
+	self._btnCloseWeaponsBg:SetActive(false)
+	self._btnOpenWeaponsBg:SetActive(true)
+end
+
+function M:handleOfflineBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildOfflineRewardPanel)
+end
+
+function M:OnFocus()
+	self:updateReddots()
+	self:updateLoadout()
+	self:updateAtk()
+end
+
+return M

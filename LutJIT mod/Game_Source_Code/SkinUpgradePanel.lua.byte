@@ -1,0 +1,201 @@
+local M = class("SkinUpgradePanel", requireLua("BasePanel"))
+local Types = Types
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	atorMain = Types.Animator,
+	txtTitle = Types.TMP_Text,
+	tfGatlinSkinContainer = Types.Transform,
+	rawImgSkin = Types.RawImage,
+	imgSkin = Types.RawImage,
+	txtName = Types.TMP_Text,
+	txtProp1 = Types.TMP_Text,
+	txtProp2 = Types.TMP_Text,
+	goSkillArea = Types.GameObject,
+	txtSkillLevel = Types.TMP_Text,
+	goSkillStarContainer = Types.GameObject,
+	imgSkillIcon = Types.Image,
+	goStarContainer = Types.GameObject,
+	goSpineWidget = Types.GameObject,
+	goDomeArea = Types.GameObject,
+	goDomeHideArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._timers = {}
+end
+
+function M:initPrefabVar()
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+end
+
+function M:init(skinId)
+	self._skinId = skinId
+	local level = P._playerSkin:getSkinLevel(skinId)
+	local cfg = P._playerSkin:getCfg(skinId)
+	local skinType = D.toSkinType(skinId)
+
+	self._rawImgSkin.gameObject:SetActive(skinType == D.SkinType.Dome)
+	self._goDomeArea:SetActive(skinType == D.SkinType.Dome)
+	self._goDomeHideArea:SetActive(skinType ~= D.SkinType.Dome)
+	self._imgSkin.gameObject:SetActive(skinType == D.SkinType.Weapon)
+	self._txtName:SetLocalize(cfg._nameSid)
+
+	if skinType ~= D.SkinType.Dome then
+		if skinType == D.SkinType.Role then
+			self._goSpineWidget:SetActive(true)
+			self._goSpineWidget:updateUI(skinId, P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN) or 1)
+		else
+			self._goSpineWidget:SetActive(false)
+
+			if skinType == D.SkinType.Gatlin then
+				self._gatlinObj = V.getGatlinSkinObj(self._tfGatlinSkinContainer, self._skinId)
+			else
+				lc.setLocalScale(self._imgSkin.gameObject, 0.65, 0.65, 0.65)
+				lc.setLocalPosition(self._imgSkin.gameObject, 0, 23, 0)
+				LuaUnity.setTexture(self._imgSkin, string.format("skin_%d_big", skinId), true)
+			end
+		end
+	else
+		LuaUnity.setTexture(self._rawImgSkin, string.format("skin_%d_big", skinId), true)
+	end
+
+	if level == 1 then
+		self._txtTitle:SetLocalize(SID.TITLE_UNLOCK_SUCCESS)
+		self._atorMain:Play("anim_GunUnlock1")
+
+		self._btnMask.enabled = false
+
+		lc.delayFunc(1.4, function ()
+			self._btnMask.enabled = true
+		end, self.gameObject)
+		Client.playSound("ui_Skin_unlock_1")
+	else
+		self._txtTitle:SetLocalize(SID.TITLE_ASCEND_SUCCESS)
+		V.setSkinQualityStar(self._goStarContainer, cfg._quality, level - 1)
+		self._atorMain:Play("anim_GunStarsUp")
+
+		self._btnMask.enabled = false
+		self._weapon = cfg._weapon
+
+		if skinType == D.SkinType.Gatlin then
+			self._txtProp1:SetLocalize(SID.STR_FINAL_DAMAGE_ADD, -D._weaponConfig[self._weapon]._skillNameSid, cfg._damageAdd * (level - 1))
+			self._txtProp2.gameObject:SetActive(false)
+			self._goSkillArea:SetActive(false)
+		elseif skinType == D.SkinType.Weapon or skinType == D.SkinType.Role then
+			LuaUnity.setTPSprite(self._imgSkillIcon, "weapon/weapon_" .. cfg._weapon, true)
+			self._txtProp1:SetLocalize(SID.SID_GEM_EFFECT_DESCSID_3, cfg._critDmgAdd * (level - 1))
+			V.setSkinQualityStar(self._goSkillStarContainer, cfg._quality, level - 1)
+
+			if skinType == D.SkinType.Weapon then
+				self._txtProp2:SetLocalize(SID.STR_DAMAGE_ADD, -SID["STR_NATURE_" .. D._weaponConfig[self._weapon]._dmgType], cfg._damageAdd * (level - 1))
+			elseif skinType == D.SkinType.Role then
+				if cfg._weapon == 0 then
+					self._txtProp2:SetLocalize(SID.STR_ALL_FINAL_DAMAGE_ADD, cfg._damageAdd * (level - 1))
+					self._goSkillArea:SetActive(false)
+				elseif cfg._weapon == 1000 then
+					self._txtProp2:SetLocalize(SID.STR_ALL_DAMAGE_ADD, cfg._damageAdd * (level - 1))
+					self._goSkillArea:SetActive(false)
+				else
+					self._txtProp2:SetLocalize(SID.STR_FINAL_DAMAGE_ADD, -D._weaponConfig[self._weapon]._skillNameSid, cfg._damageAdd * (level - 1))
+				end
+			end
+		else
+			LuaUnity.setTPSprite(self._imgSkillIcon, "skill/item_skill_" .. skinId, true)
+			self._txtProp1:SetLocalize(SID.STR_DOME_HP_ADD_VALUE, cfg._domeHp * (level - 1))
+			V.setSkinQualityStar(self._goSkillStarContainer, cfg._quality, level - 1)
+			self._txtProp2.gameObject:SetActive(false)
+		end
+
+		self._atorMain:GetComponent("AnimationEventCallback"):AddAnimationEvent(function (param)
+			if param == "1" then
+				self._goStarContainer:GetChild(level - 1):GetComponent("Animation"):Play()
+
+				if skinType ~= D.SkinType.Gatlin then
+					self._goSkillStarContainer:GetChild(level - 1):GetComponent("Animation"):Play()
+				end
+
+				if skinType == D.SkinType.Gatlin then
+					self:startDmgChangeAnim(self._txtProp1, SID.STR_FINAL_DAMAGE_ADD, -D._weaponConfig[self._weapon]._skillNameSid, cfg._damageAdd * (level - 1), cfg._damageAdd, cfg._damageAdd * level)
+				elseif skinType == D.SkinType.Weapon or skinType == D.SkinType.Role then
+					self:startDmgChangeAnim(self._txtProp1, SID.SID_GEM_EFFECT_DESCSID_3, nil, cfg._critDmgAdd * (level - 1), cfg._critDmgAdd, cfg._critDmgAdd * level)
+
+					if skinType == D.SkinType.Weapon then
+						self:startDmgChangeAnim(self._txtProp2, SID.STR_DAMAGE_ADD, -SID["STR_NATURE_" .. D._weaponConfig[self._weapon]._dmgType], cfg._damageAdd * (level - 1), cfg._damageAdd, cfg._damageAdd * level)
+					elseif skinType == D.SkinType.Role then
+						if cfg._weapon == 0 then
+							self:startDmgChangeAnim(self._txtProp2, SID.STR_ALL_FINAL_DAMAGE_ADD, nil, cfg._damageAdd * (level - 1), cfg._damageAdd, cfg._damageAdd * level)
+						elseif cfg._weapon == 1000 then
+							self:startDmgChangeAnim(self._txtProp2, SID.STR_ALL_DAMAGE_ADD, nil, cfg._damageAdd * (level - 1), cfg._damageAdd, cfg._damageAdd * level)
+						else
+							self:startDmgChangeAnim(self._txtProp2, SID.STR_FINAL_DAMAGE_ADD, -D._weaponConfig[self._weapon]._skillNameSid, cfg._damageAdd * (level - 1), cfg._damageAdd, cfg._damageAdd * level)
+						end
+					end
+				else
+					self:startDmgChangeAnim(self._txtProp1, SID.STR_DOME_HP_ADD_VALUE, nil, cfg._domeHp * (level - 1), cfg._domeHp, cfg._domeHp * level)
+				end
+			elseif param == "2" then
+				self._btnMask.enabled = true
+			end
+		end)
+		Client.playSound("ui_Skin_ascend_1")
+	end
+end
+
+function M:startDmgChangeAnim(tmp, sid, param1, baseDmg, deltaDmg, targetDmg)
+	local idx = #self._timers + 1
+	self._timers[idx] = lc.setInterval(function ()
+		baseDmg = baseDmg + deltaDmg / 7
+
+		if param1 then
+			tmp:SetLocalize(sid, param1, math.floor(baseDmg))
+		else
+			tmp:SetLocalize(sid, math.floor(baseDmg))
+		end
+
+		if sid == SID.STR_LEVEL_X then
+			tmp:SetLocalize(sid, math.random(1, 9))
+		end
+
+		if targetDmg <= baseDmg then
+			if param1 then
+				tmp:SetLocalize(sid, param1, math.floor(targetDmg))
+			else
+				tmp:SetLocalize(sid, math.floor(targetDmg))
+			end
+
+			lc.stopTimer(self._timers[idx])
+		end
+	end, 0.03333333333333333)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	for i = 1, #self._timers do
+		lc.stopTimer(self._timers[i])
+	end
+
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+end
+
+function M:closePanel()
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+	M.super.closePanel(self)
+end
+
+return M

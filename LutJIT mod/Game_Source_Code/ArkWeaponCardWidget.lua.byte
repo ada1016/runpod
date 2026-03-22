@@ -1,0 +1,277 @@
+local M = class("ArkWeaponCardWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ArkWeaponCardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	self._anim = self:GetComponent("Animation")
+	self._cg = self:GetComponent("CanvasGroup")
+	local upgradeNum = D._globalConfig._rogue_upgrade_star_num
+	self._imgStars = {}
+	local haveStarNum = self._tfStars.childCount
+
+	if haveStarNum < upgradeNum then
+		for i = 1, upgradeNum - haveStarNum do
+			GameObject.Instantiate(self._tfStars:GetChild(0).gameObject, self._tfStars)
+		end
+	elseif upgradeNum < haveStarNum then
+		for i = upgradeNum + 1, haveStarNum do
+			self._tfStars:GetChild(i - 1):SetActive(false)
+		end
+	end
+
+	for i = 1, upgradeNum do
+		if i == upgradeNum then
+			self._imgStars[i] = self._tfStars:GetChild(i - 1):GetChild(0):GetChild(0):GetComponent("Image")
+		else
+			self._imgStars[i] = self._tfStars:GetChild(i - 1):GetChild(0):GetComponent("Image")
+		end
+	end
+
+	self:initData()
+end
+
+function M:initData()
+	self._weaponId = nil
+	self._haveCard = false
+	self._showNewStage = true
+	self._totalStarNum = 0
+	self._showStageNum = 0
+	self._showStarNum = 0
+	self._newStageStarNum = 0
+end
+
+function M:copy2Card(widget)
+	widget._totalStarNum = self._totalStarNum
+	widget._showStarNum = self._showStarNum
+	widget._showStageNum = self._showStageNum
+	widget._newStageStarNum = self._newStageStarNum
+
+	widget:updateUI(self._weaponId, self._totalStarNum, self._showNewStage)
+end
+
+function M:isWeaponMax()
+	return self._weaponId and self._totalStarNum == D._globalConfig._rogue_upgrade_star_num * (D.MAX_SUPER_WEAPON_STAGE - 1)
+end
+
+function M:updateMax(isMax)
+	self._tfStars:SetActive(not isMax)
+	self._goStage:SetActive(not isMax)
+	self._goMax:SetActive(isMax)
+end
+
+function M:updateUI(weaponId, starNum)
+	self._weaponId = weaponId
+	self._haveCard = starNum and starNum >= 0
+	self._totalStarNum = starNum or 0
+
+	self:updateCardUI()
+
+	local hasWeaponCardDot = P._playerActivityArkRebuild:hasWeaponCardDot(weaponId)
+	local hasEmptyWeaponSlot = P._playerActivityArkRebuild:canUpWeapon(weaponId)
+
+	self._goDot:SetActive(hasWeaponCardDot or hasEmptyWeaponSlot)
+	self._goEditDot:SetActive(hasWeaponCardDot)
+	self._goUpDot:SetActive(hasEmptyWeaponSlot)
+end
+
+function M:updateStage(stage)
+	self._showStageNum = stage or 0
+
+	self:updateStageUI()
+end
+
+function M:updateStageUI()
+	self._tmpLv.text = self._showStageNum
+end
+
+function M:updateStar(star)
+	self._showStarNum = star or 0
+
+	self:updateStarUI(self._showStarNum)
+end
+
+function M:updateStarUI(starNum)
+	starNum = starNum or 0
+
+	if starNum == self._starNum then
+		return
+	end
+
+	self._starNum = starNum
+
+	for i = 1, #self._imgStars do
+		self._imgStars[i].enabled = i <= self._starNum
+	end
+end
+
+function M:setNewStageStarData(starNum)
+	self._newStageStarNum = starNum
+end
+
+function M:updateStarData()
+	if self._newStageStarNum then
+		self._totalStarNum = self._newStageStarNum
+		self._newStageStarNum = nil
+	end
+end
+
+function M:updateUINewStage()
+	self._showNewStage = true
+
+	self:updateStarData()
+	self:updateCardUI()
+end
+
+function M:updateUINewStageFullStar()
+	self._showNewStage = false
+
+	self:updateStarData()
+
+	local showStage, showStar = self:calculateStageAndStar(self._totalStarNum, true)
+
+	self:updateStage(showStage)
+	self:updateStarUI(4)
+
+	local isMax = self:isWeaponMax()
+
+	self:updateMax(isMax)
+
+	if isMax then
+		lc.setAnchoredPosition(self._goMax.transform, 0, 0)
+	end
+end
+
+function M:calculateStageAndStar(totalStarNum, showNewStage)
+	local showStarNum = 0
+	local showStage = 1
+	local isUpgradeStage = totalStarNum > 0 and totalStarNum % D._globalConfig._rogue_upgrade_star_num == 0
+
+	if showNewStage then
+		showStage = math.floor(totalStarNum / D._globalConfig._rogue_upgrade_star_num) + 1
+		showStarNum = isUpgradeStage and 0 or totalStarNum % D._globalConfig._rogue_upgrade_star_num
+	else
+		showStage = math.floor(totalStarNum / D._globalConfig._rogue_upgrade_star_num) + (self._haveCard and (isUpgradeStage and 0 or 1) or 0)
+		showStarNum = isUpgradeStage and D._globalConfig._rogue_upgrade_star_num or totalStarNum % D._globalConfig._rogue_upgrade_star_num
+	end
+
+	return showStage, showStarNum
+end
+
+function M:updateCardUI()
+	local weaponId = self._weaponId
+	local starNum = self._totalStarNum
+	local showNewStage = self._showNewStage
+
+	lc.setAnchoredPosition(self._goMax.transform, 46.2, 0)
+
+	local isMax = self:isWeaponMax()
+
+	self:updateMax(isMax)
+
+	if weaponId then
+		self:setFront()
+
+		local showStage, showStarNum = self:calculateStageAndStar(starNum, showNewStage)
+
+		self:updateStage(showStage)
+		self:updateStar(showStarNum)
+		self:updateIcon(weaponId)
+	else
+		self:setBack()
+		self:showComboBtn(false)
+	end
+end
+
+function M:setFront()
+	self._goCardFront:SetActive(true)
+	self._goCardLock:SetActive(false)
+end
+
+function M:setBack()
+	self._goCardFront:SetActive(false)
+	self._goCardLock:SetActive(false)
+end
+
+function M:setLock(cost)
+	self._goCardFront:SetActive(false)
+
+	if cost then
+		local cid = D.ResType.ark_rebuild_gold
+		self._tmpUnlockCost.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. cid), cost)
+	end
+
+	self._goCardLock:SetActive(true)
+	self._goCardLock.transform:GetChild(0):GetChild(0):SetActive(cost > 0)
+	self._goCardLock.transform:GetChild(0):GetChild(1):SetActive(cost == 0)
+end
+
+function M:updateColor(stage)
+	stage = stage or 1
+
+	if stage == self._stage then
+		return
+	end
+
+	self._tmpLv.text = stage
+end
+
+function M:updateIcon(weaponId)
+	V.loadWeaponIcon(self._imgIcon, weaponId, true)
+	LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/weapon_%d", weaponId), true, true)
+end
+
+function M:setUpgradeCardAnim(play, isSuper)
+	self._ator:SetBool("newStage", play or false)
+	self._ator:SetBool("isSuper", isSuper or false)
+end
+
+function M:setSuperVfx(show)
+	if not show then
+		return
+	end
+
+	if show and not self._goSuperVfx then
+		self._goSuperVfx = LuaUnity.createGameObject("Assets/FW/Prefabs/UI_vfx/vfx_rogueCardSuper.prefab", self._tfSuperVfx)
+		self._atorSuper = self._goSuperVfx:GetComponent("Animator")
+	end
+
+	self._damageType = D._weaponConfig[self._weaponId or 1]._dmgType
+
+	self._atorSuper:SetInteger("type", self._damageType)
+end
+
+function M:updateBgColor()
+end
+
+function M:hideStarArea()
+	self._tfStars:SetActive(false)
+	lc.setAnchoredPosition(self._goStageArea, 0, -65, 0)
+end
+
+function M:showTip(sid)
+	if sid then
+		self._goTip:SetActive(true)
+		self._txtTip:SetLocalize(sid)
+	else
+		self._goTip:SetActive(false)
+	end
+end
+
+return M

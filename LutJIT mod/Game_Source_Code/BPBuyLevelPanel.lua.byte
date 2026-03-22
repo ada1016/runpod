@@ -1,0 +1,113 @@
+local M = class("BPBuyLevelPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnBG = Types.Button,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	txtLv = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	btnDiamond = Types.Button,
+	txtDiamond = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnLeft, function ()
+		self:decreaseLv()
+	end)
+	self:setClick(self._btnRight, function ()
+		self:increaseLv()
+	end)
+	self:setClick(self._btnDiamond, function ()
+		self:handleBuy()
+	end)
+	self:setClickWithoutAction(self._btnBG, function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(bpModule)
+	self._bpModule = bpModule
+	self._currentLv = self._bpModule:getCurRewardLevel()
+	self._maxLv = self._bpModule:readMaxLevel()
+	self._level = lc.numberClamp(self._currentLv + 1, self._currentLv, self._maxLv)
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtDesc:SetLocalizeS(SID.TIP_USE_DIAMOND_UNLOCK_TO, string.format("<color=#6BFFE0>%d</color>", self._level))
+
+	self._txtLv.text = self._level
+	local minLv = self._currentLv + 1
+	local maxLv = self._bpModule:readMaxLevel()
+
+	self._btnLeft.gameObject:SetActive(minLv < self._level)
+	self._btnRight.gameObject:SetActive(self._level < maxLv)
+
+	local dtLv = self._level - self._currentLv
+	local costDiamond = self._bpModule:getUpCostDiamond(dtLv)
+	self._costDiamond = costDiamond
+	self._txtDiamond.text = string.format("<sprite name=\"item_small_10002\">%d", costDiamond)
+end
+
+function M:decreaseLv()
+	local minLv = self._currentLv + 1
+
+	if self._level <= minLv then
+		return
+	end
+
+	self._level = self._level - 1
+
+	self:updateUI()
+end
+
+function M:increaseLv()
+	local maxLv = self._bpModule:readMaxLevel()
+
+	if maxLv <= self._level then
+		return
+	end
+
+	self._level = self._level + 1
+
+	self:updateUI()
+end
+
+function M:handleBuy()
+	local dtLv = self._level - self._currentLv
+
+	if dtLv == 0 then
+		self:closePanel()
+
+		return
+	end
+
+	local resultCode, p1 = self._bpModule:checkAddLevel(dtLv)
+
+	if resultCode ~= ResultCode.OK then
+		V.showResultCode(resultCode, p1)
+
+		return
+	end
+
+	local ret = V.tryShowDiamondConfirm(D.ResType.diamond, self._costDiamond, function ()
+		self._bpModule:tryAddLevel(dtLv)
+		self:closePanel()
+	end)
+
+	if ret then
+		return
+	end
+
+	self._bpModule:tryAddLevel(dtLv)
+	self:closePanel()
+end
+
+return M

@@ -1,0 +1,129 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_GravityVortex", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:castSkill()
+	local num = self._mainSkill:getProp(BattlePropEnum.Salvo, 0)
+	local offsetAngle = 15
+	num = num + 1
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		num = num + self._skinSkillParam1
+	end
+
+	if self:getEffect(1101) then
+		for i = 1, num do
+			local dtAngle = offsetAngle * (i - (1 + num) / 2)
+			local skill1107 = self:getSkill(1107)
+			local bullet = skill1107:createBullet()
+
+			bullet:setPos(self._shootPos.x, self._shootPos.y)
+			bullet:setDirByAngle(self._angle + dtAngle)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+
+			local bullet1 = self._mainSkill:createBullet()
+
+			bullet:setBullet1(bullet1)
+
+			local bullet2 = self._mainSkill:createBullet()
+
+			bullet:setBullet2(bullet2)
+		end
+
+		if self._view then
+			Client.playBattleSound("se_Bullet_11_twins")
+		end
+	else
+		for i = 1, num do
+			local dtAngle = offsetAngle * (i - (1 + num) / 2)
+
+			self:createBullet(self._angle + dtAngle, nil, )
+		end
+	end
+end
+
+function M:createBullet(angle, x, y)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(x or self._shootPos.x, y or self._shootPos.y)
+	bullet:setDirByAngle(angle or self._angle)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	return bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+end
+
+function M:onShotFinished()
+	SUPER.onShotFinished(self)
+
+	if self._view then
+		if self._view._atorIdle then
+			self._view._atorIdle.speed = 0.5
+		elseif self._view._spriteAnimationEx then
+			self._view._spriteAnimationEx:SetBehavior(1)
+		end
+	end
+end
+
+function M:launchShot()
+	SUPER.launchShot(self)
+
+	if self._view then
+		if self._view._atorIdle then
+			self._view._atorIdle.speed = 2
+		elseif self._view._spriteAnimationEx then
+			self._view._spriteAnimationEx:SetBehavior(2)
+		end
+	end
+end
+
+function M:castSkin62Effect(bullet, enemy)
+	local cnt = self._skinEffect62Params.out_param
+
+	for i = 1, cnt do
+		local castSkill = self:getSkill(1121)
+		local b1 = castSkill:createBullet()
+		b1._dmgDelay = (i - 1) * 0.1
+
+		b1:setPos(bullet._position.x, bullet._position.y)
+
+		if b1._view then
+			b1._view:posEvent()
+		end
+
+		local count = self._skinEffect62Params.out_param
+		local castSkill = self:getSkill(1122)
+		local b1 = castSkill:createBullet()
+		b1._dmgDelay = (i - 1) * 0.2
+
+		b1:setPos(bullet._position.x, bullet._position.y)
+
+		if b1._view then
+			b1._view:posEvent()
+		end
+	end
+end
+
+return M

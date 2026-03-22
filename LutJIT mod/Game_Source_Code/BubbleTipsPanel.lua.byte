@@ -1,0 +1,304 @@
+local M = class("BubbleTipsPanel", requireLua("BasePanel"))
+M.args = {
+	goLine = Types.GameObject,
+	textName = Types.TMP_Text,
+	textDesc = Types.TMP_Text,
+	goLine2 = Types.GameObject,
+	textName2 = Types.TMP_Text,
+	textDesc2 = Types.TMP_Text,
+	tfContent = Types.Transform,
+	tfBottom = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._ignoreAni = true
+	self._layoutContent = self._tfContent:GetComponent("LayoutGroup")
+end
+
+function M:Start()
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+	self:startUpdater()
+end
+
+function M:OnHide()
+	self:stopUpdater()
+	M.super.OnHide(self)
+end
+
+function M:closePanel()
+	V._bubbleTiming = false
+
+	self:closeTimer()
+	M.super.closePanel(self)
+end
+
+function M:closeTimer()
+	if self._closeTimer then
+		lc.stopTimer(self._closeTimer)
+
+		self._closeTimer = nil
+	end
+end
+
+function M:Update()
+	if Input.GetMouseButtonDown(0) and (not self._closeTimer or self._closeTimer.running == false) then
+		self:closePanel()
+	end
+end
+
+function M:init(text, params, duration)
+	self._text = text
+	self._params = params
+
+	self:initFitVars()
+	self:updateUI(text, params)
+
+	if self._closeTimer then
+		lc.stopTimer(self._closeTimer)
+	end
+
+	if duration then
+		V._bubbleTiming = true
+		self._closeTimer = lc.setTimer(function ()
+			self:closePanel()
+		end, duration)
+	end
+
+	self._tfContent:DOKill()
+	lc.setLocalScale(self._tfContent, 0, 0, 0)
+	self._tfContent:DOScale(1, 0.1):SetLink(self.gameObject):SetUpdate(0, true)
+	lc.setLocalScale(self._tfBottom, 0, 1, 1)
+	self._tfBottom:DOScaleX(1, 0.1):SetLink(self.gameObject):SetUpdate(0, true)
+end
+
+function M:updateUI(textParam, param)
+	self._goLine:SetActive(false)
+
+	if type(textParam) == "table" then
+		self._goLine:SetActive(textParam.name and textParam.desc and true or false)
+
+		if textParam.name then
+			self._textName.gameObject:SetActive(true)
+
+			if type(textParam.name) == "table" then
+				self._textName:SetLocalize(unpack(textParam.name))
+			elseif type(textParam.name) == "string" then
+				self._textName.text = textParam.name
+			else
+				self._textName:SetLocalize(textParam.name)
+			end
+		else
+			self._textName.gameObject:SetActive(false)
+		end
+
+		if textParam.desc then
+			self._textDesc.gameObject:SetActive(true)
+
+			if type(textParam.desc) == "table" then
+				if textParam.desc[2] == nil or type(textParam.desc[2]) == "number" then
+					self._textDesc:SetLocalize(unpack(textParam.desc))
+				else
+					self._textDesc:SetLocalizeS(unpack(textParam.desc))
+				end
+			elseif type(textParam.desc) == "string" then
+				self._textDesc.text = textParam.desc
+			elseif textParam.descParam then
+				if type(textParam.descParam) == "table" then
+					if textParam.descParam[1] and type(textParam.descParam[1]) ~= "table" then
+						self._textDesc:SetLocalizeS(textParam.desc, unpack(textParam.descParam))
+					else
+						self._textDesc:SetLocalizeEx(textParam.desc, textParam.descParam)
+					end
+				elseif type(textParam.descParam) == "string" then
+					self._textDesc:SetLocalizeS(textParam.desc, textParam.descParam)
+				else
+					self._textDesc:SetLocalize(textParam.desc, textParam.descParam)
+				end
+			else
+				self._textDesc:SetLocalize(textParam.desc)
+			end
+		else
+			self._textDesc.gameObject:SetActive(false)
+		end
+
+		self._goLine2:SetActive(textParam.name2 and textParam.desc2 and true or false)
+
+		if textParam.name2 then
+			self._textName2.gameObject:SetActive(true)
+
+			if type(textParam.name2) == "table" then
+				self._textName2:SetLocalize(unpack(textParam.name2))
+			elseif type(textParam.name2) == "string" then
+				self._textName2.text = textParam.name2
+			else
+				self._textName2:SetLocalize(textParam.name2)
+			end
+		end
+
+		if textParam.desc2 then
+			self._textDesc2.gameObject:SetActive(true)
+
+			if type(textParam.desc2) == "table" then
+				if textParam.desc2[2] == nil or type(textParam.desc2[2]) == "number" then
+					self._textDesc2:SetLocalize(unpack(textParam.desc2))
+				else
+					self._textDesc2:SetLocalizeS(unpack(textParam.desc2))
+				end
+			elseif type(textParam.desc2) == "string" then
+				self._textDesc2.text = textParam.desc2
+			elseif textParam.descParam2 then
+				if type(textParam.descParam2) == "table" then
+					self._textDesc2:SetLocalizeEx(textParam.desc2, textParam.descParam2)
+				elseif type(textParam.descParam2) == "string" then
+					self._textDesc2:SetLocalizeS(textParam.desc2, textParam.descParam2)
+				else
+					self._textDesc2:SetLocalize(textParam.desc2, textParam.descParam2)
+				end
+			else
+				self._textDesc2:SetLocalize(textParam.desc2)
+			end
+		end
+	elseif type(textParam) == "string" then
+		self._textName.gameObject:SetActive(false)
+
+		self._textDesc.text = textParam
+	else
+		self._textName.gameObject:SetActive(false)
+		self._textDesc:SetLocalize(textParam)
+	end
+
+	local offset = param.offset
+	self._preferAlignment = param.alignment
+
+	if offset == nil then
+		offset = {
+			0,
+			0,
+			0
+		}
+	end
+
+	local offsetY = offset[2]
+	local defaultWidth = 400
+	local width = 0
+	local forceWidth = type(param) == "table" and param.forceWidth or nil
+
+	if forceWidth then
+		width = param.forceWidth
+
+		lc.setSizeDelta(self._tfContent, param.forceWidth, 500)
+	else
+		local preferredWidth = 0
+
+		if textParam.desc then
+			preferredWidth = self._textDesc.preferredWidth
+		elseif textParam.name then
+			preferredWidth = self._textName.preferredWidth
+		end
+
+		width = preferredWidth + 20
+		width = lc.numberClamp(width, 0, defaultWidth)
+
+		lc.setSizeDelta(self._tfContent, width, 500)
+	end
+
+	self:updateContentData(width)
+	self:saveFitInScreen(param.target, offsetY)
+end
+
+function M:initFitVars()
+	self._UItoScreenScale = lc.getUI2ScreenScale()
+	self._screenHeight = lc._screenHeight
+	self._screenWidth = lc._screenWidth
+
+	if self._init then
+		return
+	end
+
+	local padding = 15
+	self._tipsDefaultHeight = 200 * self._UItoScreenScale
+	self._tipsDefaultWidth = self._textDesc.fontSize * math.ceil(10 * self._UItoScreenScale) + padding * 2 * self._UItoScreenScale
+	local x, y = lc.getSizeDelta(self._tfContent)
+	self._tipsContentWidth = x * self._UItoScreenScale
+	self._tipsContentWidth_half = self._tipsContentWidth / 2
+	local x, y = lc.getSizeDelta(self._tfBottom)
+	self._tipsArrowWidth = x * self._UItoScreenScale
+	self._tipsArrowWidth_half = self._tipsArrowWidth / 2
+	self._arrowDeltaY = 0
+	self._tipsArrowHeight = y * self._UItoScreenScale
+	self._tipsArrowHeight_half = self._tipsArrowHeight / 2
+	self._arrowBaseOffsetY_bottom = -2
+	self._arrowBaseOffsetY_top = -2
+	self._init = true
+end
+
+function M:updateContentData(width)
+	self._tipsContentWidth = width * self._UItoScreenScale
+	self._tipsContentWidth_half = self._tipsContentWidth / 2
+end
+
+function M:saveFitInScreen(targetObj, addOffsetY)
+	local posX, posY, posZ = nil
+
+	if targetObj then
+		posX, posY, posZ = lc.getPosition(targetObj.transform)
+	else
+		posX, posY, posZ = lc.getMousePosition()
+	end
+
+	local basePaddingX = 16 * self._UItoScreenScale
+	self._maxX = self._screenWidth - self._tipsContentWidth_half
+	self._minX = self._tipsContentWidth_half
+	local newX = posX
+	local newY = posY
+	local newZ = posZ
+
+	if self._maxX < posX then
+		newX = self._maxX - basePaddingX
+	elseif posX < self._minX then
+		newX = self._tipsContentWidth_half + basePaddingX
+	end
+
+	local offsetY = self._arrowDeltaY + (addOffsetY or 0)
+	offsetY = offsetY * self._UItoScreenScale
+
+	self._tfContent:ForceRebuildLayoutImmediate()
+
+	local x = self._layoutContent.preferredWidth * self._UItoScreenScale
+	local y = self._layoutContent.preferredHeight * self._UItoScreenScale
+	y = lc.numberClamp(y, self._tipsDefaultHeight, 9999)
+	local calHeight = self._tipsArrowHeight + y
+	self._maxY = self._screenHeight - calHeight - offsetY - MainGameRoot._safeFit._safeTopOffY
+	self._minY = calHeight + offsetY + MainGameRoot._safeFit._safeBottomOffY
+	local alighment = self._preferAlignment or 2
+
+	if self._maxY <= posY then
+		alighment = 1
+	elseif posY <= self._minY then
+		alighment = 2
+	end
+
+	if alighment == 1 then
+		posY = posY - offsetY
+		newY = posY - self._arrowBaseOffsetY_top * self._UItoScreenScale - self._tipsArrowHeight
+
+		lc.setLocalEulerAngles(self._tfBottom, 0, 0, 180)
+		lc.setPivot(self._tfContent, 0.5, 1)
+	else
+		posY = posY + offsetY
+		newY = posY + self._arrowBaseOffsetY_bottom * self._UItoScreenScale + self._tipsArrowHeight
+
+		lc.setLocalEulerAngles(self._tfBottom, 0, 0, 0)
+		lc.setPivot(self._tfContent, 0.5, 0)
+	end
+
+	self._tfBottom:SetPosition(posX, posY, posZ)
+	self._tfContent:SetPosition(newX, newY, newZ)
+end
+
+return M

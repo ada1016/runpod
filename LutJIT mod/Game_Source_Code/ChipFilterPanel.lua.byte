@@ -1,0 +1,174 @@
+local M = class("ChipFilterPanel", requireLua("BasePanel"))
+local band = bit.band
+local bxor = bit.bxor
+local bor = bit.bor
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	btnPartFilterAll = Types.Button,
+	btnWeaponFilterAll = Types.Button,
+	goPartFilterAllChoose = Types.GameObject,
+	goWeaponFilterAllChoose = Types.GameObject,
+	goPartFilterContainer = Types.GameObject,
+	goWeaponFilterContainer = Types.GameObject,
+	btnReset = Types.Button,
+	btnConfirm = Types.Button,
+	goPartFilter = Types.GameObject,
+	goWeaponFilter = Types.GameObject,
+	goWeaponDome = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	local partNum = D.PART_NUM
+
+	for i = 1, partNum do
+		local goPartFilter = self._partFilters[i]
+
+		self:setClick(goPartFilter._btnClick, function ()
+			local valuePartAll = 2^D.PART_FILTER_NUM - 1
+
+			if band(self._filterValue, valuePartAll) == valuePartAll then
+				self._filterValue = self._filterValue - valuePartAll
+				self._filterValue = self._filterValue + 2^(i - 1)
+			else
+				self._filterValue = bxor(self._filterValue, 2^(i - 1))
+
+				if band(self._filterValue, valuePartAll) == 0 then
+					self._filterValue = self._filterValue + valuePartAll
+				end
+			end
+
+			self:updateUI()
+		end)
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID + 1 do
+		local goWeaponFilter = self._weaponFilters[i]
+
+		self:setClick(goWeaponFilter._btnClick, function ()
+			local valueWeaponAll = -2^D.PART_FILTER_NUM
+
+			if band(self._filterValue, valueWeaponAll) == valueWeaponAll then
+				self._filterValue = self._filterValue - valueWeaponAll
+				self._filterValue = self._filterValue + 2^(D.PART_FILTER_NUM + i - 1)
+			else
+				self._filterValue = bxor(self._filterValue, 2^(D.PART_FILTER_NUM + i - 1))
+
+				if band(self._filterValue, valueWeaponAll) == 0 then
+					self._filterValue = self._filterValue + valueWeaponAll
+				end
+			end
+
+			self:updateUI()
+		end)
+	end
+
+	self:setClick(self._btnPartFilterAll, function ()
+		local valuePartAll = 2^D.PART_FILTER_NUM - 1
+		self._filterValue = bor(self._filterValue, valuePartAll)
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnWeaponFilterAll, function ()
+		local valueWeaponAll = -2^D.PART_FILTER_NUM
+		self._filterValue = bor(self._filterValue, valueWeaponAll)
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnReset, function ()
+		self._filterValue = -1
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnConfirm, function ()
+		self:closePanel()
+		self._callback(self._filterValue)
+	end)
+end
+
+function M:init(filterValue, callback, onlyMode)
+	self._filterValue = filterValue or -1
+	self._callback = callback
+
+	if onlyMode == 1 then
+		self._goPartFilter:SetActive(false)
+		self._goWeaponFilter:SetActive(true)
+		self._weaponFilters[D.MAX_WEAPON_ID + 1]:SetActive(false)
+	elseif onlyMode == 2 then
+		self._goPartFilter:SetActive(true)
+		self._goWeaponFilter:SetActive(false)
+		self._weaponFilters[D.MAX_WEAPON_ID + 1]:SetActive(false)
+	elseif onlyMode == 3 then
+		self._goPartFilter:SetActive(false)
+		self._goWeaponFilter:SetActive(true)
+		self._weaponFilters[D.MAX_WEAPON_ID + 1]:SetActive(false)
+		self._weaponFilters[D.WEAPON_GATLIN]:SetActive(false)
+	else
+		self._goPartFilter:SetActive(true)
+		self._goWeaponFilter:SetActive(true)
+		self._weaponFilters[D.MAX_WEAPON_ID + 1]:SetActive(true)
+	end
+
+	self:updateUI()
+end
+
+function M:initPrefabVar()
+	local partNum = D.PART_NUM
+	self._partFilters = {}
+	self._weaponFilters = {}
+
+	for i = 1, partNum do
+		local goPartFilter = self._goPartFilterContainer:GetChild(i - 1)
+
+		lc.prefabVarPeer(goPartFilter)
+		goPartFilter._txtPart:SetLocalize(SID["STR_PART_" .. i])
+		LuaUnity.setTPSprite(goPartFilter._imgPart, "general/g_icon_center_" .. i, true)
+		LuaUnity.setTPSprite(goPartFilter._imgPartChoose, "general/g_icon_center_" .. i, true)
+
+		self._partFilters[i] = goPartFilter
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID + 1 do
+		local goWeaponFilter = self._goWeaponFilterContainer:GetChild(i - D.WEAPON_GATLIN)
+
+		goWeaponFilter:SetActive(true)
+		lc.prefabVarPeer(goWeaponFilter)
+		LuaUnity.setTPSprite(goWeaponFilter._imgIcon, "weapon/weapon_" .. i, true)
+
+		self._weaponFilters[i] = goWeaponFilter
+
+		if P._inSparkScout and P._playerActivitySparkScout:getWeaponDeck(i) == nil then
+			goWeaponFilter:SetActive(false)
+		end
+	end
+end
+
+function M:updateUI()
+	local valuePartAll = 2^D.PART_FILTER_NUM - 1
+	local valueWeaponAll = -2^D.PART_FILTER_NUM
+	local isPartAll = band(self._filterValue, valuePartAll) == valuePartAll
+	local isWeaponAll = band(self._filterValue, valueWeaponAll) == valueWeaponAll
+
+	self._goPartFilterAllChoose:SetActive(isPartAll)
+	self._goWeaponFilterAllChoose:SetActive(isWeaponAll)
+
+	local partNum = D.PART_NUM
+
+	for i = 1, partNum do
+		local goPartFilter = self._partFilters[i]
+
+		goPartFilter._goChoose:SetActive(not isPartAll and band(self._filterValue, 2^(i - 1)) ~= 0)
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID + 1 do
+		local goWeaponFilter = self._weaponFilters[i]
+
+		goWeaponFilter._goChoose:SetActive(not isWeaponAll and band(self._filterValue, 2^(D.PART_FILTER_NUM + i - 1)) ~= 0)
+	end
+end
+
+return M

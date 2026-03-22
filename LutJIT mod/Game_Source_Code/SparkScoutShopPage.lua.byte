@@ -1,0 +1,528 @@
+local M = class("SparkScoutShopPage", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnDraw1 = Types.Button,
+	btnDraw2 = Types.Button,
+	btnDraw3 = Types.Button,
+	btnDraw4 = Types.Button,
+	txtDrawCost1 = Types.TMP_Text,
+	txtDrawCost2 = Types.TMP_Text,
+	txtDrawCost3 = Types.TMP_Text,
+	txtDrawCost4 = Types.TMP_Text,
+	btnDrawIssue1 = Types.Button,
+	btnDrawIssue2 = Types.Button,
+	goSelectChip1 = Types.GameObject,
+	goSelectChip2 = Types.GameObject,
+	btnSelectChip1 = Types.Button,
+	btnSelectChip2 = Types.Button,
+	txtCountdown = Types.TMP_Text,
+	btnADIssue = Types.Button,
+	goBanner = Types.GameObject,
+	tfPurchaseWidget1 = Types.Transform,
+	tfPurchaseWidget2 = Types.Transform,
+	tfPurchaseWidget3 = Types.Transform,
+	tfPurchaseWidget4 = Types.Transform,
+	tfPurchaseWidget5 = Types.Transform,
+	tfPurchaseWidget6 = Types.Transform,
+	tfPurchaseWidget7 = Types.Transform,
+	txtPool1 = Types.TMP_Text,
+	txtPool2 = Types.TMP_Text,
+	txtPool3 = Types.TMP_Text,
+	txtPool4 = Types.TMP_Text,
+	txtPool5 = Types.TMP_Text
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:initPrefabVar()
+	self._goSelectChips = {
+		self._goSelectChip1,
+		self._goSelectChip2
+	}
+
+	lc.prefabVarPeer(self._goSelectChip1)
+	SimpleItemWidget.noCreate(self._goSelectChip1._goItem)
+	lc.prefabVarPeer(self._goSelectChip2)
+	SimpleItemWidget.noCreate(self._goSelectChip2._goItem)
+end
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timerCountdown)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._goSelectChip1._btnSelect, function ()
+		self:handleClaimChip(1)
+	end)
+	self:setClick(self._goSelectChip1._goItem._btnClick, function ()
+		self:handleClaimChip(1)
+	end)
+	self:setClick(self._goSelectChip2._btnSelect, function ()
+		self:handleClaimChip(2)
+	end)
+	self:setClick(self._goSelectChip2._goItem._btnClick, function ()
+		self:handleClaimChip(2)
+	end)
+	self:setClick(self._btnDrawIssue1, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutBoxDropInfoPanel, 1)
+	end)
+	self:setClick(self._btnDrawIssue2, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutBoxDropInfoPanel, 2)
+	end)
+	self:setClick(self._btnDraw1, function ()
+		self:tryHandleDrawBtn(D.SparkScoutDropType.Pack1Drop)
+	end)
+	self:setClick(self._btnDraw2, function ()
+		self:tryHandleDrawBtn(D.SparkScoutDropType.Pack2Drop)
+	end)
+	self:setClick(self._btnDraw3, function ()
+		if self._module:getBattleNum() < self._module:readCurrentCfg()._pack3UnlockBattleCount then
+			V.showToast({
+				SID.TIP_SPARK_SCOUT_DRAW_CONDITION,
+				self._module:readCurrentCfg()._pack3UnlockBattleCount - self._module:getBattleNum()
+			})
+
+			return
+		end
+
+		self:tryHandleDrawBtn(D.SparkScoutDropType.GoldDrop)
+	end)
+	self:setClick(self._btnDraw4, function ()
+		if self._module:getBattleNum() < self._module:readCurrentCfg()._pack3UnlockBattleCount then
+			V.showToast({
+				SID.TIP_SPARK_SCOUT_DRAW_CONDITION,
+				self._module:readCurrentCfg()._pack3UnlockBattleCount - self._module:getBattleNum()
+			})
+
+			return
+		end
+
+		self:tryHandleDrawBtn(D.SparkScoutDropType.SPGoldDrop)
+	end)
+	self:setClick(self._btnADIssue, function ()
+		self:handleADIssue()
+	end)
+
+	for i = 1, 5 do
+		self:setClick(self["_txtPool" .. i].transform.parent:GetComponent("Button"), function ()
+			V.showBubbleTips({
+				desc = SID["SPARK_SCOUT_CHIP_" .. i + D.Quality.Green]
+			}, {
+				alignment = 1,
+				offset = {
+					0,
+					10,
+					0
+				}
+			})
+		end)
+	end
+end
+
+function M:addEvents()
+	self:on("iap.purchase.success", function ()
+		self:updateUI()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.spark_scout_key or cid == D.ResType.spark_scout_sp_key or cid == D.ResType.spark_scout_wafer or cid == D.ResType.spark_scout_sp_wafer then
+			self:updateReddots()
+		end
+	end)
+	self:on("sparkScoutPool.dirty", function ()
+		self:showChipPool()
+	end)
+end
+
+function M:init(parentPanel)
+	self._parentPanel = parentPanel
+	self._module = P._playerActivitySparkScout
+
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	lc.stopTimer(self._timerCountdown)
+	self:updateUI()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._timerCountdown)
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateReddots()
+	self:updateAllWidgets()
+	self:updateGoldDraw()
+	self:showChipPool()
+	self:updateSelectChip(1)
+	self:updateSelectChip(2)
+end
+
+function M:updateGoldDraw()
+	local cid3, cost3 = self._module:getDropCost(D.SparkScoutDropType.GoldDrop)
+	local cid4, cost4 = self._module:getDropCost(D.SparkScoutDropType.SPGoldDrop)
+	self._txtDrawCost1.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_key)) .. 1
+	self._txtDrawCost2.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_sp_key)) .. 1
+	self._txtDrawCost3.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_wafer)) .. cost3
+	self._txtDrawCost4.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_sp_wafer)) .. cost4
+end
+
+function M:updateReddots()
+	self._btnDraw1.dot:SetVisible(self._module:hasOpenPackDot(D.SparkScoutDropType.Pack1Drop))
+	self._btnDraw2.dot:SetVisible(self._module:hasOpenPackDot(D.SparkScoutDropType.Pack2Drop))
+	self._btnDraw3.dot:SetVisible(self._module:hasOpenPackDot(D.SparkScoutDropType.GoldDrop))
+	self._btnDraw4.dot:SetVisible(self._module:hasOpenPackDot(D.SparkScoutDropType.SPGoldDrop))
+end
+
+function M:updateAllWidgets()
+	self:updateAdWidget()
+	self:updatePurchaseWidget(self._tfPurchaseWidget2, D.IapType.SparkScout_Pack3, 2)
+	self:updatePurchaseWidget(self._tfPurchaseWidget3, D.IapType.SparkScout_Pack5, 3)
+	self:updatePurchaseWidget(self._tfPurchaseWidget4, D.IapType.SparkScout_Pack2, 4)
+	self:updatePurchaseWidget(self._tfPurchaseWidget5, D.IapType.SparkScout_Pack4, 5)
+	self:updatePurchaseWidget(self._tfPurchaseWidget6, D.IapType.SparkScout_Pack6, 6)
+	self:updatePurchaseWidget(self._tfPurchaseWidget7, D.IapType.SparkScout_Pack_Duel_Ticket, 7)
+
+	if P._playerActivitySparkScout:isBeta() then
+		self._tfPurchaseWidget2:SetActive(false)
+		self._tfPurchaseWidget3:SetActive(false)
+		self._tfPurchaseWidget4:SetActive(false)
+		self._tfPurchaseWidget5:SetActive(false)
+		self._tfPurchaseWidget6:SetActive(false)
+		self._tfPurchaseWidget7:SetActive(false)
+	end
+end
+
+function M:initBanner()
+	self:setClick(self._goBanner._btnBuy, function ()
+		C.tryPurchase(D.IapType.SparkScout_Pack_Duel_Ticket, function (iapId, rewards)
+			self:updateBanner()
+			V.showRewardClaimPanel(rewards)
+		end)
+	end)
+	self:setClick(self._goBanner._btnBG, function ()
+		C.tryPurchase(D.IapType.SparkScout_Pack_Duel_Ticket, function (iapId, rewards)
+			self:updateBanner()
+			V.showRewardClaimPanel(rewards)
+		end)
+	end)
+end
+
+function M:updateBanner()
+	local iapId = D.IapType.SparkScout_Pack_Duel_Ticket
+	local leftNum = self._module:getLeftBuyNum(iapId)
+	local maxNum = self._module:getMaxBuyNum(iapId)
+
+	self._goBanner:SetActive(leftNum > 0)
+
+	if leftNum > 0 then
+		local cids, nums = P._playerStore:readObtainAssets(iapId)
+
+		self._goBanner._txtItemNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(cids[1]), nums[1])
+
+		self._goBanner._txtPrice.text = P._playerStore:getDisplayPrice(iapId)
+	end
+end
+
+function M:updateAdWidget(refresh)
+	local tfWidget = self._tfPurchaseWidget1
+	local getCids, getNums = self._module:readAdPackRewards()
+	local leftNum = self._module:getLeftAdPackNum()
+	local maxNum = self._module:readAdMaxCacheNum()
+	local leftStr = V.getLeftStr(leftNum, maxNum)
+
+	tfWidget:GetChild(1):GetComponent("TMP_Text"):SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCids), getNums)
+	tfWidget:GetChild(4):GetChild(0):GetComponent("TMP_Text"):SetLocalizeS(SID.STR_REMAIN_TIMES, leftStr)
+
+	local tfBtn = tfWidget:Find("AdBtn")
+
+	V.loadAdButton1(tfBtn.gameObject, leftNum == 0)
+
+	local btn = tfBtn:GetComponent("Button")
+	btn.enabled = leftNum > 0
+
+	self:setClickWithoutAction(tfWidget:GetChild(0):GetComponent("Button"), function ()
+		V.showItemInfoPanel(getCids)
+	end)
+	self:setClick(btn, function ()
+		local leftNum = self._module:getLeftAdPackNum()
+
+		if leftNum == 0 then
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.SparkScout_AdPack, function ()
+			self._module:recordAdPack()
+			self:updateAdWidget()
+			V.showRewardClaimPanel(D.formatRewards(getCids, getNums))
+		end)
+	end)
+	self:updateAdCountDown(refresh)
+end
+
+function M:updateAdCountDown(refresh)
+	local leftNum = self._module:getLeftAdPackNum()
+	local maxNum = self._module:readAdMaxCacheNum()
+
+	lc.stopTimer(self._timerCountdown)
+
+	if leftNum < maxNum then
+		self._timerCountdown = lc.setInterval(function ()
+			local newLeftNum = self._module:getLeftAdPackNum()
+			local dt = self._module:getAdPackCountdown()
+
+			if newLeftNum ~= leftNum then
+				lc.stopTimer(self._timerCountdown)
+				self:updateAdWidget(true)
+			end
+		end, 0.5)
+
+		self._timerCountdown.func()
+	end
+end
+
+function M:updatePurchaseWidget(tfWidget, iapId, idx)
+	local cids, nums = P._playerStore:readObtainAssets(iapId)
+	local leftNum = self._module:getLeftBuyNum(iapId)
+	local maxNum = self._module:getMaxBuyNum(iapId)
+	local leftStr = V.getLeftStr(leftNum, maxNum)
+	local textNum = tfWidget:GetChild(2):GetComponent("TMP_Text")
+
+	textNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(cids[1]), nums[1])
+	tfWidget:GetChild(3):GetComponent("TMP_Text"):SetLocalizeS(SID.STR_REMAIN_TIMES, leftStr)
+	tfWidget:GetChild(3):SetActive(maxNum > 0)
+
+	local tfBtn = tfWidget:Find("Btn")
+	local btn = tfBtn:GetComponent("Button")
+	local tmpCost = tfBtn:GetChild(1):GetComponent("TMP_Text")
+
+	if leftNum == 0 then
+		V.setBtnStyle(tfBtn, V.BTN_STYLE.gray)
+		tmpCost:SetLocalize(SID.STR_SOLD_OUT)
+	else
+		V.setBtnStyle(tfBtn, V.BTN_STYLE.green)
+
+		tmpCost.text = P._playerStore:getDisplayPrice(iapId)
+	end
+
+	btn.enabled = leftNum > 0
+
+	self:setClickWithoutAction(tfWidget:GetChild(0):GetComponent("Button"), function ()
+		V.showItemInfoPanel(cids[1])
+	end)
+	self:setClick(btn, function ()
+		if self._module:getLeftBuyNum(iapId) == 0 then
+			V.showResultCode(ResultCode.THIS_TIME_NUM_MAX)
+
+			return
+		end
+
+		C.tryPurchase(iapId, function (iapId, rewards)
+			self:updatePurchaseWidget(tfWidget, iapId, idx)
+			V.showRewardClaimPanel(rewards)
+		end)
+	end)
+end
+
+function M:tryHandleDrawBtn(type)
+	Client.checkNetworkAsync(function ()
+		self:handleDrawBtn(type)
+	end)
+end
+
+function M:handleDrawBtn(dropType)
+	local retCode = self._module:checkLottery(dropType)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode)
+
+		return
+	end
+
+	local resultCode, rewards = self._module:tryLottery(dropType)
+
+	if resultCode ~= ResultCode.OK then
+		return
+	end
+
+	local isCommon = dropType == D.SparkScoutDropType.Pack1Drop or dropType == D.SparkScoutDropType.GoldDrop
+	local boxType = isCommon and 1 or 2
+
+	UIManager.openPanel(PrefabDefine.SparkScoutOpenBoxPanel, dropType, rewards, function ()
+		self:updateGoldDraw()
+		self:updateReddots()
+		self:updateSelectChip(boxType)
+	end)
+end
+
+function M:handleADIssue()
+	local leftNum = self._module:getLeftAdPackNum()
+	local maxNum = self._module:readAdMaxCacheNum()
+
+	if leftNum == maxNum then
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_MAX
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	else
+		local dt = self._module:getAdPackCountdown()
+		local day, hour, minute, second = Client.getTimeEndArgs(dt)
+		local timeSid = SID.PERIOD_DAY
+		local timeParam = 1
+
+		if day > 0 then
+			timeSid = SID.PERIOD_DAY
+			timeParam = day
+		elseif hour > 0 then
+			timeSid = SID.PERIOD_HOUR
+			timeParam = hour
+		elseif minute > 0 then
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = minute
+		else
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = 1
+		end
+
+		local recoverT = self._module:readAdRecoverSeconds()
+		local recoverHour = math.ceil(recoverT / 3600)
+		local str = LcLocalization.getTextStr(timeSid)
+		str = string.gsub(str, "{0}", timeParam)
+
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_TIME,
+			descParam = {
+				str,
+				recoverHour
+			}
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	end
+end
+
+function M:showChipPool()
+	local chipPools = self._module:calcChipPools()
+	self._txtPool1.text = #chipPools[D.Quality.Blue]
+	self._txtPool2.text = #chipPools[D.Quality.Purple]
+	self._txtPool3.text = #chipPools[D.Quality.Orange]
+	self._txtPool4.text = #chipPools[D.Quality.Red]
+	self._txtPool5.text = #chipPools[D.Quality.COLORFUL]
+end
+
+function M:handleSelectChip(type)
+	local cid = 15301
+
+	if type == 1 then
+		cid = 15301
+	end
+end
+
+function M:handleClaimChip(boxType)
+	local retCode = self._module:checkClaimFreeChip(boxType)
+	local isCumuClaimed = retCode == ResultCode.REWARD_CLAIMED
+	local canClaimCumu = retCode == ResultCode.OK
+	local needCount, getCid = self._module:readFreeChipCfg(boxType)
+	local goItem = self._goSelectChips[boxType]._goItem
+
+	if D.isCustomSelectItem(getCid) then
+		local selectedIdx, selectedId = P._playerAsset:getItemCustomSelectIdx(getCid)
+		local selected = selectedIdx ~= nil
+
+		if isCumuClaimed and selected then
+			V.showItemInfoPanel(selectedId)
+
+			return
+		end
+
+		if not canClaimCumu or not selected then
+			UIManager.openPanel(PrefabDefine.ItemSelectPanel, getCid, function ()
+				self:updateSelectChip(boxType)
+			end, {
+				descFunc = function (txtDesc)
+					txtDesc:SetLocalizeEx(SID.TIP_SPARK_SCOUT_CUSTOM, {
+						{
+							type = "sid",
+							value = boxType == 1 and SID.SPARK_SCOUT_BOX_COMMON or SID.SPARK_SCOUT_BOX_ADVANCE
+						},
+						{
+							type = "str",
+							value = string.format("<color=#77E7D4>%s</color>", needCount)
+						}
+					})
+				end
+			})
+
+			return
+		end
+
+		if selected and canClaimCumu and not isCumuClaimed then
+			UIManager.openPanel(PrefabDefine.ItemSelectConfirmPanel, getCid, goItem, function ()
+				local ret, rewards = self._module:tryClaimFreeChip(boxType)
+
+				if ret ~= ResultCode.OK then
+					return
+				end
+
+				V.showRewardClaimPanel(rewards)
+				self:updateSelectChip(boxType)
+			end, function ()
+				self:updateSelectChip(boxType)
+			end)
+
+			return
+		end
+	end
+
+	if canClaimCumu and not isCumuClaimed then
+		local ret, rewards = self._module:tryClaimFreeChip(boxType)
+
+		if ret ~= ResultCode.OK then
+			return
+		end
+
+		V.showRewardClaimPanel(rewards)
+		self:updateSelectChip(boxType)
+	else
+		goItem:rewardclickCallback()
+	end
+end
+
+function M:updateSelectChip(boxType)
+	local needCount, getCid = self._module:readFreeChipCfg(boxType)
+	local go = self._goSelectChips[boxType]
+	local selectIdx = P._playerAsset:getItemCustomSelectIdx(getCid)
+
+	if selectIdx then
+		-- Nothing
+	end
+
+	go._goItem:init(getCid, 1)
+
+	local showDot = self._module:checkClaimFreeChip(boxType) == ResultCode.OK
+	local claimed = self._module:checkClaimFreeChip(boxType) == ResultCode.REWARD_CLAIMED
+
+	go._goItem:setClaimed(claimed)
+	go._btnSelect.dot:SetActive(showDot)
+	go._goItem:SetActive(selectIdx ~= nil)
+
+	if showDot then
+		go._goItem:setExchange(false)
+	end
+
+	local currentCount = self._module:getLotteryCountByBoxType(boxType)
+	go._imgBar.fillAmount = currentCount / needCount
+	go._tmpPgs.text = string.format("%d/%d", currentCount, needCount)
+end
+
+return M

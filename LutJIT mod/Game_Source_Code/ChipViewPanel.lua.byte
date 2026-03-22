@@ -1,0 +1,197 @@
+local M = class("ChipViewPanel", requireLua("BasePanel"))
+local Types = Types
+local triangleColor = V.QUALITY_TRIANGLE
+M.args = {
+	btnBg = Types.Button,
+	txtTitle = Types.TMP_Text,
+	imgBg = Types.Image,
+	imgFrame = Types.Image,
+	imgIcon = Types.Image,
+	txtGrade = Types.TMP_Text,
+	txtLevel = Types.TMP_Text,
+	imgQuality = Types.Image,
+	btnUpgrade = Types.Button,
+	btnTabEquip = Types.Button,
+	btnTabGem = Types.Button,
+	txtTabEquip = Types.TMP_Text,
+	txtTabGem = Types.TMP_Text,
+	goGemDetail = Types.GameObject,
+	goEquipDetail = Types.GameObject,
+	txtBaseAtk = Types.TMP_Text,
+	txtUpgradeAtk = Types.TMP_Text,
+	goExtraAtk1 = Types.GameObject,
+	goExtraAtk2 = Types.GameObject,
+	goExtraAtk3 = Types.GameObject,
+	goExtraAtk4 = Types.GameObject,
+	goChip1 = Types.GameObject,
+	goChip2 = Types.GameObject,
+	goChip3 = Types.GameObject,
+	goChip4 = Types.GameObject,
+	goChip5 = Types.GameObject,
+	goChip6 = Types.GameObject,
+	goExtraArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goChips = {
+		self._goChip1,
+		self._goChip2,
+		self._goChip3,
+		self._goChip4,
+		self._goChip5,
+		self._goChip6
+	}
+	self._goExtraAtks = {
+		self._goExtraAtk1,
+		self._goExtraAtk2,
+		self._goExtraAtk3,
+		self._goExtraAtk4
+	}
+
+	for i = 1, #self._goChips do
+		lc.prefabVarPeer(self._goChips[i])
+		self:setClick(self._goChips[i]._btnRemove, function ()
+			P._playerRole:unequipGem(self._part, i)
+			self:updateUI()
+			self._equipCallback()
+		end)
+	end
+
+	for i = 1, #self._goExtraAtks do
+		lc.prefabVarPeer(self._goExtraAtks[i])
+	end
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerRole:tryUpgradeChip(self._part)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			self._upgraded = true
+
+			self:updateUI(self._id)
+			V.showEnhanceToast()
+		end
+	end)
+	self:setClick(self._btnTabGem, function ()
+		if self._tab ~= 1 then
+			self._tab = 1
+
+			LuaUnity.setTPSprite(self._btnTabGem:GetComponent("Image"), "general/g_bg_10_2")
+			LuaUnity.setTPSprite(self._btnTabEquip:GetComponent("Image"), "general/g_bg_11_2")
+
+			self._btnTabEquip:GetComponent("Image").color = Color.str2Static(V.tabUnSelectedColor)
+			self._btnTabGem:GetComponent("Image").color = Color.str2Static(V.tabSelectedColor)
+			self._txtTabEquip.color = Color.str2Static(V.tabUnSelectTextColor)
+			self._txtTabGem.color = Color.str2Static(V.tabSelectTextColor)
+
+			self._goGemDetail:SetActive(true)
+			self._goEquipDetail:SetActive(false)
+		end
+	end, "ui_Tap_page_1")
+	self:setClick(self._btnTabEquip, function ()
+		if self._tab ~= 2 then
+			self._tab = 2
+
+			LuaUnity.setTPSprite(self._btnTabGem:GetComponent("Image"), "general/g_bg_10")
+			LuaUnity.setTPSprite(self._btnTabEquip:GetComponent("Image"), "general/g_bg_11")
+
+			self._btnTabEquip:GetComponent("Image").color = Color.str2Static(V.tabSelectedColor)
+			self._btnTabGem:GetComponent("Image").color = Color.str2Static(V.tabUnSelectedColor)
+			self._txtTabEquip.color = Color.str2Static(V.tabSelectTextColor)
+			self._txtTabGem.color = Color.str2Static(V.tabUnSelectTextColor)
+
+			self._goGemDetail:SetActive(false)
+			self._goEquipDetail:SetActive(true)
+		end
+	end, "ui_Tap_page_1")
+end
+
+function M:init(equip, gems, level, slotLocked)
+	self._part = equip:part()
+	self._equip = equip
+	self._level = level
+	self._gems = gems
+	self._slotLocked = slotLocked
+	self._tab = 1
+
+	self._goGemDetail:SetActive(true)
+	self._goEquipDetail:SetActive(false)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtTitle:SetLocalize(SID.STR_NAME_EQUIP, -SID["STR_QUALITY_" .. self._equip:quality()], -SID["STR_PART_" .. self._equip:part()])
+	self._txtGrade:SetLocalize(SID.STR_GRADE_X_LONG, self._equip:grade())
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X_LONG, self._level)
+	LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", self._equip:quality()), true)
+	LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", self._equip:quality()), true)
+	LuaUnity.setTPSprite(self._imgIcon, "general/equip1_" .. self._equip:part(), true)
+	V.setQualityImgText(self._imgQuality, self._equip:quality())
+	self:updateGemUI()
+	self:updateEnhanceUI()
+end
+
+function M:updateGemUI()
+	local gemSlots = self._gems
+	local count = #self._goChips
+
+	for i = 1, count do
+		local goChip = self._goChips[i]
+
+		if gemSlots[i] then
+			local conf = D._gemConfig[gemSlots[i]]
+
+			LuaUnity.setTPSprite(goChip._imgIcon, D.toSprite(gemSlots[i]), true)
+			LuaUnity.setTPSprite(goChip._imgBg, string.format("item/frame-frame_%02d", conf._quality))
+			LuaUnity.setTPSprite(goChip._imgFrame, string.format("item/frame-frame_%02d_out", conf._quality))
+			V.loadChipDescription(goChip._txtDesc, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+			goChip._goEmpty:SetActive(false)
+			goChip._goLock:SetActive(false)
+			goChip._goChip:SetActive(true)
+			goChip._btnRemove:SetActive(false)
+		else
+			goChip._goChip:SetActive(false)
+
+			if i == 6 and self._slotLocked then
+				goChip:SetActive(false)
+			else
+				goChip._goEmpty:SetActive(true)
+			end
+		end
+	end
+end
+
+function M:updateEnhanceUI()
+	local part = self._part
+	local level = self._level
+	self._txtBaseAtk.text = self._equip:atk()
+	self._txtUpgradeAtk.text = P._playerRole:getChipSystemLevelAtk(level)
+	local extra = self._equip:extra()
+
+	if extra then
+		self._goExtraArea:SetActive(true)
+
+		for i = 1, 4 do
+			if extra[i] then
+				self._goExtraAtks[i]:SetActive(true)
+				V.loadAtkClassText(self._goExtraAtks[i]._tmpTitle, extra[i][1])
+
+				self._goExtraAtks[i]._tmpValue.text = extra[i][2]
+			else
+				self._goExtraAtks[i]:SetActive(false)
+			end
+		end
+	else
+		self._goExtraArea:SetActive(false)
+	end
+end
+
+return M

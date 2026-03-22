@@ -1,0 +1,375 @@
+local M = class("ItemInfoPanel", requireLua("BasePanel"))
+M.args = {
+	btnBg = Types.Button,
+	goItem = Types.GameObject,
+	textName = Types.TMP_Text,
+	bgQuality = Types.Image,
+	goNum = Types.GameObject,
+	imgQuality = Types.Image,
+	textNum = Types.TMP_Text,
+	tfContainGoods = Types.Transform,
+	goGetWayArea = Types.GameObject,
+	textInfo = Types.TMP_Text,
+	tfGetType = Types.Transform,
+	goJumpProp = Types.GameObject,
+	btnJumpProp = Types.Button
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	ItemWidget.noCreate(self._goItem)
+	self._goItem:setNum(false)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClickWithoutAction(self._btnJumpProp, function ()
+		self:jumpPropPanel()
+	end)
+end
+
+function M:init(cid, num, requireNum)
+	self._cid = cid or 10001
+	self._num = num or P._playerAsset:getAssetNum(self._cid)
+	self._quality = D.toQuality(self._cid)
+	self._requireNum = requireNum
+
+	self:updateUI(cid, num)
+end
+
+function M:updateUI(cid, num)
+	self._goJumpProp:SetActive(D.isRandomChipItem(self._cid))
+	self:updateItem()
+	self:updateContent()
+	self:updateGetWayUI()
+	self:updateDisplayItemsUI()
+end
+
+function M:updateDisplayItemsUI()
+	local cfg = D._itemConfig[self._cid]
+	local group = cfg._group
+
+	if group == D.ItemGroup.Box then
+		self:updateBoxGroupDisplayItem(self._cid)
+	elseif self._cid == D.CHIP_DROP_NORMAL or self._cid == D.CHIP_DROP_ELITE then
+		self:updateChipDisplayItems(self._cid)
+	elseif D.isRandomEquip(self._cid) then
+		self:updateEquipDisplayItems(self._cid)
+	elseif self._cid == 13501 then
+		self:updateGDChipDisplayItems(self._cid)
+	else
+		self._tfContainGoods:SetActive(false)
+	end
+end
+
+function M:getShowDrops(viewCid, sortFunc)
+	local cfg = D._itemConfig[viewCid]
+
+	self._tfContainGoods:SetActive(true)
+
+	local val = cfg._val
+	local drops = DropHelper.readDropsById(val)
+	local showDrops = {}
+	local totalWeights = 0
+
+	for i = 1, #drops do
+		local weight = drops[i]._weight
+
+		if weight > 0 then
+			showDrops[#showDrops + 1] = drops[i]
+			totalWeights = totalWeights + weight
+		end
+	end
+
+	if sortFunc then
+		table.sort(showDrops, sortFunc)
+	end
+
+	return totalWeights, showDrops
+end
+
+function M:updateBoxGroupDisplayItem(viewCid)
+	self._tfContainGoods:SetActive(true)
+
+	if D.isCustomSelectItem(self._cid) then
+		local cids, nums = P._playerAsset:getInsideAssets(self._cid)
+		local cidLength = lc.lenTable(cids)
+
+		for i = 1, cidLength do
+			local widget = ItemWidget.create(self._tfContainGoods)
+
+			widget:init(cids[i])
+			self:setClick(widget._btnClick, function ()
+				widget:rewardclickCallback()
+			end)
+		end
+	else
+		local totalWeights, showDrops = self:getShowDrops(viewCid)
+		local haveSkinOwn = false
+
+		for i = 1, #showDrops do
+			local cid = showDrops[i]._itemId
+			local num = showDrops[i]._minNum
+			local weight = showDrops[i]._weight
+			local widget = ItemWidget.create(self._tfContainGoods)
+
+			widget:init(cid, num)
+
+			if D._itemConfig[cid]._type == D.ItemType.Skin then
+				local lv = P._playerSkin:getSkinLevel(cid)
+
+				if lv > 0 then
+					widget._txtExtraDesc:SetLocalizeS(SID.STR_OWNED_STARNUM, string.format("%d<sprite name=\"star\">", lv))
+				else
+					widget._txtExtraDesc:SetLocalize(SID.STR_NOT_OWN)
+				end
+
+				haveSkinOwn = true
+
+				widget:setPropNum(true, weight / totalWeights, true)
+			elseif D._itemConfig[cid]._type == D.ItemType.Ranger then
+				local lv = P._playerRanger:getRangerLevel(cid)
+				local color = math.ceil(lv / 5)
+				local leftLv = lv % 5
+
+				if lv == 0 then
+					widget._txtExtraDesc:SetLocalize(SID.STR_NOT_OWN)
+				else
+					local colorStrs = {
+						"star",
+						"star_red",
+						"star_colorful"
+					}
+					local tmpStr = colorStrs[1]
+					color = Mathf.Clamp(color, 1, #colorStrs)
+					tmpStr = colorStrs[color]
+
+					if leftLv == 0 then
+						leftLv = 5
+					end
+
+					widget._txtExtraDesc:SetLocalizeS(SID.STR_OWNED_STARNUM, string.format("%d%s", leftLv, D.getTMPSpriteRichText(tmpStr)))
+				end
+
+				haveSkinOwn = true
+
+				widget:setPropNum(true, weight / totalWeights, true)
+			else
+				widget:setPropNum(true, weight / totalWeights)
+			end
+
+			self:setClick(widget._btnClick, function ()
+				widget:rewardclickCallback()
+			end)
+		end
+
+		local layout = self._tfContainGoods:GetComponent("GridLayoutGroup")
+
+		if LuaHelper.SetLayoutPadding then
+			LuaHelper.SetLayoutPadding(layout, Vector4.static(5, 0, 10, haveSkinOwn and 40 or 10))
+		end
+
+		layout.spacing = Vector2.static(10, haveSkinOwn and 60 or 30)
+	end
+end
+
+function M:updateChipDisplayItems(viewCid)
+	local msType = V.__viewMissionInfoMsType
+	local msId = V.__viewMissionInfoMsId
+
+	if not msId then
+		return
+	end
+
+	if msType ~= D.MissionType.Common then
+		if not D.MissionType.Elite then
+			return
+		end
+	end
+
+	local dropProps, totalWeights = P._playerMission:readMissionChip(msType, msId)
+
+	for i = 1, #dropProps do
+		local quality = i
+		local weight = dropProps[i]
+		local cid = 13002 + quality
+		local widget = ItemWidget.create(self._tfContainGoods)
+
+		widget:init(cid)
+		widget:setPropNum(true, weight / totalWeights)
+	end
+end
+
+function M:updateGDChipDisplayItems(viewCid)
+	local msType = V.__viewMissionInfoMsType
+	local msId = V.__viewMissionInfoMsId
+
+	if not msId then
+		return
+	end
+
+	local cfgs = P._playerMission:getCfgByType(D.MissionType.GlobalDefense)
+	local cfg = cfgs[msId]
+	local dropProps = cfg._winChipRate
+	local totalWeights = 0
+
+	for i = 1, #dropProps do
+		local quality = i
+		local weight = dropProps[i]
+		totalWeights = totalWeights + weight
+	end
+
+	for i = 1, #dropProps do
+		local quality = i
+		local weight = dropProps[i]
+		local cid = 13002 + quality
+		local widget = ItemWidget.create(self._tfContainGoods)
+
+		widget:init(cid)
+		widget:setPropNum(true, weight / totalWeights)
+	end
+end
+
+function M:updateEquipDisplayItems(viewCid)
+	local totalWeights, showDrops = self:getShowDrops(viewCid, function (a, b)
+		local q1 = a._itemId / 100
+		local q2 = b._itemId / 100
+
+		return q1 > q2
+	end)
+
+	for i = 1, #showDrops do
+		local itemId = showDrops[i]._itemId
+		local quality = math.floor(itemId / 100)
+		local grade = itemId - quality * 100
+		local cid = 14002 + quality
+		local num = showDrops[i]._minNum
+		local weight = showDrops[i]._weight
+		local widget = ItemWidget.create(self._tfContainGoods)
+
+		widget:init(cid)
+		widget:setPropNum(true, weight / totalWeights)
+		widget:setEquipQuality(quality, grade)
+
+		local viewPart = P._playerRole:findLowestBaseStatsPart()
+		local equipId = 30000 + quality * 1000 + viewPart * 100 + grade
+
+		self:setClick(widget._btnClick, function ()
+			local conf = D._equipRefineConfig[grade * 10 + quality]
+			local equipMeta = nil
+
+			if conf then
+				equipMeta = {
+					cid = equipId,
+					extra = {
+						{
+							-SID.STR_ATK_NATURE_RANDOM,
+							conf._atkMax
+						},
+						{
+							-SID.STR_ATK_NATURE_RANDOM,
+							conf._atkMax
+						}
+					}
+				}
+			else
+				equipMeta = {
+					cid = equipId
+				}
+			end
+
+			local lb = UIManager.openPanel(PrefabDefine.EquipReplacePanel, equipMeta)
+
+			lb:hideAction()
+		end)
+	end
+end
+
+function M:updateItem()
+	local cfg = D._itemConfig[self._cid]
+	local quality = cfg._quality or 1
+
+	self._goItem:init(self._cid)
+
+	if D.isRandomEquip(self._cid) then
+		local grade = self._cid % 100
+
+		self._goItem:setEquipQuality(quality, grade)
+	end
+
+	if self._cid == D.CHIP_DROP_NORMAL or self._cid == D.CHIP_DROP_ELITE then
+		local type = self._cid == D.CHIP_DROP_NORMAL and D.MissionType.Common or D.MissionType.Elite
+
+		self._textName:SetLocalize(SID.STR_MISSION_CHIP_DROP, -cfg._nameSid, -P._playerMission:readMissionName(V._lastMsId, type))
+
+		self._textName.text = string.gsub(self._textName.text, "{0}", V._lastMsId % 10000)
+	else
+		self._textName:SetLocalize(cfg._nameSid)
+	end
+
+	if self._requireNum then
+		self._textNum:SetLocalizeS(SID.ITEM_INFO_REQUIRE_X, V.getNeedStr1(self._num, self._requireNum))
+	elseif self._num >= 0 then
+		self._textNum:SetLocalize(SID.ITEM_INFO_NUM_X, self._num)
+	else
+		self._textNum:SetLocalizeS(SID.ITEM_INFO_NUM_X, tostring(self._num))
+	end
+
+	self._goNum:SetActive(self._num ~= 0)
+	V.setQualityImgText(self._imgQuality, quality)
+end
+
+function M:updateContent()
+	self._textInfo:SetLocalize(D.toDescSid(self._cid))
+end
+
+function M:updateGetWayUI()
+	local getWays = D._itemConfig[self._cid]._dropPath
+	local getWayNum = getWays and #getWays or 0
+
+	if getWayNum == 1 and getWays[1] == 0 then
+		getWayNum = 0
+	end
+
+	self._goGetWayArea:SetActive(getWayNum > 0)
+
+	local cellNum = self._tfGetType.childCount
+
+	for i = 1, math.max(getWayNum, cellNum) do
+		local tf = nil
+
+		if cellNum < i then
+			tf = GameObject.Instantiate(self._tfGetType:GetChild(0).gameObject, self._tfGetType).transform
+		else
+			tf = self._tfGetType:GetChild(i - 1)
+		end
+
+		if i <= getWayNum then
+			tf:GetChild(0):GetComponent("TMP_Text"):SetLocalize(D._dropPathConfig[getWays[i]]._nameSid)
+			tf:GetChild(1):SetActive(D._dropPathConfig[getWays[i]]._jump ~= nil)
+
+			if P._playerGuide:isWaitingTrigger() or BattleManager or ArkShipManager and ArkShipManager:isInMain() or UIManager.getPanel(PrefabDefine.CrisisZoneFinalRewardPanel.id) then
+				tf:GetChild(1):SetActive(false)
+			else
+				self:setClick(tf:Find("ImgGo"):GetComponent("Button"), function ()
+					local jumpId = D._dropPathConfig[getWays[i]]._jump
+
+					V.jumpTo(D._jumpConfig[jumpId])
+				end)
+			end
+		end
+
+		tf:SetActive(i <= getWayNum)
+	end
+end
+
+function M:jumpPropPanel()
+	if D.isRandomChipItem(self._cid) then
+		UIManager.openPanel(PrefabDefine.ChipDropWeightOverviewPanel, self._quality)
+	end
+end
+
+return M

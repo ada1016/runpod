@@ -1,0 +1,545 @@
+local M = class("LoginPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTips = Types.TMP_Text,
+	tmpUID = Types.TMP_Text,
+	btnClickUID = Types.Button,
+	rawBg = Types.RawImage,
+	tfCN = Types.Transform,
+	tmpSN = Types.TMP_Text,
+	btnLogin = Types.Button,
+	btnCADPA = Types.Button,
+	btnFixGame = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._rawBg.texture = Resources.Load("Loading/loading", tolua.typeof(UnityEngine.Texture))
+
+	if lc._isCN then
+		self._tfCN:SetActive(true)
+		self._tmpTips.transform:SetActive(false)
+		self._tmpUID.transform:SetActive(false)
+		self._tmpSN:SetLocalize(SID.TITLE_SN)
+		self._btnFixGame:SetActive(true)
+	else
+		self._btnFixGame:SetActive(false)
+		self._tfCN:SetActive(false)
+		self._tmpTips.transform:SetActive(true)
+		self._tmpUID.transform:SetActive(true)
+	end
+
+	self._useBtnLogin = false
+
+	self._btnLogin.transform:SetActive(self._useBtnLogin)
+	self._tmpTips:SetLocalize(SID.LOGIN_PROGRESS_TIPS1)
+	MainGameRoot:hideBlackBG()
+
+	if C._firebaseId == nil then
+		if self._useBtnLogin then
+			self._loginStep = 0
+		else
+			self._loginStep = 1
+		end
+
+		local firebaseId = lc.getStringKeyValue("firebase.udid", "")
+		self._tmpUID.text = "UID:" .. firebaseId
+
+		if firebaseId:len() > 0 then
+			self._btnClickUID.gameObject:SetActive(true)
+		else
+			self._btnClickUID.gameObject:SetActive(false)
+		end
+
+		self._failRetryCount = 0
+	else
+		self._loginStep = 4
+		self._tmpUID.text = "UID:" .. C._firebaseId
+
+		C.onLoginSuccess("")
+	end
+end
+
+function M:Start()
+	self:startUpdater()
+
+	local defaultPanel = GameObject.Find("UpdateLoadingPanel")
+
+	if defaultPanel ~= nil then
+		GameObject.Destroy(defaultPanel)
+	end
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnClickUID, function ()
+		if C._firebaseId then
+			UniClipboard.SetText(C._firebaseId)
+			V.showToast(SID.CONT_COPY_SUCCEED)
+		end
+	end, nil, true)
+	self:setClick(self._btnLogin, function ()
+		if self._loginStep == 0 then
+			self._loginStep = 1
+		end
+	end)
+	self:setClick(self._btnFixGame, function ()
+		C.fixGameGameCache("LoginPanel")
+	end)
+	self:setClick(self._btnCADPA, function ()
+		if not lc._isCN then
+			UIManager.openPanel(PrefabDefine.CAPDAPanel)
+		end
+	end)
+end
+
+function M:addEvents()
+	self:on("firebase.auth.fail", function ()
+		if not lc._isCN then
+			local firebaseId = lc.getStringKeyValue("firebase.udid", "")
+
+			if firebaseId == "" then
+				if not self._isChangeToGuest then
+					Trace.AF_traceKey("e01_guest")
+				end
+
+				self._isChangeToGuest = true
+			end
+		end
+
+		if self._failRetryCount == 3 then
+			V.showMessageBox({
+				_content = SID.LOGIN_FAILED,
+				_confirmCallback = function ()
+					C._failRetryCount = 0
+					self._loginStep = 1
+				end
+			})
+
+			return
+		end
+
+		self._failRetryCount = self._failRetryCount + 1
+		self._loginStep = 1
+	end)
+	self:on("link.succeed", function ()
+		UIManager.hideWaiting()
+		self:dealEnterLogin()
+	end)
+	self:on("link.fail", function ()
+		UIManager.hideWaiting()
+		V.showToast(SID.LINK_FAIL)
+		self:showLinkAccountBox()
+	end)
+	self:on("link.cancel.user", function ()
+		self:showLinkAccountBox()
+	end)
+end
+
+function M:Update()
+	if self._loginStep == 1 then
+		if lc._isCN then
+			if C._useFirebaseAccount then
+				if C._isFirebaseInited then
+					ChannelManager:Login()
+
+					self._loginStep = 2
+				end
+			else
+				C._firebaseId = lc.getUdid()
+				self._tmpUID.text = "UID:" .. C._firebaseId
+
+				self._btnClickUID.gameObject:SetActive(true)
+
+				self._loginStep = 2
+			end
+		elseif C._useFirebaseAccount then
+			if C._isFirebaseInited and C._isFacebookInited then
+				local loginType = FirebaseManager.FIREBASE_AUTH_TYPE_GUEST
+
+				if lc._isiOS then
+					if self._isChangeToGuest then
+						loginType = FirebaseManager.FIREBASE_AUTH_TYPE_GUEST
+					else
+						loginType = lc.getStringKeyValue("ios.auth.type", FirebaseManager.FIREBASE_AUTH_TYPE_APPLE)
+					end
+				end
+
+				if lc._isAndroid then
+					if self._isChangeToGuest then
+						loginType = FirebaseManager.FIREBASE_AUTH_TYPE_GUEST
+					else
+						loginType = FirebaseManager.FIREBASE_AUTH_TYPE_GOOGLE
+					end
+				end
+
+				FirebaseManager:Login(loginType)
+
+				self._loginStep = 2
+			end
+		else
+			C._firebaseId = lc.getUdid()
+			self._tmpUID.text = "UID:" .. C._firebaseId
+
+			self._btnClickUID.gameObject:SetActive(true)
+			C.onLoginSuccess("")
+
+			self._loginStep = 4
+		end
+	elseif self._loginStep == 2 then
+		if C._firebaseId then
+			self._tmpUID.text = "UID:" .. C._firebaseId
+
+			self._btnClickUID.gameObject:SetActive(true)
+			self._tmpTips:SetLocalize(SID.LOGIN_PROGRESS_TIPS2)
+
+			if lc._isCN then
+				local serverDomain = C._config.gameDomain or C._appConfig.gameDomain or "dev.gameserver.idefense.leocool.com"
+				local serverAddr = string.find(serverDomain, "192.168") ~= nil and "ws://" .. serverDomain .. "/ws" or "wss://" .. serverDomain .. "/ws"
+
+				Network:init(serverAddr, 10)
+			else
+				if C._config.udid then
+					C._firebaseId = C._config.udid
+				end
+
+				FirebaseManager:LoadFromStore(C._firebaseId)
+
+				C._remoteJsonData = nil
+			end
+
+			self._loginStep = 3
+			self._loadStoreTime = 0
+		end
+	elseif self._loginStep == 3 then
+		if not lc._isCN and self._loadStoreTime then
+			self._loadStoreTime = self._loadStoreTime + Time.unscaledDeltaTime
+
+			if self._loadStoreTime >= 12 then
+				self._loadStoreTime = nil
+				C._waitSyncRemote = false
+
+				C.onLoginSuccess()
+
+				if C._waitSyncRemote then
+					C._waitSyncRemote = nil
+					self._loginStep = 0
+
+					Trace.AF_traceEvent("e01_loadSaveData", {
+						{
+							_key = "strParam",
+							_value = "wait_user"
+						}
+					})
+					V.showMessageBox({
+						_type = 2,
+						_content = SID.STR_SAVE_DATA_CHOOST_TIP10,
+						_confirmCallback = function ()
+							FirebaseManager:LoadFromStore(C._firebaseId)
+
+							self._loginStep = 3
+							self._loadStoreTime = 0
+						end,
+						_cancelCallback = function ()
+							Application.Quit()
+						end
+					})
+				else
+					local localSave = C.readLocalSaveData()
+
+					if localSave and localSave.recordDeviceIds and #localSave.recordDeviceIds > 1 then
+						self._loginStep = 0
+
+						Trace.AF_traceEvent("e01_loadSaveData", {
+							{
+								_key = "strParam",
+								_value = "wait_user2"
+							}
+						})
+						V.showMessageBox({
+							_type = 2,
+							_content = SID.STR_SAVE_DATA_CHOOST_TIP10,
+							_confirmCallback = function ()
+								FirebaseManager:LoadFromStore(C._firebaseId)
+
+								self._loginStep = 3
+								self._loadStoreTime = 0
+							end,
+							_cancelCallback = function ()
+								Application.Quit()
+							end
+						})
+					else
+						self._loginStep = 4
+						C._offlineStatus = true
+
+						Trace.AF_traceEvent("e01_loadSaveData", {
+							{
+								_key = "strParam",
+								_value = "finish_local"
+							}
+						})
+					end
+				end
+
+				return
+			end
+		end
+
+		if C._remoteJsonData then
+			self._tmpTips:SetLocalize(SID.LOGIN_PROGRESS_TIPS3)
+			C.onLoginSuccess(C._remoteJsonData)
+
+			C._remoteJsonData = nil
+			self._loginStep = 4
+
+			Trace.AF_traceEvent("e01_loadSaveData", {
+				{
+					_key = "strParam",
+					_value = "finish"
+				}
+			})
+		end
+	elseif self._loginStep == 4 then
+		self._loginStep = 5
+		self._countdown = 1
+
+		self._tmpTips:SetLocalize(SID.LOGIN_PROGRESS_TIPS4)
+	elseif self._loginStep == 5 then
+		self._countdown = self._countdown - Time.unscaledDeltaTime
+
+		if self._countdown <= 0 then
+			if self:checkCouldLogin() then
+				self:checkServerTimestamp()
+				Client.createPlayer()
+				self:enterLogin()
+			end
+
+			self._loginStep = 0
+		end
+	elseif self._loginStep == 10 then
+		self._countdown = self._countdown - Time.unscaledDeltaTime
+
+		if self._countdown <= 0 then
+			self:enterLogin()
+
+			self._loginStep = 0
+		end
+	end
+end
+
+function M:init()
+end
+
+local function getRegionIP()
+	if Client._config.regionServer then
+		local p = string.split(Client._config.regionServer, ":")
+
+		return p[1], p[2]
+	end
+end
+
+function M:enterLogin()
+	if Client._saveData.lastDeviceId ~= Client.getDeviceId() and (Client._saveData.userFlag == nil or bit.band(Client._saveData.userFlag, D.UserFlag.NeedCheckNetwork) == 0) then
+		local cnt = lc.getIntKeyValue("daily_multi_device_login_count", 0)
+		cnt = cnt + 1
+
+		lc.setIntKeyValue("daily_multi_device_login_count", cnt)
+
+		if cnt >= 20 then
+			Client._saveData.userFlag = bit.bor(Client._saveData.userFlag or 0, D.UserFlag.NeedCheckNetwork)
+		end
+	end
+
+	if Client._saveData.userFlag == nil or bit.band(Client._saveData.userFlag, D.UserFlag.NeedCheckNetwork) == 0 then
+		local cnt = lc.getIntKeyValue("daily_login_count", 0)
+		cnt = cnt + 1
+
+		lc.setIntKeyValue("daily_login_count", cnt)
+
+		if cnt >= 40 then
+			Client._saveData.userFlag = bit.bor(Client._saveData.userFlag or 0, D.UserFlag.NeedCheckNetwork)
+		end
+	end
+
+	local count = #Client._saveData.recordDeviceIds
+	Client._saveData.lastDeviceId = Client.getDeviceId()
+
+	if not table.findArray(Client._saveData.recordDeviceIds, Client.getDeviceId()) then
+		Client._saveData.recordDeviceIds[#Client._saveData.recordDeviceIds + 1] = Client.getDeviceId()
+	end
+
+	self:dealEnterLogin()
+end
+
+function M:showLinkAccountBox()
+	V.showTopMessageBox({
+		_type = 2,
+		_content = SID.LOGIN_TIPS_9,
+		_txtCancel = SID.CHEST_SKIP,
+		_txtConfirm = SID.STR_LINK,
+		_confirmCallback = function ()
+			UIManager.showWaiting()
+			lc.setTimer(function ()
+				Client.linkAccount()
+			end, 0.5)
+		end,
+		_cancelCallback = function ()
+			lc.setTimer(function ()
+				self:switch2city()
+			end, 0.5)
+		end
+	})
+end
+
+function M:dealEnterLogin()
+	if not Client._isLogout and Client.getIsGuest() and not lc._isCN then
+		local dayOffset = lc.getIntKeyValue("login.bind.tips.day", 0)
+
+		if dayOffset == 0 or dayOffset < C.getDayOffset() then
+			lc.setIntKeyValue("login.bind.tips.day", C.getDayOffset())
+			self:showLinkAccountBox()
+
+			return
+		end
+	end
+
+	self:switch2city()
+end
+
+function M:switch2city()
+	if C.isMultipleDeivce() and lc._isMobile and not lc._isCN then
+		FirebaseManager:WriteAndListenSession(C._firebaseId, Client.getDeviceId())
+	end
+
+	SceneHelper:Login2CityScene(function ()
+		MainGameRoot:showBlackBG()
+		Trace.AF_traceEvent("e02_enterMainScene", {
+			{
+				_key = "target",
+				_value = P:getName()
+			},
+			{
+				_key = "encryptOffset",
+				_value = lc._encryptOffset
+			},
+			{
+				_key = "assetXBorKey",
+				_value = P._playerAsset._bxorKey
+			},
+			{
+				_key = "createDeviceId",
+				_value = Client._saveData.createDeviceId
+			},
+			{
+				_key = "createTimestamp",
+				_value = Client._saveData.createTimestamp
+			},
+			{
+				_key = "isMultipleDeivce",
+				_value = Client.isMultipleDeivce() and 1 or 0
+			}
+		})
+
+		if C._traceWaitSyncRemoteFlag then
+			C._traceWaitSyncRemoteFlag = nil
+
+			Trace.AF_traceKey("e02_enterMainScene2")
+		end
+
+		local level = P._playerProfile:getLevel()
+		local curGroup = LuaHelper.PrefsGetInt("RES_CUR_GROUP", 0)
+		local payMoney = P._playerStore:getPayMoney()
+		local createDay = P:getCreateDay()
+
+		if lc._isWebGL and ((payMoney > 0 or createDay >= 3) and curGroup < 3 or level >= 2 and curGroup < 2 or level > 4 and curGroup < 3) then
+			UIManager.openPanel(PrefabDefine.CrossScreenPanel, "login", "city")
+		else
+			UIManager.openPanel(PrefabDefine.MainPanel, "login")
+		end
+	end)
+end
+
+function M:checkCouldLogin()
+	if not C.compareAppVersionAndArchiveVersion() then
+		Trace.AF_traceKey("e02_lowVersion")
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.LOGIN_TIME_ERROR2,
+			_txtConfirm = SID.GO_UPDATE_APP,
+			_confirmCallback = function ()
+				lc.openUrl(D.STORE_URL)
+				lc.delayFunc(0.1, function ()
+					Application.Quit()
+				end, self.gameObject)
+			end
+		})
+
+		return false
+	end
+
+	if Client._isForbidLogin then
+		V.showForbiddenMessageBox(C._forbidReason or SID.FORBID_LOGIN)
+
+		return false
+	end
+
+	return true
+end
+
+function M:checkOldSavaData()
+	if C.isAlpha() then
+		return false
+	end
+
+	local saveData = Client._saveData
+
+	if saveData.version then
+		return false
+	end
+
+	return true
+end
+
+function M:checkServerTimestamp()
+	local saveData = Client._saveData
+	local lastLogoutTime = saveData and saveData.logoutTimestamp or 0
+	local ct = Client.getCurTime()
+
+	if lastLogoutTime > 0 and ct < lastLogoutTime then
+		local ntpTime = LuaHelper.GetNetworkTimestamp()
+
+		if ntpTime > 0 and ntpTime < 2100000000 then
+			Trace.AF_traceEvent("e01_startTime_olderError", {
+				{
+					_key = "num",
+					_value = ntpTime
+				},
+				{
+					_key = "type",
+					_value = "ntp"
+				}
+			})
+			ServerTimestamp.LuaSetBaseLocalTimestamp(ntpTime)
+		else
+			local localTime = os.time()
+
+			Trace.AF_traceEvent("e01_startTime_olderError", {
+				{
+					_key = "num",
+					_value = localTime
+				},
+				{
+					_key = "ntp",
+					_value = ntpTime
+				},
+				{
+					_key = "type",
+					_value = "local"
+				}
+			})
+			ServerTimestamp.LuaSetBaseLocalTimestamp(localTime)
+		end
+	end
+end
+
+return M

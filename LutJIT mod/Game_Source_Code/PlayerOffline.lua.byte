@@ -1,0 +1,184 @@
+local M = class("PlayerOffline")
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.offlineRecordTime = self._meta.offlineRecordTime or -1
+	self._meta.offlineRandomSeed = self._meta.offlineRandomSeed or self:regenOfflineRandomSeed()
+	self._meta.fullPopped = self._meta.fullPopped or false
+end
+
+function M:start()
+	if self._meta.offlineRecordTime == -1 then
+		self:recordNewOfflineTime(C.getCurTime() - 3600)
+	end
+
+	self:updateOfflineTime()
+end
+
+function M:updateOfflineTime()
+	local totalTime = self:getOfflineTime()
+	local needPop = totalTime < self:readOfflineShowTime()
+
+	GameClock:removeTimeCallback("offlinebtn")
+
+	if needPop then
+		GameClock:registerTimeCallback("offlinebtn", self:getRecordOfflineTime() + self:readOfflineShowTime(), function ()
+			GameClock:removeTimeCallback("offlinebtn")
+			SimpleEvent.emit("offline.time.change")
+		end)
+	end
+
+	GameClock:removeTimeCallback("offlinebtn.full")
+
+	if not self:isOfflineTimeFull() then
+		GameClock:registerTimeCallback("offlinebtn.full", self:getRecordOfflineTime() + self:getOfflineFullTimeSeconds(), function ()
+			self:resetPop()
+			SimpleEvent.emit("offline.time.full")
+		end)
+	end
+end
+
+function M:resetPop()
+	self._meta.fullPopped = false
+end
+
+function M:isPoped()
+	return self._meta.fullPopped
+end
+
+function M:recordPop()
+	if not self._meta.fullPopped then
+		self._meta.fullPopped = true
+	end
+end
+
+function M:readOfflineShowTime()
+	return D._globalConfig._offline_show_cd * 60
+end
+
+function M:getOfflineFullTimeSeconds()
+	return self:getOfflineFullHour() * 3600
+end
+
+function M:readOfflineFullTime()
+	return D._globalConfig._offline_max_time
+end
+
+function M:readOfflineFullTimeSeconds()
+	return D._globalConfig._offline_max_time * 3600
+end
+
+function M:recordNewOfflineTime(newT)
+	if newT then
+		self._meta.offlineRecordTime = newT
+	else
+		local dt = (C.getCurTime() - self._meta.offlineRecordTime) % 3600
+
+		if self:isOfflineTimeFull() then
+			dt = 0
+		end
+
+		self._meta.offlineRecordTime = C.getCurTime() - dt
+	end
+
+	self:updateOfflineTime()
+	self:regenOfflineRandomSeed()
+end
+
+function M:regenOfflineRandomSeed()
+	self._meta.offlineRandomSeed = math.random(1, 1000000)
+
+	return self._meta.offlineRandomSeed
+end
+
+function M:getOfflineRandomSeed()
+	return self._meta.offlineRandomSeed
+end
+
+function M:getRecordOfflineTime()
+	return self._meta.offlineRecordTime
+end
+
+function M:getOfflineTime()
+	if self._meta.offlineRecordTime < 0 then
+		return 0
+	end
+
+	return C.getCurTime() - self._meta.offlineRecordTime
+end
+
+function M:isOfflineTimeFull()
+	return self:getOfflineFullTimeSeconds() < self:getOfflineTime()
+end
+
+function M:calOfflineRewards(total, offlineId, dt)
+	local cfg = D._missionOfflineConfig[offlineId]
+	local cids = cfg._rewardCids
+	local nums = cfg._rewardNums
+	dt = math.min(self:getOfflineFullTimeSeconds(), dt)
+	local calHour = math.floor(dt / 3600)
+
+	for i, cid in ipairs(cids) do
+		local num = nums[i]
+		local hour = 1
+		local getNum = math.floor(dt / (hour * 3600)) * num
+
+		if getNum > 0 then
+			total[cid] = (total[cid] or 0) + getNum
+		end
+	end
+
+	local randomObj = BattleRandomLib.new(self:getOfflineRandomSeed())
+	local randomCids = cfg._randomRewardCids
+	local randomNums = cfg._randomRewardNums
+
+	for i = 1, calHour do
+		for key, cid in ipairs(randomCids) do
+			local weight = randomNums[key]
+			local get = randomObj:randomTrueWithRange(weight, 10000)
+
+			if get then
+				total[cid] = (total[cid] or 0) + 1
+			end
+		end
+	end
+
+	for cid, num in pairs(total) do
+		total[cid] = math.floor(total[cid] * self:getExtraOfflineTimeRate())
+	end
+
+	return total
+end
+
+function M:getOfflineFullHour()
+	local hour = self:readOfflineFullTime()
+	local extra = 100
+
+	if P._playerRight:isSVIP() then
+		extra = extra + D._globalConfig._rightcard_svip_params[3]
+	end
+
+	if P._playerRight:isVIP() then
+		extra = extra + D._globalConfig._rightcard_vip_params[3]
+	end
+
+	hour = math.floor(hour * extra / 10) / 10
+
+	return hour
+end
+
+function M:getExtraOfflineTimeRate()
+	local num = 100
+
+	if P._playerRight:isSVIP() then
+		num = num + D._globalConfig._rightcard_svip_params[2]
+	end
+
+	if P._playerRight:isVIP() then
+		num = num + D._globalConfig._rightcard_vip_params[2]
+	end
+
+	return num / 100
+end
+
+return M

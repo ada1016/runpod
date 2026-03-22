@@ -1,0 +1,21 @@
+local M = class("BattleBullet_Brust_Rectangle1", requireLua("BattleBullet_Burst"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:setTargetPosition(beganPos, targetPos)
+	self:setPos(beganPos.x, beganPos.y)
+	self:setDir(targetPos)
+
+	local dis = Vector2.Distance(self._position, targetPos)
+	self._scale = dis
+	self._size[2] = dis
+	self._endPosX = targetPos.x
+	self._endPosY = targetPos.y
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+return M

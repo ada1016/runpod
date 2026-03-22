@@ -1,0 +1,75 @@
+local M = class("DiamondPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tfDiamonds = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:init(callback, purchaseChannel)
+	self._purchaseCallback = callback
+	self._purchaseChannel = purchaseChannel
+
+	self:updateDiamondArea()
+end
+
+function M:updateDiamondArea()
+	for i = 1, 6 do
+		self:updateDiamondWidget(self._tfDiamonds:GetChild(i - 1), i)
+	end
+end
+
+function M:updateDiamondWidget(tfWidget, idx)
+	local iapId = D.IapType.Diamond1 + idx - 1
+	local tf1 = tfWidget:GetChild(0)
+	local tfExtra = tfWidget:GetChild(1)
+	local imgIcon = tf1:GetChild(1):GetComponent("Image")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local getNum = D._iapConfig[iapId]._nums[1]
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(D.ResType.diamond), getNum)
+
+	local isFirst = P._playerStore:getFirstPurchaseExtra(iapId)
+
+	tfExtra:SetActive(true)
+
+	local textExtra = tfExtra:GetChild(0):GetChild(0):GetComponent("TextMeshProUGUI")
+
+	if isFirst then
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._firstNums[1])
+	else
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._afterNums[1])
+	end
+
+	local tfBtn = tfWidget:GetChild(2)
+	local iapId = D.IapType.Diamond1 + idx - 1
+
+	self:setClick(tfWidget:GetComponent("Button"), function ()
+		C.tryPurchase(D.IapType.Diamond1 + idx - 1, function (iapId, rewards)
+			if rewards then
+				V.showRewardClaimPanel(rewards, nil, function ()
+					if self._purchaseCallback then
+						self._purchaseCallback()
+					end
+				end)
+			elseif self._purchaseCallback then
+				self._purchaseCallback()
+			end
+
+			self:closePanel()
+		end, self._purchaseChannel or D.PurchaseChannel.Pop)
+	end)
+
+	local tfBtn = tfWidget:GetChild(2)
+	tfBtn:Find("text"):GetComponent("TextMeshProUGUI").text = P._playerStore:getDisplayPrice(iapId)
+
+	V.addRechargeScoreWidget(iapId, tfBtn)
+end
+
+return M

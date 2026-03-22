@@ -1,0 +1,234 @@
+local M = class("QuadGrid")
+local BattleMatchLib = requireLua("BattleMathLib")
+local rectangle_rectangle_intersect_align_axis = BattleMatchLib.rectangle_rectangle_intersect_align_axis
+local OUT_INDEXS = table.new(64, 0)
+local OUT_OBJ_DUP_MAP = table.new(0, 64)
+local table = table
+local math = math
+
+function M:isValidPosition(px, py)
+	if px < -self._width / 2 or px > self._width / 2 then
+		return false
+	end
+
+	if py < 0 or self._height < py then
+		return false
+	end
+
+	return true
+end
+
+local function position_to_index(self, px, py)
+	if not self:isValidPosition(px, py) then
+		return -1
+	end
+
+	local i = -1
+	local j = -1
+	px = px + self._width / 2
+
+	if px == 0 then
+		i = 1
+	elseif px == self._width then
+		i = self._width / self._gridWidth
+	else
+		i = math.floor(px / self._gridWidth) + 1
+	end
+
+	if py == 0 then
+		j = 0
+	elseif py == self._height then
+		j = self._height / self._gridHeight - 1
+	else
+		j = math.floor(py / self._gridHeight)
+	end
+
+	return j * self._capacityX + i
+end
+
+function M:position2index(px, py)
+	return position_to_index(self, px, py)
+end
+
+function M:resize(width, height)
+	self._width = width
+	self._height = height
+end
+
+function M:ctor(width, height, gridWidth)
+	self._width = width
+	self._height = height
+	self._gridWidth = gridWidth
+	self._gridHeight = gridWidth
+	self._capacityX = width / gridWidth
+	self._capacityY = height / gridWidth
+	self._gridCount = self._capacityX * self._capacityY
+	self._gridSize = {
+		gridWidth,
+		gridWidth
+	}
+	local capacity = self._gridCount
+	self._targets = table.new(capacity, 0)
+
+	for i = 1, capacity do
+		self._targets[i] = table.new(8, 0)
+	end
+
+	local minX = -self._width / 2 + self._gridWidth / 2
+	local minY = self._gridHeight / 2
+	self._nodes = table.new(capacity, 0)
+
+	for j = 1, self._capacityY do
+		for i = 1, self._capacityX do
+			self._nodes[#self._nodes + 1] = {
+				x = minX + (i - 1) * self._gridWidth,
+				y = minY + (j - 1) * self._gridHeight
+			}
+		end
+	end
+end
+
+function M:clearObjs()
+	for i = 1, self._gridCount do
+		table.clear(self._targets[i])
+	end
+end
+
+function M:addObj(enemy)
+	local px = enemy._position.x
+	local py = enemy._position.y
+	local n0 = position_to_index(self, px, py)
+
+	if n0 == -1 then
+		return
+	end
+
+	enemy._at = n0
+	local size = enemy._size
+
+	self:getIntersectingIndexs(enemy._position, enemy._size)
+
+	local indexs = OUT_INDEXS
+
+	for i = 1, #indexs do
+		local index = indexs[i]
+		self._targets[index][#self._targets[index] + 1] = enemy
+	end
+end
+
+function M:getIntersectingIndexs(position, size)
+	local px = position.x
+	local py = position.y
+
+	table.clear(OUT_INDEXS)
+
+	if not self:isValidPosition(px, py) then
+		return
+	end
+
+	local s1 = size[1] / 2
+	local s2 = size[2] / 2
+	local leftPosX = math.max(px - s1 + 0.01, -self._width / 2)
+	local rightPosX = math.min(px + s1 - 0.01, self._width / 2)
+	local downPosY = math.max(py - s2 + 0.001, 0)
+	local topPosY = math.min(py + s2 - 0.001, self._height)
+	local leftTopIndex = position_to_index(self, leftPosX, topPosY)
+	local rightTopIndex = position_to_index(self, rightPosX, topPosY)
+	local leftDownIndex = position_to_index(self, leftPosX, downPosY)
+	local rightDownIndex = position_to_index(self, rightPosX, downPosY)
+	local dtY = math.floor((rightTopIndex - rightDownIndex) / self._capacityX)
+
+	table.clear(OUT_OBJ_DUP_MAP)
+
+	for j = 0, dtY do
+		for i = leftDownIndex, rightDownIndex do
+			local n = i + j * self._capacityX
+
+			if OUT_OBJ_DUP_MAP[n] == nil then
+				OUT_INDEXS[#OUT_INDEXS + 1] = n
+				OUT_OBJ_DUP_MAP[n] = true
+			end
+		end
+	end
+end
+
+function M:retrieve(bullet, out)
+	self:getIntersectingIndexs(bullet._position, bullet._size)
+
+	local indexs = OUT_INDEXS
+
+	for i = 1, #indexs do
+		local index = indexs[i]
+		local targets = self._targets[index]
+
+		if targets then
+			for j = 1, #targets do
+				out[#out + 1] = targets[j]
+			end
+		end
+	end
+end
+
+function M:retrieve_PulseLaser(bullet, out)
+	local px = bullet._position.x
+	local size = bullet._size
+	local minX = px - size[1] / 2
+	local maxX = px + size[1] / 2
+	minX = math.max(-self._capacityX / 2, math.floor(minX))
+	maxX = math.min(self._capacityX / 2, math.floor(maxX))
+
+	for j = 0, self._capacityY do
+		for i = minX, maxX do
+			local index = position_to_index(self, i, j)
+			local objs = self._targets[index]
+
+			if objs then
+				for j = 1, #objs do
+					if OUT_OBJ_DUP_MAP[objs[j]._id] == nil then
+						out[#out + 1] = objs[j]
+						OUT_OBJ_DUP_MAP[objs[j]._id] = true
+					end
+				end
+			end
+		end
+
+		if #OUT_OBJ_DUP_MAP > 0 then
+			break
+		end
+	end
+
+	table.clear(OUT_OBJ_DUP_MAP)
+end
+
+function M:retrieveMinY(bullet, out)
+	local px = bullet._position.x
+	local size = bullet._size
+	local minX = px - size[1] / 2
+	local maxX = px + size[1] / 2
+	minX = math.max(-self._capacityX / 2, math.floor(minX))
+	maxX = math.min(self._capacityX / 2, math.floor(maxX))
+
+	for j = 0, self._capacityY do
+		for i = minX, maxX do
+			local index = position_to_index(self, i, j)
+			local objs = self._targets[index]
+
+			if objs then
+				for j = 1, #objs do
+					if OUT_OBJ_DUP_MAP[objs[j]._id] == nil then
+						out[#out + 1] = objs[j]
+						OUT_OBJ_DUP_MAP[objs[j]._id] = true
+					end
+				end
+			end
+		end
+
+		if #OUT_OBJ_DUP_MAP > 0 then
+			break
+		end
+	end
+
+	table.clear(OUT_OBJ_DUP_MAP)
+end
+
+return M

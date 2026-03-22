@@ -1,0 +1,555 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	Bullet_1_hit = {
+		"Bullet_1_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_1_thunder = {
+		"Bullet_1_thunder",
+		8,
+		8
+	},
+	Bullet_1_Laser = {
+		"Bullet_1_Laser",
+		6,
+		8
+	},
+	Bullet_3_hit = {
+		"Bullet_3_hit",
+		6,
+		8,
+		1
+	},
+	Bullet_3_boom = {
+		"Bullet_3_boom",
+		10,
+		8,
+		1
+	},
+	General_ignition = {
+		"General_ignition",
+		24,
+		32
+	},
+	General_vulnerable = {
+		"General_vulnerable",
+		20,
+		32
+	},
+	Bullet_303 = {
+		"Bullet_303",
+		15,
+		8
+	},
+	Bullet_3_forcefield = {
+		"Bullet_3_forcefield",
+		8,
+		8
+	},
+	Bullet_4_hit = {
+		"Bullet_4_hit",
+		4,
+		16,
+		1
+	},
+	General_paralyze = {
+		"General_paralyze",
+		24,
+		32,
+		1
+	},
+	General_physical_boom = {
+		"General_physical_boom",
+		8,
+		8
+	},
+	Bullet_5_portal_in = {
+		"Bullet_5_portal_in",
+		8,
+		32
+	},
+	Bullet_5_portal_out = {
+		"Bullet_5_portal_out",
+		8,
+		32
+	},
+	Bullet_6_hit = {
+		"Bullet_6_hit",
+		8,
+		16,
+		1
+	},
+	Bullet_6_boom = {
+		"Bullet_6_boom",
+		7,
+		16
+	},
+	Bullet_602 = {
+		"Bullet_602",
+		8,
+		32
+	},
+	Bullet_6_boom_center = {
+		"Bullet_6_boom_center",
+		5,
+		16
+	},
+	General_energy_boom = {
+		"General_energy_boom",
+		8,
+		16
+	},
+	Bullet_8_decor = {
+		"Bullet_8_decor",
+		6,
+		16
+	},
+	Bullet_7_hit = {
+		"Bullet_7_hit",
+		8,
+		16,
+		1
+	},
+	Enemy_general_bullet_hit = {
+		"Enemy_general_bullet_hit",
+		7,
+		32
+	},
+	Bullet_9_hit = {
+		"Bullet_9_hit",
+		5,
+		32
+	},
+	Bullet_8_hit = {
+		"Bullet_8_hit",
+		8,
+		16
+	},
+	Bullet_8 = {
+		"Bullet_8",
+		8,
+		32,
+		1
+	},
+	Bullet_102_hit = {
+		"Bullet_102_hit",
+		12,
+		32,
+		1
+	},
+	Bullet_10 = {
+		"Bullet_10",
+		8,
+		8,
+		1
+	},
+	Bullet_10_hit = {
+		"Bullet_10_hit",
+		5,
+		16,
+		1
+	},
+	Bullet_10_matrix = {
+		"Bullet_10_matrix",
+		8,
+		16,
+		1
+	},
+	Bullet_10_hit_outer = {
+		"Bullet_10_hit_outer",
+		5,
+		16
+	},
+	Bullet_10_matrix_outer = {
+		"Bullet_10_matrix_outer",
+		8,
+		16,
+		1
+	},
+	Enemy_general_portal = {
+		"Enemy_general_portal",
+		1,
+		8
+	},
+	Bullet_6_traction = {
+		"Bullet_6_traction",
+		6,
+		8
+	},
+	Enemy_general_injured = {
+		"Enemy_general_injured",
+		13,
+		32
+	},
+	Weapon_12_boom = {
+		"Weapon_12_boom",
+		6,
+		32
+	},
+	Bullet_12_hit = {
+		"Bullet_12_hit",
+		8,
+		32
+	},
+	Enemy_general_dome = {
+		"Enemy_general_dome",
+		12,
+		16
+	},
+	Enemy_general_dome_140001 = {
+		"Enemy_general_dome_140001",
+		12,
+		16
+	},
+	Enemy_general_dome_140002 = {
+		"Enemy_general_dome_140002",
+		12,
+		16
+	},
+	Enemy_general_dome_140003 = {
+		"Enemy_general_dome_140003",
+		12,
+		16
+	},
+	Enemy_general_dome_140004 = {
+		"Enemy_general_dome_140004",
+		12,
+		16
+	},
+	Enemy_general_dome_140005 = {
+		"Enemy_general_dome_140005",
+		12,
+		16
+	},
+	Enemy_general_dome_140006 = {
+		"Enemy_general_dome_140006",
+		12,
+		16
+	},
+	Enemy_general_dome_140007 = {
+		"Enemy_general_dome_140007",
+		12,
+		16
+	},
+	Enemy_general_dome_140008 = {
+		"Enemy_general_dome_140008",
+		12,
+		16
+	},
+	Enemy_general_dome_140010 = {
+		"Enemy_general_dome_140010",
+		12,
+		16
+	},
+	Enemy_general_dome_140011 = {
+		"Enemy_general_dome_140011",
+		12,
+		16
+	},
+	Enemy_general_dome_140015 = {
+		"Enemy_general_dome_140015",
+		12,
+		16
+	},
+	Bullet_12_1 = {
+		"Bullet_12_1"
+	},
+	Bullet_12_2 = {
+		"Bullet_12_2"
+	},
+	Bullet_12_3 = {
+		"Bullet_12_3"
+	},
+	Enemy_1502_speedup = {
+		"Enemy_1502_speedup",
+		16,
+		32
+	},
+	Enemy_general_Shield = {
+		"Enemy_general_Shield",
+		16,
+		32
+	},
+	Bullet_110001_hit = {
+		"Bullet_110001_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110002_hit = {
+		"Bullet_110002_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110003_hit = {
+		"Bullet_110003_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110004_hit = {
+		"Bullet_110004_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110005_hit = {
+		"Bullet_110005_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110006_hit = {
+		"Bullet_110006_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110007_hit = {
+		"Bullet_110007_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110008_hit = {
+		"Bullet_110008_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110009_hit = {
+		"Bullet_110009_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110010_hit = {
+		"Bullet_110010_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110011_hit = {
+		"Bullet_110011_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110012_hit = {
+		"Bullet_110012_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110014_hit = {
+		"Bullet_110014_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110015_hit = {
+		"Bullet_110015_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110016_hit = {
+		"Bullet_110016_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110019_hit = {
+		"Bullet_110019_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_110021_hit = {
+		"Bullet_110021_hit",
+		4,
+		16,
+		1
+	},
+	Bullet_1_hit_forcefield = {
+		"Bullet_1_hit_forcefield",
+		4,
+		16,
+		1
+	},
+	Ranger_150003_1_hit = {
+		"Ranger_150003_1_hit",
+		4,
+		16,
+		1
+	},
+	Ranger_150007_100 = {
+		"Ranger_150007_100",
+		4,
+		16,
+		1
+	},
+	Person_120022_skill = {
+		"Person_120022_skill",
+		23,
+		16,
+		1
+	},
+	Bullet_801 = {
+		"Bullet_801",
+		8,
+		32,
+		1
+	},
+	Enemy_1101_boom = {
+		"Enemy_1101_boom",
+		8,
+		32,
+		1
+	},
+	Enemy_1404_fire = {
+		"Enemy_1404_fire",
+		9,
+		16
+	},
+	Enemy_1404_hit = {
+		"Enemy_1404_hit",
+		9,
+		16
+	},
+	Bullet_5_unravel = {
+		"Bullet_5_unravel",
+		8,
+		32,
+		1
+	},
+	Bullet_9_vulnerable = {
+		"Bullet_9_vulnerable",
+		13,
+		32
+	},
+	Enemy_general_HP = {
+		"Enemy_general_HP",
+		17,
+		32
+	},
+	Enemy_1305_HP = {
+		"Enemy_1305_HP",
+		16,
+		32
+	},
+	Enemy_1508_dispel = {
+		"Enemy_1508_dispel",
+		10,
+		16
+	},
+	Person_120016_skill = {
+		"Person_120016_skill",
+		22,
+		16
+	},
+	Bullet_110020_hit = {
+		"Bullet_110020_hit",
+		4,
+		32,
+		1
+	},
+	Bullet_110022_hit = {
+		"Bullet_110022_hit",
+		4,
+		32,
+		1
+	},
+	Bullet_110024_hit = {
+		"Bullet_110024_hit",
+		4,
+		32,
+		1
+	},
+	Enemy_general_ccimmune = {
+		"Enemy_general_ccimmune",
+		12,
+		32
+	}
+}
+local mapKeyIndex = {
+	k9181563 = 2,
+	k1644150 = 1,
+	k5007479 = 3,
+	k15846603 = 4
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 3726
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 3726
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

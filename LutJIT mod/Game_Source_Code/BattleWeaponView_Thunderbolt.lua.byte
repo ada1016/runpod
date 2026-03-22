@@ -1,0 +1,130 @@
+local M = class("BattleWeaponView_Thunderbolt")
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+local math = math
+local sqrt = math.sqrt
+local opt = opt
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+	self._objBalls = table.new(8, 0)
+end
+
+function M:init(weapon)
+	self._weapon = weapon
+	local prefab = weapon._prefab
+
+	if not BattleManager:isMissionArkRebuild() then
+		local skinId = self._battleSession:getEquipedSkin(BattleSkillGroupEnum.Thunderbolt)
+
+		if skinId then
+			local cfg = D._skinWeaponConfig[skinId]
+			prefab = cfg._skinPrefab
+			self._aniType = cfg._aniType
+		end
+	end
+
+	self._obj = self._sessionView:createWeapon(prefab, weapon._index)
+
+	self._obj:SetPosition(weapon._position.x, weapon._position.y, 0)
+
+	if self._aniType == 2 then
+		self._spriteAnimationEx = self._obj:GetComponent("SpriteAnimationEx")
+	end
+end
+
+function M:addBallEvent()
+	local weapon = self._weapon
+	local objBall = self._sessionView:createWeapon("Bullet_4_thunderball", weapon._index)
+
+	objBall:SetParent(self._battleView._tfBulletContainer)
+
+	self._objBalls[#self._objBalls + 1] = objBall
+end
+
+function M:posEvent()
+	local cd = self._weapon._cd
+	local maxCD = self._weapon._mainSkill:getSkillCD()
+	local per = math.min(math.max(1 - cd / maxCD, 0.3), 1)
+	local balls = self._weapon._balls
+	local cnt = #balls
+
+	for i = 1, cnt do
+		local ball = balls[i]
+		local obj = self._objBalls[i]
+
+		obj:SetPosition(ball._position.x, ball._position.y, 0)
+		obj:SetLocalScale(per)
+	end
+end
+
+function M:castEndEvent()
+	local balls = self._weapon._balls
+	local cnt = #balls
+
+	for i = 1, cnt do
+		local obj = self._objBalls[i]
+
+		obj.transform:DOScale(0.3, 0.1)
+
+		local objChain = self._objChains[i]
+
+		if objChain then
+			objChain:SetActive(false)
+		end
+	end
+end
+
+function M:readyCastEvent()
+	local balls = self._weapon._balls
+	local cnt = #balls
+
+	for i = 1, cnt do
+		local obj = self._objBalls[i]
+		local ball = balls[i]
+
+		if self._objChains == nil then
+			self._objChains = table.new(4, 0)
+		end
+
+		local objChain = self._objChains[i]
+
+		if objChain == nil then
+			objChain = self._sessionView:createBullet("Bullet_4_sub")
+			self._objChains[i] = objChain
+		else
+			objChain:SetActive(true)
+		end
+
+		local x1 = self._weapon._position.x
+		local y1 = self._weapon._position.y + 1
+		local x2 = ball._position.x
+		local y2 = ball._position.y
+		local length = sqrt((x1 - x2)^2 + (y1 - y2)^2)
+
+		objChain:SetLocalScale(length, 1, 1)
+		objChain:SetLocalPosition(x1, y1, 0)
+		opt.vec3_1:SetXYZ(x2 - x1, y2 - y1, 0):SetNormalize()
+
+		local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+
+		objChain:SetLocalRotation(0, 0, angle)
+		obj.transform:DOKill()
+		obj:SetLocalScale(1, 1, 1)
+	end
+end
+
+function M:launchEvent()
+end
+
+function M:shotEvent()
+end
+
+function M:addEffectEvent(id)
+	if id == 10000 and self._weapon._superDecoPrefab then
+		self._sessionView:addVFX(self._weapon._superDecoPrefab, self._obj.transform)
+	end
+end
+
+return M

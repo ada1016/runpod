@@ -1,0 +1,351 @@
+local M = {}
+
+declare("LuaUnity", M)
+
+local RES = RES
+local tolua = tolua
+local opt = opt
+local Vector2 = Vector2
+local Timer = Timer
+local SpriteAtlasManager = SpriteAtlasManager
+local string = string
+local math = math
+local typeof = typeof
+local type = type
+local setmetatable = setmetatable
+local UnityEngine = UnityEngine
+local GameObject = GameObject
+local LuaHelper = LuaHelper
+local AppConst = AppConst
+local typeof_Texture = typeof(UnityEngine.Texture)
+
+function M.setPeer(u)
+	local t = tolua.getpeer(u)
+
+	if t then
+		return t
+	end
+
+	t = {}
+
+	tolua.setpeer(u, t)
+
+	t.__index = t
+	u.peer = t
+
+	return t
+end
+
+function M.syncLoadAsset(name)
+	return RES:SyncLoadAsset(string.lower(name))
+end
+
+function M.createGameObject(prefabPath, parent)
+	if type(prefabPath) == "table" then
+		prefabPath = prefabPath.path
+	end
+
+	local obj = RES:SyncLoadAsset(prefabPath)
+
+	return M.copyGameObject(obj.m_oAssetObject, parent)
+end
+
+function M.createGameObjectWithDefault(prefabPath, parent, defaultPath)
+	if type(prefabPath) == "table" then
+		prefabPath = prefabPath.path
+	end
+
+	local obj = RES:SyncLoadAsset(prefabPath)
+
+	if obj.m_oAssetObject then
+		return M.copyGameObject(obj.m_oAssetObject, parent)
+	end
+
+	local obj = RES:SyncLoadAsset(defaultPath)
+
+	return M.copyGameObject(obj.m_oAssetObject, parent)
+end
+
+function M.copyGameObject(obj, parent)
+	local go = GameObject.Instantiate(obj, parent)
+
+	return go
+end
+
+function M.createGameObjectWithPeer(prefabArg, parent)
+	local go = M.createGameObject(prefabArg, parent)
+
+	M.setPeer(go)
+
+	return go
+end
+
+function M.createGameObjectWithPeerVar(prefabArg, parent)
+	local go = M.createGameObject(prefabArg, parent)
+
+	M.setPeer(go)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.destroyGameObject(obj, isImmediate)
+	if isImmediate then
+		GameObject.DestroyImmediate(obj)
+	else
+		GameObject.Destroy(obj)
+	end
+end
+
+function M.extend(go, cls)
+	local t = M.setPeer(go)
+
+	setmetatable(t, cls)
+	lc.prefabVar(go, t)
+end
+
+function M.createWithExtend(path, parent, cls, ...)
+	local go = M.createGameObject(path, parent)
+
+	M.extend(go, cls)
+	go:init(...)
+
+	return go
+end
+
+function M.extendFcuns(element, root)
+	if root._extends == nil then
+		root._extends = {}
+	end
+
+	root._extends[#root._extends + 1] = element
+end
+
+function M.walkStart(root)
+	local extends = root._extends
+
+	if extends == nil then
+		return
+	end
+
+	for i = 1, #extends do
+		local ele = extends[i]
+
+		if ele.Start then
+			ele:Start()
+		end
+	end
+end
+
+function M.forceRebuildLayoutImmediate(tf)
+	UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(tf)
+end
+
+function M.getTPSprite(key)
+	return SpriteAtlasManager.getTPSprite(key)
+end
+
+function M.setTPSprite(image, key, nativeSize, ignorePivot)
+	local sprite = SpriteAtlasManager.getTPSprite(key)
+
+	if sprite then
+		image.sprite = sprite
+	else
+		return
+	end
+
+	if nativeSize then
+		if ignorePivot then
+			image:SetNativeSize()
+		else
+			M.setNativeSizeAndPivot(image)
+		end
+	end
+end
+
+function M.setTPSpriteWithDefault(image, key, nativeSize, ignorePivot, defaultKey)
+	local sprite = SpriteAtlasManager.getTPSprite(key)
+	sprite = sprite or SpriteAtlasManager.getTPSprite(defaultKey)
+
+	if sprite then
+		image.sprite = sprite
+	else
+		return
+	end
+
+	if nativeSize then
+		if ignorePivot then
+			image:SetNativeSize()
+		else
+			M.setNativeSizeAndPivot(image)
+		end
+	end
+end
+
+function M.setNativeSizeAndPivot(image)
+	image:SetNativeSize()
+
+	local tf = image.transform
+	local size = tf.sizeDelta * image.pixelsPerUnit
+	local pixelPivot = image.sprite.pivot
+	tf.pivot = Vector2.static(pixelPivot.x / size.x, pixelPivot.y / size.y)
+end
+
+function M.resetUIMaterial(node, material)
+	local image = node.GetComponent and node:GetComponent("Image") or node
+
+	if tolua.isnull(image.material) then
+		return
+	end
+
+	if AppConst.IsGamma then
+		material = M.GammaMat
+
+		if material == nil then
+			local res = UnityEngine.Resources.Load("UI-Gamma", tolua.typeof(UnityEngine.Material))
+			material = GameObject.Instantiate(res)
+			M.GammaMat = material
+		end
+	end
+
+	image.material = material
+end
+
+function M.setGray(node, isGray)
+	local mat = M.GrayMat
+
+	if mat == nil then
+		local res = RES:SyncLoadAsset("Assets/FW/Materials/GrayMat.mat", nil, opt.empty_func, nil)
+		mat = GameObject.Instantiate(res.m_oAssetObject)
+		M.GrayMat = mat
+	end
+
+	local image = node.GetComponent and node:GetComponent("Image") or node
+
+	if tolua.isnull(image.material) then
+		return
+	end
+
+	local isCurrentGray = image.material.name:find("GrayMat") ~= nil
+
+	if isCurrentGray == isGray then
+		return
+	end
+
+	M.setPeer(node)
+
+	if node:get("_material") == nil then
+		node._material = image.material
+	end
+
+	if isGray then
+		image.material = mat
+	else
+		mat = node._material
+
+		M.resetUIMaterial(image, node._material)
+	end
+
+	return node
+end
+
+function M.setTexture(image, name, nativeSize)
+	local res = M.syncLoadAsset(string.format("Assets/FW/Texture2D/Manualdeps/%s.png", name), typeof_Texture, function (res)
+	end)
+	local texture = res.m_oAssetObject
+
+	if texture then
+		image.texture = texture
+	end
+
+	if nativeSize then
+		image:SetNativeSize()
+	end
+end
+
+function M.setTextureWithDefault(image, name, defaultName, nativeSize)
+	local res = M.syncLoadAsset(string.format("Assets/Art/ManualDeps/Images/%s.png", name), typeof_Texture, function (res)
+	end)
+	local texture = res.m_oAssetObject
+
+	if texture then
+		image.texture = texture
+	else
+		res = M.syncLoadAsset(string.format("Assets/Art/ManualDeps/Images/%s.png", defaultName), typeof_Texture, function (res)
+		end)
+		texture = res.m_oAssetObject
+		image.texture = texture
+	end
+
+	if nativeSize then
+		image:SetNativeSize()
+	end
+
+	return texture.width, texture.height
+end
+
+function M.setBattleSprite(spriteRenderer, name)
+	local sprite = RES:LoadSingleSprite(string.format("Assets/Battle/Texture2D/Manualdeps/%s.png", name))
+
+	if sprite then
+		spriteRenderer.sprite = sprite
+	end
+end
+
+function M.loadBattleSingleSprite(name)
+	return RES:LoadSingleSprite(string.format("Assets/Battle/Texture2D/Manualdeps/%s.png", name))
+end
+
+function M.setModelGray(node, isGray)
+	local mat = M.ModelGrayMat
+
+	if mat == nil then
+		local res = RES:SyncLoadAsset("Assets/FW/ManualDeps/Materials/ModelGrayMat.mat", nil, opt.empty_func, nil)
+		mat = GameObject.Instantiate(res.m_oAssetObject)
+		M.ModelGrayMat = mat
+	end
+
+	local meshRenderer = node.GetComponent and node:GetComponent("MeshRenderer") or node
+
+	if tolua.isnull(meshRenderer.material) then
+		return
+	end
+
+	M.setPeer(meshRenderer)
+
+	if meshRenderer.data._material == nil then
+		meshRenderer.data._material = meshRenderer.material
+	end
+
+	if isGray then
+		meshRenderer.material = mat
+	else
+		meshRenderer.material = meshRenderer.data._material
+	end
+
+	return meshRenderer
+end
+
+function M.assignMaterial(nodeFrom, nodeTo)
+	local fromRenderer = nodeFrom:GetComponent("MeshRenderer")
+
+	if tolua.isnull(fromRenderer.material) then
+		return
+	end
+
+	local toRenderer = nodeTo:GetComponent("MeshRenderer")
+
+	if tolua.isnull(toRenderer.material) then
+		return
+	end
+
+	toRenderer.material = fromRenderer.material
+end
+
+function M.removeAllChildren(gameObject)
+	local tf = gameObject.transform
+
+	for i = 0, tf.childCount - 1 do
+		GameObject.Destroy(tf:GetChild(i).gameObject)
+	end
+end

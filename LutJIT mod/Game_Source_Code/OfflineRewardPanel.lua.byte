@@ -1,0 +1,516 @@
+local M = class("OfflineRewardPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnClaim = Types.Button,
+	btnStat = Types.Button,
+	tmpCommon = Types.TMP_Text,
+	tmpElite = Types.TMP_Text,
+	tmpCurrentTime = Types.TMP_Text,
+	tmpMaxTime = Types.TMP_Text,
+	goNoRewardTip = Types.GameObject,
+	tfRewardArea = Types.Transform,
+	imgIcon1 = Types.Image,
+	tmpTime1 = Types.TMP_Text,
+	imgIcon2 = Types.Image,
+	tmpTime2 = Types.TMP_Text,
+	imgIcon3 = Types.Image,
+	tmpTime3 = Types.TMP_Text,
+	btnSweep = Types.Button,
+	btnAddSweep = Types.Button,
+	goSweepRemoveAd = Types.GameObject,
+	goSweepAd = Types.GameObject,
+	goSweepFree = Types.GameObject,
+	btnChangeSweepRate = Types.Button,
+	tmpSweepRate = Types.TMP_Text,
+	tmpSweepTitle = Types.TMP_Text,
+	tmpSweepCost = Types.TMP_Text
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClaim, function ()
+		self:dealClaimRewards()
+	end)
+	self:setClick(self._btnStat, function ()
+		UIManager.openPanel(PrefabDefine.OfflineStatPanel, self._rewardCids, self._common, self._elite)
+	end)
+	self:setClick(self._imgIcon1:GetComponent("Button"), function ()
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, D.ResType.coin)
+	end)
+	self:setClick(self._imgIcon2:GetComponent("Button"), function ()
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, D.ResType.random_weapon_piece)
+	end)
+	self:setClick(self._btnSweep, function ()
+		self:dealSweepBtn()
+	end)
+	self:setClick(self._btnAddSweep, function ()
+		if D.isSystemUnlocked(D.SystemType.MonthCard) then
+			UIManager.openPanel(PrefabDefine.RightCardPanel, D.PurchaseChannel.Pop)
+		else
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+		end
+	end)
+	self:setClick(self._btnChangeSweepRate, function ()
+		self:dealChangeSweepRateBtn()
+	end)
+end
+
+function M:addEvents()
+	self:on("rightcard.update", function ()
+		self:updateQuickSweep()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.energy then
+			self:updateBtnChangeSweepRate()
+			self:updateSweepCost()
+		end
+	end)
+	self:on("day.cross", function ()
+		self:updateQuickSweep()
+	end)
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+	lc.stopTimer(self._timer)
+
+	if not P._playerOffline:isOfflineTimeFull() then
+		self._timer = lc.setInterval(function ()
+			self:updateTime()
+		end, 0.5)
+	end
+end
+
+function M:OnHide()
+	lc.stopTimer(self._timer)
+	M.super.OnHide(self)
+end
+
+function M:init(homepage)
+	self._sweepMsType = D.MissionType.Common
+
+	if P._playerOffline:isOfflineTimeFull() then
+		P._playerOffline:recordPop()
+	end
+
+	local msId = P._playerMission:getMissionIdByType(D.MissionType.Common) - 1
+	local eliteMsId = P._playerMission:getMissionIdByType(D.MissionType.Elite) - 1
+	self._msId = msId
+	self._eliteMsId = eliteMsId
+
+	if msId >= 10001 then
+		V.loadMissionTitleText(self._tmpCommon, msId, D.MissionType.Common)
+	else
+		self._tmpCommon:SetLocalize(SID.STR_NO_MISSION)
+	end
+
+	if eliteMsId >= 10001 then
+		V.loadMissionTitleText(self._tmpElite, eliteMsId, D.MissionType.Elite)
+	else
+		self._tmpElite:SetLocalize(SID.STR_NO_MISSION)
+	end
+
+	local isfull = P._playerOffline:isOfflineTimeFull()
+
+	if isfull then
+		self._tmpCurrentTime:SetLocalize(SID.OFFLINE_TIME_REACH_MAX)
+	else
+		self._tmpCurrentTime.text = V.formatTimeS2HMS(P._playerOffline:getOfflineTime())
+	end
+
+	self._tmpMaxTime:SetLocalize(SID.OFFLINE_TIME_MAX, P._playerOffline:getOfflineFullHour())
+
+	local fixCids = {}
+	local totalCids = {}
+	local common = {}
+
+	if self._msId >= 10001 then
+		local id1 = P._playerMission:readOfflineId(msId, D.MissionType.Common)
+		local cfg = D._missionOfflineConfig[id1]
+		local cids = cfg._rewardCids
+		local nums = cfg._rewardNums
+		fixCids = cids
+		local randomCids = cfg._randomRewardCids
+		local randomNums2 = cfg._randomRewardNums
+
+		for i = 1, #cids do
+			local cid = cids[i]
+			totalCids[cid] = true
+			common[cid] = nums[i]
+		end
+
+		for i = 1, #randomCids do
+			local cid = randomCids[i]
+			totalCids[cid] = true
+			common[cid] = randomNums2[i] / 100
+		end
+	end
+
+	local elite = {}
+
+	if self._eliteMsId >= 10001 then
+		local id2 = P._playerMission:readOfflineId(eliteMsId, D.MissionType.Elite)
+		local cfg = D._missionOfflineConfig[id2]
+		local cids = cfg._rewardCids
+		local nums = cfg._rewardNums
+		fixCids = cids
+		local randomCids = cfg._randomRewardCids
+		local randomNums2 = cfg._randomRewardNums
+
+		for i = 1, #cids do
+			local cid = cids[i]
+			totalCids[cid] = true
+			elite[cid] = nums[i]
+		end
+
+		for i = 1, #randomCids do
+			local cid = randomCids[i]
+			totalCids[cid] = true
+			elite[cid] = randomNums2[i] / 100
+		end
+	end
+
+	self._common = common
+	self._elite = elite
+	self._rewardCids = table.toArray(totalCids)
+
+	LuaUnity.setTPSprite(self._imgIcon1, "itemSmall/item_small_10001")
+	LuaUnity.setTPSprite(self._imgIcon2, "itemSmall/item_small_11000")
+
+	local num1 = (self._common[fixCids[1]] or 0) + (self._elite[fixCids[1]] or 0)
+	local num2 = (self._common[fixCids[2]] or 0) + (self._elite[fixCids[2]] or 0)
+	self._tmpTime1.text = string.format("%d/h", num1)
+	self._tmpTime2.text = string.format("%d/h", num2)
+	local offlineTime = P._playerOffline:getOfflineTime()
+	self._updateRewardsTime = math.floor(offlineTime / 3600) * 3600
+
+	self:updateRewards()
+	self:updateBtnChangeSweepRate()
+	self:updateQuickSweep()
+end
+
+function M:updateTime()
+	local offlineTime = P._playerOffline:getOfflineTime()
+	local isfull = P._playerOffline:isOfflineTimeFull()
+
+	if isfull then
+		self._tmpCurrentTime:SetLocalize(SID.OFFLINE_TIME_REACH_MAX)
+		lc.stopTimer(self._timer)
+	else
+		self._tmpCurrentTime.text = V.formatTimeS2HMS(offlineTime)
+	end
+
+	local nextUpdateTime = math.floor(offlineTime / 3600) * 3600
+
+	if offlineTime > 0 and self._updateRewardsTime < nextUpdateTime then
+		self._updateRewardsTime = nextUpdateTime
+
+		self:updateRewards()
+	end
+end
+
+function M:updateRewards()
+	local dt = P._playerOffline:getOfflineTime()
+	self._rewards = {}
+
+	if self._msId >= 10001 then
+		local id1 = P._playerMission:readOfflineId(self._msId, D.MissionType.Common)
+
+		if dt > 0 then
+			P._playerOffline:calOfflineRewards(self._rewards, id1, dt)
+		end
+	end
+
+	if self._eliteMsId >= 10001 then
+		local id2 = P._playerMission:readOfflineId(self._eliteMsId, D.MissionType.Elite)
+
+		if dt > 0 then
+			P._playerOffline:calOfflineRewards(self._rewards, id2, dt)
+		end
+	end
+
+	local cids = {}
+	local nums = {}
+
+	for i, v in pairs(self._rewards) do
+		table.insert(cids, i)
+		table.insert(nums, v)
+	end
+
+	local rewards = D.formatRewards(cids, nums)
+	self._rewards = D.sortRewards(rewards)
+
+	self._goNoRewardTip:SetActive(#self._rewards == 0)
+
+	for i = 1, math.max(#self._goRewards, #self._rewards) do
+		if i <= #self._rewards then
+			local reward = self._rewards[i]
+
+			if self._goRewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._goRewards[i] = goItemWidget
+
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			self._goRewards[i]:SetActive(true)
+			self._goRewards[i]:init(reward[1], reward[2])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+end
+
+function M:dealClaimRewards()
+	if #self._rewards == 0 then
+		V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+
+		return
+	end
+
+	local id1 = self._msId >= 10001 and P._playerMission:readOfflineId(self._msId, D.MissionType.Common) or nil
+	local id2 = self._eliteMsId >= 10001 and P._playerMission:readOfflineId(self._eliteMsId, D.MissionType.Elite) or nil
+	local dt = P._playerOffline:getOfflineTime()
+	self._rewards = {}
+
+	if dt > 0 then
+		if id1 then
+			P._playerOffline:calOfflineRewards(self._rewards, id1, dt)
+		end
+
+		if id2 then
+			P._playerOffline:calOfflineRewards(self._rewards, id2, dt)
+		end
+	end
+
+	local cids = {}
+	local nums = {}
+	local chipNums = {}
+
+	for i, v in pairs(self._rewards) do
+		if i == D.CHIP_DROP_OFFLINE_NORMAL or i == D.CHIP_DROP_OFFLINE_ELITE then
+			chipNums[i] = v
+		else
+			table.insert(cids, i)
+			table.insert(nums, v)
+		end
+	end
+
+	local showRewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.offline)
+
+	if chipNums[D.CHIP_DROP_OFFLINE_NORMAL] then
+		for i = 1, chipNums[D.CHIP_DROP_OFFLINE_NORMAL] do
+			P._playerMission:dropMissionOfflineChip(D.MissionType.Common, showRewards)
+		end
+	end
+
+	if chipNums[D.CHIP_DROP_OFFLINE_ELITE] then
+		for i = 1, chipNums[D.CHIP_DROP_OFFLINE_ELITE] do
+			P._playerMission:dropMissionOfflineChip(D.MissionType.Elite, showRewards)
+		end
+	end
+
+	V.showRewardClaimPanel(showRewards)
+	P._playerOffline:recordNewOfflineTime()
+	SimpleEvent.emit("offline.claim")
+	P:saveGameData()
+	self:closePanel()
+end
+
+function M:updateSweepCost()
+	local cost = D._globalConfig._mission_cost_energy[self._sweepMsType]
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+
+	if not isAdRemoved and num1 > 0 then
+		self._tmpSweepCost.text = D.getTMPSpriteRichText("item_small_" .. D.ResType.energy) .. cost
+
+		return
+	end
+
+	local sweepNum = isSVIP and P._playerRecord:getFastSweepNum() or 1
+	cost = cost * sweepNum
+	self._tmpSweepCost.text = D.getTMPSpriteRichText("item_small_" .. D.ResType.energy) .. cost
+	self._tmpSweepRate.text = sweepNum
+end
+
+function M:updateBtnChangeSweepRate()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+	local show = false
+
+	if isSVIP then
+		local enough = P._playerAsset:isAssetEnough(D.ResType.energy, D._globalConfig._fast_sweep_energy_num_limit)
+
+		if enough then
+			show = true
+		end
+	end
+
+	self._btnChangeSweepRate.gameObject:SetActive(show)
+end
+
+function M:updateQuickSweep()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+	local num2 = P._playerRecord:getLeftAdEnergySweepNum()
+	local isUnlimitedSweep = isSVIP
+	local isRemoveAdSweep = isAdRemoved and num1 == 0
+	local isFreeSweep = not isSVIP and num1 > 0
+	local isAdSweep = not isAdRemoved and num1 == 0
+
+	self._goSweepRemoveAd:SetActive(isRemoveAdSweep or isUnlimitedSweep)
+	self._goSweepAd:SetActive(isAdSweep)
+	self._goSweepFree:SetActive(isFreeSweep)
+
+	local cost = D._globalConfig._mission_cost_energy[self._sweepMsType]
+
+	if isUnlimitedSweep then
+		self:updateBtnChangeSweepRate()
+		self._tmpSweepTitle:SetLocalize(SID.SWEEP_NOAD_TIPS)
+	elseif isRemoveAdSweep then
+		self:updateBtnChangeSweepRate()
+		self._tmpSweepTitle:SetLocalizeS(SID.SWEEP_AD_LEFT_TIPS, num2 == 0 and string.format("<color=#DD6261>%d</color>", num2) or num2, P._playerRecord:readAdEnergySweepNum())
+	elseif isAdSweep then
+		self._tmpSweepTitle:SetLocalizeS(SID.SWEEP_AD_LEFT_TIPS, num2 == 0 and string.format("<color=#DD6261>%d</color>", num2) or num2, P._playerRecord:readAdEnergySweepNum())
+
+		if num2 == 0 then
+			self._goSweepAd.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+			self._goSweepAd.transform:GetChild(1):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		else
+			self._goSweepAd.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+			self._goSweepAd.transform:GetChild(1):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+		end
+	else
+		self._tmpSweepTitle:SetLocalize(SID.SWEEP_LEFT_TIPS, num1, P._playerRecord:readEnergySweepNum())
+	end
+
+	self._btnAddSweep.gameObject:SetActive(not isSVIP)
+	self:updateSweepCost()
+end
+
+function M:dealSweepBtn()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+	local num2 = P._playerRecord:getLeftAdEnergySweepNum()
+	local msId = P._playerMission:getMissionIdByType(self._sweepMsType) - 1
+
+	if msId < 10001 then
+		V.showResultCode(ResultCode.NOT_MEET_CONDITION)
+
+		return
+	end
+
+	local totalCost = D._globalConfig._mission_cost_energy[self._sweepMsType]
+	local rate = 1
+
+	if isSVIP then
+		local canFastSweep = P._playerAsset:isAssetEnough(D.ResType.energy, D._globalConfig._fast_sweep_energy_num_limit)
+		local rate = isSVIP and canFastSweep and P._playerRecord:getFastSweepNum() or 1
+		totalCost = totalCost * rate
+		local isEnough = P._playerAsset:isAssetEnough(D.ResType.energy, totalCost)
+
+		if not isEnough then
+			UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+
+			return
+		end
+
+		self:dealAfterSweep(msId, rate, totalCost)
+	elseif num1 == 0 and num2 == 0 then
+		if D.isSystemUnlocked(D.SystemType.MonthCard) then
+			UIManager.openPanel(PrefabDefine.RightCardPanel, D.PurchaseChannel.Pop)
+		else
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+		end
+
+		return
+	else
+		local isEnough = P._playerAsset:isAssetEnough(D.ResType.energy, totalCost)
+
+		if not isEnough then
+			UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+
+			return
+		end
+
+		if num1 > 0 then
+			P._playerRecord:recordEnergySweepNum()
+			self:dealAfterSweep(msId, rate, totalCost)
+		else
+			P._playerAd:tryStartRewardAd(D.AdType.AdSweep, function ()
+				P._playerRecord:recordAdEnergySweepNum()
+				self:dealAfterSweep(msId, rate, totalCost)
+			end)
+
+			return
+		end
+	end
+end
+
+function M:dealAfterSweep(msId, rate, totalCost)
+	P._playerAsset:increaseAssetNum(D.ResType.energy, -totalCost, D.LogWay.sweep_mission)
+
+	local rewards = {}
+	local expGain = 0
+
+	for i = 1, rate do
+		local onceRewards = P._playerMission:readMissionRewardsByWave(msId, self._sweepMsType, 20)
+
+		for i = 1, #onceRewards do
+			local cid = onceRewards[i][1]
+
+			if cid == D.CHIP_DROP_NORMAL or cid == D.CHIP_DROP_ELITE then
+				onceRewards[i][2] = 0
+			end
+
+			if cid == D.ResType.exp then
+				expGain = expGain + onceRewards[i][2]
+				onceRewards[i][2] = 0
+			end
+		end
+
+		P._playerMission:dropMissionChip(self._sweepMsType, msId, onceRewards)
+		table.append(rewards, onceRewards)
+	end
+
+	table.insert(rewards, 1, {
+		D.ResType.exp,
+		expGain
+	})
+	TaskHelper:increaseTaskValue(D.TaskType.SWEEP_COUNT, rate)
+	V.showRewardClaimPanel(P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.sweep_mission), SID.REWARD_TITLE_QUICK_SWEEP)
+	self:updateQuickSweep()
+end
+
+function M:dealChangeSweepRateBtn()
+	local isAdRemoved = P._playerRight:isSVIP()
+
+	if isAdRemoved then
+		P._playerRecord:changeFastSweep()
+
+		self._tmpSweepRate.text = P._playerRecord:getFastSweepNum()
+
+		self:updateSweepCost()
+	end
+end
+
+return M

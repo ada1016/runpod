@@ -1,0 +1,141 @@
+local M = class("PlayerAd")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._records = lc.assignTable(meta, "records")
+	self._meta.totalRewardAdWatchCount = self._meta.totalRewardAdWatchCount or 0
+end
+
+function M:getTotalRewardAdWatchCount()
+	return self._meta.totalRewardAdWatchCount
+end
+
+function M:skipAdVideo()
+	if Client._config.lookAdVideo then
+		return false
+	end
+
+	if Client._config.skipAdVideo then
+		return true
+	end
+
+	if not lc._isMobile then
+		return false
+	end
+
+	if AppConst.Release then
+		return false
+	end
+
+	return true
+end
+
+function M:isRewardedAdIsReady()
+	return ADManager:RewardedAdIsReady()
+end
+
+function M:isInterstitialIsReady()
+	return ADManager:InterstitialAdIsReady()
+end
+
+function M:tryShowInterstitialAd(adId)
+	if not ADManager:InterstitialAdIsReady() then
+		return
+	end
+
+	Client._watchingAd = true
+
+	ADManager:ShowInterstitialAd(adId)
+end
+
+function M:tryStartRewardAd(adId, callback)
+	self._finishCallback = callback
+
+	if P._playerRight:isAdRemoved() then
+		MainGameRoot:showGlobalMask()
+		Client.checkNetworkAsync(function ()
+			MainGameRoot:hideGlobalMask()
+			self:onFinishAd(adId)
+		end)
+
+		return
+	end
+
+	if self:skipAdVideo() then
+		self:onFinishAd(adId)
+
+		return
+	end
+
+	if not ADManager:RewardedAdIsReady() then
+		SimpleEvent.emit("ad.notready", adId)
+
+		return
+	end
+
+	Client._watchingAd = true
+
+	if lc._isiOS then
+		AudioService:SetMusicMute(true)
+		AudioService:SetSoundMute(true)
+	end
+
+	if lc._isCN then
+		UIManager.showWaitingWithDesc("广告加载中...", 10)
+	end
+
+	ADManager:ShowRewardedAd(adId)
+end
+
+function M:onFinishInterstitialAd(adId)
+	self._meta.totalInterstitialAdWatchCount = (self._meta.totalInterstitialAdWatchCount or 0) + 1
+
+	self:onFinishAd(adId)
+end
+
+function M:onFinishRewardAd(adId)
+	self._meta.totalRewardAdWatchCount = (self._meta.totalRewardAdWatchCount or 0) + 1
+
+	self:onFinishAd(adId)
+end
+
+function M:onFinishAd(adId)
+	if self._records[adId] == nil then
+		self._records[adId] = 1
+	else
+		self._records[adId] = self._records[adId] + 1
+	end
+
+	TaskHelper:increaseTaskValue(D.TaskType.WATCH_AD)
+
+	if self._finishCallback then
+		self._finishCallback()
+
+		self._finishCallback = nil
+	end
+
+	if lc._isCN then
+		P:saveGameData(true)
+	end
+
+	SimpleEvent.emit("finished.ad", adId)
+end
+
+function M:getRealRewardAdNum()
+	return self._meta.totalRewardAdWatchCount or 0
+end
+
+function M:getSkippedAdNum()
+	local total = 0
+
+	for i, v in pairs(self._records) do
+		total = total + v
+	end
+
+	return total - self:getRealRewardAdNum()
+end
+
+return M

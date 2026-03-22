@@ -1,0 +1,32 @@
+local M = class("DropInfoWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DropInfoWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(drop, probility)
+	local cid = drop._itemId
+	local num = drop._minNum
+
+	if D.isItem(cid) then
+		self._tmpName:SetLocalize(D._itemConfig[cid]._nameSid)
+	elseif D.isRangerEquip(cid) then
+		self._tmpName:SetLocalize(SID.STR_RANGER_EQUIP_NAME, D._rangerEquipConfig[cid]._level)
+	end
+
+	self._tmpName.text = string.format("%s x%d", self._tmpName.text, num)
+	self._tmpOdds.text = string.format("%.2f%%", probility * 100)
+	self._tmpName.color = Color.str2Static(V.QUALITY_TXT[D.toQuality(cid)])
+	self._tmpOdds.color = Color.str2Static(V.QUALITY_TXT[D.toQuality(cid)])
+end
+
+function M:setBgColor(color)
+	self._imgBg.color = Color.str2Static(color)
+end
+
+return M

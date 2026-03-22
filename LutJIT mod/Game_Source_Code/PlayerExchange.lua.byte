@@ -1,0 +1,484 @@
+local D = D
+local M = class("PlayerExchange")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	meta.exchangeCounts = meta.exchangeCounts or {}
+	meta.exchangeGroupDot = meta.exchangeGroupDot or {}
+	meta.recordExchangeCounts = meta.recordExchangeCounts
+
+	if meta.recordExchangeCounts == nil then
+		meta.recordExchangeCounts = clone(meta.exchangeCounts)
+	end
+
+	self._exchangeGroupDot = meta.exchangeGroupDot
+	self._exchangeCounts = meta.exchangeCounts
+	self._recordExchangeCounts = meta.recordExchangeCounts
+	self._remainEnergyCount = meta.remainEnergyCount or self:getLeftExchangeCount(D.ExchangeId.Energy2)
+	self._lastAdTimes = lc.assignTable(meta, "lastAdTimes")
+	self._meta.lastCacheRemainEnergyTime = self._meta.lastCacheRemainEnergyTime or C.getCurTime()
+	self._exchangeIdsByType = {}
+
+	for k, v in pairs(D._exchangeConfig) do
+		local id = v._id
+		local type = self:getTypeById(id)
+
+		if not self._exchangeIdsByType[type] then
+			self._exchangeIdsByType[type] = {}
+		end
+
+		local tb = self._exchangeIdsByType[type]
+		tb[#tb + 1] = id
+	end
+
+	for k, v in pairs(self._exchangeIdsByType) do
+		table.sort(v)
+	end
+
+	self._customExchangesSelectIdx = {}
+end
+
+function M:dailyReset()
+	self:cacheRemainEnergy()
+	self:resetExchangesByRefreshType(1)
+end
+
+function M:weekReset()
+	self:resetExchangesByRefreshType(2)
+end
+
+function M:monthReset()
+	self:resetExchangesByRefreshType(3)
+end
+
+function M:isDayGiftUnlock()
+	return D.isSystemUnlocked(D.SystemType.SpecialOfferGift)
+end
+
+function M:isWeekGiftUnlock()
+	return D.isSystemUnlocked(D.SystemType.SpecialOfferGift_Week)
+end
+
+function M:isMonthGiftUnlock()
+	return D.isSystemUnlocked(D.SystemType.SpecialOfferGift_Month)
+end
+
+function M:haveFreeSpecialOfferGift()
+	if not D.isSystemUnlocked(D.SystemType.SpecialOfferGift) then
+		return false
+	end
+
+	if P._playerExchange:getLeftExchangeCount(D.ExchangeId.SpecialOfferGift_DayFree1) > 0 then
+		return true
+	end
+
+	if self:isWeekGiftUnlock() and P._playerExchange:getLeftExchangeCount(D.ExchangeId.SpecialOfferGift_WeekFree1) > 0 then
+		return true
+	end
+
+	if self:isMonthGiftUnlock() and P._playerExchange:getLeftExchangeCount(D.ExchangeId.SpecialOfferGift_MonthFree1) > 0 then
+		return true
+	end
+
+	return false
+end
+
+function M:cacheRemainEnergy()
+	local lt = self._meta.lastCacheRemainEnergyTime
+	local ct = C.getCurTime()
+	local ctZero = C.getZeroTimestamp(ct)
+
+	if C.getZeroTimestamp(lt) == ctZero then
+		return
+	end
+
+	local deltaDay = math.ceil((ctZero - lt) / D.DAY_SECONDS)
+
+	if deltaDay > 0 then
+		self._remainEnergyCount = math.min(self:getLeftExchangeCount(D.ExchangeId.Energy3) + self:getLeftExchangeCount(D.ExchangeId.Energy2) + self:readExchangeBuyLimit(D.ExchangeId.Energy2) * (deltaDay - 1), D._exchangeConfig[D.ExchangeId.Energy3]._buyLimit + self:readExchangeBuyLimit(D.ExchangeId.Energy2))
+		self._meta.remainEnergyCount = self._remainEnergyCount
+		self._meta.lastCacheRemainEnergyTime = ctZero
+	end
+end
+
+function M:resetExchangesByRefreshType(type)
+	local count = 0
+	local cfgs = D._exchangeConfig
+
+	for id, exCount in pairs(self._exchangeCounts) do
+		if cfgs[id] and cfgs[id]._refreshType == type then
+			self._exchangeCounts[id] = 0
+			count = count + 1
+		end
+	end
+
+	if count == 0 then
+		return
+	end
+
+	SimpleEvent.emit("exchange.reset")
+end
+
+function M:resetExchangesByExchangeGroup(group)
+	local ids = self:getExchangeIdsByType(group)
+
+	for k, id in pairs(ids) do
+		self._exchangeCounts[id] = nil
+	end
+
+	self._exchangeGroupDot[group] = true
+end
+
+function M:haveExchangeGroupDot(group)
+	return self._exchangeGroupDot[group] ~= nil
+end
+
+function M:resetExchangeGroupDot(group)
+	self._exchangeGroupDot[group] = true
+
+	SimpleEvent.emit("exchange.group.dot", group)
+end
+
+function M:removeExchangeGroupDot(group)
+	if self._exchangeGroupDot[group] == nil then
+		return false
+	end
+
+	self._exchangeGroupDot[group] = nil
+
+	SimpleEvent.emit("exchange.group.dot", group)
+
+	return true
+end
+
+function M:resetExchangeId(id)
+	self._exchangeCounts[id] = nil
+end
+
+function M:getTargetExchangeCountByLack(exchangeId, lack)
+	local cid, num = self:readExchangeGain(exchangeId)
+	local exchangeNum = math.ceil(lack / num)
+
+	return exchangeNum
+end
+
+function M:checkExchange(exchangeId, count)
+	count = count or 1
+	local currentLevel = P:getLevel()
+
+	if count <= 0 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local unlockLv = self:readExchangeUnlock(exchangeId)
+
+	if currentLevel < unlockLv then
+		return ResultCode.LEVEL_NOT_MEET
+	end
+
+	local curNum = self:getCurExchangeCount(exchangeId)
+	local limitNum = self:readExchangeBuyLimit(exchangeId)
+
+	if limitNum ~= -1 and limitNum < curNum + count then
+		local refreshType = self:readRefreshType(exchangeId)
+
+		if refreshType == 1 then
+			return ResultCode.DAILY_NUM_MAX
+		elseif refreshType == 2 then
+			return ResultCode.WEEK_NUM_MAX
+		elseif refreshType == 3 then
+			return ResultCode.MONTH_NUM_MAX
+		elseif refreshType == 4 then
+			return ResultCode.ACTIVITY_EXCHANGE_NUM_MAX
+		elseif refreshType == 5 then
+			return ResultCode.DAILY_NUM_MAX
+		else
+			return ResultCode.EXCHANGE_NUM_MAX
+		end
+	end
+
+	local getCid1, getNum1 = self:getExchangeGain(exchangeId, count)
+
+	if D.isRangerItem(getCid1) and P._playerRanger:isMaxLevel(getCid1) then
+		return ResultCode.EXCHANGE_NUM_MAX
+	end
+
+	local cid, num = self:getExchangeCost(exchangeId)
+
+	if num < 0 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local compareNum = num * count
+
+	if cid > 0 and not P._playerAsset:isAssetEnough(cid, compareNum) then
+		return cid, compareNum
+	end
+
+	return ResultCode.OK
+end
+
+function M:checkExchangeBuyLimitNum(exchangeId)
+	local curNum = self:getCurExchangeCount(exchangeId)
+	local limitNum = self:readExchangeBuyLimit(exchangeId)
+
+	if limitNum ~= -1 and limitNum <= curNum then
+		return ResultCode.DAILY_NUM_MAX
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryExchange(exchangeId, count, callback)
+	count = count or 1
+	local ret, cid, num = self:checkExchange(exchangeId, count)
+
+	if ret ~= ResultCode.OK then
+		return ret, cid
+	end
+
+	local cid1, num1 = self:getExchangeCost(exchangeId)
+	local getCid1, getNum1 = self:getExchangeGain(exchangeId, count)
+
+	if D.isCustomSelectItem(getCid1) then
+		local selectedIdx = P._playerAsset:getItemCustomSelectIdx(getCid1)
+
+		if not selectedIdx then
+			return ResultCode.NOT_MEET_CONDITION
+		end
+
+		local valid = P._playerAsset:checkItemCustomSelectIdValid(getCid1)
+
+		if not valid then
+			return ResultCode.NOT_MEET_CONDITION
+		end
+	end
+
+	local logway = string.format("%s_%d", self:readExchangeLogWay(exchangeId) or "exchange", exchangeId)
+
+	if cid1 > 0 then
+		P._playerAsset:decreaseAssetNum(cid1, num1 * count, logway)
+	end
+
+	local cids, nums = self:getAllExchangeGain(exchangeId, count)
+
+	if cids[1] == 10002 then
+		Client.forbidLogin("exchange")
+		Trace.AF_traceEvent("e_cheat", {
+			{
+				_key = "resourceId",
+				_value = exchangeId
+			},
+			{
+				_key = "cheatWay",
+				_value = "exchange"
+			}
+		})
+
+		return ResultCode.RESOURCE_NOT_ENOUGH, 10002
+	end
+
+	self:addExchangeCount(exchangeId, count)
+
+	local rewards = P._playerAsset:increaseAssetNums(cids, nums, logway)
+	local originRewards = cids
+
+	if callback then
+		callback(rewards, originRewards)
+	end
+
+	for i = 1, count do
+		Trace.traceDesign("Exchange:%d", exchangeId)
+	end
+
+	if lc._isCN then
+		P:saveGameData(true)
+	else
+		P:saveGameDataWithCheckResource(rewards)
+	end
+
+	SimpleEvent.emit("exchange.success", exchangeId)
+
+	return ResultCode.OK, rewards, originRewards
+end
+
+function M:addExchangeCount(exchangeId, num)
+	self._exchangeCounts[exchangeId] = (self._exchangeCounts[exchangeId] or 0) + num
+	self._recordExchangeCounts[exchangeId] = (self._recordExchangeCounts[exchangeId] or 0) + num
+end
+
+function M:getCurExchangeCount(exchangeId)
+	return self._exchangeCounts[exchangeId] or 0
+end
+
+function M:getLeftExchangeCount(exchangeId)
+	local limitNum = self:readExchangeBuyLimit(exchangeId)
+
+	if limitNum == -1 then
+		return 99
+	end
+
+	local curNum = self:getCurExchangeCount(exchangeId)
+
+	return math.max(0, limitNum - curNum)
+end
+
+function M:recordAdTime(exchangeId)
+	self._lastAdTimes[exchangeId] = C.getCurTime()
+end
+
+function M:getUnlockedExchangeIdsByType(type)
+	local ids = self:getExchangeIdsByType(type)
+	local curLv = P:getLevel()
+	local ret1 = {}
+	local ret2 = {}
+
+	for k, id in pairs(ids) do
+		local needContinue = false
+		local getCid1, getNum1 = P._playerExchange:getExchangeGain(id, 1)
+
+		if D.isRangerItem(getCid1) and P._playerRanger:isMaxLevel(getCid1) then
+			ret2[#ret2 + 1] = id
+			needContinue = true
+		end
+
+		if not needContinue and self:readExchangeUnlock(id) <= curLv then
+			if self:getLeftExchangeCount(id) > 0 then
+				ret1[#ret1 + 1] = id
+			else
+				ret2[#ret2 + 1] = id
+			end
+		end
+	end
+
+	local ret = {}
+
+	table.sort(ret1, function (a, b)
+		local sortA = self:readExchangeSort(a)
+		local sortB = self:readExchangeSort(b)
+
+		if sortA ~= sortB then
+			return sortA < sortB
+		end
+
+		return a < b
+	end)
+	table.append(ret, ret1)
+	table.append(ret, ret2)
+
+	return ret
+end
+
+function M:getExchangeCost(exchangeId, count)
+	count = count or 1
+	local cid, num = self:readExchangeCost(exchangeId)
+
+	return cid, num * count
+end
+
+function M:getExchangeGain(exchangeId, count)
+	count = count or 1
+	local cid, num = self:readExchangeGain(exchangeId)
+
+	return cid, num * count
+end
+
+function M:getAllExchangeGain(exchangeId, count)
+	count = count or 1
+	local cids, nums = self:readAllExchangeGain(exchangeId)
+	local len = nums.c or #nums
+	local retNums = {}
+
+	for i = 1, len do
+		retNums[i] = nums[i] * count
+	end
+
+	return cids, retNums
+end
+
+function M:getExchangeIdsByType(type)
+	return self._exchangeIdsByType[type]
+end
+
+function M:readExchangeGain(exchangeId)
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._rid[1], exchangeCfg._count[1]
+end
+
+function M:readExchangeCost(exchangeId)
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._consumeId, exchangeCfg._consumeNum
+end
+
+function M:readAllExchangeGain(exchangeId)
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._rid, exchangeCfg._count
+end
+
+function M:readExchangeBuyLimit(exchangeId)
+	if exchangeId == D.ExchangeId.Energy3 then
+		return self._remainEnergyCount
+	end
+
+	if exchangeId == D.ExchangeId.ExchangeGlobalDefenseTicketBuy then
+		local limit = D._globalConfig._recruitment_ticket_buy_limit[P._playerGlobalDefense:getLastUnlockMissionId() % 10000] or D._globalConfig._recruitment_ticket_buy_limit[lc.lenTable(D._globalConfig._recruitment_ticket_buy_limit)]
+
+		return limit - 1
+	end
+
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._buyLimit
+end
+
+function M:readDiscount(exchangeId)
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._discount
+end
+
+function M:readRefreshType(exchangeId)
+	return self:readExchangeCfg(exchangeId)._refreshType
+end
+
+function M:readExchangeUnlock(exchangeId)
+	local exchangeCfg = self:readExchangeCfg(exchangeId)
+
+	return exchangeCfg._unlockLevel
+end
+
+function M:readExchangeSort(exchangeId)
+	return self:readExchangeCfg(exchangeId)._sort
+end
+
+function M:readExchangeCfg(exchangeId)
+	return D._exchangeConfig[exchangeId]
+end
+
+function M:getLastAdTime(exchangeId)
+	return self._lastAdTimes[exchangeId] or 0
+end
+
+function M:getTypeById(exchangeId)
+	return exchangeId - exchangeId % 100
+end
+
+function M:readExchangeLogWay(exchangeId)
+	return D._exchangeConfig[exchangeId]._logway
+end
+
+function M:recordCustomSelectIdx(exchangeId, idx)
+	self._customExchangesSelectIdx[exchangeId] = idx
+end
+
+function M:getCustomSelectIdx(exchangeId)
+	return self._customExchangesSelectIdx[exchangeId]
+end
+
+return M

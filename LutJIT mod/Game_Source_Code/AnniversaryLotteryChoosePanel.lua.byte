@@ -1,0 +1,180 @@
+local M = class("AnniversaryLotteryChoosePanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goTemp = Types.GameObject,
+	btnConfirm = Types.Button,
+	btnFilter = Types.Button
+}
+local AnniversarySelectRewardWidget = requireLua("AnniversarySelectRewardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		direction = 1,
+		cellHeight = 140,
+		cellInitCount = 7
+	})
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnConfirm, function ()
+		self:handleConfirmBtn()
+	end)
+	self:setClick(self._btnFilter, function ()
+		self:handleFilterBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+	end)
+	self:on("day.cross", function ()
+	end)
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:initPrefabVar()
+	self._tfCards = {}
+	self._goWidgets = {}
+end
+
+local band = bit.band
+
+function M:init(confirmCallback)
+	self._module = P._playerActivityAnniversary._moduleLottery
+	self._showPackages = self._module:getShowPackages()
+	self._confirmCallback = confirmCallback
+
+	self._tmpTitle:SetLocalize(SID.BTN_CHOOSE)
+
+	self._selectPackageId = self._module:getCurChosePackageId()
+	self._weaponFilter = -1
+
+	self:updateFilter()
+	self:updateUI()
+end
+
+function M:updateFilter()
+	self._selectIdx = nil
+	local valueWeaponAll = -2^D.PART_FILTER_NUM
+	local isWeaponAll = band(self._weaponFilter, valueWeaponAll) == valueWeaponAll
+	self._filteredPackages = {}
+
+	for i = 1, #self._showPackages do
+		local pid = self._showPackages[i]
+		local cfgFilters = self._module:readFilter(pid)
+
+		for j = 1, #cfgFilters do
+			local cfgFilter = cfgFilters[j]
+
+			if isWeaponAll or band(-2^D.PART_FILTER_NUM, band(2^(D.PART_FILTER_NUM + cfgFilter - 1), self._weaponFilter)) ~= 0 then
+				table.insert(self._filteredPackages, pid)
+
+				break
+			end
+		end
+	end
+
+	for i = 1, #self._filteredPackages do
+		local pid = self._filteredPackages[i]
+
+		if self._selectPackageId == pid then
+			self._selectIdx = i
+		end
+	end
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData()
+end
+
+function M:onCellNum()
+	return #self._filteredPackages
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = AnniversarySelectRewardWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self)
+	end
+
+	goCell:updateUI(self._filteredPackages[index], self._selectPackageId)
+	self:setClickWithoutAction(goCell._btnClick, function ()
+		self:handleSelect(index)
+	end)
+
+	return goCell
+end
+
+function M:handleConfirmBtn()
+	self._module:tryChangeCurChosePackageId(self._selectPackageId)
+
+	if self._confirmCallback then
+		self._confirmCallback()
+	end
+
+	self:closePanel()
+end
+
+function M:handleFilterBtn()
+	UIManager.openPanel(PrefabDefine.ChipFilterPanel, self._weaponFilter, function (value)
+		self._weaponFilter = value
+
+		self:updateFilter()
+		self:updateUI()
+	end, 3)
+end
+
+function M:handleSelect(index)
+	local selectPid = self._filteredPackages[index]
+	local oldIndex = self._selectIdx
+
+	if selectPid == self._selectPackageId then
+		self._selectPackageId = nil
+		self._selectIdx = nil
+	else
+		self._selectPackageId = selectPid
+		self._selectIdx = index
+	end
+
+	if oldIndex then
+		local show, goCell = self._scrollViewEx:isIdxShow(oldIndex)
+
+		if show then
+			goCell:updateSelect(self._selectPackageId)
+		end
+	end
+
+	if self._selectIdx then
+		local show, goCell = self._scrollViewEx:isIdxShow(self._selectIdx)
+
+		if show then
+			goCell:updateSelect(self._selectPackageId)
+		end
+	end
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+return M

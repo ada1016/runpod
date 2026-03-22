@@ -1,0 +1,600 @@
+local M = class("BattleManager")
+local BattleSession = requireLua("BattleSession")
+
+function M:ctor()
+	self._mainSession = nil
+	self._secondSession = nil
+	self._battleView = BattleView
+
+	self:initBattleInput()
+end
+
+function M:initBattleInput()
+	self._msId = InputBattleData.msId
+	self._msType = InputBattleData.msType
+	self._isTrainMode = InputBattleData.isTrain
+	local seed = math.random(1, 999999)
+	local input = {
+		seed = seed,
+		defaultBlood = InputBattleData.defaultBlood,
+		isGuideBattle = P._playerMission:getMissionId() == 10001
+	}
+	self._battleInput = input
+
+	if InputBattleData.msType ~= D.MissionType.Common then
+		input.isGuideBattle = false
+	end
+
+	BattleRandomLib:setSeed(seed)
+
+	self._battleSpeed = input.seed
+	self._inputSpeed = self._battleSpeed
+
+	if self._msType == D.MissionType.SparkScout then
+		self._weaponPovits = BattleDefine.WeaponPovit_PVP
+	else
+		self._weaponPovits = BattleDefine.WeaponPovit
+	end
+end
+
+function M:weaponPovit(index)
+	return self._weaponPovits[index]
+end
+
+function M:initBattle()
+	self._step = 0
+	self._battleBeganed = false
+
+	self:initTimeScale()
+	self:genSelfBattleInput(self._battleInput)
+	self._mainSession:initBattle(self._battleInput)
+
+	self._pvpWeaponReadyedAll = true
+
+	if self:isMissionPVP() then
+		self._mainSession:setPvPWeaponQueue(self._battleInput.pvp_weapons)
+		self._secondSession:setPvPWeaponQueue(self._battleInput.oppInput.pvp_weapons)
+
+		self._battleInput.oppInput.seed = math.random(1, 999999)
+		self._battleInput.oppInput.missionEnemies = self._battleInput.missionEnemies
+		self._curRound = 0
+		self._pvpWeaponReadyedAll = false
+
+		self._secondSession:initBattle(self._battleInput.oppInput)
+	end
+end
+
+function M:isPVPDuel()
+	if self:isMissionPVP() then
+		return self._battleInput.oppInput.match_data.isDuel
+	end
+end
+
+function M:Update(dt)
+	if self._pvpBattleResult then
+		return
+	end
+
+	if self._nextPVPRoundCD then
+		self._nextPVPRoundCD = self._nextPVPRoundCD - dt
+
+		if self._nextPVPRoundCD <= 0 then
+			self._nextPVPRoundCD = nil
+
+			self:startNextPVPRound()
+		end
+
+		return
+	end
+
+	if not self._pvpWeaponReadyedAll then
+		return
+	end
+
+	if self._bettleBeganCountDown then
+		self._bettleBeganCountDown = self._bettleBeganCountDown - dt
+
+		if self._bettleBeganCountDown <= 0 then
+			self._bettleBeganCountDown = nil
+			self._battleBeganed = true
+		end
+	end
+
+	if not self._battleBeganed then
+		return
+	end
+
+	self._step = self._step + 1
+
+	if self._step > 1 and not self._stop then
+		self._mainSession:Update(dt)
+	end
+
+	if not self._stop and self._secondSession then
+		self._secondSession:Update(dt)
+	end
+end
+
+function M:pvpWeaponReadyed(battleSession)
+	battleSession._pvpWeaponReadyed = true
+
+	if self._mainSession._pvpWeaponReadyed and self._secondSession._pvpWeaponReadyed then
+		self._pvpWeaponReadyedAll = true
+	end
+end
+
+function M:pvpCurRound()
+	return self._curRound
+end
+
+function M:startBattle()
+	if self:isMissionPVP() then
+		self._pvpBattleResult = nil
+		self._battleBeganed = true
+
+		self:pauseBattle(true)
+	else
+		self._bettleBeganCountDown = 0.1
+
+		self:pauseBattle(false)
+	end
+end
+
+function M:startFirstPVPRound()
+	self:pvpBeganRound()
+end
+
+function M:startNextPVPRound()
+	self:pvpBeganRound()
+end
+
+function M:pvpBeganRound()
+	self._step = 0
+
+	self:pauseBattle(false)
+
+	self._pvpBattleTime = D._battleGlobalConfig._battle_pvp_battle_time
+	self._curRound = self._curRound + 1
+
+	if self._curRound > 1 then
+		self:syncTargetTimeScale()
+	end
+
+	if self._battleView then
+		self._battleView:pvpBeganRoundBefore()
+	end
+
+	self._mainSession:pvpBeganRound()
+	self._secondSession:pvpBeganRound()
+
+	if self._battleView then
+		self._battleView:pvpBeganRound()
+	end
+end
+
+function M:pvpEndRound()
+	self._pvpWeaponReadyedAll = false
+
+	self:pauseBattle(true)
+end
+
+function M:pvpBattleResult()
+	return self._pvpBattleResult
+end
+
+function M:pvpBattleWin()
+	return self._pvpBattleResult == D.BattleResult.Win
+end
+
+function M:pvpLastBattle()
+	return self._mainSession._pvpLoseCount == 2 or self._secondSession._pvpLoseCount == 2
+end
+
+function M:forceSettleBattle(battleResult, surround)
+	if self._msType == D.MissionType.SparkScout then
+		if battleResult == D.BattleResult.Win then
+			self:settlePvpEndRound(self._secondSession, false)
+		else
+			self:settlePvpEndRound(self._mainSession, surround)
+		end
+	elseif battleResult == D.BattleResult.Win then
+		self._mainSession:settleBattle(battleResult)
+	else
+		self._mainSession:settleBattle(battleResult, surround)
+	end
+end
+
+function M:settlePvpEndRound(battleSessionOfLose, surround)
+	if self._pvpBattleResult then
+		return
+	end
+
+	self:pauseBattle(true)
+
+	local mainLose = battleSessionOfLose._index == 1
+
+	self._mainSession:settlePvpEndRound(mainLose)
+	self._secondSession:settlePvpEndRound(not mainLose)
+
+	if surround then
+		if self._mainSession._pvpWinCount >= 2 then
+			self._pvpBattleResult = D.BattleResult.Win
+
+			self._mainSession:settleBattle(D.BattleResult.Win)
+		else
+			self._pvpBattleResult = D.BattleResult.Lose
+
+			self._mainSession:settleBattle(D.BattleResult.Lose)
+		end
+	elseif self._curRound == 3 then
+		if self._mainSession._pvpWinCount >= 2 then
+			self._pvpBattleResult = D.BattleResult.Win
+
+			self._mainSession:settleBattle(D.BattleResult.Win)
+		elseif self._secondSession._pvpWinCount >= 2 then
+			self._pvpBattleResult = D.BattleResult.Lose
+
+			self._mainSession:settleBattle(D.BattleResult.Lose)
+		end
+	end
+
+	if self._pvpBattleResult == nil then
+		self._nextPVPRoundCD = 2
+
+		self._mainSession:cleanOnPvpEndRound()
+		self._secondSession:cleanOnPvpEndRound()
+
+		if self._battleView then
+			self._battleView:cleanOnPvpEndRound()
+		end
+
+		SimpleEvent.emit("pvp.round.end")
+	end
+end
+
+function M:getPvpScore()
+	return self._secondSession._pvpLoseCount or 0, self._mainSession._pvpLoseCount or 0
+end
+
+function M:getPvpFinalScore()
+	local score1 = self._mainSession._pvpWinCount or 0
+
+	return score1, 3 - score1
+end
+
+function M:genSelfBattleInput(input)
+	if self:isMissionArkRebuild() then
+		P._playerActivityArkRebuild:genBattleInput(input)
+	elseif self:isMissionPVP() then
+		P._playerActivitySparkScout:genBattleInput(input)
+	else
+		P._playerRole:genBattleSkinInput(input)
+		P._playerRole:genBattleGemInput(input)
+		P._playerRole:genBattleEquipInput(input)
+		P._playerArmory:genBattleWeaponInput(input)
+		P._playerSkin:genBattleSkinInput(input)
+		P._playerRanger:genBattleRangerInput(input)
+
+		if self._msType == D.MissionType.Dome then
+			P._playerDome:genBattleEnemeyProps(input)
+		elseif self._msType == D.MissionType.GlobalDefense then
+			P._playerGlobalDefense:genBattleEnemeyProps(input, self._msId)
+		end
+	end
+
+	if C._isTraceBattleInput then
+		local inputStr = table.tojson(input)
+
+		Trace.AF_traceEvent("d_battleInput", {
+			{
+				_key = "strParam",
+				_value = inputStr
+			}
+		})
+	end
+end
+
+function M:getBattleSpeed()
+	return self._battleSpeed
+end
+
+function M:getInputSpeed()
+	return self._inputSpeed
+end
+
+function M:getMissionType()
+	return self._msType
+end
+
+function M:getMissionId()
+	return self._msId
+end
+
+function M:createBattleSession()
+	local session = BattleSession.create()
+
+	self:_addSession(session)
+
+	return session
+end
+
+function M:_addSession(session)
+	if self._mainSession == nil then
+		session._index = 1
+		self._mainSession = session
+	else
+		session._index = 2
+
+		if self._sessions == nil then
+			self._sessions = {
+				self._mainSession,
+				session
+			}
+			self._secondSession = session
+		end
+	end
+end
+
+function M:getSession(index)
+	if index == nil or index == 1 then
+		return self._mainSession
+	end
+
+	return self._sessions[index]
+end
+
+function M:destroySession()
+	self._mainSession = nil
+
+	if self._sessions then
+		table.clear(self._sessions)
+	end
+end
+
+function M:isMissionArkRebuild()
+	return self._msType == D.MissionType.ArkRebuild
+end
+
+function M:isMissionGlobalDefense()
+	return self._msType == D.MissionType.GlobalDefense
+end
+
+function M:isMissionDome()
+	return self._msType == D.MissionType.Dome
+end
+
+function M:isMissionCrisisZone()
+	return self._msType == D.MissionType.CrisisZone
+end
+
+function M:isMissionElite()
+	return self._msType == D.MissionType.Elite
+end
+
+function M:isMissionCommon()
+	return self._msType == D.MissionType.Common
+end
+
+function M:isMissionMain()
+	return self:isMissionCommon() or self:isMissionElite()
+end
+
+function M:isMissionPVP()
+	return self._msType == D.MissionType.SparkScout
+end
+
+function M:getOppoEnemyNum(battleSession)
+	return #self:getOppoBattleSession(battleSession):getAllEnemys()
+end
+
+function M:getOppoBattleSession(battleSession)
+	return self:getSession(3 - battleSession._index)
+end
+
+function M:onEnemyKilledByBullet(battleEnemy)
+	if self:isMissionPVP() then
+		if battleEnemy._type ~= 1 and battleEnemy._type ~= 2 then
+			return
+		end
+
+		if battleEnemy._ignorePVPProtal then
+			return
+		end
+
+		if battleEnemy._cid == 218201 or battleEnemy._cid == 218203 or battleEnemy._cid == 218202 then
+			return
+		end
+
+		local curBattleSession = battleEnemy._battleSession
+		local oppoBattleSession = self:getOppoBattleSession(curBattleSession)
+		battleEnemy._destroyedCount = battleEnemy._destroyedCount or 0
+		local destroyedCount = battleEnemy._destroyedCount + 1
+		battleEnemy._destroyedCount = 0
+		local selfKilled = battleEnemy._battleSession._index == 1 and true or false
+		local vfxName = selfKilled and "WeekendMid_portal_mine" or "WeekendMid_portal_enemy"
+
+		if battleEnemy._view then
+			local vfx = battleEnemy._sessionView:createAndPlayVFX(vfxName, 0.5)
+
+			if vfx then
+				vfx:SetPosition(battleEnemy._position.x, battleEnemy._position.y, 0)
+				vfx:SetLocalRotation(0, 0, 0)
+
+				if battleEnemy._type == 2 then
+					vfx:SetLocalScale(2)
+				else
+					vfx:SetLocalScale(1)
+				end
+			end
+		end
+
+		local battleEnemyGenerator = oppoBattleSession._battleEnemyGenerator
+		local enemy = battleEnemyGenerator:createSummonEnemy(battleEnemy._cid)
+
+		if battleEnemy._atkType == 1 and battleEnemy._position.y - battleEnemy._radius <= 3.1 then
+			enemy:setPos(-battleEnemy._position.x, oppoBattleSession._screenEdgeY2 / 2 + 1)
+
+			if enemy._moveMode == 1 then
+				local randomTargetX = oppoBattleSession._battleRandomLib:randomMN(-3, 3)
+				local angle = math.deg(math.atan2(-oppoBattleSession._screenEdgeY2 / 2, randomTargetX - battleEnemy._position.x))
+
+				enemy:setDirByAngle(angle)
+
+				if enemy._view then
+					enemy._view:rotationEvent()
+				end
+			end
+		else
+			enemy:setPos(-battleEnemy._position.x, oppoBattleSession._screenEdgeY2 / 2 + 1)
+		end
+
+		if enemy._moveMode == 6 then
+			enemy._scriptBehavior.initPath(enemy)
+		end
+
+		enemy._pvpPortal = true
+		enemy._delayStepCount = D._battleGlobalConfig._battle_pvp_portal_wait_time
+
+		if enemy._view then
+			enemy._view:posEvent()
+			enemy._view:rotationEvent()
+
+			local vfx = enemy._sessionView:createAndPlayVFX(vfxName, 0.5)
+
+			if vfx then
+				vfx:SetPosition(enemy._position.x, enemy._position.y, 0)
+				vfx:SetLocalRotation(0, 0, 180)
+
+				if enemy._type == 2 then
+					vfx:SetLocalScale(2)
+				else
+					vfx:SetLocalScale(1)
+				end
+			end
+		end
+
+		enemy._destroyedCount = destroyedCount
+		local val = 1
+
+		for i = 1, destroyedCount do
+			val = val * (1 + D._battleGlobalConfig._battle_pvp_hp_inc / 100)
+		end
+
+		enemy._maxHp = enemy._maxHp * val
+		enemy._hp = enemy._maxHp
+		enemy._atk = enemy._atk * (1 + destroyedCount * D._battleGlobalConfig._battle_pvp_atk_inc / 100)
+	end
+end
+
+function M:_setTimeScale()
+	if self:isMissionGlobalDefense() then
+		if P._playerGlobalDefense:getMissionTimeRecord(self._msId) == -1 then
+			self._speedNormalTimeScale = D._battleGlobalConfig._battle_time_scale[2]
+		else
+			self._speedNormalTimeScale = D._battleGlobalConfig._battle_time_scale[1]
+		end
+	elseif self._msId < P._playerMission:getMissionIdByType(self._msType) then
+		self._speedNormalTimeScale = D._battleGlobalConfig._battle_time_scale[2]
+	else
+		self._speedNormalTimeScale = D._battleGlobalConfig._battle_time_scale[1]
+	end
+
+	self._speedUpTimeScale = D._battleGlobalConfig._battle_time_scale[3]
+end
+
+function M:initTimeScale()
+	self:_setTimeScale()
+
+	local canSpeedUp = P._playerRight:isForever(D.RightCardType.SVIP)
+
+	if P._playerRecord:isBattleSpeedUp() and canSpeedUp then
+		self._timeScale = self._speedUpTimeScale
+	else
+		self._timeScale = self._speedNormalTimeScale
+	end
+
+	self._targetTimeScale = self._timeScale
+
+	self:syncUnityTimeScale()
+end
+
+function M:getRealTimeScale()
+	return self._timeScale
+end
+
+function M:syncUnityTimeScale(timeScale)
+	self._timeScale = timeScale or self._timeScale
+	Time.timeScale = self._timeScale
+end
+
+function M:dealspeedUp()
+	self._timeScale = self._speedUpTimeScale
+	self._targetTimeScale = self._speedUpTimeScale
+
+	P._playerRecord:recordBattleSpeedUp(true)
+	self:syncUnityTimeScale()
+end
+
+function M:revertSpeedUp()
+	self._timeScale = self._speedNormalTimeScale
+	self._targetTimeScale = self._speedNormalTimeScale
+
+	P._playerRecord:recordBattleSpeedUp(false)
+	self:syncUnityTimeScale()
+end
+
+function M:syncTargetTimeScale()
+	self:syncUnityTimeScale(self._targetTimeScale)
+end
+
+function M:isSpeedUp()
+	return self._targetTimeScale ~= self._speedNormalTimeScale
+end
+
+function M:stopTime()
+	if AudioService then
+		AudioService:SetBattleSoundPaused(true)
+	end
+
+	self:syncUnityTimeScale(0)
+	self:pauseBattle(true)
+end
+
+function M:revertStopTime()
+	if AudioService then
+		AudioService:SetBattleSoundPaused(false)
+	end
+
+	self:syncTargetTimeScale()
+	self:pauseBattle(false)
+end
+
+function M:normalTime()
+	self:syncUnityTimeScale(1)
+end
+
+function M:pauseBattle(pause)
+	self._stop = pause
+
+	if self._sessions then
+		for i = 1, #self._sessions do
+			self._sessions[i]:pauseBattle(pause)
+		end
+	elseif self._mainSession then
+		self._mainSession:pauseBattle(pause)
+	end
+end
+
+function M:leaveBattle()
+	self:normalTime()
+
+	if self._sessions then
+		for i = 1, #self._sessions do
+			self._sessions[i]:leaveBattle()
+		end
+	elseif self._mainSession then
+		self._mainSession:leaveBattle()
+	end
+end
+
+return M

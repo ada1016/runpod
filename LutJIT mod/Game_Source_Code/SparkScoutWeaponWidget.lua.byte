@@ -1,0 +1,37 @@
+local M = class("SparkScoutWeaponWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutWeaponWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+
+	return go
+end
+
+function M:init(weapon)
+	LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. weapon, true, true)
+end
+
+function M:shake()
+	self._animShake:Play()
+end
+
+function M:stopShake()
+	self._animShake:Stop()
+	lc.setLocalRotation(self._animShake.gameObject, 0, 0, 0)
+end
+
+return M

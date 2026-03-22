@@ -1,0 +1,218 @@
+local M = class("RangerDropWeightOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goTemplate2 = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpTitle = Types.TMP_Text
+}
+local RangerItemWidget = requireLua("RangerItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+
+	self._partLoaded = {}
+	self._partArrows = {}
+	self._partBtns = {}
+	self._partBgs = {}
+	self._partTitles = {}
+	self._partContents = {}
+	self._parts = {}
+	self._partEffectContents = {}
+	self._partEffectLoaded = {}
+	self._partEffectArrows = {}
+end
+
+local EQUIP_LEVELS = {
+	3,
+	6,
+	9,
+	12,
+	15
+}
+
+function M:init(showQuality, focusPart)
+	self._showQuality = showQuality
+
+	self._tmpTitle:SetLocalize(D.toNameSid(17201 + showQuality - 3))
+
+	self._focusPart = focusPart or 1
+
+	for i = 1, 5 do
+		local tfPart = self._tfContainer:GetChild(i - 1)
+		self._parts[i] = tfPart
+		self._partBgs[i] = tfPart:GetChild(0):GetChild(0)
+		self._partTitles[i] = tfPart:GetChild(0):GetChild(1)
+		local tmpPart = self._partTitles[i]:GetChild(1):GetComponent("TMP_Text")
+
+		tmpPart:SetLocalize(SID.STR_RANGER_EQUIP_NAME, EQUIP_LEVELS[i])
+
+		self._partContents[i] = tfPart:GetChild(0):GetChild(2)
+		self._partBtns[i] = self._partTitles[i]:GetChild(0):GetComponent("Button")
+		self._partArrows[i] = self._partTitles[i]:GetChild(0):GetChild(0):GetComponent("Image")
+
+		self:setClick(self._partBtns[i], function ()
+			self:expandPart(i)
+			self:updatePartUI(i)
+
+			if self._partLoaded[i] then
+				self:focusTab(i)
+			end
+		end)
+
+		local tfEffect = tfPart:GetChild(0):GetChild(2):GetChild(0)
+		local dealPart = i
+
+		for effectIdx = 1, 2 do
+			local key = dealPart + effectIdx * 100
+			self._partEffectContents[key] = tfEffect:GetChild(effectIdx - 1):GetChild(1)
+			local tfBtn = tfEffect:GetChild(effectIdx - 1):GetChild(0):GetChild(1)
+			self._partEffectArrows[key] = tfBtn:GetChild(0)
+			local btnExpandEffect = tfBtn:GetComponent("Button")
+
+			self:setClick(btnExpandEffect, function ()
+				self:expandPartEffect(dealPart, effectIdx)
+				self:updatePartEffectUI(dealPart, effectIdx)
+			end)
+			self:updatePartEffectUI(dealPart, effectIdx)
+		end
+	end
+
+	local equipCfgs = D._rangerEquipSkillConfigDropList
+	local equipEffectWeights = {}
+	self._equipEffectWeights = equipEffectWeights
+
+	for effectKey, v in pairs(equipCfgs) do
+		for i = 1, #v do
+			local cfg = v[i]
+			equipEffectWeights[effectKey + 1000] = (equipEffectWeights[effectKey + 1000] or 0) + cfg._weight1
+			equipEffectWeights[effectKey + 2000] = (equipEffectWeights[effectKey + 2000] or 0) + cfg._weight2
+		end
+	end
+
+	for i = 1, 5 do
+		if i == self._focusPart then
+			self:expandPart(i)
+		end
+
+		self:updatePartUI(i)
+	end
+
+	self:focusTab(self._focusPart)
+	self._goEmpty:SetActive(self._showQuality and self._loadChipCount == 0)
+end
+
+function M:focusTab(idx)
+	LuaUnity.forceRebuildLayoutImmediate(self._tfContainer)
+
+	local moveSpeed = 400
+	local tfPart = self._parts[idx]
+	local tfViewport = self._tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tfPart)
+	local totalHeight = tfViewport.rect.height
+	local partLen = self._partContents[idx].rect.height
+	local x2, y2, z2 = lc.getAnchoredPosition(self._tfContainer)
+
+	self._tfContainer:DOAnchorPosY(-y1, 0.35):SetLink(self.gameObject)
+end
+
+function M:expandPart(part)
+	if self._partLoaded[part] == nil then
+		self:loadPart(part)
+	else
+		self._partLoaded[part] = not self._partLoaded[part]
+	end
+end
+
+function M:updatePartUI(part)
+	self._partContents[part]:SetActive(self._partLoaded[part] == true)
+	lc.setLocalEulerAngles(self._partArrows[part], 0, 0, self._partLoaded[part] and 180 or 270)
+end
+
+function M:loadPart(dealPart)
+	self._partLoaded[dealPart] = true
+
+	self:expandPartEffect(dealPart, 1)
+	self:expandPartEffect(dealPart, 2)
+	self:updatePartEffectUI(dealPart, 1)
+	self:updatePartEffectUI(dealPart, 2)
+end
+
+function M:expandPartEffect(dealPart, effectIdx)
+	local key = dealPart + effectIdx * 100
+
+	if self._partEffectLoaded[key] == nil then
+		self:loadPartEffect(dealPart, effectIdx)
+	else
+		self._partEffectLoaded[key] = not self._partEffectLoaded[key]
+	end
+end
+
+function M:updatePartEffectUI(dealPart, effectIdx)
+	local key = dealPart + effectIdx * 100
+
+	self._partEffectContents[key]:SetActive(self._partEffectLoaded[key] == true)
+	lc.setLocalEulerAngles(self._partEffectArrows[key], 0, 0, self._partEffectLoaded[key] and 180 or 270)
+end
+
+function M:loadPartEffect(dealPart, effectIdx)
+	local key = dealPart + effectIdx * 100
+	self._partEffectLoaded[key] = true
+	local level = EQUIP_LEVELS[dealPart]
+	local bucket = self._showQuality * 100 + level
+	local skillCfgs = D._rangerEquipSkillConfigDropList[bucket]
+	local weightKey = "_weight" .. effectIdx
+	local tfPartEffect = self._partContents[dealPart]:GetChild(0):GetChild(effectIdx - 1)
+	local tmpEffect = tfPartEffect:GetChild(0):GetChild(0):GetComponent("TMP_Text")
+
+	tmpEffect:SetLocalize(SID.STR_EFFECT_X, effectIdx)
+
+	local tfContainer = tfPartEffect:GetChild(1)
+
+	for i = 1, #skillCfgs do
+		local skillCfg = skillCfgs[i]
+		local weight = skillCfg[weightKey]
+
+		if weight > 0 then
+			if skillCfg._effect < 100 then
+				local goCell = GameObject.Instantiate(self._goTemplate, tfContainer)
+
+				goCell:SetActive(true)
+
+				local tfTmps = goCell.transform:GetChild(0)
+				local tmpDesc = tfTmps:Find("Text"):GetComponent("TMP_Text")
+				local tmpWeight = tfTmps:Find("TextWeight"):GetComponent("TMP_Text")
+				local totalWeight = self._equipEffectWeights[bucket + effectIdx * 1000]
+				tmpWeight.text = string.format("%.2f%%", math.floor(skillCfg[weightKey] / totalWeight * 10000) / 100)
+
+				V.loadRangerEquipText(tmpDesc, skillCfg._id)
+			else
+				local goCell = GameObject.Instantiate(self._goTemplate2, tfContainer)
+
+				goCell:SetActive(true)
+
+				local tfTmps = goCell.transform:GetChild(0)
+				local tfRangerFrame = tfTmps:GetChild(0):GetChild(0):Find("~img_imgFrame")
+				local rangerQ = D.toQuality(skillCfg._ranger)
+
+				LuaUnity.setTPSprite(tfRangerFrame:Find("~img_imgIcon"):GetComponent("Image"), "item/item_" .. skillCfg._ranger, true, true)
+				LuaUnity.setTPSprite(tfRangerFrame:GetComponent("Image"), "item/frame-frame_0" .. rangerQ)
+				LuaUnity.setTPSprite(tfRangerFrame:Find("~img_imgFrameOut"):GetComponent("Image"), "item/frame-frame_0" .. rangerQ .. "_out")
+
+				local tmpDesc = tfTmps:Find("TxtTitle"):GetComponent("TMP_Text")
+				local tmpWeight = tfTmps:Find("Bg"):Find("Txt"):GetComponent("TMP_Text")
+				local totalWeight = self._equipEffectWeights[bucket + effectIdx * 1000]
+				tmpWeight.text = string.format("%.2f%%", math.floor(skillCfg[weightKey] / totalWeight * 10000) / 100)
+
+				V.loadRangerEquipText(tmpDesc, skillCfg._id)
+			end
+		end
+	end
+end
+
+return M

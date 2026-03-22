@@ -1,0 +1,363 @@
+local M = class("BattleRanger_213_Sub")
+local STAGE_IDLE = 1
+local STAGE_MOVE = 2
+local STAGE_ATTACK_1 = 3
+local STAGE_ATTACK_2 = 4
+local STAGE_ATTACK_MOVE = 5
+local STAGE_ATTACK_MOVE_2 = 6
+local STAGE_ATTACK_END = 7
+local SPEED_MOVE_UP = 1
+local MOVE_UP_TIME = 1
+local SIZE1 = {
+	2.2,
+	0.2
+}
+local SIZE2 = {
+	3.8,
+	0.2
+}
+local circle_circle_intersect = BattleMathLib.circle_circle_intersect
+local rectangle_circle_intersect_align_axis = BattleMathLib.rectangle_circle_intersect_align_axis
+
+function M:ctor(ranger)
+	self._ranger = ranger
+	self._battleSession = ranger._battleSession
+	self._sessionView = self._battleSession._sessionView
+	self._radius = 0.4
+	self._speed = ranger._cfg._subSpeed
+	self._position = Vector2.retain(0, 0)
+	self._stage = STAGE_IDLE
+	self._dir = {
+		0,
+		0
+	}
+	self._size = {
+		0,
+		0
+	}
+	self._affectedEnemys = table.new(64, 0)
+
+	if self._ranger._view then
+		self._view = self._battleSession._sessionView:createRanger("Ranger_150013_Sub")
+
+		self._view:SetActive(true)
+
+		self._tf = self._view.transform
+
+		self._tf:SetLocalScale(0)
+
+		self._ator = self._view:GetChild(0):GetComponent("Animator")
+	end
+end
+
+function M:step(dt)
+	if self._stage == STAGE_ATTACK_MOVE then
+		self._position.x = self._position.x
+		self._position.y = self._position.y + dt * self._moveUpSpeed
+
+		if self._view then
+			self._view:SetPosition(self._position.x, self._position.y, 0)
+			self._vfx:SetPosition(self._position.x, self._position.y, 0)
+		end
+
+		self:checkEnemyCollision(dt)
+
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE_ATTACK_2
+			self._moveUpSpeed = 0
+
+			self:castSkill1()
+		end
+	elseif self._stage == STAGE_ATTACK_2 then
+		self:checkEnemyCollision(dt)
+
+		self._stageCD = self._stageCD - dt
+
+		if self._stepScaleY then
+			local b = self._mainBullet
+			b._size[2] = math.min(b._size[2] + dt * self._stepScaleY, b._initialSize[2] * 2)
+		end
+
+		if self._stageCD <= 0 then
+			self._mainBullet = nil
+			self._stepScaleY = nil
+			self._stage = STAGE_IDLE
+
+			self:finishSkill1()
+		end
+	elseif self._stage == STAGE_ATTACK_MOVE_2 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE_ATTACK_END
+			self._stageCD = 0.65
+			local triggerSkill = self._ranger:getSkill(21301)
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			if bullet._view then
+				bullet._view:scaleEvent()
+			end
+		end
+	elseif self._stage == STAGE_ATTACK_END then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE_IDLE
+
+			self:finishSkill2()
+		end
+	elseif self._stage == STAGE_MOVE then
+		self._position.x = self._position.x + dt * self._speed * self._dir[1]
+		self._position.y = self._position.y + dt * self._speed * self._dir[2]
+
+		if self._view then
+			self._view:SetPosition(self._position.x, self._position.y, 0)
+		end
+
+		if self._position.y >= self._battleSession._screenEdgeY2 * 2 / 3 then
+			self._stage = STAGE_ATTACK_1
+
+			self:doAttack()
+
+			return
+		elseif self._battleSession._screenEdgeY2 <= self._position.y then
+			self._ranger:onEnd()
+
+			return
+		elseif self._position.x <= self._battleSession._screenEdgeX1 - self._radius then
+			self._dir[1] = math.abs(self._dir[1])
+		elseif self._position.x >= self._battleSession._screenEdgeX2 + self._radius then
+			self._dir[1] = -math.abs(self._dir[1])
+		end
+
+		local allEnemys = self._battleSession:getAllEnemys()
+		local cnt = #allEnemys
+
+		for i = 1, #allEnemys do
+			local enemy = allEnemys[i]
+
+			if self._battleSession:enemyCanBeChoseAsTarget(enemy, self._ranger) and circle_circle_intersect(self._position, enemy._position, self._radius, enemy._radius) then
+				self._stage = STAGE_ATTACK_1
+
+				self:doAttack()
+
+				break
+			end
+		end
+	end
+end
+
+function M:finishSkill2()
+	if self._vfx then
+		self._sessionView:removeVFX(self._vfx)
+
+		self._vfx = nil
+	end
+
+	self:clear()
+	self._ranger:onEnd()
+end
+
+function M:finishSkill1()
+	if self._battleSession:getWeapon(BattleSkillGroupEnum.Aeroblast) then
+		if self._obj1 then
+			self._sessionView:removeVFX(self._obj1)
+
+			self._obj1 = nil
+		end
+
+		if self._obj2 then
+			self._sessionView:removeVFX(self._obj2)
+
+			self._obj2 = nil
+		end
+
+		self._moveUpSpeed = 0
+		self._stage = STAGE_ATTACK_MOVE_2
+		self._stageCD = 0.4
+
+		if self._view then
+			self._ator:SetTrigger("attack2")
+		end
+
+		if self._vfx then
+			self._vfx:GetComponent("Animation"):Play()
+		end
+	else
+		if self._obj1 then
+			self._sessionView:removeVFX(self._obj1)
+
+			self._obj1 = nil
+		end
+
+		if self._obj2 then
+			self._sessionView:removeVFX(self._obj2)
+
+			self._obj2 = nil
+		end
+
+		if self._vfx then
+			self._sessionView:removeVFX(self._vfx)
+
+			self._vfx = nil
+		end
+
+		self:clear()
+		self._ranger:onEnd()
+	end
+end
+
+function M:castSkill1()
+	local bullet = self._ranger._mainSkill:createBullet()
+
+	bullet:setPos(self._position.x, self._position.y + 1.5)
+
+	self._stageCD = bullet._atkInterval * bullet._releaseAtkNum
+	self._mainBullet = bullet
+	local prefabName = nil
+
+	if self._ranger:getEffect(21301) then
+		bullet._size[1] = bullet._initialSize[1] + bullet._initialSize[1] * self._ranger._mainSkill:getProp(BattlePropEnum.BattlePropParam1, 0) / 100
+		prefabName = "Ranger_150013_105"
+	else
+		prefabName = "Ranger_150013_1"
+	end
+
+	if bullet._view then
+		self._obj1 = self._sessionView:addVFX(prefabName)
+
+		self._obj1:SetPosition(self._position.x, self._position.y, 0)
+
+		if self._ranger:getEffect(21304) then
+			self._stepScaleY = 0.25
+
+			self._obj1:GetComponent("Animation"):Play()
+		end
+	end
+end
+
+function M:doAttack()
+	if self._view then
+		self._ator:SetTrigger("attack")
+
+		if self._ranger:getEffect(21301) then
+			local vfx = self._sessionView:addVFX("Ranger_150013_101")
+			self._vfx = vfx
+
+			vfx:SetPosition(self._position.x, self._position.y, 0)
+
+			self._size[1] = SIZE2[1]
+			self._size[2] = SIZE2[2]
+		else
+			local vfx = self._sessionView:addVFX("Ranger_150013_100")
+			self._vfx = vfx
+
+			vfx:SetPosition(self._position.x, self._position.y, 0)
+
+			self._size[1] = SIZE1[1]
+			self._size[2] = SIZE1[2]
+		end
+	end
+
+	self._stage = STAGE_ATTACK_MOVE
+	self._stageCD = MOVE_UP_TIME
+	self._stageCD = self._stageCD + self._stageCD * self._ranger._mainSkill:getProp(BattlePropEnum.BattlePropParam2, 0) / 100
+end
+
+function M:doStart(targetEnemy)
+	self._stage = STAGE_MOVE
+	self._position.x = self._ranger._position.x
+	self._position.y = self._ranger._position.y
+	self._moveUpSpeed = SPEED_MOVE_UP
+
+	opt.vec2_1:Set(targetEnemy._position.x, targetEnemy._position.y - self._radius)
+
+	local angle = BattleMathLib.angle(opt.vec2_1, self._position)
+	self._dir[1], self._dir[2] = BattleMathLib.angle2dir(angle)
+
+	if self._view then
+		self._view:SetActive(true)
+		self._tf:SetLocalScale(1)
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+		self._ator:SetTrigger("fly")
+	end
+end
+
+function M:clear()
+	local cnt = #self._affectedEnemys
+
+	for i = 1, cnt do
+		local enemy = self._affectedEnemys[i]
+		enemy._affectedByRanger13 = nil
+		enemy._stopAction = nil
+	end
+
+	table.clear(self._affectedEnemys)
+end
+
+function M:doEnd()
+	self:clear()
+
+	self._stage = STAGE_IDLE
+
+	if self._view then
+		self._tf:DOScale(0, 0.3):OnComplete(function ()
+			self._view:SetActive(false)
+		end)
+		self._ator:SetTrigger("end")
+	end
+end
+
+function M:checkEnemyCollision(dt)
+	local enemys = self._battleSession:getEnemys(self)
+
+	if enemys then
+		local cnt = #enemys
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and not enemy._affectedByRanger13 and not enemy._ignoreRegulateBuf then
+				opt.vec2_1:Set(self._position.x, self._position.y + 1.1)
+
+				if rectangle_circle_intersect_align_axis(opt.vec2_1, enemy._position, self._size, enemy._radius) then
+					enemy._affectedByRanger13 = true
+					self._affectedEnemys[#self._affectedEnemys + 1] = enemy
+					enemy._stopAction = true
+
+					if #self._affectedEnemys == 64 then
+						break
+					end
+				end
+			end
+		end
+	end
+
+	local flag = nil
+	local cnt = #self._affectedEnemys
+
+	for i = 1, cnt do
+		local enemy = self._affectedEnemys[i]
+
+		if not enemy._isToBeDestroyed then
+			enemy._position.y = enemy._position.y + dt * self._moveUpSpeed
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+		else
+			flag = true
+			self._affectedEnemys[i] = nil
+			enemy._affectedByRanger13 = nil
+			enemy._stopAction = nil
+		end
+	end
+
+	table.removeNilValuesOutOrder(self._affectedEnemys, cnt)
+end
+
+return M

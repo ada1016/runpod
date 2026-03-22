@@ -1,0 +1,412 @@
+local M = class("AnniversaryInvitePanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	goBind = Types.GameObject,
+	goBinded = Types.GameObject,
+	goShareTip = Types.GameObject,
+	txtInviteCode = Types.TMP_Text,
+	txtInviteNum = Types.TMP_Text,
+	btnCopyCode = Types.Button,
+	btnBindCode = Types.Button,
+	txtBindTip = Types.TMP_Text,
+	btnPointsDetail = Types.Button,
+	goTask1 = Types.GameObject,
+	goTask2 = Types.GameObject,
+	goTask3 = Types.GameObject,
+	tfContent = Types.Transform,
+	txtTotalPoints = Types.TMP_Text,
+	txtBigRewardIndex = Types.TMP_Text,
+	goBigReward = Types.GameObject,
+	goBigRewardArea = Types.GameObject
+}
+local AnniversaryInviteRewardWidget = requireLua("AnniversaryInviteRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goTaskWidgets = {
+		self._goTask1,
+		self._goTask2,
+		self._goTask3
+	}
+
+	for i = 1, #self._goTaskWidgets do
+		lc.prefabVarPeer(self._goTaskWidgets[i])
+	end
+
+	self._goRewards = {}
+	local childCount = self._tfContent.childCount
+
+	for i = 1, childCount do
+		local go = self._tfContent:GetChild(i - 1).gameObject
+
+		AnniversaryInviteRewardWidget.noCreate(go)
+
+		self._goRewards[i] = go
+	end
+
+	ItemWidget.noCreate(self._goBigReward)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnCopyCode, function ()
+		local unlockMission = P._playerActivityAnniversary:readInviteMissionLimit()
+
+		if lc._isMobile and lc._isRelease and C.getIsGuest() then
+			V.showToast(SID.TIP_NEED_BIND_MAIL)
+		elseif P._playerMission:getMissionIdByType(D.MissionType.Common) % 10000 <= unlockMission % 10000 then
+			V.showToast({
+				SID.TIP_PASS_MISSION_X_GEN_INVITECODE,
+				unlockMission % 10000
+			})
+		else
+			UniClipboard.SetText(self._inviteCode)
+
+			if lc._isWebGL then
+				return
+			end
+
+			V.showToast(SID.CONT_COPY_SUCCEED)
+		end
+	end)
+	self:setClick(self._btnPointsDetail, function ()
+		UIManager.openPanel(PrefabDefine.AnniversaryIntegralDetailsPanel, self._inviteRankData)
+	end)
+	self:setClick(self._btnBindCode, function ()
+		lc.setIntKeyValue("bind_invite_code_dot", 1)
+		self._btnBindCode.dot:SetActive(false)
+		UIManager.openPanel(PrefabDefine.AnniversaryBindCodePanel, function ()
+			self:updateBindStatus()
+			self:updateTaskProgress(P._playerActivityAnniversary:getInvitePoint())
+			self:updateRewards()
+		end)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:closePanel(enterBattle)
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:init(from)
+	self._from = from
+	self._inviteCode = P._playerActivityAnniversary:getInviteCode()
+
+	self._txtBindTip:SetLocalize(SID.TIP_BIND_ENTER_DESC_1, P._playerActivityAnniversary:readBindInviteCodePoint())
+	self:updateUI()
+
+	if self._inviteCode == nil then
+		self:genRandomInviteCode()
+
+		self._inviteRankData = {}
+
+		self:updateTaskProgress(0)
+		self:updateInviteNum(0)
+
+		return
+	end
+
+	self:updateCodeText(self._inviteCode)
+	UIManager.showWaiting()
+
+	local function callback(data)
+		UIManager.hideWaiting()
+
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._inviteRankData = data
+		local totalPoint = 0
+
+		if P._playerActivityAnniversary:getBeInviteCode() then
+			totalPoint = totalPoint + P._playerActivityAnniversary:readBindInviteCodePoint()
+		end
+
+		local totalNum = 0
+
+		for i = 1, #data do
+			totalPoint = totalPoint + data[i].rankValue
+			totalNum = totalNum + 1
+		end
+
+		totalPoint = totalPoint + P._playerActivityAnniversary:getGMInvitePoint()
+
+		P._playerActivityAnniversary:setInvitePoint(totalPoint)
+		self:updateTaskProgress(totalPoint)
+		self:updateInviteNum(totalNum)
+		self:updateRewards()
+	end
+
+	local function failCallback()
+		UIManager.hideWaiting()
+
+		if CNull(self.gameObject) then
+			return
+		end
+
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+		self:closePanel()
+	end
+
+	P._playerRanker:getCachedActivityRankData(D.RankType.InviteRank, self._inviteCode, callback, failCallback)
+end
+
+function M:updateUI()
+	self:updateBindStatus()
+	self:updateExpireTime()
+	self:updateTasks()
+	self:updateRewards()
+end
+
+function M:updateBindStatus()
+	self._beInviteCode = P._playerActivityAnniversary:getBeInviteCode()
+
+	self._goBind:SetActive(self._beInviteCode == nil and P._playerMission:getMissionId() <= P._playerActivityAnniversary:readActivityBindLevelLimit())
+	self._goBinded:SetActive(self._beInviteCode ~= nil)
+	self._btnBindCode.dot:SetActive(P._playerActivityAnniversary:haveBindCodeDot())
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local targetTime = P._playerActivityAnniversary:readActivityEndTime()
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds)
+end
+
+function M:updateCodeText(code)
+	local unlockMission = P._playerActivityAnniversary:readInviteMissionLimit()
+
+	if lc._isMobile and lc._isRelease and C.getIsGuest() then
+		self._txtInviteCode:SetLocalize(SID.TIP_NEED_BIND_MAIL)
+		self._goShareTip:SetActive(false)
+	elseif P._playerMission:getMissionIdByType(D.MissionType.Common) % 10000 <= unlockMission % 10000 then
+		self._txtInviteCode:SetLocalize(SID.TIP_PASS_MISSION_X_GEN_INVITECODE, unlockMission % 10000)
+		self._goShareTip:SetActive(false)
+	else
+		self._txtInviteCode.text = code
+
+		self._goShareTip:SetActive(true)
+	end
+end
+
+function M:updateTasks()
+	local newbieTasks = P._playerActivityAnniversary:readCfg()._newbieTasks
+
+	for i = 1, #self._goTaskWidgets do
+		local taskConf = D._anniversaryNewbieTaskConfig[newbieTasks[i]]
+		local go = self._goTaskWidgets[i]
+		go._tmpPoint.text = tostring(taskConf._point)
+
+		go._tmpTitle:SetLocalize(SID.STR_TASK_X, i)
+
+		if taskConf._param then
+			go._tmpDesc:SetLocalize(taskConf._descSid, taskConf._param)
+		else
+			go._tmpDesc:SetLocalize(taskConf._descSid)
+		end
+	end
+end
+
+function M:updateRewards()
+	local curClaimedRewardIndex = P._playerActivityAnniversary:getNewbieCurClaimedRewardIndex()
+	local nowPoint = P._playerActivityAnniversary:getInvitePoint()
+	local finalIndex = 4
+	local lastRequirePoint = 0
+
+	for i, conf in ipairs(D._anniversaryNewbieRewardConfig) do
+		local requirePoint = conf._exp
+		local deltaPoint = requirePoint - lastRequirePoint
+
+		if self._goRewards[i] == nil then
+			local go = AnniversaryInviteRewardWidget.create(self._tfContent)
+			self._goRewards[i] = go
+		end
+
+		local reward = self._goRewards[i]
+		local claimed = i <= curClaimedRewardIndex
+		local percent = nowPoint / deltaPoint
+
+		reward:updateUI(i, conf._cid, conf._num, claimed, percent, requirePoint)
+
+		nowPoint = nowPoint - deltaPoint
+		local canClaim = percent >= 1
+
+		self:setClick(reward._goItem._btnClick, function ()
+			Client.checkNetworkAsync(function ()
+				if not P._playerActivity:isAnniversaryOpening() then
+					self:closePanel()
+
+					return
+				end
+
+				if claimed then
+					reward._goItem:rewardclickCallback()
+				elseif canClaim then
+					local rewards = P._playerActivityAnniversary:claimInviteReward(i)
+
+					self:updateRewards()
+					V.showRewardClaimPanel(rewards)
+				else
+					reward._goItem:rewardclickCallback()
+				end
+			end)
+		end)
+
+		if i > curClaimedRewardIndex + 1 and conf._isNode == 1 then
+			reward:updateRightBarAmount(nowPoint / deltaPoint)
+
+			finalIndex = i
+
+			break
+		end
+
+		lastRequirePoint = requirePoint
+	end
+
+	local hasBigReward = false
+	local lastBigReward = nil
+
+	for i, conf in ipairs(D._anniversaryNewbieRewardConfig) do
+		if conf._bigReward == 1 then
+			lastBigReward = i
+
+			if i > curClaimedRewardIndex + 1 then
+				self._txtBigRewardIndex.text = i
+
+				self._goBigReward:init(conf._cid, conf._num)
+				self:setClick(self._goBigReward._btnClick, function ()
+					self._goBigReward:rewardclickCallback()
+				end)
+
+				hasBigReward = true
+
+				break
+			end
+		end
+	end
+
+	if not hasBigReward and lastBigReward then
+		self._txtBigRewardIndex.text = lastBigReward
+		local conf = D._anniversaryNewbieRewardConfig[lastBigReward]
+
+		self._goBigReward:init(conf._cid, conf._num)
+		self._goBigReward._goClaimed:SetActive(true)
+		self:setClick(self._goBigReward._btnClick, function ()
+			self._goBigReward:rewardclickCallback()
+		end)
+	end
+
+	if finalIndex > 4 then
+		lc.delayFunc(0.1, function ()
+			self._tfContent:SetLocalPosition(-135 * (finalIndex - 5) - 250, -9, 0)
+		end, self.gameObject)
+	end
+end
+
+function M:updateTaskProgress(totalPoint)
+	self._txtTotalPoints.text = totalPoint
+end
+
+function M:updateInviteNum(num)
+	self._txtInviteNum.text = num
+end
+
+function M:updateReddots()
+end
+
+function M:genRandomInviteCode()
+	UIManager.showWaiting()
+
+	local code = P._playerActivityAnniversary:genRandomInviteCode()
+	local col = "invite_data"
+
+	if not lc._isRelease then
+		col = "dev_" .. col
+	end
+
+	if C._config.noQuery then
+		UIManager.hideWaiting()
+
+		self._inviteCode = code
+
+		P._playerActivityAnniversary:setInviteCode(code)
+		self:updateCodeText(code)
+
+		if P._playerMission:getMissionId() <= P._playerActivityAnniversary:readActivityBindLevelLimit() and P._playerActivityAnniversary:needPopBindInvite() then
+			P._playerActivityAnniversary:removePopBindInvite()
+			lc.setTimer(function ()
+				UIManager.openPanel(PrefabDefine.AnniversaryBindCodePanel, function ()
+					self:updateBindStatus()
+				end)
+			end, 0.2)
+		end
+
+		return
+	end
+
+	LuaHelper.queryDocData(col, code, function (data)
+		UIManager.hideWaiting()
+
+		if data == "" then
+			if P then
+				self._inviteCode = code
+
+				P._playerActivityAnniversary:setInviteCode(code)
+				FirebaseManager:WriteToCollection(col, code, "{}")
+				self:updateCodeText(code)
+
+				if P._playerMission:getMissionId() <= P._playerActivityAnniversary:readActivityBindLevelLimit() and P._playerActivityAnniversary:needPopBindInvite() then
+					P._playerActivityAnniversary:removePopBindInvite()
+					UIManager.openPanel(PrefabDefine.AnniversaryBindCodePanel, function ()
+						self:updateBindStatus()
+					end)
+				end
+			end
+		else
+			self:genRandomInviteCode()
+		end
+	end)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._secondTimer)
+end
+
+return M

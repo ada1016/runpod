@@ -1,0 +1,37 @@
+local M = class("RogueUnlockPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	goRogueCard = Types.GameObject
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	RogueCardInfoWidget.noCreate(self._goRogueCard)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._goRogueCard._btnClick, function ()
+		UIManager.openPanel(PrefabDefine.WeaponTreePanel, self._card)
+	end)
+end
+
+function M:init(card)
+	self._card = card
+
+	self._goRogueCard:updateUI(card)
+	self._goRogueCard:setFront()
+
+	self._btnMask.enabled = false
+
+	lc.delayFunc(1, function ()
+		self._btnMask.enabled = true
+	end, self.gameObject)
+	Client.playSound("ui_Toast_1")
+end
+
+return M

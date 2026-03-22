@@ -1,0 +1,63 @@
+local M = {}
+_G.BattleEntityFactory = M
+local BattleOperation = requireLua("BattleOperation")
+local BattleBuff = requireLua("BattleBuff")
+local BattleEnemyBullet = requireLua("BattleEnemyBullet")
+local BattleEnemyBullet_Plasma = requireLua("BattleEnemyBullet_Plasma")
+local table = table
+local BUFF_FREE_POOL = table.new(32, 0)
+local ENEMY_FREE_POOL = table.new(64, 0)
+local ENEMY_BULLET_FREE_POOL = table.new(32, 0)
+
+local function getEntityFromPool(pool, entityClass, p1)
+	local entity = nil
+	local poolSize = #pool
+
+	if poolSize == 0 then
+		entity = entityClass.new(p1)
+	else
+		entity = pool[poolSize]
+		pool[poolSize] = nil
+	end
+
+	return entity
+end
+
+local function putEntityToPool(pool, entity)
+	local poolSize = #pool
+	pool[poolSize + 1] = entity
+end
+
+function M:getEnemyBullet(p1)
+	return getEntityFromPool(ENEMY_BULLET_FREE_POOL, BattleEnemyBullet, p1)
+end
+
+function M:getEnemyBullet_Plasma(p1)
+	return BattleEnemyBullet_Plasma.new(p1)
+end
+
+function M:getBuff(p1)
+	return getEntityFromPool(BUFF_FREE_POOL, BattleBuff, p1)
+end
+
+function M:getOperation()
+	return BattleOperation.create()
+end
+
+function M:clearPools()
+	table.clear(ENEMY_FREE_POOL)
+	table.clear(BUFF_FREE_POOL)
+	table.clear(ENEMY_BULLET_FREE_POOL)
+end
+
+function M:putEnyity(entity)
+	if entity.__cname == "BattleEnemy" then
+		putEntityToPool(ENEMY_FREE_POOL, entity)
+	elseif entity.__cname == "BattleBuff" then
+		putEntityToPool(BUFF_FREE_POOL, entity)
+	elseif entity.__cname == "BattleEnemyBullet" then
+		putEntityToPool(ENEMY_BULLET_FREE_POOL, entity)
+	end
+end
+
+return M

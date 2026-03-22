@@ -1,0 +1,278 @@
+local M = class("ShopPage", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfPageContainer = Types.Transform,
+	btnResource = Types.Button,
+	btnDayWeekMonth = Types.Button,
+	btnActivityExchange = Types.Button,
+	goPageBtns = Types.GameObject
+}
+local PAGE_PREFAB_PATH_HOLDER = "Assets/FW/Prefabs/UI/page/%s.prefab"
+local PageCfg = {
+	{
+		PanelName = "ShopResourcePage",
+		SystemId = D.SystemType.Store,
+		BtnShowCond = function ()
+			return true
+		end,
+		RedCond = function ()
+			return false
+		end
+	},
+	{
+		PanelName = "ShopDayWeekMonthPage",
+		SystemId = D.SystemType.SpecialOfferGift,
+		RedCond = function ()
+			return false
+		end
+	},
+	{
+		PanelName = "ShopActivityExchangePage",
+		BtnShowCond = function ()
+			return P._playerActivity:getExchangeShopNum() > 0 or P._playerBPSkin:isStatusOpen()
+		end,
+		RedCond = function ()
+			return false
+		end
+	}
+}
+local PageNum = #PageCfg
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._pages = {}
+
+	RedDotManager.add(self._btnResource, "city.shop.resource", true)
+	RedDotManager.add(self._btnDayWeekMonth, "city.shop.dayweekmonth", true)
+	RedDotManager.add(self._btnActivityExchange, "city.shop.activityexchange", true)
+end
+
+function M:OnDestroy()
+	RedDotManager.remove("city.shop.resource")
+	RedDotManager.remove("city.shop.dayweekmonth")
+	RedDotManager.remove("city.shop.activityexchange")
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	self._btnPages = {
+		self._btnResource,
+		self._btnDayWeekMonth,
+		self._btnActivityExchange
+	}
+
+	for i = 1, PageNum do
+		self:setClick(self._btnPages[i], function ()
+			self:changePage(i)
+		end)
+	end
+end
+
+function M:addEvents()
+	self:on("iap.purchase.success", function ()
+		self:updateBottomArea()
+	end)
+end
+
+function M:init(showPage)
+	self._pageIdx = 0
+	showPage = showPage or 1
+
+	if not showPage or not self:canShowPage(showPage) then
+		showPage = self:getFirstShowPageIdx()
+	end
+
+	if not showPage then
+		return
+	end
+
+	self:changePage(showPage, true)
+	self:updateBottomArea()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	RedDotManager.update("city.shop.activityexchange")
+	self:updateBottomArea()
+	self:changePage(1)
+end
+
+function M:hideInternal()
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	M.super.hideInternal(self)
+end
+
+function M:getRecommendPageIdx()
+	for i = 1, PageNum do
+		if PageCfg[i].RedCond() then
+			return i
+		end
+	end
+
+	return 1
+end
+
+function M:getFirstShowPageIdx()
+	for i = 1, PageNum do
+		if self:canShowPage(i) then
+			return i
+		end
+	end
+end
+
+function M:closePanel()
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnPanelOpened()
+	local lb = self._pages[self._pageIdx]
+
+	if lb.OnPageOpened then
+		lb:OnPageOpened()
+	end
+end
+
+function M:updateUI()
+end
+
+function M:canShowPage(pageIdx)
+	if not PageCfg[pageIdx] or PageCfg[pageIdx].SystemId and not D.isSystemUnlocked(PageCfg[pageIdx].SystemId) then
+		return false
+	end
+
+	if PageCfg[pageIdx].BtnShowCond and not PageCfg[pageIdx].BtnShowCond() then
+		return false
+	end
+
+	return true
+end
+
+function M:changePage(pageIdx, isStartPage)
+	if pageIdx == self._pageIdx then
+		local lastPage = self._pages[self._pageIdx]
+
+		lastPage:showInternal()
+
+		return
+	end
+
+	if not self:canShowPage(pageIdx) then
+		pageIdx = 1
+	end
+
+	if not self:canShowPage(pageIdx) then
+		return
+	end
+
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	self._pageIdx = pageIdx
+	local lb = self:getOrCreatePage(pageIdx)
+	self._lastPage = lb
+
+	Client.playSound("ui_Open_Gift_1")
+
+	if not isStartPage then
+		self:OnPanelOpened()
+	end
+
+	self:updateBottomArea()
+end
+
+function M:getOrCreatePage(index)
+	local lb = self._pages[index]
+
+	if lb == nil then
+		local go = nil
+
+		if index == 1 then
+			go = self._tfPageContainer:GetChild(0).gameObject
+		else
+			go = LuaUnity.createGameObject(string.format(PAGE_PREFAB_PATH_HOLDER, PageCfg[index].PanelName), self._tfPageContainer)
+		end
+
+		lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self)
+
+		self._pages[index] = lb
+	elseif lb.showInternal then
+		lb:showInternal()
+	end
+
+	return lb
+end
+
+local BTNCOLOR_CFG = {
+	active = {
+		txt = "4CE9D1",
+		bg = "0F4141",
+		light2 = "43A698",
+		light1 = "1C7E82"
+	},
+	inactive = {
+		txt = "30766B",
+		bg = "0A282B",
+		light2 = "276E6C",
+		light1 = "144243"
+	}
+}
+
+function M:updateBottomArea()
+	local showPageNum = 0
+
+	for i = 1, PageNum do
+		local btn = self._btnPages[i]
+		local canShow = self:canShowPage(i)
+		local showButton = canShow and PageCfg[i].BtnShowCond and PageCfg[i].BtnShowCond()
+
+		if PageCfg[i].BtnShowCond then
+			showButton = canShow and PageCfg[i].BtnShowCond()
+		else
+			showButton = canShow
+		end
+
+		btn.transform:SetActive(showButton)
+
+		if showButton then
+			showPageNum = showPageNum + 1
+			local isActivePage = self._pageIdx == i
+
+			btn.transform:GetChild(0):SetActive(isActivePage)
+			btn.transform:GetChild(2):SetActive(isActivePage)
+
+			local colors = isActivePage and BTNCOLOR_CFG.active or BTNCOLOR_CFG.inactive
+			btn.transform:GetComponent("Image").color = Color.str2Static(colors.bg)
+			local lights = btn.transform:GetChild(1)
+			lights:GetComponent("Image").color = Color.str2Static(colors.light1)
+			local light2Color = Color.str2Static(colors.light1)
+			lights:GetChild(0):GetComponent("Image").color = light2Color
+			lights:GetChild(1):GetComponent("Image").color = light2Color
+			btn.transform:GetChild(3):GetComponent("TMP_Text").color = Color.str2Static(colors.txt)
+		end
+	end
+
+	self._goPageBtns:SetActive(showPageNum > 1)
+	lc.setSizeDelta(self._tfPageContainer, 0, showPageNum > 1 and -100 or 0)
+	lc.setAnchoredPosition(self._tfPageContainer, 0, showPageNum > 1 and 50 or 0)
+end
+
+return M

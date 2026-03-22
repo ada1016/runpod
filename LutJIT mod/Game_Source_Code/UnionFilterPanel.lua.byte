@@ -1,0 +1,148 @@
+local M = class("UnionFilterPanel", requireLua("BasePanel"))
+local Types = Types
+local NetPack = NetPack
+local LangChooseArea = requireLua("LangChooseArea")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpInputLevel = Types.TMP_InputField,
+	tmpInputAtk = Types.TMP_InputField,
+	btnStateClose = Types.Button,
+	btnStateOpen = Types.Button,
+	textLanguage = Types.Text,
+	tmpLanguage = Types.TMP_Text,
+	goLanguageChoose = Types.GameObject,
+	btnLanguage = Types.Button,
+	btnMiusLevel = Types.Button,
+	btnAddLevel = Types.Button,
+	btnMiusAtk = Types.Button,
+	btnAddAtk = Types.Button,
+	btnConfirm = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+	LangChooseArea.noCreate(self._goLanguageChoose)
+	self._goLanguageChoose:init(self, function (langId)
+		NetPack.UnionSearchReqPack.language = langId
+
+		self:updateLanguage()
+	end)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		NetPack.UnionSearchReqPack.enable_filter = true
+
+		if self._confirmCallback then
+			self._confirmCallback()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnMiusLevel, function ()
+		self:doChangeLevelStep(-10)
+	end)
+	self:setClick(self._btnAddLevel, function ()
+		self:doChangeLevelStep(10)
+	end)
+	self:setClick(self._btnMiusAtk, function ()
+		self:doChangeAtkStep(-1000)
+	end)
+	self:setClick(self._btnAddAtk, function ()
+		self:doChangeAtkStep(1000)
+	end)
+end
+
+function M:addEvents()
+	self._tmpInputLevel.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 0
+
+		self:doChangeLevel(math.abs(pt))
+	end)
+	self._tmpInputAtk.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 0
+
+		self:doChangeAtk(math.abs(pt))
+	end)
+	self:setClick(self._btnStateClose, function ()
+		NetPack.UnionSearchReqPack.need_apply = false
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(true)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(false)
+	end)
+	self:setClick(self._btnStateOpen, function ()
+		NetPack.UnionSearchReqPack.need_apply = true
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(false)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(true)
+	end)
+	self:setClick(self._btnLanguage, function ()
+		self._goLanguageChoose:doAction(NetPack.UnionSearchReqPack.language)
+	end)
+end
+
+function M:init()
+	self:updateLanguage()
+end
+
+function M:updateLanguage()
+	local langId = NetPack.UnionSearchReqPack.language
+
+	if langId == 1 then
+		self._textLanguage.text = LcLocalization.getTextStr(SID.ALL_LANGUAGE_STR)
+	else
+		self._textLanguage.text = D.UnionLanguages[langId]
+	end
+
+	self._tmpLanguage.text = ""
+	self._tmpInputLevel.text = NetPack.UnionSearchReqPack.require_level
+	self._tmpInputAtk.text = NetPack.UnionSearchReqPack.require_atk
+
+	self._btnStateClose:GetComponent("TabSelector"):SetSelected(not NetPack.UnionSearchReqPack.need_apply)
+	self._btnStateOpen:GetComponent("TabSelector"):SetSelected(NetPack.UnionSearchReqPack.need_apply)
+end
+
+function M:doChangeLevel(pt)
+	pt = math.max(pt, 0)
+	NetPack.UnionSearchReqPack.require_level = pt
+	self._tmpInputLevel.text = pt
+end
+
+function M:doChangeAtk(pt)
+	pt = math.max(pt, 0)
+	NetPack.UnionSearchReqPack.require_atk = pt
+	self._tmpInputAtk.text = pt
+end
+
+function M:doChangeLevelStep(dt)
+	local require_level = NetPack.UnionSearchReqPack.require_level + dt
+
+	if require_level > 100 then
+		require_level = 0
+	elseif require_level < 0 then
+		require_level = 100
+	end
+
+	self:doChangeLevel(require_level)
+end
+
+function M:doChangeAtkStep(dt)
+	local require_atk = NetPack.UnionSearchReqPack.require_atk + dt
+
+	if require_atk > 10000 then
+		require_atk = 0
+	elseif require_atk < 0 then
+		require_atk = 10000
+	end
+
+	self:doChangeAtk(require_atk)
+end
+
+return M

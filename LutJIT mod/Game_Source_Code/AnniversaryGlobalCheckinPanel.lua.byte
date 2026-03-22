@@ -1,0 +1,332 @@
+local M = class("AnniversaryGlobalCheckinPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	btnExit = Types.Button,
+	scroll = Types.ScrollRect,
+	tfContent = Types.Transform,
+	goLastReward = Types.GameObject,
+	txtLastDay = Types.TMP_Text,
+	imgRT = Types.RawImage,
+	camera = Types.Camera,
+	txtGlobalStar = Types.TMP_Text,
+	txtCurrentStar = Types.TMP_Text,
+	btnStarTreasure = Types.Button,
+	btnFeedback = Types.Button,
+	btnCostAllStar = Types.Button,
+	btnDebugChangeEarth = Types.Button,
+	btnStar = Types.Button,
+	goEarth = Types.GameObject,
+	animEarth = Types.Animation
+}
+local AnniversaryCheckRewardWidget = requireLua("AnniversaryCheckRewardWidget")
+local AnniversaryEarthWidget = requireLua("AnniversaryEarthWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		extraEarlyCount = 1,
+		bottomPadding = 0,
+		cellMargin = 0,
+		direction = 2,
+		updateVisibleCells = true,
+		cellHeight = 150,
+		cellInitCount = 5
+	})
+	self._camera.orthographicSize = 2 * lc._bestFitScale
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnIssue, function ()
+		V.showBubbleTips({
+			desc = SID.ANNIVERSARY_GLOBAL_STAR_RULE
+		}, {
+			target = self._btnIssue.transform,
+			offset = {
+				0,
+				20,
+				0
+			}
+		})
+	end)
+	self:setClick(self._btnStarTreasure, function ()
+		self:handleStarTreasureBtn()
+	end)
+	self:setClick(self._btnFeedback, function ()
+		self:handleFeedbackRewardBtn()
+	end)
+	self:setClick(self._btnCostAllStar, function ()
+		self:handleCostStarBtn()
+	end)
+	self:setClick(self._btnDebugChangeEarth, function ()
+		self._showLv = (self._showLv or 1) + 1
+
+		if self._showLv > 10 then
+			self._showLv = 1
+		end
+
+		self._goEarth:updateUI(self._showLv)
+	end)
+	self:setClickWithoutAction(self._btnStar, function ()
+		V.showItemInfoPanel(D.ResType.anniversary_star)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.anniversary_star then
+			self:updateReddots()
+			self:playStarAnim(0)
+		end
+	end)
+	self:on("day.cross", function ()
+		self:updateUI()
+		self:updateBigReward(true)
+	end)
+	self:on("anniversary.feedback.claim", function ()
+		self:updateFeedback()
+	end)
+	self:on("anniversary.checkin.claim", function ()
+		self:updateBigReward(true)
+	end)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._timer)
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+	self:updateReddots()
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:initPrefabVar()
+	AnniversaryEarthWidget.noCreate(self._goEarth)
+	AnniversaryCheckRewardWidget.noCreate(self._goLastReward)
+	self._goLastReward:setRewardsClick(self)
+end
+
+function M:init(from)
+	self._from = from
+	self._module = P._playerActivityAnniversary._moduleCheckin
+
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_TITLE_CHECKIN)
+
+	if from == "preview" then
+		-- Nothing
+	end
+
+	self._secondFuncs = {}
+	self._secondTimer = lc.setInterval(function ()
+		for i, v in pairs(self._secondFuncs) do
+			v()
+		end
+	end, 0.5)
+
+	CameraSettingHelper.SetRendererIndex(self._camera, 2)
+
+	self._showLv = self._module:getEarthStarLevel()
+
+	self._scrollViewEx:reloadData()
+	self._scrollViewEx:moveToItemByIndex(math.max(1, self._module:getTodayIdx() - 2), nil, , , function ()
+	end)
+	self._goEarth:updateUI(self._showLv)
+	self:updateStar()
+	self:updateUI(true)
+end
+
+function M:updateUI(init)
+	if not init then
+		self._scrollViewEx:reloadData()
+	end
+
+	self:updateFeedback()
+	self:updateExpireTime()
+	self:updateReddots()
+end
+
+function M:updateStar()
+	self._showCurrent = P._playerAsset:getAssetNum(D.ResType.anniversary_star)
+	self._showGlobalStarValue = self._module:getTotalGlobalStars()
+
+	self._txtCurrentStar:FormatComma(self._showCurrent)
+	self._txtGlobalStar:FormatComma(self._showGlobalStarValue)
+end
+
+function M:playAnimOfGlobal()
+	self:playGlobalAnim(0)
+end
+
+function M:playStarAnim(delay1)
+	local old1 = self._showCurrent
+	local new1 = P._playerAsset:getAssetNum(D.ResType.anniversary_star)
+
+	if old1 ~= new1 then
+		self._txtCurrentStar:DODigitScrollComma(old1, new1, 1, delay1 or 0)
+
+		self._showCurrent = new1
+	end
+end
+
+function M:playGlobalAnim(delay2)
+	local old2 = self._showGlobalStarValue
+	local new2 = self._module:getTotalGlobalStars()
+
+	if old2 ~= new2 then
+		self._txtGlobalStar:DODigitScrollComma(old2, new2, 1, delay2 or 2)
+
+		self._showGlobalStarValue = new2
+	end
+end
+
+function M:updateFeedback()
+	self._btnFeedback:SetActive(P._playerActivityAnniversary:haveUnclaimedFeedbackRewards())
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local endTime = P._playerActivityAnniversary:readActivityEndTime()
+
+	if not endTime or endTime <= 0 then
+		return
+	end
+
+	local seconds = endTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:updateReddots()
+	self._btnStarTreasure.dot:SetActive(self._module:haveTreasureDot())
+end
+
+function M:onCellNum()
+	return self._module:readTotalDay() - 1
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = AnniversaryCheckRewardWidget.create(self._tfContent)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self, function ()
+		end)
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+function M:onChangeVisibleCells()
+	self:updateBigReward()
+end
+
+function M:updateBigReward(force)
+	local lastCellIdx = self._scrollViewEx:getLastVisibleCellIdx()
+	local showRewardLevel = nil
+
+	if lastCellIdx > 0 then
+		showRewardLevel = self._module:findBigRewardIdx(lastCellIdx)
+	end
+
+	showRewardLevel = showRewardLevel or self._module:readTotalDay()
+
+	if self._showBigRewardIdx == showRewardLevel and not force then
+		return
+	end
+
+	self._showBigRewardIdx = showRewardLevel
+
+	self._goLastReward:updateUI(showRewardLevel)
+
+	self._txtLastDay.text = showRewardLevel
+end
+
+function M:handleStarTreasureBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryStarTreasurePanel, function ()
+		local total = self._module:getTotalGlobalStars()
+
+		if total ~= self._showGlobalStarValue then
+			self:playAnimOfGlobal()
+		end
+	end)
+end
+
+function M:handleFeedbackRewardBtn()
+	local haveRewards = P._playerActivityAnniversary:haveUnclaimedFeedbackRewards()
+
+	if not haveRewards then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.AnniversaryThanksRewardPanel)
+end
+
+function M:handleCostStarBtn()
+	if not P._playerActivity:isAnniversaryOpening() then
+		V.showToast(SID.TIP_EVENT_END)
+		self:closePanel()
+
+		return
+	end
+
+	local num = P._playerAsset:getAssetNum(D.ResType.anniversary_star)
+
+	if num <= 0 then
+		V.showResultCode(ResultCode.RESOURCE_NOT_ENOUGH)
+
+		return
+	end
+
+	Client.playSound("ui_Annvy_star_add_1")
+	self._module:costAllStars()
+	self._animEarth:Stop()
+	self._animEarth:Play()
+	self:playGlobalAnim(2)
+	self:updateReddots()
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:handleStartBtn()
+end
+
+return M

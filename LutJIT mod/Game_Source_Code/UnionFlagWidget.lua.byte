@@ -1,0 +1,22 @@
+local M = class("UnionFlagWidget")
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(base, bdage)
+	LuaUnity.setTPSprite(self._imgBase, string.format("guild/flag_bottom_%d", base), true)
+	LuaUnity.setTPSprite(self._imgBadge, string.format("guild/flag_above_%d", bdage), true)
+end
+
+return M

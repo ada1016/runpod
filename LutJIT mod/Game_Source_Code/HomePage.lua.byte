@@ -1,0 +1,1539 @@
+local M = class("HomePage", requireLua("BasePanel"))
+local Types = Types
+local Client = Client
+local SPINE_PATH = "Assets/FW/Prefabs/UI/element/MissionBossSpine%s.prefab"
+M.args = {
+	btnMissionInfo = Types.Button,
+	textMissionTitle = Types.TMP_Text,
+	textMissionBattleData = Types.TMP_Text,
+	animMissionShow = Types.Animation,
+	goCommonEnemy = Types.GameObject,
+	imgEnemy1 = Types.Image,
+	imgEnemy2 = Types.Image,
+	imgEnemy3 = Types.Image,
+	goSweep = Types.GameObject,
+	btnSweep = Types.Button,
+	goSweepRemoveAd = Types.GameObject,
+	goSweepAd = Types.GameObject,
+	goSweepFree = Types.GameObject,
+	btnChangeSweepRate = Types.Button,
+	tmpSweepRate = Types.TMP_Text,
+	tmpSweepTitle = Types.TMP_Text,
+	tmpSweepMission = Types.TMP_Text,
+	tmpSweepCost = Types.TMP_Text,
+	goOffline = Types.GameObject,
+	btnOffline = Types.Button,
+	goOfflineFull = Types.GameObject,
+	goOfflineNotFull = Types.GameObject,
+	btnPreviewNextMission = Types.Button,
+	btnPreviewLastMission = Types.Button,
+	btnMissionIcon = Types.Button,
+	imgMissionIcon = Types.RawImage,
+	imgMissionIconLock = Types.RawImage,
+	goMission = Types.GameObject,
+	goMissionLock = Types.GameObject,
+	imgTabBg1 = Types.Image,
+	imgTabBg2 = Types.Image,
+	goTabIcon1 = Types.GameObject,
+	goTabIcon2 = Types.GameObject,
+	textTab1 = Types.TMP_Text,
+	textTab2 = Types.TMP_Text,
+	goBg1 = Types.GameObject,
+	goBg2 = Types.GameObject,
+	btnUnClaimRewardTip1 = Types.Button,
+	animMissionBox = Types.Animation,
+	goComplete = Types.GameObject,
+	goCompletePerfect = Types.GameObject,
+	textCompleteNotPerfect = Types.TMP_Text,
+	goNotComplete = Types.GameObject,
+	btnCommonMission = Types.Button,
+	goCommonArea = Types.GameObject,
+	btnEliteMission = Types.Button,
+	btnTask = Types.LCButton,
+	btnPlay = Types.Button,
+	textCostEnergy = Types.TMP_Text,
+	btnNewbieTask = Types.LCButton,
+	goNewbieTask = Types.GameObject,
+	txtNewbieTaskDesc = Types.TMP_Text,
+	txtNewbieTaskProgress = Types.TMP_Text,
+	animNewbieTask = Types.Animation,
+	goLeftArea = Types.GameObject,
+	btnRightCard = Types.Button,
+	btnNewbie = Types.Button,
+	btnFirstCharge = Types.Button,
+	btnLimitGift = Types.Button,
+	btnSpecialOffer = Types.Button,
+	btnAnniversary = Types.Button,
+	giftScroll = Types.ScrollRect,
+	tfGiftsScroll = Types.Transform,
+	lgGifts = Types.LayoutGroup,
+	btnExpand = Types.Button,
+	rightBtnsScroll = Types.ScrollRect,
+	tfRightBtnsScroll = Types.Transform,
+	lgRightBtns = Types.LayoutGroup,
+	btnRightExpand = Types.Button,
+	btnSpark = Types.Button,
+	btnArkProj = Types.Button,
+	btnArkLottery = Types.Button,
+	btnRank = Types.Button,
+	btnSevenDay = Types.Button,
+	btnWeekLottery1 = Types.Button,
+	btnPlayerReturn = Types.Button,
+	btnAnniversaryInvite = Types.Button
+}
+local MissionPerfectRewardWidget = requireLua("MissionPerfectRewardWidget")
+local TaskHelper = TaskHelper
+
+function M:Awake()
+	M.super.Awake(self)
+	RedDotManager.add(self._btnCommonMission, "city.home.common", true)
+	RedDotManager.add(self._btnEliteMission, "city.home.elite", true)
+	RedDotManager.add(self._btnOffline, "city.home.offline", true)
+	RedDotManager.add(self._btnRightCard, "city.home.rightcard", true)
+	RedDotManager.add(self._btnFirstCharge, "city.home.firstcharge", true)
+	RedDotManager.add(self._btnNewbie, "city.home.newbie", true)
+	RedDotManager.add(self._btnLimitGift, "city.home.limittime", true)
+	RedDotManager.add(self._btnSpecialOffer, "city.home.special", true)
+	RedDotManager.add(self._btnSevenDay, "city.home.sevenday", true)
+	RedDotManager.add(self._btnWeekLottery1, "city.home.weeklottery", true)
+	RedDotManager.add(self._btnRank, "city.home.mainrank", true)
+	RedDotManager.add(self._btnArkProj, "city.home.arkProj", true)
+	RedDotManager.add(self._btnSpark, "city.home.sparkScout", true)
+	RedDotManager.add(self._btnPlayerReturn, "city.home.playerReturn", true)
+	RedDotManager.add(self._btnAnniversary, "city.home.anniversary", true)
+	RedDotManager.add(self._btnAnniversaryInvite, "city.home.anniversaryInvite", true)
+
+	self._btnTab1 = self._btnCommonMission
+	self._btnTab2 = self._btnEliteMission
+	self._goBosses = {}
+
+	self._goCommonArea:SetActive(false)
+end
+
+function M:OnDestroy()
+	RedDotManager.remove("city.home.common")
+	RedDotManager.remove("city.home.elite")
+	RedDotManager.remove("city.home.offline")
+	RedDotManager.remove("city.home.rightcard")
+	RedDotManager.remove("city.home.firstcharge")
+	RedDotManager.remove("city.home.newbie")
+	RedDotManager.remove("city.home.limittime")
+	RedDotManager.remove("city.home.special")
+	RedDotManager.remove("city.home.sevenday")
+	RedDotManager.remove("city.home.weeklottery")
+	RedDotManager.remove("city.home.mainrank")
+	RedDotManager.remove("city.home.arkProj")
+	RedDotManager.remove("city.home.sparkScout")
+	RedDotManager.remove("city.home.playerReturn")
+	RedDotManager.remove("city.home.anniversary")
+	RedDotManager.remove("city.home.anniversaryInvite")
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnRightCard, function ()
+		UIManager.openPanel(PrefabDefine.RightCardPanel, D.PurchaseChannel.Main)
+	end)
+	self:setClickWithoutAction(self._btnCommonMission, function ()
+		self._msId = self:getShowMissionIdByType(D.MissionType.Common)
+
+		self:changeMissionTab(1)
+	end)
+	self:setClickWithoutAction(self._btnEliteMission, function ()
+		if D.isSystemUnlocked(D.SystemType.EliteMission) then
+			self._msId = self:getShowMissionIdByType(D.MissionType.Elite)
+
+			self:changeMissionTab(2)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.EliteMission]._unlockVal
+			})
+		end
+	end)
+	self:setClickWithoutAction(self._btnMissionIcon, function ()
+		UIManager.openPanel(PrefabDefine.MissionOverviewPanel, self, self._msId, self._msType)
+	end)
+	self:setClick(self._btnPreviewLastMission, function ()
+		self:showLastMission()
+	end)
+	self:setClick(self._btnPreviewNextMission, function ()
+		self:showNextMission()
+	end)
+	self:setClickWithoutAction(self._btnMissionInfo, function ()
+		UIManager.openPanel(PrefabDefine.MissionInfoPanel, self._msId, self._msType)
+	end)
+	self:setClick(self._btnUnClaimRewardTip1, function ()
+		self:dealClickUnClaimTip()
+	end)
+	self:setClick(self._btnTask, function ()
+		UIManager.openPanel(PrefabDefine.TaskPanel, D.TaskClass.Daily)
+	end)
+	self:setClick(self._btnNewbieTask, function ()
+		if TaskHelper:isFinished(self._newbieTask) then
+			local task = self._newbieTask
+			local rewards = P._playerTask:claimTaskReward(task, D.LogWay.newbie_task)
+
+			Trace.traceDesign("TaskNewbie_%s", task)
+			V.showRewardClaimPanel(rewards)
+			self:updateTaskUI()
+			SimpleEvent.emit("guide.trigger", D.GuideTriggerType.ClaimNewbieTask, task)
+		else
+			UIManager.openPanel(PrefabDefine.TaskInfoPanel, self._newbieTask)
+		end
+	end)
+	self:setClick(self._btnPlay, function ()
+		if not C._config.atk and P:checkAtkIllegality() then
+			return
+		end
+
+		self:dealEnterBattle()
+	end)
+	self:setClick(self._btnSweep, function ()
+		self:dealSweepBtn()
+	end)
+	self:setClick(self._btnChangeSweepRate, function ()
+		self:dealChangeSweepRateBtn()
+	end)
+	self:setClick(self._btnOffline, function ()
+		self:dealOfflineBtn()
+	end)
+	self:setClick(self._btnNewbie, function ()
+		local giftId = P._playerGift:getBtnShowNewbieGiftId()
+
+		if not giftId then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.NewbieGiftPanel, self._showNewbieId)
+	end)
+	self:setClick(self._btnLimitGift, function ()
+		local giftId = P._playerGift:getBtnShowLimitGiftId()
+
+		if not giftId then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.LimitGiftPanel, self._showLimitId)
+	end)
+	self:setClick(self._btnFirstCharge, function ()
+		UIManager.openPanel(PrefabDefine.FirstChargePanel)
+	end)
+	self:setClick(self._btnSpecialOffer, function ()
+		UIManager.openPanel(PrefabDefine.SpecialRewardsPanel)
+	end)
+	self:setClick(self._btnSevenDay, function ()
+		self:dealSevenDayBtn()
+	end)
+	self:setClick(self._btnWeekLottery1, function ()
+		self:dealActivityLottery()
+	end)
+	self:setClick(self._btnRank, function ()
+		UIManager.openPanel(PrefabDefine.StageRankPanel)
+	end)
+	self:setClick(self._btnArkProj, function ()
+		self:dealArkProj()
+	end)
+	self:setClick(self._btnArkLottery, function ()
+		self:dealArkLottery()
+	end)
+	self:setClick(self._btnSpark, function ()
+		self:dealSparkScout()
+	end)
+	self:setClick(self._btnPlayerReturn, function ()
+		self:dealPlayerReturnBtn()
+	end)
+	self:setClick(self._btnAnniversary, function ()
+		self:dealAnniversary()
+	end)
+	self:setClick(self._btnAnniversaryInvite, function ()
+		self:dealAnniversaryInvite()
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateQuickSweep()
+		self:updateTaskUI()
+		self:updateSevenDayUI()
+		self:updateWeekLottery()
+		self:updateSpecialOffer()
+		self:updateArkProj()
+		self:updateSparkScout()
+		self:updatePlayerReturn()
+		self:updateAnniversaryInvite()
+		self:updateAnniversary()
+		RedDotManager.update("city.home.limittime")
+		RedDotManager.update("city.home.newbie")
+		RedDotManager.update("city.home.mainrank")
+		RedDotManager.update("city.home.monthlyCheckin")
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.energy then
+			self:updateBtnChangeSweepRate()
+			self:updateSweepCost()
+		end
+	end)
+	self:on("offline.time.change", function ()
+		self:updateOfflineBtn()
+		RedDotManager.update("city.home.offline")
+	end)
+	self:on("offline.time.full", function ()
+		self:updateOfflineBtn()
+		RedDotManager.update("city.home.offline")
+
+		local canShow = P._playerGuide:isGroupFinished(D.GuideGroupId.Offline) and D.isSystemUnlocked(D.SystemType.Afk)
+
+		if not canShow then
+			return
+		end
+
+		local showTime = P._playerOffline:getRecordOfflineTime() + P._playerOffline:readOfflineShowTime()
+
+		if Client.getCurTime() < showTime then
+			return
+		end
+
+		if UIManager.isInMain() then
+			UIManager.openPanel(PrefabDefine.OfflineRewardPanel)
+		end
+	end)
+	self:on("offline.claim", function ()
+		self:updateOfflineBtn()
+		RedDotManager.update("city.home.offline")
+	end)
+	self:on("rightcard.update", function ()
+		self:updateQuickSweep()
+		self:updateRightCardUI()
+		RedDotManager.update("city.home.rightcard")
+	end)
+	self:on("gift.trigger", function (giftType)
+		if giftType == D.GiftType.Newbie then
+			self:updateNewbieUI()
+		elseif giftType == D.GiftType.FirstCharge then
+			self:updateFirstChargeUI()
+		elseif giftType == D.GiftType.LimitTime then
+			self:updateLimitGiftUI()
+		end
+	end)
+	self:on("gift.claim", function (giftType)
+		if giftType == D.GiftType.Newbie then
+			self:updateNewbieUI()
+		elseif giftType == D.GiftType.FirstCharge then
+			self:updateFirstChargeUI()
+		elseif giftType == D.GiftType.LimitTime then
+			self:updateLimitGiftUI()
+		end
+	end)
+	self:on("gift.limit.update", function ()
+		self:updateLimitGiftUI()
+	end)
+	self:on("gift.newbie.update", function ()
+		self:updateNewbieUI()
+	end)
+	self:on("mission.reward.claim", function (msId)
+		self:updateAfterClaim(msId)
+
+		if self._msType == D.MissionType.Common then
+			RedDotManager.update("city.home.common")
+		else
+			RedDotManager.update("city.home.elite")
+		end
+	end)
+	self:on("elite.dot", function ()
+		RedDotManager.update("city.home.elite")
+	end)
+	self:on("sevenday.claim", function ()
+		self:updateSevenDayUI()
+	end)
+	self:on("iap.purchase.success", function ()
+		self:updateGiftUI()
+	end)
+	self:on("activity.open", function (type)
+		if type == D.ActivityType.WeekLottery then
+			self:updateWeekLottery()
+		elseif type == D.ActivityType.Anniversary then
+			self:updateAnniversary()
+		end
+	end)
+	self:on("guide.group.finish", function (groupId)
+		if groupId == D.GuideGroupId.Offline then
+			self:updateOfflineBtn()
+			RedDotManager.update("city.home.offline")
+		end
+	end)
+	self:on("level.dirty", function ()
+		self:updateSpecialOffer()
+	end)
+	self:on("ark_rebulid.rank_reward", function ()
+		self:updateArkProj()
+	end)
+	self:on("ark_rebulid.settled", function ()
+		self:updateArkProj()
+	end)
+	self:on("ark_rebuild.lottery.open", function ()
+		RedDotManager.update("city.home.arkProj")
+		self:updateArkProj()
+	end)
+end
+
+function M:init(panel)
+	self._panel = panel
+	self._imgEnemies = {
+		self._imgEnemy1,
+		self._imgEnemy2,
+		self._imgEnemy3
+	}
+
+	self:initUI()
+end
+
+function M:initUI()
+	local iconPath = D.toSmallSprite(D.ResType.energy)
+	local imgSprite = self._textCostEnergy.transform.parent:GetChild(0):GetComponent("Image")
+
+	LuaUnity.setTPSprite(imgSprite, iconPath, nil, true)
+	lc.setLocalScale(self._btnMissionIcon.transform, 0, 0, 0)
+	self._animMissionShow:Stop()
+	self._animMissionShow:Play("anim_homepage_ChangeChapter")
+
+	if not self._secondTimerFuncs then
+		self._secondTimerFuncs = {}
+	end
+
+	if not self._secondTimer then
+		self._secondTimer = lc.setInterval(function ()
+			for k, func in pairs(self._secondTimerFuncs) do
+				func()
+			end
+		end, 0.5)
+	end
+
+	self:updateOfflineBtn()
+
+	local lastMsId, lastMsType = P._playerMission:getLastMissionIdType()
+	local msId = P._playerMission:getMissionId()
+	local remainLastMs = msId > 10010
+	self._msType = lastMsType
+
+	if remainLastMs then
+		self._msId = lastMsId
+	else
+		self._msId = self:getShowMissionIdByType(lastMsType)
+	end
+
+	local tabIndex = self._msType == D.MissionType.Common and 1 or 2
+
+	self:changeMissionTab(tabIndex, true)
+end
+
+function M:updateUI()
+	self:updateRightCardUI()
+	self:updateAnniversary()
+	self:updateGiftUI()
+	self:updateRightAreaUI()
+
+	if C.isInReview() then
+		self._goLeftArea:SetActive(false)
+	end
+end
+
+function M:getShowMissionIdByType(msType)
+	local msId = P._playerMission:getMissionIdByType(msType)
+
+	if not P._playerMission:isMissionExist(msId) then
+		return math.max(10001, msId - 1)
+	end
+
+	if msType == D.MissionType.Elite then
+		local cmsId = P._playerMission:getMissionIdByType(D.MissionType.Common)
+
+		if cmsId == msId then
+			if P._playerMission:isMissionComplete(cmsId, D.MissionType.Common) then
+				return cmsId
+			else
+				return math.max(10001, cmsId - 1)
+			end
+		end
+	end
+
+	return msId
+end
+
+function M:dealEnterBattle()
+	local totalCost = D._globalConfig._mission_cost_energy[self._msType]
+
+	if P._playerAsset:isAssetEnough(D.ResType.energy, totalCost) then
+		InputBattleData = {
+			msType = self._msType,
+			msId = self._msId
+		}
+
+		P:setMsType(self._msType)
+		P._playerMission:setLastMissionIdType(self._msId, self._msType)
+		V.switchBetweenMainAndBattleScene("city", "battle")
+
+		local type = self._msType == D.MissionType.Common and "Normal" or "Elite"
+
+		Trace.traceDesign("%sStageTimes:%d", type, self._msType == D.MissionType.Common and self._msId or self._msId + 10000)
+	else
+		UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+	end
+end
+
+function M:changeMissionTab(tabIdx, noAnim)
+	if self._missionTab == tabIdx then
+		return
+	end
+
+	self._missionTab = tabIdx
+	self._msType = tabIdx == 1 and D.MissionType.Common or D.MissionType.Elite
+
+	if tabIdx == 2 then
+		P._playerRecord:setEliteRedDot(false)
+	end
+
+	self._goBg1:SetActive(tabIdx == 1)
+	self._goBg2:SetActive(tabIdx == 2)
+	self._btnCommonMission.dot:SetVisible(tabIdx == 2)
+	self._btnEliteMission.dot:SetVisible(tabIdx == 1)
+	LuaUnity.setTexture(self._imgMissionIcon, tabIdx == 1 and "img_Mainland_01" or "img_Mainland_02", true)
+	self:updateSelectMissionTab()
+	self:updateMissionInfo()
+	self:updateArrow()
+	self:updateUnopenBoxTips()
+	self:updateQuickSweep()
+
+	if not noAnim then
+		self._animMissionShow:Play("anim_SwitchLand")
+	end
+end
+
+function M:updateMissionInfo()
+	V.loadMissionTitleText(self._textMissionTitle, self._msId, self._msType)
+
+	local type = P._playerMission:getMissionPerfectType(self._msId, self._msType)
+	local battleData = P._playerMission:getBattleData(self._msId, self._msType)
+
+	if type == D.PerfectType.NotCleared then
+		if battleData.battleTime == 0 then
+			self._textMissionBattleData.text = ""
+		else
+			self._textMissionBattleData:SetLocalizeS(SID.MISSION_MAX_TIME, V.formatTimeS2MS(battleData.battleTime))
+		end
+	else
+		self._textMissionBattleData.text = ""
+	end
+
+	if D.PerfectType.NotCleared < type and type < D.PerfectType.Perfect then
+		local hp = Mathf.Clamp(battleData.leftHp, 0, 100)
+
+		self._textCompleteNotPerfect:SetLocalize(SID.MISSION_COMPLETE_X, hp)
+	end
+
+	self._goCompletePerfect:SetActive(type == D.PerfectType.Perfect)
+	self._goComplete:SetActive(type ~= D.PerfectType.NotCleared and type ~= D.PerfectType.Perfect)
+
+	self._textCostEnergy.text = D._globalConfig._mission_cost_energy[self._msType]
+	local isLock = P._playerMission:getMissionIdByType(self._msType) < self._msId
+
+	if not isLock and self._msType == D.MissionType.Elite then
+		isLock = P._playerMission:getMissionIdByType(D.MissionType.Common) <= self._msId
+	end
+
+	V._lastMsId = self._msId
+
+	self._btnPlay:SetActive(not isLock)
+	self._goMission:SetActive(not isLock)
+	self._goMissionLock:SetActive(isLock)
+	self._goCommonArea:SetActive(false)
+
+	local boss = P._playerMission:readBoss(self._msId, self._msType)
+
+	if not isLock then
+		if boss then
+			self._goCommonEnemy:SetActive(false)
+
+			for i = 1, 5 do
+				if self._goBosses[i] then
+					self._goBosses[i]:SetActive(false)
+				end
+			end
+
+			if boss == 3101 then
+				self:showBoss(1)
+			elseif boss == 3501 then
+				self:showBoss(2)
+			elseif boss == 3401 then
+				self:showBoss(4)
+			elseif boss == 3201 then
+				self:showBoss(3)
+			elseif boss == 3301 then
+				self:showBoss(5)
+			end
+		else
+			for i = 1, 5 do
+				if self._goBosses[i] then
+					self._goBosses[i]:SetActive(false)
+				end
+			end
+
+			self._goCommonEnemy:SetActive(true)
+
+			local enemyIds = P._playerMission:readEnemy(self._msId, self._msType)
+
+			for i = 1, #enemyIds do
+				if enemyIds[i] then
+					self._imgEnemies[i]:SetActive(true)
+					V.loadEnemySprite(self._imgEnemies[i], enemyIds[i])
+				else
+					self._imgEnemies[i]:SetActive(false)
+				end
+			end
+		end
+	else
+		for i = 1, 5 do
+			if self._goBosses[i] then
+				self._goBosses[i]:SetActive(false)
+			end
+		end
+
+		self._goCommonEnemy:SetActive(false)
+	end
+end
+
+function M:showBoss(id)
+	if not self._goBosses[id] then
+		self._goBosses[id] = LuaUnity.createGameObject(string.format(SPINE_PATH, id), self._goCommonEnemy.transform.parent)
+	end
+
+	self._goBosses[id]:SetActive(true)
+end
+
+function M:updateSelectMissionTab()
+	LuaUnity.setTPSprite(self._imgTab1, "general/11")
+	LuaUnity.setTPSprite(self._imgTab2, "general/11")
+
+	local showTabIdx = self._missionTab
+
+	for i = 1, 2 do
+		if i == showTabIdx then
+			local textTab = self["_textTab" .. i]
+			textTab.color = Color.str2Static(V.COLOR_DEFINE.tab_text_active)
+			textTab.margin = Vector4.static(40, 0, 0, 0)
+
+			lc.setSizeDelta(self["_btnTab" .. i].transform, 170, 52)
+
+			self["_imgTabBg" .. i].enabled = true
+
+			self["_goTabIcon" .. i]:SetActive(true)
+		else
+			local textTab = self["_textTab" .. i]
+			textTab.color = Color.str2Static(V.COLOR_DEFINE.tab_text_inactive)
+			textTab.margin = Vector4.static(0, 0, 0, 0)
+
+			lc.setSizeDelta(self["_btnTab" .. i].transform, 130, 52)
+
+			self["_imgTabBg" .. i].enabled = false
+
+			self["_goTabIcon" .. i]:SetActive(false)
+		end
+	end
+end
+
+function M:updateArrow()
+	local nextMs = self._msId + 1
+
+	self._btnPreviewLastMission.gameObject:SetActive(self._msId > 10001)
+
+	local isLock = P._playerMission:getMissionIdByType(self._msType) < self._msId
+
+	if not isLock and self._msType == D.MissionType.Elite then
+		isLock = P._playerMission:getMissionIdByType(D.MissionType.Common) <= self._msId
+	end
+
+	self._btnPreviewNextMission.gameObject:SetActive(P._playerMission:isMissionExist(nextMs) and not isLock)
+end
+
+function M:showNextMission()
+	local nextMs = self._msId + 1
+	local canSee = P._playerMission:isMissionExist(nextMs) and self._msId < P._playerMission:getMissionId() + 1
+
+	if not canSee then
+		return
+	end
+
+	self:changeMission(nextMs)
+end
+
+function M:showLastMission()
+	if self._msId <= 10001 then
+		return
+	end
+
+	self:changeMission(self._msId - 1)
+end
+
+function M:changeMission(missionId, missionType)
+	local canSee = P._playerMission:isMissionExist(missionId) and missionId <= P._playerMission:getMissionId() + 1
+
+	if canSee then
+		self._msId = missionId
+	else
+		self._msId = P._playerMission:getMissionId()
+	end
+
+	if not P._playerMission:isMissionExist(self._msId) then
+		self._msId = self._msId - 1
+	end
+
+	if missionType and missionType ~= self._msType then
+		self:changeMissionTab(missionType)
+	else
+		self:updateMissionInfo()
+		self:updateArrow()
+		self:updateUnopenBoxTips()
+		self:updateQuickSweep()
+		self._animMissionShow:Play("anim_SwitchLand")
+	end
+end
+
+function M:handleBackMainPop()
+	if P._playerMission:isNextMission() then
+		self._animMissionShow:Stop()
+		self._animMissionShow:Play("anim_homepage_ChangeChapter")
+		P._playerMission:removeNextMission()
+	end
+end
+
+function M:updateUnopenBoxTips()
+	local msId = P._playerMission:getFirstUnClaimPerfectReward(self._msType)
+	self._rewardMsId = msId
+
+	self._btnUnClaimRewardTip1.transform.parent:SetActive(D.MissionBegin < P._playerMission:getMissionId())
+	self._btnUnClaimRewardTip1.dot:SetActive(msId ~= nil)
+
+	self._animMissionBox.enabled = msId ~= nil
+
+	lc.setLocalScale(self._animMissionBox.transform, 1, 1, 1)
+end
+
+function M:dealClickUnClaimTip()
+	UIManager.openPanel(PrefabDefine.MissionOverviewPanel, self, self._msId, self._msType)
+end
+
+function M:updateAfterClaim(msId)
+	self:updateUnopenBoxTips()
+end
+
+function M:dealSweepBtn()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSvip = P._playerRight:isSVIP()
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+	local num2 = P._playerRecord:getLeftAdEnergySweepNum()
+	local msId = P._playerMission:getMissionIdByType(self._msType) - 1
+
+	if msId < 10001 then
+		V.showResultCode(ResultCode.NOT_MEET_CONDITION)
+
+		return
+	end
+
+	local totalCost = D._globalConfig._mission_cost_energy[self._msType]
+	local rate = 1
+
+	if num1 > 0 then
+		local isEnough = P._playerAsset:isAssetEnough(D.ResType.energy, totalCost)
+
+		if not isEnough then
+			UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+
+			return
+		end
+
+		P._playerRecord:recordEnergySweepNum()
+		self:dealAfterSweep(msId, rate, totalCost)
+	else
+		if num1 == 0 and not isSvip and num2 == 0 then
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+
+			if D.isSystemUnlocked(D.SystemType.MonthCard) then
+				UIManager.openPanel(PrefabDefine.RightCardPanel, D.PurchaseChannel.Pop)
+			end
+
+			return
+		end
+
+		local isEnough = P._playerAsset:isAssetEnough(D.ResType.energy, totalCost)
+
+		if not isEnough then
+			UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+
+			return
+		end
+
+		if isSvip then
+			local canFastSweep = P._playerAsset:isAssetEnough(D.ResType.energy, D._globalConfig._fast_sweep_energy_num_limit)
+			local rate = isSvip and canFastSweep and P._playerRecord:getFastSweepNum() or 1
+			totalCost = totalCost * rate
+
+			self:dealAfterSweep(msId, rate, totalCost)
+		elseif num2 > 0 then
+			P._playerAd:tryStartRewardAd(D.AdType.AdSweep, function ()
+				P._playerRecord:recordAdEnergySweepNum()
+				self:dealAfterSweep(msId, rate, totalCost)
+			end)
+
+			return
+		end
+	end
+end
+
+function M:dealAfterSweep(msId, rate, totalCost)
+	P._playerAsset:increaseAssetNum(D.ResType.energy, -totalCost, D.LogWay.sweep_mission)
+
+	local rewards = P._playerMission:readMissionRewardsByWave(msId, self._msType, 20)
+
+	if rate > 1 then
+		D.rewardMultiRate(rewards, rate)
+	end
+
+	for i = 1, #rewards do
+		local cid = rewards[i][1]
+
+		if cid == D.CHIP_DROP_NORMAL or cid == D.CHIP_DROP_ELITE then
+			rewards[i][2] = 0
+		end
+	end
+
+	for i = 1, rate do
+		P._playerMission:dropMissionChip(self._msType, msId, rewards)
+	end
+
+	V.showRewardClaimPanel(P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.sweep_mission), SID.REWARD_TITLE_QUICK_SWEEP)
+	self:updateQuickSweep()
+end
+
+function M:dealChangeSweepRateBtn()
+	local isSVIP = P._playerRight:isSVIP()
+
+	if isSVIP then
+		P._playerRecord:changeFastSweep()
+
+		self._tmpSweepRate.text = P._playerRecord:getFastSweepNum()
+
+		self:updateSweepCost()
+	end
+end
+
+function M:updateSweepCost()
+	local cost = D._globalConfig._mission_cost_energy[self._msType]
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+
+	if num1 > 0 then
+		self._tmpSweepCost.text = cost
+
+		return
+	end
+
+	local isSVIP = P._playerRight:isSVIP()
+	local sweepNum = isSVIP and P._playerRecord:getFastSweepNum() or 1
+	cost = cost * sweepNum
+	self._tmpSweepCost.text = cost
+	self._tmpSweepRate.text = sweepNum
+end
+
+function M:updateBtnChangeSweepRate()
+	local isSVIP = P._playerRight:isSVIP()
+
+	if isSVIP then
+		local enough = P._playerAsset:isAssetEnough(D.ResType.energy, D._globalConfig._fast_sweep_energy_num_limit)
+
+		if enough then
+			self._btnChangeSweepRate.gameObject:SetActive(true)
+
+			return
+		end
+	end
+
+	self._btnChangeSweepRate.gameObject:SetActive(false)
+end
+
+function M:updateQuickSweep()
+	self._goSweep:SetActive(false)
+
+	return
+
+	self._goSweep:SetActive(true)
+
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+	local num1 = P._playerRecord:getLeftEnergySweepNum()
+	local num2 = P._playerRecord:getLeftAdEnergySweepNum()
+	local isRemoveAdSweep = num1 == 0 and isAdRemoved
+	local isFreeSweep = num1 > 0
+	local isAdSweep = not isAdRemoved and not isFreeSweep
+
+	self._goSweepRemoveAd:SetActive(isRemoveAdSweep)
+	self._goSweepAd:SetActive(isAdSweep)
+	self._goSweepFree:SetActive(isFreeSweep)
+
+	local cost = D._globalConfig._mission_cost_energy[self._msType]
+	local tmpSweep = self._btnSweep.title
+	tmpSweep.color = Color.str2Static(isRemoveAdSweep and "968DFF" or "39847a")
+	self._tmpSweepTitle.color = Color.str2Static(isRemoveAdSweep and "ACB0F3" or "62b6a5")
+	self._tmpSweepMission.color = Color.str2Static(isRemoveAdSweep and "968DFF" or "39847a")
+
+	lc.setSizeDelta(tmpSweep.transform.parent, 150, (isRemoveAdSweep or isAdSweep) and 65 or 75)
+
+	local missionText = nil
+	local idx = P._playerMission:getMissionIdByType(self._msType) - 10001
+
+	if self._msType == D.MissionType.Common then
+		missionText = string.gsub(LcLocalization.getTextStr(SID.SWEEP_MISSION_COMMON), "{0}", idx)
+	else
+		missionText = string.gsub(LcLocalization.getTextStr(SID.SWEEP_MISSION_ELITE), "{0}", idx)
+	end
+
+	self._tmpSweepMission.text = missionText
+
+	if isRemoveAdSweep then
+		self:updateBtnChangeSweepRate()
+		tmpSweep:SetLocalize(SID.STR_UNLIMIT)
+	elseif isAdSweep then
+		tmpSweep.text = string.format("(%s/%d)", num2 == 0 and string.format("<color=#DD6261>%d</color>", num2) or num2, P._playerRecord:readAdEnergySweepNum())
+	else
+		tmpSweep.text = string.format("(%d/%d)", num1, P._playerRecord:readEnergySweepNum())
+	end
+
+	self:updateSweepCost()
+end
+
+function M:dealOfflineBtn()
+	UIManager.openPanel(PrefabDefine.OfflineRewardPanel, self)
+end
+
+function M:updateOfflineBtn()
+	local isFull = P._playerOffline:isOfflineTimeFull()
+
+	self._goOfflineFull:SetActive(isFull)
+	self._goOfflineNotFull:SetActive(not isFull)
+
+	local canShow = D.isSystemUnlocked(D.SystemType.Afk)
+
+	self._goOffline:SetActive(canShow)
+end
+
+function M:updateTaskUI()
+	if D.isSystemUnlocked(D.SystemType.DailyTask) then
+		self._btnTask:SetActive(true)
+		self._btnTask.dot:SetActive(P._playerTask:haveRewards(D.TaskClass.Daily))
+	else
+		self._btnTask:SetActive(false)
+	end
+
+	if D.isSystemUnlocked(D.SystemType.NewbieTask) then
+		self._newbieTask = P._playerTask:getDisplayTasks(D.TaskClass.Newbie)[1]
+
+		if self._newbieTask then
+			self._btnNewbieTask:SetActive(true)
+
+			local tid = self._newbieTask
+
+			V.updateTaskDescProgress(tid, {
+				showBreifDesc = true,
+				txtDesc = self._txtNewbieTaskDesc,
+				txtProgress = self._txtNewbieTaskProgress
+			})
+			self._btnNewbieTask.dot:SetActive(TaskHelper:isFinished(tid))
+			self._animNewbieTask:Play(TaskHelper:isFinished(tid) and "anim_TaskFinish" or "anim_TaskDoing")
+		else
+			self._btnNewbieTask:SetActive(false)
+		end
+	else
+		self._btnNewbieTask:SetActive(false)
+	end
+
+	self:refreshRightExpandStatus()
+end
+
+function M:dealSevenDayBtn()
+	if P._playerSevenDay:isExpired() then
+		if P._playerSevenDay:haveCachedRewards() then
+			local rewards = P._playerSevenDay:claimCachedRewards()
+
+			if rewards and #rewards > 0 then
+				V.showMissRewardClaimPanel(rewards, SID.SEVENDAY_EXPIRED_REWARDS)
+			end
+
+			self:updateSevenDayUI()
+		end
+	else
+		UIManager.openPanel(PrefabDefine.SevenDayPanel)
+	end
+end
+
+function M:updateGiftUI()
+	self._ignoreExpandRefresh = true
+
+	self:updateFirstChargeUI()
+	self:updateNewbieUI()
+	self:updateLimitGiftUI()
+	self:updateSpecialOffer()
+
+	self._ignoreExpandRefresh = false
+
+	self:refreshLeftExpandStatus()
+end
+
+function M:updateRightCardUI()
+	self._btnRightCard:SetActive(D.isSystemUnlocked(D.SystemType.MonthCard))
+
+	if C.isInReview() then
+		self._btnRightCard:SetActive(false)
+	end
+end
+
+function M:updateSpecialOffer()
+	self._btnSpecialOffer:SetActive(P._playerLevelFund:isStatusOpen() or P._playerBPNew:isStatusOpen() or P._playerBPNew:isStatusExpired() or P._playerBPSkin:isStatusOpen() or P._playerBPSkin:isStatusExpired() or P._playerBPRanger:isStatusOpen() or P._playerBPRanger:isStatusExpired())
+	self:refreshLeftExpandStatus()
+
+	if C.isInReview() then
+		self._btnSpecialOffer:SetActive(false)
+	end
+
+	RedDotManager.update("city.home.special")
+end
+
+function M:updateSevenDayUI()
+	self._secondTimerFuncs.sevenday = nil
+	local unlock = D.isSystemUnlocked(D.SystemType.SevenDay)
+	local exp = P._playerSevenDay:isExpired()
+	local show = unlock and not exp or exp and P._playerSevenDay:haveCachedRewards()
+
+	self._btnSevenDay:SetActive(show)
+
+	local endTime = Client.getZeroTimestamp(P._playerSevenDay:getSystemCreateTime()) + 7 * D.DAY_SECONDS
+	local leftTime = endTime - C.getCurTime()
+
+	if show and leftTime > 0 and leftTime <= 86400 then
+		self._btnSevenDay.title.enabled = true
+
+		function self._secondTimerFuncs.sevenday()
+			local seconds = endTime - C.getCurTime()
+
+			V.formatLeftTime(self._btnSevenDay.title, seconds)
+		end
+
+		self._secondTimerFuncs.sevenday()
+	else
+		self._btnSevenDay.title.enabled = false
+	end
+
+	if not P._playerSevenDay:isExpired() then
+		local records = P._playerSevenDay:getRecordedDesignEvents()
+		local sevenDayTasks = P._playerTask:getDisplayTasks(D.TaskClass.SevenDay)
+
+		for i = 1, #sevenDayTasks do
+			local tid = sevenDayTasks[i]
+
+			if not records[tid] and TaskHelper:traceTaskCompleted(sevenDayTasks[i]) then
+				Trace.traceDesign("SevenDayTask:%d", sevenDayTasks[i])
+
+				records[tid] = 1
+			end
+		end
+	end
+
+	RedDotManager.update("city.home.sevenday")
+	self:refreshRightExpandStatus()
+end
+
+function M:updateNewbieUI()
+	self._secondTimerFuncs.newbie = nil
+	local giftId = P._playerGift:getBtnShowNewbieGiftId()
+	self._showNewbieId = giftId
+
+	if giftId then
+		local isCountdown = P._playerGift:isCountdownGift(giftId)
+
+		if isCountdown then
+			function self._secondTimerFuncs.newbie()
+				if P._playerGift:isBought(giftId) then
+					if P._playerGift:isNewbieTodayClaimed(giftId) then
+						local seconds = Client.getTodayZeroTimestamp(1) - Client.getCurTime()
+
+						V.formatLeftTime(self._btnNewbie.title, seconds)
+					else
+						self._btnNewbie.title.text = ""
+					end
+				else
+					local seconds = P._playerGift:getExpireTime(giftId) - Client.getCurTime()
+
+					V.formatLeftTime(self._btnNewbie.title, seconds)
+				end
+			end
+
+			self._secondTimerFuncs.newbie()
+			lc.setAnchoredPosition(self._btnNewbie.title.transform.parent:GetChild(3), 0, 33)
+		else
+			self._btnNewbie.title.text = ""
+
+			lc.setAnchoredPosition(self._btnNewbie.title.transform.parent:GetChild(3), 0, 17)
+		end
+	end
+
+	local show1 = P._playerGift:isBought(D.GiftId.Newbie1) and not P._playerGift:isClaimed(D.GiftId.Newbie1)
+	local show2 = P._playerGift:isBought(D.GiftId.Newbie2) and not P._playerGift:isClaimed(D.GiftId.Newbie2)
+
+	self._btnNewbie.gameObject:SetActive(giftId ~= nil or show1 or show2)
+	self:refreshLeftExpandStatus()
+end
+
+function M:updateLimitGiftUI()
+	self._secondTimerFuncs.limitGift = nil
+	local giftId = P._playerGift:getBtnShowLimitGiftId()
+	self._showLimitId = giftId
+
+	if giftId then
+		function self._secondTimerFuncs.limitGift()
+			local seconds = P._playerGift:getExpireTime(giftId) - Client.getCurTime()
+
+			V.formatLeftTime(self._btnLimitGift.title, seconds)
+		end
+
+		self._secondTimerFuncs.limitGift()
+	end
+
+	self._btnLimitGift.gameObject:SetActive(giftId ~= nil)
+	self:refreshLeftExpandStatus()
+end
+
+function M:updateFirstChargeUI()
+	local show = P._playerGift:isTrigger(D.GiftId.FirstCharge) and not P._playerGift:isClaimed(D.GiftId.FirstCharge)
+
+	self._btnFirstCharge.gameObject:SetActive(show)
+	self:refreshLeftExpandStatus()
+end
+
+local EXPAND_HEIGHT_LEFT = 420
+local CONST_EXPAND_HEIGHT_LEFT = EXPAND_HEIGHT_LEFT
+
+function M:refreshLeftExpandStatus()
+	if self._ignoreExpandRefresh then
+		return
+	end
+
+	if self._giftExpanding == nil then
+		self._giftExpanding = true
+	end
+
+	local tfs = self._lgGifts.transform
+
+	LuaUnity.forceRebuildLayoutImmediate(tfs)
+
+	local showCount = 0
+
+	for i = 0, tfs.childCount - 1 do
+		local tfgift = tfs:GetChild(i)
+
+		if tfgift.gameObject.activeSelf then
+			showCount = showCount + 1
+		end
+	end
+
+	local a1 = self._btnAnniversary.gameObject.activeSelf
+	local a2 = self._btnRightCard.gameObject.activeSelf
+	local fixTopCount = (a1 and 1 or 0) + (a2 and 1 or 0)
+	local enableExpandHeight = 130 + CONST_EXPAND_HEIGHT_LEFT + lc._floatHeight - MainGameRoot._safeFit._safeTopOffY + 50
+	local calculateHeight = 130 * fixTopCount + showCount * 110
+
+	if enableExpandHeight > calculateHeight then
+		EXPAND_HEIGHT_LEFT = calculateHeight - 130 * fixTopCount + 20
+	else
+		EXPAND_HEIGHT_LEFT = enableExpandHeight - 130 * fixTopCount + 20
+	end
+
+	local canClickExpand = enableExpandHeight < calculateHeight
+
+	self._btnExpand.gameObject:SetActive(canClickExpand)
+
+	self._giftScroll.movementType = canClickExpand and 1 or 2
+
+	self._giftScroll.transform:GetChild(0):GetChild(1):SetVisible(canClickExpand)
+	self:updateLeftExpand()
+end
+
+function M:updateLeftExpand()
+	lc.setRotation(self._btnExpand.transform:Find("ImgIcon"), self._giftExpanding and 0 or 180)
+
+	local targetHeight = self._lgGifts.preferredHeight
+	targetHeight = math.min(targetHeight, EXPAND_HEIGHT_LEFT)
+
+	lc.setSizeDelta(self._tfGiftsScroll, Vector2.static(170, self._giftExpanding and targetHeight or 0))
+end
+
+function M:dealLeftExpand()
+	self._giftExpanding = not self._giftExpanding
+
+	if self._giftExpanding then
+		local targetHeight = self._lgGifts.preferredHeight
+		targetHeight = math.min(targetHeight, EXPAND_HEIGHT_LEFT)
+
+		self._tfGiftsScroll:DOSizeDelta(Vector2.static(170, targetHeight), 0.3)
+	else
+		self._tfGiftsScroll:DOSizeDelta(Vector2.static(170, 0), 0.3)
+	end
+
+	lc.setRotation(self._btnExpand.transform:Find("ImgIcon"), self._giftExpanding and 0 or 180)
+end
+
+local CONST_EXPAND_HEIGHT_RIGHT = 420
+local EXPAND_HEIGHT_RIGHT = CONST_EXPAND_HEIGHT_RIGHT
+
+function M:refreshRightExpandStatus()
+	if self._ignoreExpandRefresh then
+		return
+	end
+
+	if self._rightBtnExpanding == nil then
+		self._rightBtnExpanding = true
+	end
+
+	local tfs = self._lgRightBtns.transform
+
+	LuaUnity.forceRebuildLayoutImmediate(tfs)
+
+	local showCount = 0
+
+	for i = 0, tfs.childCount - 1 do
+		local tfgift = tfs:GetChild(i)
+
+		if tfgift.gameObject.activeSelf then
+			showCount = showCount + 1
+		end
+	end
+
+	local a1 = self._btnArkProj.gameObject.activeSelf
+	local a2 = self._btnSpark.gameObject.activeSelf
+	local fixTopCount = (a1 and 1 or 0) + (a2 and 1 or 0)
+	local enableExpandHeight = 120 + CONST_EXPAND_HEIGHT_RIGHT + lc._floatHeight - MainGameRoot._safeFit._safeTopOffY + 50
+	local calculateHeight = 120 * fixTopCount + showCount * 90
+
+	if enableExpandHeight > calculateHeight then
+		EXPAND_HEIGHT_RIGHT = calculateHeight - 120 * fixTopCount + 20
+	else
+		EXPAND_HEIGHT_RIGHT = enableExpandHeight - 120 * fixTopCount + 20
+	end
+
+	local canClickExpand = enableExpandHeight < calculateHeight
+
+	self._btnRightExpand.gameObject:SetActive(canClickExpand)
+
+	self._rightBtnsScroll.movementType = canClickExpand and 1 or 2
+
+	self._rightBtnsScroll.transform:GetChild(0):GetChild(1):SetVisible(canClickExpand)
+	self:updateRightExpand()
+end
+
+function M:updateRightExpand()
+	lc.setRotation(self._btnRightExpand.transform:Find("ImgIcon"), self._rightBtnExpanding and 0 or 180)
+
+	local targetHeight = self._lgRightBtns.preferredHeight
+	targetHeight = math.min(targetHeight, EXPAND_HEIGHT_RIGHT)
+
+	lc.setSizeDelta(self._tfRightBtnsScroll, Vector2.static(170, self._rightBtnExpanding and targetHeight or 0))
+end
+
+function M:dealRightExpand()
+	self._rightBtnExpanding = not self._rightBtnExpanding
+
+	if self._rightBtnExpanding then
+		local targetHeight = self._lgRightBtns.preferredHeight
+		targetHeight = math.min(targetHeight, EXPAND_HEIGHT_RIGHT)
+
+		self._tfRightBtnsScroll:DOSizeDelta(Vector2.static(170, targetHeight), 0.3)
+	else
+		self._tfRightBtnsScroll:DOSizeDelta(Vector2.static(170, 0), 0.3)
+	end
+
+	lc.setRotation(self._btnRightExpand.transform:Find("ImgIcon"), self._rightBtnExpanding and 0 or 180)
+end
+
+function M:updateRightAreaUI()
+	self._ignoreExpandRefresh = true
+
+	self:updateSevenDayUI()
+	self:updateArkProj()
+	self:updateSparkScout()
+	self:updateTaskUI()
+	self:updateWeekLottery()
+	self:updatePlayerReturn()
+	self:updateAnniversaryInvite()
+	self._btnRank:SetActive(D.isSystemUnlocked(D.SystemType.StageRank))
+
+	self._ignoreExpandRefresh = false
+
+	self:refreshRightExpandStatus()
+end
+
+function M:updateWeekLottery()
+	self._btnWeekLottery1:SetActive(P._playerActivity:getLotteryActivityNum() > 0)
+	RedDotManager.update("city.home.weeklottery")
+	self:refreshRightExpandStatus()
+end
+
+function M:dealActivityLottery()
+	if P._playerActivity:getLotteryActivityNum() < 1 then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.ActivityPanel)
+end
+
+function M:getArkBtnPosition()
+	return lc.getPosition(self._btnArkLottery.transform)
+end
+
+function M:updateArkProj(open)
+	local unlock = D.isSystemUnlocked(D.SystemType.ArkRebuild_Entrance)
+	local hasSettleRewards = P._playerActivityArkRebuild:hasSettleRewards()
+	local isOpening = unlock and P._playerActivity:getArkProjActivityNum() > 0
+	self._secondTimerFuncs.arkProj = nil
+	local isLotteryOpening = P._playerArkRebuildLottery:isOpening()
+
+	if not isLotteryOpening then
+		self._btnArkProj.title:SetLocalize(P._playerActivity:readNameSid(D.ActivityType.ArkRebuild))
+	end
+
+	self._btnArkProj:SetActive(isOpening or hasSettleRewards)
+	self._btnArkLottery:SetActive(isLotteryOpening)
+
+	if isOpening then
+		RedDotManager.update("city.home.arkProj")
+	end
+
+	local lotteryDot = isLotteryOpening and not P._playerArkRebuildLottery:isEntered() or P._playerArkRebuildLottery:haveDot()
+
+	self._btnArkLottery.dot:SetVisible(lotteryDot)
+	self:refreshRightExpandStatus()
+end
+
+function M:dealArkProj()
+	local unlock = D.isSystemUnlocked(D.SystemType.ArkRebuild_Entrance)
+
+	if not unlock then
+		V.showSystemUnlockTips(D.SystemType.ArkRebuild_Entrance)
+
+		return
+	end
+
+	if P._playerActivityArkRebuild:hasSettleRewards() then
+		UIManager.openPanel(PrefabDefine.ArkRebuildSettlementRewardPanel)
+
+		return
+	end
+
+	local isOpening = P._playerActivity:getArkProjActivityNum() > 0
+
+	if isOpening then
+		if P._playerActivityArkRebuild:isEntered() then
+			UIManager.openPanel(PrefabDefine.ArkRebuildMainPanel, "mainBtn")
+			Trace.traceDesign_Activity("RebuildMainPanel_Enter:%s", nil, D.ActivityType.ArkRebuild, P._playerActivityArkRebuild:getSubType())
+
+			return
+		else
+			UIManager.openPanel(PrefabDefine.ArkRebuildPreviewPanel)
+		end
+	else
+		local showPreview, cfg = P._playerActivity:canPreview(D.ActivityType.ArkRebuild)
+
+		if showPreview then
+			UIManager.openPanel(PrefabDefine.ArkRebuildPreviewPanel)
+		end
+	end
+end
+
+function M:dealArkLottery()
+	if not P._playerArkRebuildLottery:isOpening() then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.ArkRebuildSpinPanel)
+end
+
+function M:updateSparkScout(open)
+	local unlock = D.isSystemUnlocked(D.SystemType.SparkScout_Entrance)
+	local hasSettleRewards = P._playerActivitySparkScout:hasSettleRewards()
+	local isOpening = unlock and P._playerActivity:getSparkScoutActivityNum() > 0
+	self._secondTimerFuncs.sparkScout = nil
+
+	self._btnSpark.title:SetLocalize(P._playerActivity:readNameSid(D.ActivityType.SparkScout))
+	self._btnSpark:SetActive(isOpening or hasSettleRewards)
+
+	if isOpening then
+		RedDotManager.update("city.home.sparkScout")
+	end
+
+	if lc._isCN then
+		self._btnSpark:SetActive(false)
+	end
+
+	self:refreshRightExpandStatus()
+end
+
+function M:dealSparkScout()
+	local unlock = D.isSystemUnlocked(D.SystemType.SparkScout_Entrance)
+
+	if not unlock then
+		V.showSystemUnlockTips(D.SystemType.SparkScout_Entrance)
+
+		return
+	end
+
+	if P._playerActivitySparkScout:hasSettleRewards() then
+		UIManager.openPanel(PrefabDefine.SparkScoutSettlementRewardPanel)
+
+		return
+	end
+
+	local isOpening = P._playerActivity:getSparkScoutActivityNum() > 0
+
+	if isOpening then
+		if P._playerActivitySparkScout:isEntered() then
+			UIManager.openPanel(PrefabDefine.SparkScoutMainPanel, "mainBtn")
+			Trace.traceDesign_Activity("SparkMainPanel_Enter:%s", nil, D.ActivityType.SparkScout, P._playerActivitySparkScout:getSubType())
+
+			return
+		else
+			UIManager.openPanel(PrefabDefine.SparkScoutPreviewPanel)
+		end
+	else
+		local showPreview, cfg = P._playerActivity:canPreview(D.ActivityType.SparkScout)
+
+		if showPreview then
+			UIManager.openPanel(PrefabDefine.SparkScoutPreviewPanel)
+		end
+	end
+end
+
+function M:updateAnniversary()
+	local isOpening = P._playerActivity:isAnniversaryOpening()
+	local inPreview = P._playerActivity:canPreviewAnniversary()
+	local showEntry = false
+	showEntry = P._playerActivityAnniversary:showSystemEntry() and (inPreview or isOpening or P._playerActivityAnniversary:hasSettleRewards())
+
+	self._btnAnniversary:SetActive(showEntry)
+
+	if showEntry then
+		self._btnAnniversary.title:SetLocalize(P._playerActivity:readNameSid(D.ActivityType.Anniversary))
+		RedDotManager.update("city.home.anniversary")
+	end
+
+	if lc._isCN then
+		self._btnAnniversary:SetActive(false)
+	end
+
+	self:refreshLeftExpandStatus()
+end
+
+function M:dealAnniversary()
+	if lc._isCN then
+		return
+	end
+
+	local inPreview, seconds = P._playerActivity:canPreviewAnniversary()
+
+	if inPreview then
+		V.showToast({
+			SID.TIP_COMING_SOON_WITH_DAY,
+			math.ceil(seconds / D.DAY_SECONDS)
+		})
+
+		return
+	end
+
+	local isOpening = P._playerActivity:isAnniversaryOpening() and P._playerActivityAnniversary:showSystemEntry()
+
+	if isOpening then
+		UIManager.openPanel(PrefabDefine.AnniversaryMainPanel)
+	elseif P._playerActivityAnniversary:hasSettleRewards() then
+		local rewards = P._playerActivityAnniversary:tryClaimSettleRewards()
+
+		if rewards then
+			V.showAnniMissRewardClaimPanel(rewards, SID.EXPIRED_REWARDS_TITLE)
+		end
+	end
+end
+
+function M:dealPlayerReturnBtn()
+	if P._playerReturn:isExpired() then
+		if P._playerReturn:haveCachedRewards() then
+			local rewards = P._playerReturn:claimCachedRewards()
+
+			if rewards and #rewards > 0 then
+				V.showMissRewardClaimPanel(rewards, SID.EXPIRED_REWARDS_TITLE)
+			end
+
+			self:updatePlayerReturn()
+		end
+	else
+		UIManager.openPanel(PrefabDefine.PlayerReturnPanel)
+	end
+end
+
+function M:updatePlayerReturn()
+	self._btnPlayerReturn:SetActive(P._playerReturn:showSystem())
+	RedDotManager.update("city.home.playerReturn")
+	self:refreshRightExpandStatus()
+end
+
+function M:updateAnniversaryInvite()
+	local isOpening = P._playerActivity:isAnniversaryOpening()
+	local showEntry = isOpening
+	showEntry = showEntry and P:getCreateDay() <= 7
+
+	if isOpening and P._playerMission:getMissionId() <= P._playerActivityAnniversary:readBeInviteMissionLimit() and not C._config.systemUnlock then
+		showEntry = false
+	end
+
+	self._btnAnniversaryInvite:SetActive(showEntry)
+
+	if showEntry then
+		RedDotManager.update("city.home.anniversaryInvite")
+	end
+end
+
+function M:dealAnniversaryInvite()
+	if not P._playerActivity:isAnniversaryOpening() then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.AnniversaryInvitePanel)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:updateUI()
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	self:updateTaskUI()
+	self:updateArkProj()
+	self:updateSparkScout()
+	self:updateWeekLottery()
+	self:updateAnniversary()
+	self:updatePlayerReturn()
+	self:updateAnniversaryInvite()
+end
+
+function M:OnHide()
+	lc.stopTimer(self._secondTimer)
+end
+
+return M

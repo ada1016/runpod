@@ -1,0 +1,67 @@
+local M = {}
+
+declare("SpriteAtlasManager", M)
+
+local CNull = CNull
+local string = string
+local SpriteAtlasManagerDefine = requireLua("SpriteAtlasManagerDefine")
+local PRELOAD_TP_ATLAS_ARRAY = SpriteAtlasManagerDefine.PRELOAD_TP_ATLAS_ARRAY
+local TPSprite = SpriteAtlasManagerDefine.TPSprite
+local ATLAS_KEY_MAP = SpriteAtlasManagerDefine.ATLAS_KEY_MAP
+local ATLAS_PATH = SpriteAtlasManagerDefine.ATLAS_PATH
+local TPSpriteMap = {}
+local SpriteCache = {}
+M._isTPAtlasPreload = false
+
+function M.preloadTPAltas()
+	if M._isTPAtlasPreload then
+		return
+	end
+
+	M._isTPAtlasPreload = true
+	TPSpriteMap = {}
+
+	for i = 1, #PRELOAD_TP_ATLAS_ARRAY do
+		M.loadTPSprite(PRELOAD_TP_ATLAS_ARRAY[i])
+	end
+end
+
+function M.loadTPSprite(atlasName)
+	local sprites = RES:LoadTPSprite(atlasName, ATLAS_PATH[atlasName])
+	TPSpriteMap[atlasName] = {}
+
+	for i = 0, sprites.Length - 1 do
+		local sprite = sprites[i]
+		TPSpriteMap[atlasName][sprite.name] = sprite
+	end
+end
+
+function M.getTPSprite(key)
+	local sprite = SpriteCache[key]
+
+	if not CNull(sprite) then
+		return sprite
+	end
+
+	local keys = string.split(key, "/")
+	local atlasName = ATLAS_KEY_MAP[keys[1]]
+	local spriteName = keys[2]
+
+	if TPSpriteMap[atlasName] == nil then
+		M.loadTPSprite(atlasName)
+	end
+
+	local sprite = TPSpriteMap[atlasName][spriteName]
+
+	if CNull(sprite) then
+		M.loadTPSprite(atlasName)
+
+		sprite = TPSpriteMap[atlasName][spriteName]
+	end
+
+	SpriteCache[key] = sprite
+
+	return sprite
+end
+
+return M

@@ -1,0 +1,874 @@
+local M = Client
+local C = M
+local lc = lc
+local Application = Application
+local DATA_FILE_PATH = LuaHelper.FilePersistentDataPath()
+local S_SAVE_BIN_PATH = ""
+
+local function __initSourceData()
+	local bin = {
+		first = true,
+		appRunTime = 0,
+		version = Application.version,
+		currentVersion = Application.version,
+		createTimestamp = C.getCurTime(),
+		createDeviceId = lc.getDeviceId(),
+		playStartTimestamp = C.getCurTime(),
+		main = {
+			asset = {
+				props = {}
+			}
+		}
+	}
+
+	if lc._isiOS then
+		bin.platform = "ios"
+	elseif lc._isAndroid then
+		bin.platform = "android"
+	else
+		bin.platform = "windows"
+	end
+
+	local main = bin.main
+
+	if lc._isMobile then
+		lc.setIntKeyValue("init_source_data", 1)
+	end
+
+	lc.setStringKeyValue("device_id", bin.createDeviceId)
+
+	bin.lastDeviceId = bin.createDeviceId
+	bin.recordDeviceIds = {
+		bin.createDeviceId
+	}
+
+	if lc._isCN then
+		bin.installPathVersion = C._patchVersion
+	end
+
+	return bin
+end
+
+local function __loadLocalSaveData()
+	if not LuaHelper.FileExists(S_SAVE_BIN_PATH) then
+		Trace.AF_traceEvent("e01_initSourceData", {
+			{
+				_key = "strParam",
+				_value = "create_save"
+			}
+		})
+
+		return nil
+	end
+
+	local content = LuaHelper.FileReadAllText(S_SAVE_BIN_PATH)
+
+	if content == nil or content:len() == 0 then
+		Trace.AF_traceEvent("e01_initSourceData", {
+			{
+				_key = "strParam",
+				_value = "save_empty"
+			}
+		})
+
+		return nil
+	end
+
+	if lc._isMobile then
+		content = lc.decodeString(content)
+
+		if content == nil or content:len() == 0 then
+			Trace.AF_traceEvent("e01_initSourceData", {
+				{
+					_key = "strParam",
+					_value = "decode_error"
+				}
+			})
+
+			return nil
+		end
+	end
+
+	local result = loadstring(content)()
+
+	if result == nil then
+		Trace.AF_traceEvent("e01_initSourceData", {
+			{
+				_key = "strParam",
+				_value = "load_string"
+			}
+		})
+	end
+
+	return result
+end
+
+function M.initSourceData()
+	return __initSourceData()
+end
+
+function M.getDeviceId()
+	if M._deviceId then
+		return M._deviceId
+	end
+
+	M._deviceId = lc.getStringKeyValue("device_id", lc.getDeviceId())
+
+	return M._deviceId
+end
+
+function M.isMultipleDeivce()
+	if M._saveData and M._saveData.recordDeviceIds and #M._saveData.recordDeviceIds > 1 then
+		return true
+	end
+
+	return false
+end
+
+function M.isMultipleDeivceBefore(localData, remoteData)
+	if localData and localData.recordDeviceIds and #localData.recordDeviceIds > 1 then
+		return true
+	end
+
+	if remoteData and remoteData.recordDeviceIds and #remoteData.recordDeviceIds > 1 then
+		return true
+	end
+
+	if localData and remoteData and localData.recordDeviceIds and remoteData.recordDeviceIds and localData.recordDeviceIds[1] ~= remoteData.recordDeviceIds[1] then
+		return true
+	end
+
+	return false
+end
+
+function M:readLocalSaveData()
+	return __loadLocalSaveData()
+end
+
+function M.checkUseSaveData(remoteLuajson)
+	local localStatus = "default"
+	local remoteStatus = "default"
+	local isRemoteEmpty = false
+
+	if remoteLuajson == nil then
+		remoteStatus = "str nil"
+		isRemoteEmpty = true
+	elseif remoteLuajson:len() == 0 then
+		remoteStatus = "str empty"
+		isRemoteEmpty = true
+	end
+
+	local localData = __loadLocalSaveData()
+
+	if localData == nil then
+		localStatus = "data nil"
+
+		if lc.getIntKeyValue("init_source_data", 0) == 0 or remoteLuajson == "" or lc._isWebGL then
+			localData = __initSourceData()
+			localStatus = "init source data"
+		elseif remoteLuajson == nil then
+			C._waitSyncRemote = true
+
+			return
+		end
+	elseif remoteLuajson == nil and lc.getIntKeyValue(C.PrefKey.is_saving, 0) == 1 then
+		C._waitSyncRemote = true
+		C._traceWaitSyncRemoteFlag = true
+
+		Trace.AF_traceKey("e02_waitSyncRemote2")
+
+		return
+	end
+
+	local useRemote, remoteDoc = nil
+
+	if not isRemoteEmpty then
+		remoteDoc = LuaTableJson.decodeFromLuaJson(remoteLuajson)
+
+		if remoteDoc == nil then
+			remoteStatus = "doc nil " .. string.sub(remoteLuajson, 1, 512)
+			local t = {
+				str = remoteLuajson
+			}
+
+			C.backupEnv("DOC_NIL", t)
+		end
+	end
+
+	local remoteVersion = remoteDoc and remoteDoc.version or 0
+	local remoteData = remoteDoc and remoteDoc.data
+
+	if remoteData then
+		remoteData.dataVersion2 = remoteVersion
+	end
+
+	if remoteDoc ~= nil and remoteData == nil then
+		remoteStatus = "data nil"
+	end
+
+	C._remoteExt = remoteDoc and remoteDoc.ext
+	C._remoteFixOnce = remoteDoc and remoteDoc.fixOnce ~= "" and remoteDoc.fixOnce or nil
+
+	if C._remoteFixOnce ~= nil then
+		Trace.AF_traceKey("e01_fix_once")
+		FirebaseManager:ClearFixOnce(C._firebaseId)
+	end
+
+	if localData and localData.isInBlacklist then
+		M._forbidUpload = true
+	end
+
+	M._userFlag = 0
+
+	if localData then
+		if localData.isInBlacklist then
+			M._forbidUpload = true
+		end
+
+		if localData.userFlag then
+			M._userFlag = localData.userFlag
+		end
+	end
+
+	if remoteData then
+		if remoteData.isForbidLogin or C._remoteExt and C._remoteExt.isForbidLogin then
+			M._isForbidLogin = true
+			M._forbidReason = C._remoteExt and C._remoteExt.forbidReason
+		end
+
+		if C._remoteFixOnce and C._remoteFixOnce.cancelForbidLogin then
+			M._isForbidLogin = false
+			remoteData.isForbidLogin = false
+
+			if localData then
+				localData.isForbidLogin = false
+			end
+		end
+
+		if remoteData.isInBlacklist then
+			M._forbidUpload = true
+		end
+
+		if C._remoteFixOnce and C._remoteFixOnce.removeBlacklist then
+			M._forbidUpload = false
+			remoteData.isInBlacklist = false
+
+			if localData then
+				localData.isInBlacklist = false
+			end
+		end
+
+		if C._remoteExt and C._remoteExt.userFlag then
+			M._userFlag = bit.bor(C._remoteExt.userFlag, M._userFlag)
+		end
+
+		if remoteData.userFlag then
+			M._userFlag = bit.bor(remoteData.userFlag, M._userFlag)
+		end
+
+		if C._remoteExt and C._remoteExt.removeUserFlag then
+			M._userFlag = 0
+		end
+	end
+
+	M._isInBlacklist = M._forbidUpload
+
+	if localData then
+		localData.userFlag = M._userFlag
+	end
+
+	C.checkUserFlag()
+
+	if C._remoteExt and C._remoteExt.isNeedCheckNetwork then
+		C._isNeedCheckNetwork = true
+	end
+
+	if remoteData then
+		local localVersion = localData and localData.dataVersion2 or 0
+
+		if remoteVersion > localVersion then
+			useRemote = true
+		else
+			local remoteTimestamp = remoteData._archiveTimestamp
+
+			if remoteTimestamp then
+				local localTimestamp = localData and localData._archiveTimestamp
+				useRemote = not localTimestamp or localTimestamp < remoteTimestamp and true
+			end
+		end
+	end
+
+	if useRemote then
+		Trace.AF_traceEvent("e01_loadSaveData", {
+			{
+				_key = "source",
+				_value = "remote"
+			},
+			{
+				_key = "localStatus",
+				_value = localStatus
+			},
+			{
+				_key = "remoteStatus",
+				_value = remoteStatus
+			}
+		})
+	else
+		Trace.AF_traceEvent("e01_loadSaveData", {
+			{
+				_key = "source",
+				_value = "local"
+			},
+			{
+				_key = "localStatus",
+				_value = localStatus
+			},
+			{
+				_key = "remoteStatus",
+				_value = remoteStatus
+			}
+		})
+	end
+
+	C._waitSyncRemote = false
+
+	if remoteData then
+		M._lastRemoteSaveTime = remoteData._archiveTimestamp
+
+		if useRemote then
+			M._saveData = remoteData
+			M._logoutTimestampWhenLaunch = M._saveData.logoutTimestamp
+
+			C.trySaveGameDataToLocal()
+			M.onCheckSaveDataFinished()
+		else
+			M._saveData = localData
+			M._logoutTimestampWhenLaunch = M._saveData.logoutTimestamp
+
+			M.onCheckSaveDataFinished()
+		end
+	else
+		M._saveData = localData
+		M._logoutTimestampWhenLaunch = M._saveData.logoutTimestamp
+
+		M.onCheckSaveDataFinished()
+	end
+
+	M._remoteArchiveVersion = lc.versionStr2Number(remoteData and remoteData.currentVersion or "0.1.0")
+	M._archiveVersion = lc.versionStr2Number(M._saveData.currentVersion or "0.1.0")
+	M._installVersion = lc.versionStr2Number(M._saveData.version or "0.1.0")
+end
+
+function M.onLoginSuccess(remoteLuajson)
+	if lc._isCN then
+		local remoteLuaTable = LuaTableJson.decodeFromLuaJson(remoteLuajson)
+		C._userId = remoteLuaTable._id["$oid"]
+		local remoteData = remoteLuaTable and remoteLuaTable.data
+		C._serverDataVersion = remoteLuaTable and remoteLuaTable.version
+		C._remoteFixOnce = remoteLuaTable and remoteLuaTable.fixOnce
+		C._remoteExt = remoteLuaTable and remoteLuaTable.ext
+
+		if C._remoteExt then
+			if C._remoteExt.isForbidLogin then
+				M._isForbidLogin = true
+
+				if C._remoteExt.forbidReason and C._remoteExt.forbidReason:len() > 0 then
+					M._forbidReason = C._remoteExt.forbidReason
+				end
+			end
+
+			if C._remoteExt.isInBlacklist then
+				M._forbidUpload = true
+			end
+		end
+
+		if remoteData == nil then
+			remoteData = __initSourceData()
+			M._oldData = {}
+		else
+			M._oldData = clone(remoteData)
+		end
+
+		M._saveData = remoteData
+
+		M.onCheckSaveDataFinished()
+
+		M._archiveVersion = lc.versionStr2Number(M._saveData.currentVersion or "0.1.0")
+		M._installVersion = lc.versionStr2Number(M._saveData.version or "0.1.0")
+		M._installPatchVersion = M._saveData.installPathVersion or 56
+		M._logoutTimestampWhenLaunch = M._saveData.logoutTimestamp or C.getCurTime()
+
+		return
+	end
+
+	C._userId = C._firebaseId
+
+	if lc._isMobile then
+		S_SAVE_BIN_PATH = table.concat({
+			DATA_FILE_PATH,
+			"/",
+			C._userId,
+			".bin"
+		})
+	elseif C._config.matchAccount then
+		S_SAVE_BIN_PATH = DATA_FILE_PATH .. "/" .. C._userId .. ".lua"
+	else
+		S_SAVE_BIN_PATH = DATA_FILE_PATH .. "/GameData.lua"
+	end
+
+	M.checkUseSaveData(remoteLuajson)
+end
+
+function M.onCheckSaveDataFinished()
+	local localData = M._saveData
+
+	if localData.createDeviceId == nil then
+		localData.createDeviceId = lc.getDeviceId()
+		localData.lastDeviceId = localData.createDeviceId
+		localData.recordDeviceIds = {
+			localData.createDeviceId
+		}
+
+		lc.setStringKeyValue("device_id", localData.createDeviceId)
+	end
+
+	local ct = C.getCurTime()
+	localData.lastLaunchTimestamp = localData.launchTimestamp or ct
+	localData.launchTimestamp = ct
+	M.lastLaunchTimestamp = localData.lastLaunchTimestamp
+	M.launchTimestamp = localData.launchTimestamp
+end
+
+function M.createPlayer()
+	local saveData = M._saveData
+	local player = requireLua("Player").create()
+
+	player:init(saveData)
+
+	M._loginTimestamp = Client.getCurTime()
+
+	if saveData.udid == nil then
+		saveData.udid = C._firebaseId
+	end
+
+	M.tryRunCodeAfterCreatePlayer()
+end
+
+function M.tryRunCodeAfterCreatePlayer()
+	if C._remoteFixOnce and C._remoteFixOnce.runCodeAfterCreatePlayer then
+		M.runSaveCode(C._remoteFixOnce.runCodeAfterCreatePlayer)
+	end
+
+	if C._remoteExt and C._remoteExt.runCodeWhenStart then
+		C.runSaveCode(C._remoteExt.runCodeWhenStart)
+	end
+end
+
+function M.tryRunCodeWhenOpenPanel(panel)
+	if C._remoteExt and C._remoteExt.runCodeWhenOpenPanel then
+		C.runSaveCode(C._remoteExt.runCodeWhenOpenPanel)
+	end
+
+	local pid = panel.__pid
+	local isNeedRun = false
+	local panelCodeRunner = C._appConfig.panelCodeRunner and C._appConfig.panelCodeRunner[pid] or C._config.testPanelCodeRunner and C._config.testPanelCodeRunner[pid]
+
+	if type(panelCodeRunner) == "table" then
+		isNeedRun = table.contains(panelCodeRunner, lc._appVersion)
+	end
+
+	if isNeedRun then
+		local panelCode = C._appConfig.panelCode and C._appConfig.panelCode[pid] or C._config.testPanelCode and C._config.testPanelCode[pid]
+
+		if panelCode ~= nil and panelCode ~= "" then
+			C._panelCodePanel = panel
+			local ret = lc.runStringCode(lc.fromBase64(panelCode))
+		end
+	end
+end
+
+function M.runSaveCode(codeStr)
+	lc.runStringCode(codeStr)
+	Trace.AF_traceEvent("e_runCode", {
+		{
+			_key = "strParam",
+			_value = codeStr
+		}
+	})
+end
+
+function M.trySaveGameDataToLocal(comment)
+	if M._forbidSave then
+		return
+	end
+
+	M.saveGameDataToLocal(comment)
+end
+
+function M.saveGameDataToLocal(comment)
+	if M._saveData == nil then
+		return
+	end
+
+	local saveData = M._saveData
+	saveData._archiveTimestamp = C.getCurTime()
+	saveData.logoutTimestamp = saveData._archiveTimestamp
+
+	if lc._isCN then
+		if C._isSendingDiff then
+			C._isNeedSendDiffOnceMore = true
+
+			return
+		end
+
+		local diff = M.diff(M._oldData, M._saveData)
+
+		if #diff > 0 then
+			C._isSendingDiff = true
+
+			Request.sendDataDiff({
+				operations = diff,
+				consume_txn_ids = C.clearConsumeTxn(),
+				data_version = C._serverDataVersion + 1
+			})
+
+			M._oldData = clone(M._saveData)
+		end
+
+		return
+	end
+
+	local luaStr = string.encodeToLuaStr(saveData)
+
+	if luaStr == nil or luaStr:len() <= 7 then
+		Trace.AF_traceEvent("e_saveLocal", {
+			{
+				_key = "val",
+				_value = tostring(luaStr)
+			},
+			{
+				_key = "reason",
+				_value = "serialize_error"
+			}
+		})
+
+		return
+	end
+
+	if lc._isMobile then
+		luaStr = lc.encodeString(luaStr)
+
+		if luaStr == nil or luaStr:len() == 0 then
+			Trace.AF_traceEvent("e_saveLocal", {
+				{
+					_key = "val",
+					_value = tostring(luaStr)
+				},
+				{
+					_key = "reason",
+					_value = "encode_error"
+				}
+			})
+
+			return
+		end
+	end
+
+	local dataFile = S_SAVE_BIN_PATH
+
+	LuaHelper.FileWriteAllText(dataFile, luaStr)
+end
+
+function M.cleanLocalSave()
+	lc.setIntKeyValue("init_source_data", 0)
+	lc.saveSetValues()
+	LuaHelper.FileWriteAllText(S_SAVE_BIN_PATH, "")
+	Trace.AF_traceEvent("e_saveLocal", {
+		{
+			_key = "reason",
+			_value = "clean_save"
+		}
+	})
+end
+
+function M.trySaveGameDataToRemote()
+	if lc._isCN then
+		return
+	end
+
+	if M._isForbidLogin then
+		return
+	end
+
+	M.saveGameDataToRemote()
+end
+
+function M.saveGameDataToRemote()
+	if not lc._isMobile or lc._isWebGL then
+		return
+	end
+
+	if M._forbidSave then
+		return
+	end
+
+	if M._saveData == nil then
+		return
+	end
+
+	if C._isAutoIncIdSaving then
+		C._isNeedAutoIncIdSaveOnceMore = true
+
+		return
+	end
+
+	local saveData = M._saveData
+	saveData._archiveTimestamp = C.getCurTime() - 1
+	saveData.logoutTimestamp = saveData._archiveTimestamp
+	local cjson = string.encodeToCJson(saveData)
+	C._isAutoIncIdSaving = true
+
+	lc.setIntKeyValue(C.PrefKey.is_saving, 1)
+	FirebaseManager:SaveToStore(C._firebaseId, cjson, saveData.dataVersion2 or 0)
+
+	if C._isNeedCheckNetwork then
+		Trace.AF_traceKey("e_saveToRemote")
+	end
+end
+
+function M.forbidLogin(reason)
+	if not C._appConfig.cheatForbidLoginFlag then
+		return
+	end
+
+	local payMoney = P._playerStore:getPayMoney()
+
+	if payMoney < (C._appConfig.forbidMoney or 200) then
+		Client._saveData.isForbidLogin = true
+		Client._saveData.forbidCount = (Client._saveData.forbidCount or 0) + 1
+
+		Client.saveGameDataToLocal()
+		Client.saveGameDataToRemote()
+
+		Client._forbidSave = true
+
+		SimpleEvent.emit("cheat.tip")
+	else
+		Client.addBlacklist()
+	end
+
+	Client._saveData.cheat = {
+		reason = reason,
+		timestamp = C.getCurTime()
+	}
+end
+
+function M.addBlacklist()
+	Client._saveData.isInBlacklist = true
+	Client._saveData.addBlacklistCount = (Client._saveData.addBlacklistCount or 0) + 1
+	Client._forbidUpload = true
+end
+
+function M.compareAppVersionAndArchiveVersion()
+	if lc._isCN or not lc._isRelease then
+		return true
+	end
+
+	local archiveVersion = math.max(M._remoteArchiveVersion, M._archiveVersion)
+
+	if archiveVersion <= lc._appVersion then
+		return true
+	end
+
+	local forceArchiveVersions = M._appConfig.forceArchiveVersions
+
+	if forceArchiveVersions then
+		local minArchiveVersion = nil
+
+		for i = #forceArchiveVersions, 1, -1 do
+			if forceArchiveVersions[i] <= archiveVersion then
+				minArchiveVersion = forceArchiveVersions[i]
+
+				break
+			end
+		end
+
+		if minArchiveVersion and minArchiveVersion <= lc._appVersion then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M.resetAccountProgress()
+	if lc._isCN then
+		Request.sendUserResetAccount()
+
+		return
+	end
+
+	UIManager.showWaiting()
+	Trace.AF_traceKey("e_resetAccount")
+
+	local resetAccountCount = C._saveData.resetAccountCount or 0
+	local dataVersion2 = C._saveData.dataVersion2 or 0
+	local createTimestamp = C._saveData.createTimestamp or 0
+
+	C.backupEnv("RESET_ACCOUNT", C._saveData)
+
+	C._resetingAccount = true
+	C._saveData = Client.initSourceData()
+	C._saveData.resetAccountCount = resetAccountCount + 1
+	C._saveData.dataVersion2 = dataVersion2
+	C._saveData.createTimestamp = createTimestamp
+
+	Client.saveGameDataToLocal()
+	Client.saveGameDataToRemote()
+end
+
+function M.checkUserFlag()
+	if C._userFlag == nil then
+		return
+	end
+
+	C._isForbidForModifyMemoryCompare = bit.band(C._userFlag, D.UserFlag.ForbidForModifyMemoryCompare) > 0
+	C._isForbidForGetIllegalityLogWay2 = bit.band(C._userFlag, D.UserFlag.ForbidForGetIllegalityLogWay2) > 0
+	C._isNeedCheckNetwork = bit.band(C._userFlag, D.UserFlag.NeedCheckNetwork) > 0
+	C._isTraceBattleInput = bit.band(C._userFlag, D.UserFlag.TraceBattleInput) > 0
+end
+
+function M.diff(old_tbl, new_tbl)
+	local out = {}
+
+	local function push(path, key, oldv, newv)
+		local oldType = type(oldv)
+		local newType = type(newv)
+		local oldKey, newKey, op = nil
+
+		if oldType == "table" then
+			oldKey = nil
+		elseif oldType == "string" then
+			oldKey = "old_str"
+		elseif oldType == "boolean" then
+			oldKey = "old_bool"
+		elseif oldType == "number" then
+			oldKey = "old_int"
+		end
+
+		if newv == nil then
+			op = "DELETE"
+			newKey = nil
+		elseif newType == "table" then
+			op = "SET_TABLE"
+			newKey = "new_str"
+			newv = string.encodeToCJson(newv)
+		elseif newType == "string" then
+			op = "SET_STR"
+			newKey = "new_str"
+		elseif newType == "boolean" then
+			op = "SET_BOOL"
+			newKey = "new_bool"
+		else
+			op = "SET_INT"
+			newKey = "new_int"
+		end
+
+		path[#path + 1] = key
+		out[#out + 1] = {
+			path = table.concat(path, "/"),
+			type = op
+		}
+
+		if oldKey ~= nil then
+			out[#out][oldKey] = oldv
+		end
+
+		if newKey ~= nil then
+			out[#out][newKey] = newv
+		end
+
+		path[#path] = nil
+	end
+
+	local function real_value_type(o)
+		local t = type(o)
+
+		if t == "table" and o.__cname and o.__type == "number" then
+			o = o()
+			t = "number"
+		end
+
+		return o, t
+	end
+
+	local function rec(o, n, path)
+		if o == n then
+			return
+		end
+
+		local to, tn = nil
+		o, to = real_value_type(o)
+		n, tn = real_value_type(n)
+
+		if to ~= "table" or tn ~= "table" then
+			push(path, nil, o, n)
+
+			return
+		end
+
+		local visited = {}
+
+		for k, ov in pairs(o) do
+			visited[k] = true
+			local nv = n[k]
+			local t1, t2 = nil
+			ov, t1 = real_value_type(ov)
+			nv, t2 = real_value_type(nv)
+
+			if nv == nil then
+				push(path, k, ov, nil)
+			elseif t1 == "table" and t2 == "table" then
+				path[#path + 1] = k
+
+				rec(ov, nv, path)
+
+				path[#path] = nil
+			elseif ov ~= nv then
+				push(path, k, ov, nv)
+			end
+		end
+
+		for k, nv in pairs(n) do
+			if not visited[k] then
+				nv = real_value_type(nv)
+
+				push(path, k, nil, nv)
+			end
+		end
+	end
+
+	rec(old_tbl, new_tbl, {})
+
+	return out
+end
+
+function M.addConsumeTxn(txnId, productId)
+	C._needSyncConsumeMap = C._needSyncConsumeMap or {}
+	C._needSyncConsumeMap[txnId] = productId
+end
+
+function M.clearConsumeTxn()
+	local consumeTxnIds = nil
+
+	if C._needSyncConsumeMap then
+		for k, v in pairs(C._needSyncConsumeMap) do
+			consumeTxnIds = consumeTxnIds or {}
+			consumeTxnIds[#consumeTxnIds + 1] = k
+		end
+
+		C._needSyncConsumeMap = {}
+	end
+
+	return consumeTxnIds
+end

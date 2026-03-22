@@ -1,0 +1,66 @@
+local M = class("ScoreToastPanel", requireLua("BasePanel"))
+M.args = {
+	showAtor = Types.Animator,
+	tfBody = Types.Transform,
+	imgIcon = Types.Image,
+	txtScore = Types.TMP_Text,
+	txtScoreChange = Types.TMP_Text
+}
+local typeCG = typeof(UnityEngine.CanvasGroup)
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._canvasGroup = self.gameObject:GetOrAddComponent(typeCG)
+end
+
+function M:init(baseScore, deltaScore, isRanger)
+	self:updateUI(baseScore, deltaScore, isRanger)
+end
+
+function M:updateUI(baseScore, deltaScore, isRanger)
+	if not isRanger then
+		LuaUnity.setTPSprite(self._imgIcon, "general/g_icon_06", true)
+	else
+		LuaUnity.setTPSprite(self._imgIcon, "ranger/ranger_icon_05", true)
+	end
+
+	self._showAtor:Play("anim_CombatToast", 0, 0)
+
+	self._txtScore.text = baseScore
+	self._txtScoreChange.text = "+" .. deltaScore
+
+	lc.stopTimer(self._timer)
+
+	self._timer = lc.setTimer(function ()
+		self:startScoreChangeAnim(baseScore, deltaScore)
+	end, 0.75)
+end
+
+function M:startScoreChangeAnim(baseScore, deltaScore)
+	local targetScore = baseScore + deltaScore
+	self._timer = lc.setInterval(function ()
+		baseScore = baseScore + deltaScore / 7
+		self._txtScore.text = math.floor(baseScore)
+
+		if targetScore <= baseScore then
+			self._txtScore.text = math.floor(targetScore)
+
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+		end
+	end, 0.03333333333333333)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+end
+
+return M

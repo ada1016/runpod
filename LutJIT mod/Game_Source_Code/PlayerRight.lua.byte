@@ -1,0 +1,254 @@
+local M = class("PlayerRight")
+
+local function generateRightData()
+	return {
+		forever = false,
+		dailyClaimed = false,
+		buyMonth = 0,
+		expireTime = 0
+	}
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._rights = self._meta
+	self._rights[D.RightCardType.VIP] = self._rights[D.RightCardType.VIP] or generateRightData()
+	self._rights[D.RightCardType.SVIP] = self._rights[D.RightCardType.SVIP] or generateRightData()
+	self._foreverIapIds = {
+		[D.RightCardType.VIP] = D.IapType.VIP,
+		[D.RightCardType.SVIP] = D.IapType.SVIP
+	}
+	self._monthCardIapIds = {
+		[D.RightCardType.VIP] = D.IapType.VIP11,
+		[D.RightCardType.SVIP] = D.IapType.SVIP11
+	}
+	self._monthCardAddIapIds = {
+		[D.RightCardType.VIP] = D.IapType.VIP1,
+		[D.RightCardType.SVIP] = D.IapType.SVIP1
+	}
+end
+
+function M:start()
+	self:updateRightCards()
+end
+
+function M:dailyReset()
+	self:resetDailyRewards(D.RightCardType.SVIP)
+	self:resetDailyRewards(D.RightCardType.VIP)
+end
+
+function M:updateRightCards()
+	self:updateRightCard(D.RightCardType.SVIP)
+	self:updateRightCard(D.RightCardType.VIP)
+end
+
+function M:updateRightCard(rightCardType)
+	GameClock:removeTimeCallback("svip.expire" .. rightCardType)
+	GameClock:removeTimeCallback("svip.priceoff.expire" .. rightCardType)
+	GameClock:removeTimeCallback("svip.priceoff.start" .. rightCardType)
+
+	if P._playerRight:isInDuration(rightCardType) then
+		if not P._playerRight:isForever(rightCardType) then
+			GameClock:registerTimeCallback("rightcard.expire" .. rightCardType, P._playerRight:getExpireTime(rightCardType), function ()
+				self:updateRightCard(rightCardType)
+				self:dealExpired()
+				P._playerRecord:syncFastSweepIdx()
+				SimpleEvent.emit("rightcard.update", rightCardType)
+			end)
+		end
+
+		if P._playerRight:isInPriceOffCountDown(rightCardType) then
+			GameClock:registerTimeCallback("rightcard.priceoff.expire" .. rightCardType, C.getCurTime() + P._playerRight:getLeftPriceOffSeconds(rightCardType), function ()
+				self:updateRightCard(rightCardType)
+			end)
+			SimpleEvent.emit("rightcard.update", rightCardType)
+		else
+			GameClock:registerTimeCallback("rightcard.priceoff.start" .. rightCardType, C.getCurTime() + P._playerRight:getPriceOffStartSeconds(rightCardType), function ()
+				self:updateRightCard(rightCardType)
+			end)
+			SimpleEvent.emit("rightcard.update", rightCardType)
+		end
+	end
+end
+
+function M:isAdRemoved()
+	return self:isSVIP() or self:isSVIPNoAdBought()
+end
+
+function M:isSVIPNoAdBought()
+	return P._playerStore:isPurchased(D.IapType.NOAD)
+end
+
+function M:readBuyNoAdEndTime()
+	return D._globalConfig._removead_end_time or 0
+end
+
+function M:isVIP()
+	return self:isInDuration(D.RightCardType.VIP)
+end
+
+function M:isSVIP()
+	return self:isInDuration(D.RightCardType.SVIP)
+end
+
+function M:clearRightCard(rightCardType)
+	local data = self._rights[rightCardType]
+	data.forever = false
+	data.expireTime = 0
+	data.dailyClaimed = false
+	data.buyMonth = 0
+
+	self:updateRightCard(rightCardType)
+	self:dealExpired()
+	SimpleEvent.emit("rightcard.update", rightCardType)
+end
+
+function M:openRightCardForever(rightCardType)
+	local data = self._rights[rightCardType]
+	data.forever = true
+	data.expireTime = 0
+	data.dailyClaimed = false
+	data.buyMonth = 0
+
+	self:updateRightCard(rightCardType)
+	P._playerAsset:updateRecoverEnergyTime()
+
+	if rightCardType == D.RightCardType.SVIP then
+		P._playerRecord:syncFastSweepIdx()
+	end
+
+	SimpleEvent.emit("rightcard.update", rightCardType)
+end
+
+function M:dealExpired(rightCardType)
+	P._playerAsset:updateRecoverEnergyTime()
+end
+
+function M:getExpireTime(rightCardType)
+	return self._rights[rightCardType].expireTime
+end
+
+function M:isInPriceOff(rightCardType)
+	local inDuration = self:isInDuration(rightCardType)
+	local inForever = self:isForever(rightCardType)
+	local leftDay = self:getLeftDay(rightCardType)
+
+	return not inForever and inDuration
+end
+
+function M:isInPriceOffCountDown(rightCardType)
+	local inDuration = self:isInDuration(rightCardType)
+	local leftDay = self:getLeftDay(rightCardType)
+
+	return inDuration and leftDay % 30 < 4 and leftDay % 30 > 0
+end
+
+function M:isInDuration(rightCardType)
+	local inForever = self:isForever(rightCardType)
+
+	if inForever then
+		return true
+	end
+
+	local expireTime = self:getExpireTime(rightCardType)
+
+	return expireTime > 0 and C.getCurTime() <= expireTime
+end
+
+function M:isDailyRewardClaimed(rightCardType)
+	return self._rights[rightCardType].dailyClaimed
+end
+
+function M:isForever(rightCardType)
+	return self._rights[rightCardType].forever
+end
+
+function M:getMonthCardIapId(rightCardType)
+	return self._monthCardIapIds[rightCardType]
+end
+
+function M:getForeverIapId(rightCardType)
+	return self._foreverIapIds[rightCardType]
+end
+
+function M:getRecommendForeverIapId(rightCardType)
+	local leftDay = self:getLeftDay(rightCardType)
+	local iapIdOffset = 0
+
+	if rightCardType == D.RightCardType.SVIP and self:isSVIPNoAdBought() then
+		iapIdOffset = 10
+	end
+
+	if leftDay <= 0 then
+		return self:getForeverIapId(rightCardType) + iapIdOffset
+	end
+
+	local month = math.ceil(leftDay / 30)
+
+	return self._monthCardAddIapIds[rightCardType] + lc.numberClamp(4 - month, 0, 4) + iapIdOffset
+end
+
+function M:dealClaimDailyRewards(rightCardType)
+	local data = self._rights[rightCardType]
+	data.dailyClaimed = true
+	local logway = rightCardType == D.RightCardType.SVIP and D.LogWay.svip_card or D.LogWay.vip_card
+	local cids, nums = P._playerStore:readObtainAssets(self:getForeverIapId(rightCardType))
+
+	return P._playerAsset:increaseAssetNums(cids, nums, logway)
+end
+
+function M:resetDailyRewards(rightCardType)
+	if not self:isInDuration(rightCardType) then
+		return
+	end
+
+	local data = self._rights[rightCardType]
+	data.dailyClaimed = false
+
+	SimpleEvent.emit("rightcard.update", rightCardType)
+end
+
+function M:dealBuyRightCard(rightCardType, iapId, isForever)
+	local data = self._rights[rightCardType]
+
+	if isForever then
+		data.forever = true
+	else
+		local month = 1
+		local addSeconds = month * 30 * D.DAY_SECONDS
+
+		if self:isInDuration(rightCardType) then
+			local t = self:getExpireTime(rightCardType)
+			data.expireTime = t + addSeconds
+		else
+			data.expireTime = Client.getTodayZeroTimestamp() + addSeconds
+			data.dailyClaimed = false
+		end
+	end
+
+	P._playerAsset:updateRecoverEnergyTime()
+
+	if rightCardType == D.RightCardType.SVIP then
+		P._playerRecord:syncFastSweepIdx()
+	end
+
+	self:updateRightCard(rightCardType)
+end
+
+function M:getLeftDay(rightCardType)
+	return math.ceil((self:getExpireTime(rightCardType) - C.getCurTime()) / D.DAY_SECONDS)
+end
+
+function M:getLeftSeconds(rightCardType)
+	return math.ceil(self:getExpireTime(rightCardType) - C.getCurTime())
+end
+
+function M:getLeftPriceOffSeconds(rightCardType)
+	return P._playerRight:getLeftSeconds(rightCardType) % (30 * D.DAY_SECONDS)
+end
+
+function M:getPriceOffStartSeconds(rightCardType)
+	return P._playerRight:getLeftSeconds(rightCardType) % (30 * D.DAY_SECONDS) - 3 * D.DAY_SECONDS
+end
+
+return M

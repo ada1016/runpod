@@ -1,0 +1,142 @@
+local M = class("BattleBullet_GravityVortex", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._bulletPortalIn = nil
+	self._bulletPortalOut = nil
+	self._finalScale = self._scale
+	self._scale = 0.3
+	self._stage = 1
+
+	if self._view then
+		self._view:scaleEvent()
+	end
+end
+
+function M:destroy()
+	SUPER.destroy(self)
+
+	self._bulletPortalIn = nil
+	self._bulletPortalOut = nil
+end
+
+function M:hitEnemy(enemy)
+	SUPER.hitEnemy(self, enemy)
+
+	if not enemy._isToBeDestroyed then
+		local duration = self._battleSkill:getProp(BattlePropEnum.AtkInterval)
+		local speed = self._battleSkill:getProp(BattlePropEnum.DragIntensity) / 100
+		local addPer = self._battleSkill:getProp(BattlePropEnum.DragIntensityAddPer, 0)
+		speed = speed + speed * addPer / 100
+
+		enemy:beDraged(self._position, duration, speed)
+	end
+
+	if enemy:isParalysis() then
+		local effPar = self._battleWeapon:getEffect(1151)
+
+		if effPar then
+			for i = 1, effPar do
+				local castSkill = self._battleWeapon:getSkill(1106)
+				local bullet = castSkill:createBullet()
+
+				bullet:setPos(enemy._position.x, enemy._position.y)
+				bullet:setBeganTargt(enemy)
+			end
+		end
+	end
+
+	local effPar = self._battleWeapon:getEffect(1153)
+
+	if effPar then
+		local buff = enemy:existBuffClass(BattleDefine.BuffMainClass.Vulnerable)
+
+		if buff then
+			local param = D.getBattleEffectParams(1153)
+			local disSqrt = param[1]^2
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy2 = enemys[j]
+
+				if not enemy2._isToBeDestroyed and enemy._id ~= enemy2._id and BattleMathLib.dis_square(enemy._position, enemy2._position) <= disSqrt then
+					local buff = enemy2:addBuff(param[2], param[3])
+
+					if buff and buff._boosted == nil then
+						buff._boosted = true
+						buff._val = buff._val + effPar
+					end
+				end
+			end
+
+			if buff._boosted == nil then
+				buff._boosted = true
+				buff._val = buff._val + effPar
+			end
+		end
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._stage == 1 then
+		self._scale = self._scale + dt * 3
+
+		if self._finalScale <= self._scale then
+			self._scale = self._finalScale
+			self._stage = 2
+		end
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	elseif self._stage == 2 then
+		local addPer = self._battleSkill:getProp(BattlePropEnum.BulletDmgRangeAddAfterStep)
+
+		if addPer then
+			self:addScale(addPer / 1000)
+
+			if self._view then
+				self._view:scaleEvent()
+			end
+		end
+	elseif self._stage == 3 then
+		self._scale = self._scale - dt * 4
+
+		if self._scale <= 0 then
+			self._scale = 0
+			self._stage = 4
+
+			self:markToBeDestroyed()
+		end
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	if self._stage == 2 then
+		self._stage = 3
+
+		return
+	elseif self._stage == 3 then
+		return
+	end
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

@@ -1,0 +1,516 @@
+local M = class("RightCardPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	bg = Types.RawImage,
+	scrollSnap = Types.GameObject,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	tfRewards1 = Types.Transform,
+	tfRewards2 = Types.Transform,
+	btnMonth1 = Types.Button,
+	btnMonth2 = Types.Button,
+	btnForever1 = Types.Button,
+	btnForever2 = Types.Button,
+	btnClaim1 = Types.Button,
+	btnClaim2 = Types.Button,
+	goBuyButton1 = Types.GameObject,
+	goBuyButton2 = Types.GameObject,
+	goGetIt1 = Types.GameObject,
+	goGetIt2 = Types.GameObject,
+	textForeverDesc1 = Types.TMP_Text,
+	textForeverDesc2 = Types.TMP_Text,
+	textLeftTimeCountDown1 = Types.TMP_Text,
+	textLeftTimeCountDown2 = Types.TMP_Text,
+	textPriceOffCountDown1 = Types.TMP_Text,
+	textPriceOffCountDown2 = Types.TMP_Text,
+	textMonthPrice1 = Types.TMP_Text,
+	textMonthPrice2 = Types.TMP_Text,
+	textForeverOldPrice1 = Types.TMP_Text,
+	textForeverOldPrice2 = Types.TMP_Text,
+	textForeverNewPrice1 = Types.TMP_Text,
+	textForeverNewPrice2 = Types.TMP_Text,
+	textSVIPDesc1 = Types.TMP_Text,
+	textSVIPDesc2 = Types.TMP_Text,
+	textSVIPDesc3 = Types.TMP_Text,
+	textSVIPDesc4 = Types.TMP_Text,
+	textSVIPDesc5 = Types.TMP_Text,
+	textSVIPDesc6 = Types.TMP_Text,
+	textSVIPDesc7 = Types.TMP_Text,
+	textVIPDesc1 = Types.TMP_Text,
+	textVIPDesc2 = Types.TMP_Text,
+	textVIPDesc3 = Types.TMP_Text,
+	textVIPTitle1 = Types.TMP_Text,
+	goSpeedUpDesc = Types.GameObject,
+	goRemoveAd = Types.GameObject,
+	btnBuyRemoveAd = Types.Button,
+	btnAdRemoved = Types.Button,
+	goRemoveAdTime = Types.GameObject,
+	txtRemoveAdCountdown = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._compScrollSnap = self._scrollSnap:GetComponent("SimpleScrollSnap")
+
+	self._compScrollSnap.OnScrollAxis:AddListener(function (float)
+		self:updateBgColor(float)
+	end)
+
+	self._tfRewards = {
+		[D.RightCardType.SVIP] = self._tfRewards1,
+		[D.RightCardType.VIP] = self._tfRewards1
+	}
+	self._btnMonth = {
+		[D.RightCardType.SVIP] = self._btnMonth1,
+		[D.RightCardType.VIP] = self._btnMonth2
+	}
+	self._btnForever = {
+		[D.RightCardType.SVIP] = self._btnForever1,
+		[D.RightCardType.VIP] = self._btnForever2
+	}
+	self._btnClaim = {
+		[D.RightCardType.SVIP] = self._btnClaim1,
+		[D.RightCardType.VIP] = self._btnClaim2
+	}
+	self._goBuyButton = {
+		[D.RightCardType.SVIP] = self._goBuyButton1,
+		[D.RightCardType.VIP] = self._goBuyButton2
+	}
+	self._btnMonth = {
+		[D.RightCardType.SVIP] = self._btnMonth1,
+		[D.RightCardType.VIP] = self._btnMonth2
+	}
+	self._btnForever = {
+		[D.RightCardType.SVIP] = self._btnForever1,
+		[D.RightCardType.VIP] = self._btnForever2
+	}
+	self._goGetIt = {
+		[D.RightCardType.SVIP] = self._goGetIt1,
+		[D.RightCardType.VIP] = self._goGetIt2
+	}
+	self._textForeverDesc = {
+		[D.RightCardType.SVIP] = self._textForeverDesc1,
+		[D.RightCardType.VIP] = self._textForeverDesc2
+	}
+	self._textLeftTimeCountDown = {
+		[D.RightCardType.SVIP] = self._textLeftTimeCountDown1,
+		[D.RightCardType.VIP] = self._textLeftTimeCountDown2
+	}
+	self._textPriceOffCountDown = {
+		[D.RightCardType.SVIP] = self._textPriceOffCountDown1,
+		[D.RightCardType.VIP] = self._textPriceOffCountDown2
+	}
+	self._textMonthPrice = {
+		[D.RightCardType.SVIP] = self._textMonthPrice1,
+		[D.RightCardType.VIP] = self._textMonthPrice2
+	}
+	self._textForeverOldPrice = {
+		[D.RightCardType.SVIP] = self._textForeverOldPrice1,
+		[D.RightCardType.VIP] = self._textForeverOldPrice2
+	}
+	self._textForeverNewPrice = {
+		[D.RightCardType.SVIP] = self._textForeverNewPrice1,
+		[D.RightCardType.VIP] = self._textForeverNewPrice2
+	}
+	self._secondFuncs = {}
+	self._widgets1 = {
+		self._tfRewards1:GetChild(0).gameObject,
+		self._tfRewards1:GetChild(1).gameObject,
+		self._tfRewards1:GetChild(2).gameObject,
+		self._tfRewards1:GetChild(3).gameObject
+	}
+	self._widgets2 = {
+		self._tfRewards2:GetChild(0).gameObject,
+		self._tfRewards2:GetChild(1).gameObject,
+		self._tfRewards2:GetChild(2).gameObject,
+		self._tfRewards2:GetChild(3).gameObject
+	}
+	self._widgets = {
+		[D.RightCardType.SVIP] = self._widgets1,
+		[D.RightCardType.VIP] = self._widgets2
+	}
+
+	RedDotManager.add(self._btnClaim1, "city.home.rightcard.svipclaim_dot", true)
+	RedDotManager.add(self._btnClaim2, "city.home.rightcard.vipclaim_dot", true)
+	RedDotManager.add(self._btnLeft, "city.home.rightcard.svipclaim", true)
+	RedDotManager.add(self._btnRight, "city.home.rightcard.vipclaim", true)
+end
+
+function M:addClicks()
+	self:setClick(self._btnBuyRemoveAd, function ()
+		self:dealClickNoAdButton()
+	end)
+	self:setClick(self._btnAdRemoved, function ()
+		self:dealClickNoAdButton()
+	end)
+	self:setClick(self._btnMonth1, function ()
+		self:dealClickMonthButton(D.RightCardType.SVIP)
+	end)
+	self:setClick(self._btnForever1, function ()
+		self:dealClickForeverButton(D.RightCardType.SVIP)
+	end)
+	self:setClick(self._btnClaim1, function ()
+		self:dealClickClaimButton(D.RightCardType.SVIP)
+	end)
+	self:setClick(self._btnMonth2, function ()
+		self:dealClickMonthButton(D.RightCardType.VIP)
+	end)
+	self:setClick(self._btnForever2, function ()
+		self:dealClickForeverButton(D.RightCardType.VIP)
+	end)
+	self:setClick(self._btnClaim2, function ()
+		self:dealClickClaimButton(D.RightCardType.VIP)
+	end)
+end
+
+function M:addEvents()
+	self:on("iap.purchase.success", function (iapType)
+		if D.IapType.SVIP_start < iapType and iapType < D.IapType.SVIP_end then
+			self:updatePage(D.RightCardType.SVIP)
+		elseif D.IapType.VIP_start < iapType and iapType < D.IapType.VIP_end then
+			self:updatePage(D.RightCardType.VIP)
+		end
+	end)
+	self:on("rightcard.update", function (rightCardType)
+		self:refreshUI()
+	end)
+	self:on("purchase.inited", function ()
+		self:updateBtns(D.RightCardType.SVIP)
+		self:updateBtns(D.RightCardType.VIP)
+	end)
+end
+
+function M:init(channel, closeCallback)
+	self._channel = channel
+	self._closeCallback = closeCallback
+
+	self._textSVIPDesc2:SetLocalize(SID.RIGHTCARD_DESC2, D._globalConfig._rightcard_svip_params[1])
+	self._textSVIPDesc3:SetLocalize(SID.RIGHTCARD_DESC3)
+	self._textSVIPDesc4:SetLocalize(SID.RIGHTCARD_DESC4, D._globalConfig._rightcard_svip_params[2])
+	self._textSVIPDesc5:SetLocalize(SID.RIGHTCARD_DESC5, D._globalConfig._rightcard_svip_params[3])
+	self._textSVIPDesc6:SetLocalize(SID.RIGHTCARD_DESC7)
+	self._textSVIPDesc7:SetLocalize(SID.RIGHTCARD_DESC6)
+	self._textVIPDesc1:SetLocalize(SID.RIGHTCARD_DESC2, D._globalConfig._rightcard_vip_params[1])
+	self._textVIPDesc2:SetLocalize(SID.RIGHTCARD_DESC5, D._globalConfig._rightcard_vip_params[3])
+	self._textVIPDesc3:SetLocalize(SID.RIGHTCARD_DESC6)
+	self._textVIPTitle1:SetLocalize(SID.RIGHTCARD_DESC2, D._globalConfig._rightcard_vip_params[1])
+	self:updateUI()
+	Client.playSound("ui_Open_Gift_1")
+end
+
+function M:OnDestroy()
+	self:clearUI()
+	RedDotManager.remove("city.home.rightcard.svipclaim")
+	RedDotManager.remove("city.home.rightcard.vipclaim")
+	RedDotManager.remove("city.home.rightcard.svipclaim_dot")
+	RedDotManager.remove("city.home.rightcard.vipclaim_dot")
+	M.super.OnDestroy(self)
+end
+
+function M:closePanel()
+	self:clearUI()
+
+	if self._closeCallback then
+		self._closeCallback()
+
+		self._closeCallback = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:clearUI()
+	for k, func in pairs(self._secondFuncs) do
+		self._secondFuncs[k] = nil
+	end
+
+	lc.stopTimer(self._interval)
+end
+
+function M:refreshUI()
+	self:refreshDots()
+	self:clearUI()
+	self:updateUI()
+end
+
+function M:refreshDots(type)
+	if type then
+		if type == D.RightCardType.SVIP then
+			RedDotManager.update("city.home.rightcard.svipclaim")
+			RedDotManager.update("city.home.rightcard.svipclaim_dot")
+		else
+			RedDotManager.update("city.home.rightcard.vipclaim")
+			RedDotManager.update("city.home.rightcard.vipclaim_dot")
+		end
+	else
+		RedDotManager.update("city.home.rightcard.svipclaim")
+		RedDotManager.update("city.home.rightcard.svipclaim_dot")
+		RedDotManager.update("city.home.rightcard.vipclaim")
+		RedDotManager.update("city.home.rightcard.vipclaim_dot")
+	end
+end
+
+function M:updateUI()
+	local skipNum = P._playerAd:getSkippedAdNum()
+
+	if P._playerRight:isSVIP() or skipNum > 0 then
+		self._textSVIPDesc1:SetLocalizeS(SID.RIGHTCARD_VIP_DESC_AD, string.format("<color=#C29BF0>%d</color>", skipNum))
+
+		self._textSVIPDesc1.text = LcLocalization.getTextStr(SID.RIGHTCARD_DESC1) .. self._textSVIPDesc1.text
+	else
+		self._textSVIPDesc1:SetLocalize(SID.RIGHTCARD_DESC1)
+	end
+
+	self._interval = lc.setInterval(function ()
+		for k, func in pairs(self._secondFuncs) do
+			func()
+		end
+	end, 0.5)
+
+	self:updateRemoveAdArea()
+	self:updatePage(D.RightCardType.SVIP)
+	self:updatePage(D.RightCardType.VIP)
+	self:updateRewards(D.RightCardType.SVIP)
+	self:updateRewards(D.RightCardType.VIP)
+	self:resetFuncs()
+	self._interval.func()
+end
+
+function M:resetFuncs()
+	self._secondFuncs["svip.countdown.left"] = nil
+
+	if P._playerRight:isInDuration(D.RightCardType.SVIP) and not P._playerRight:isForever(D.RightCardType.SVIP) then
+		self._secondFuncs["svip.countdown.left"] = function ()
+			self:updateLeftTimeCountDown(D.RightCardType.SVIP)
+		end
+	end
+
+	self._secondFuncs["vip.countdown.left"] = nil
+
+	if P._playerRight:isInDuration(D.RightCardType.VIP) and not P._playerRight:isForever(D.RightCardType.VIP) then
+		self._secondFuncs["vip.countdown.left"] = function ()
+			self:updateLeftTimeCountDown(D.RightCardType.VIP)
+		end
+	end
+
+	self._secondFuncs["svip.countdown.priceoff"] = nil
+
+	if P._playerRight:isInPriceOffCountDown(D.RightCardType.SVIP) then
+		self._secondFuncs["svip.countdown.priceoff"] = function ()
+			self:updatePriceOffCountDown(D.RightCardType.SVIP)
+		end
+	end
+
+	self._secondFuncs["vip.countdown.priceoff"] = nil
+
+	if P._playerRight:isInPriceOffCountDown(D.RightCardType.VIP) then
+		self._secondFuncs["vip.countdown.priceoff"] = function ()
+			self:updatePriceOffCountDown(D.RightCardType.VIP)
+		end
+	end
+
+	self._secondFuncs["removead.countdown.priceoff"] = nil
+	local showRemoveAdBtn = false
+	local endTime = P._playerRight:readBuyNoAdEndTime() or 0
+
+	if showRemoveAdBtn and endTime > 0 and endTime - C.getCurTime() > 0 then
+		self._secondFuncs["removead.countdown.priceoff"] = function ()
+			self:updateRemoveAdLeftTimeCountDown()
+		end
+	end
+end
+
+function M:updatePage(rightCardType)
+	self:updateClaimBtn(rightCardType)
+	self:updateBtns(rightCardType)
+end
+
+function M:updateRemoveAdLeftTimeCountDown()
+	local endTime = P._playerRight:readBuyNoAdEndTime()
+	local leftSeconds = endTime - C.getCurTime()
+
+	V.formatLeftTime(self._txtRemoveAdCountdown, leftSeconds)
+end
+
+function M:updateRemoveAdArea()
+	local isForever = P._playerRight:isForever(D.RightCardType.SVIP)
+	local isBought = P._playerRight:isSVIPNoAdBought()
+	local endTime = P._playerRight:readBuyNoAdEndTime() or 0
+	local isInDuration = endTime < 0 or endTime - C.getCurTime() > 0
+	local showRemoveAdBtn = false
+	local showLeftTime = showRemoveAdBtn and endTime > 0 and endTime - C.getCurTime() > 0
+
+	self._goRemoveAd:SetActive(not isForever and (isBought or showRemoveAdBtn))
+	self._goRemoveAdTime:SetActive(not isBought and showRemoveAdBtn and showLeftTime)
+	self._btnBuyRemoveAd.gameObject:SetActive(not isForever and not isBought)
+	self._btnAdRemoved.gameObject:SetActive(not isForever and isBought)
+	self:updateRemoveAdLeftTimeCountDown()
+end
+
+function M:updateLeftTimeCountDown(rightCardType)
+	local leftSeconds = P._playerRight:getLeftSeconds(rightCardType)
+
+	if D.DAY_SECONDS < leftSeconds then
+		self._textLeftTimeCountDown[rightCardType]:SetLocalizeS(SID.STR_REMAIN_TIME_DAY, P._playerRight:getLeftDay(rightCardType))
+	else
+		self._textLeftTimeCountDown[rightCardType]:SetLocalizeS(SID.STR_REMAIN_TIME, V.formatTimeS2HMS(leftSeconds))
+	end
+end
+
+function M:updatePriceOffCountDown(rightCardType)
+	if not P._playerRight:isInPriceOffCountDown(rightCardType) then
+		return
+	end
+
+	self._textPriceOffCountDown[rightCardType].text = V.formatTimeS2HMS(P._playerRight:getLeftPriceOffSeconds(rightCardType))
+end
+
+function M:updateClaimBtn(rightCardType)
+	local isInDuration = P._playerRight:isInDuration(rightCardType)
+
+	self._btnClaim[rightCardType].gameObject:SetActive(isInDuration)
+
+	if not isInDuration then
+		return
+	end
+
+	if P._playerRight:isDailyRewardClaimed(rightCardType) then
+		self._btnClaim[rightCardType].gameObject:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._btnClaim[rightCardType].transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+
+		self._btnClaim[rightCardType].title:SetLocalize(SID.STR_CLAIMED)
+	else
+		self._btnClaim[rightCardType].gameObject:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		self._btnClaim[rightCardType].transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+
+		self._btnClaim[rightCardType].title:SetLocalize(SID.STR_CLAIM)
+	end
+end
+
+function M:updateBtns(rightCardType)
+	local forever = P._playerRight:isForever(rightCardType)
+
+	self._goBuyButton[rightCardType]:SetActive(not forever)
+
+	if rightCardType == D.RightCardType.SVIP then
+		self._goSpeedUpDesc:SetActive(not forever)
+	end
+
+	self._goGetIt[rightCardType]:SetActive(forever)
+
+	local hideMonth = P._playerRight:getLeftDay(rightCardType) > 90
+
+	self._btnMonth[rightCardType].gameObject:SetActive(not hideMonth)
+
+	local isInRemoveAdPriceoff = rightCardType == D.RightCardType.SVIP and P._playerRight:isSVIPNoAdBought() and not P._playerRight:isForever(D.RightCardType.SVIP)
+	local isInPriceOff = P._playerRight:isInPriceOff(rightCardType) or isInRemoveAdPriceoff
+
+	lc.setAnchoredPosition(self._textForeverNewPrice[rightCardType].transform, isInPriceOff and 77 or 0, 0)
+	self._textForeverOldPrice[rightCardType].transform.parent:SetActive(isInPriceOff)
+	self._textPriceOffCountDown[rightCardType].gameObject:SetActive(P._playerRight:isInPriceOffCountDown(rightCardType))
+
+	local iapId1 = P._playerRight:getMonthCardIapId(rightCardType)
+	local iapId2 = P._playerRight:getForeverIapId(rightCardType)
+	local iapId3 = P._playerRight:getRecommendForeverIapId(rightCardType)
+
+	if rightCardType == D.RightCardType.SVIP and P._playerRight:isSVIPNoAdBought() then
+		iapId1 = iapId1 + 10
+	end
+
+	self._textMonthPrice[rightCardType].text = P._playerStore:getDisplayPrice(iapId1)
+	self._textForeverOldPrice[rightCardType].text = P._playerStore:getDisplayPrice(iapId2)
+	self._textForeverNewPrice[rightCardType].text = P._playerStore:getDisplayPrice(iapId3)
+
+	if P._playerRight:isForever(rightCardType) then
+		self._textLeftTimeCountDown[rightCardType]:SetLocalize(SID.RIGHTCARD_FOREVER)
+	end
+
+	self._textLeftTimeCountDown[rightCardType].gameObject:SetActive(P._playerRight:isInDuration(rightCardType))
+end
+
+function M:updateRewards(rightCardType)
+	local claimed = P._playerRight:isInDuration(rightCardType) and P._playerRight:isDailyRewardClaimed(rightCardType)
+
+	V.loadFixRewardsWidget(self, self._widgets[rightCardType], D.formatRewards(P._playerStore:readObtainAssets(P._playerRight:getForeverIapId(rightCardType))), claimed)
+end
+
+function M:dealClickNoAdButton()
+	local isForever = P._playerRight:isForever(D.RightCardType.SVIP)
+
+	if isForever then
+		return
+	end
+
+	local isBought = P._playerRight:isSVIPNoAdBought()
+
+	if isBought then
+		V.showBubbleTips({
+			desc = SID.STR_REMOVEAD_DESC1
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnBuyRemoveAd.gameObject
+		})
+
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.RemoveAdPanel, self._channnel, function ()
+		self:updatePage(D.RightCardType.SVIP)
+		self:updateRemoveAdArea()
+	end)
+end
+
+function M:dealClickMonthButton(rightCardType)
+	local iapId = P._playerRight:getMonthCardIapId(rightCardType)
+
+	if rightCardType == D.RightCardType.SVIP and P._playerRight:isSVIPNoAdBought() then
+		iapId = D.IapType.SVIP_NOAD11
+	end
+
+	C.tryPurchase(iapId, function ()
+	end, self._channel)
+end
+
+function M:dealClickForeverButton(rightCardType)
+	local iapId = P._playerRight:getRecommendForeverIapId(rightCardType)
+
+	C.tryPurchase(iapId, function ()
+	end, self._channel)
+end
+
+function M:dealClickClaimButton(rightCardType)
+	local inDuration = P._playerRight:isInDuration(rightCardType)
+
+	if not inDuration then
+		V.showResultCode(ResultCode.NOT_MEET_CONDITION)
+
+		return
+	end
+
+	local isClaimed = P._playerRight:isDailyRewardClaimed(rightCardType)
+
+	if isClaimed then
+		V.showResultCode(ResultCode.REWARD_CLAIMED)
+
+		return
+	end
+
+	local rewards = P._playerRight:dealClaimDailyRewards(rightCardType)
+
+	V.showRewardClaimPanel(rewards)
+	self:updateClaimBtn(rightCardType)
+	self:updateRewards(rightCardType)
+	self:refreshDots(rightCardType)
+end
+
+function M:updateBgColor(float)
+	self._bg.color = Color.Lerp(Color.White, Color.str2Static("00B9FF"), float)
+end
+
+return M

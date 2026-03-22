@@ -1,0 +1,195 @@
+local M = class("AutoMergePanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	txtTitle = Types.TMP_Text,
+	txtContent = Types.TMP_Text,
+	tfItemContent = Types.Transform,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	btnClose = Types.Button,
+	btnBg = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goItems = {}
+	self._ignoreCids = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._hasValuableGem then
+			V.showMessageBox({
+				_type = 2,
+				_content = SID.STR_VALUABLE_MERGE_TIP,
+				_confirmCallback = function ()
+					self:dealMerge()
+				end
+			})
+		else
+			self:dealMerge()
+		end
+	end)
+	self:setClick(self._btnCancel, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnClose, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+	self:setClickWithoutAction(self._btnBg, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:addEvents()
+	self:on("gem.locked", function (lock, cid)
+		if lock then
+			self._ignoreCids[#self._ignoreCids + 1] = cid
+
+			table.erase(self._availableGems, function (e)
+				return table.contains(self._ignoreCids, e.cid)
+			end)
+
+			self._items = P._playerRole:calcAutoMergeGems(self._availableGems)
+
+			self:updateItems(self._items)
+		end
+	end)
+end
+
+function M:init(param)
+	self._fcConfirm = param._fcConfirm
+	self._fcCancel = param._fcCancel
+	self._items = param._items
+	self._maxQuality = 1
+
+	for i = 1, #self._items do
+		local quality = D._gemConfig[self._items[i][1]]._quality
+
+		if self._maxQuality < quality then
+			self._maxQuality = quality
+
+			if self._maxQuality >= 5 then
+				break
+			end
+		end
+	end
+
+	self._availableGems = clone(P._playerRole:getAvaliableGems())
+	self._hasValuableGem = false
+
+	if param._items then
+		for i = 1, #param._items do
+			local item = param._items[#param._items - i + 1]
+			local widget = ItemWidget.create(self._tfItemContent)
+			self._goItems[i] = widget
+			local cid = item.cid or item[1]
+			local quality = D._gemConfig[cid]._quality
+			local num = item.num or item[2]
+
+			widget:init(cid, num)
+
+			if cid == 3440025 or D._gemConfig[cid - quality * 100000 + 400000] == nil then
+				self._hasValuableGem = true
+
+				widget:showValuable(true)
+			end
+
+			self:setClick(widget._btnClick, function ()
+				if D.isGem(cid) then
+					UIManager.openPanel(PrefabDefine.ChipInfoPanel, cid, 1, true)
+				end
+			end)
+		end
+	end
+end
+
+function M:updateItems(items)
+	self._items = items
+	self._hasValuableGem = false
+
+	for i = 1, #items do
+		local item = items[#items - i + 1]
+		local widget = nil
+
+		if self._goItems[i] then
+			widget = self._goItems[i]
+
+			self._goItems[i]:SetActive(true)
+		else
+			widget = ItemWidget.create(self._tfItemContent)
+		end
+
+		local cid = item.cid or item[1]
+		local num = item.num or item[2]
+		local quality = D._gemConfig[cid]._quality
+
+		widget:init(cid, num)
+
+		if cid == 3440025 or D._gemConfig[cid - quality * 100000 + 400000] == nil then
+			self._hasValuableGem = true
+
+			widget:showValuable(true)
+		else
+			widget:showValuable(false)
+		end
+
+		self:setClick(widget._btnClick, function ()
+			if D.isGem(cid) then
+				UIManager.openPanel(PrefabDefine.ChipInfoPanel, cid, 1, true)
+			end
+		end)
+	end
+
+	for i = #items + 1, #self._goItems do
+		self._goItems[i]:SetActive(false)
+	end
+end
+
+function M:dealMerge()
+	if #self._items == 0 then
+		V.showToast(SID.TIP_NO_CHIP_MERGE)
+
+		return
+	end
+
+	if lc.isNetworkNotReachable() then
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+
+		return
+	end
+
+	if self._maxQuality >= 5 then
+		Client.checkNetworkAsync(function ()
+			if self._fcConfirm then
+				self._fcConfirm(self._items)
+			end
+
+			self:closePanel()
+		end)
+	else
+		if self._fcConfirm then
+			self._fcConfirm(self._items)
+		end
+
+		self:closePanel()
+	end
+end
+
+return M

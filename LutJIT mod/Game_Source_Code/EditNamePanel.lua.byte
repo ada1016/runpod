@@ -1,0 +1,199 @@
+local M = class("EditNamePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtInput = Types.TMP_InputField,
+	txtPlaceHolder = Types.TMP_Text,
+	btnFree = Types.Button,
+	btnDiamond = Types.Button,
+	txtCostDiamond = Types.TMP_Text,
+	imgCost = Types.Image,
+	tmpExplain = Types.TMP_Text,
+	tmpInputCount = Types.TMP_Text
+}
+local MAX_INPUT_LENGTH = 12
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+	if lc._isCN then
+		self._tmpExplain:SetLocalize(SID.CN_NAME_VAILD_TIPS_2)
+	end
+end
+
+function M:initPrefabVar()
+end
+
+function M:checkName(name)
+	if name == P:getName() then
+		V.showToast(SID.TIP_NAME_EQUAL)
+
+		return false
+	end
+
+	if not lc._isCN then
+		if not lc.isNameStrValid(name) then
+			V.showToast(SID.TIP_NAME_INVALID)
+
+			return false
+		end
+
+		if string.utfstrlen(name) < 4 then
+			V.showToast(SID.TIP_NAME_TOO_SHORT)
+
+			return false
+		elseif string.utfstrlen(name) > 12 then
+			V.showToast(SID.TIP_NAME_TOO_LONG)
+
+			return false
+		end
+
+		return true
+	elseif not string.hasNoSpecialChars(name) then
+		V.showToast(SID.CN_INPUT_VAILD)
+
+		return false
+	end
+
+	return true
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:on("verify.text.result", function (pass)
+		UIManager.hideWaiting()
+
+		if pass then
+			self:doSetNameAfterVerufy()
+		else
+			V.showToast(SID.CN_INPUT_VAILD)
+		end
+	end)
+	self:setClick(self._btnFree, function ()
+		if P._playerRecord:getChangeNameCount() == 0 then
+			local name = self._txtInput.text
+
+			if not name then
+				V.showToast(SID.TIP_NAME_TOO_SHORT)
+
+				return
+			elseif self:checkName(name) then
+				if not lc._isCN then
+					self:doSetNameAfterVerufy(name)
+				else
+					UIManager.showWaiting()
+					Request.sendCheckInputTextReq(name)
+				end
+			end
+		end
+	end)
+	self:setClick(self._btnDiamond, function ()
+		self:dealChangeNameWithCheckUse()
+	end)
+
+	if lc._isCN then
+		self._txtInput.onValueChanged:RemoveAllListeners()
+		self._txtInput.onValueChanged:AddListener(function (pt)
+			local is_valid, weighted_length = string.checkInputLength(pt, MAX_INPUT_LENGTH)
+
+			if not is_valid then
+				local truncated = string.truncateToMaxLength(pt, MAX_INPUT_LENGTH)
+				self._txtInput.text = truncated
+			end
+
+			self._tmpInputCount.text = string.format("%d/%d", math.min(weighted_length, MAX_INPUT_LENGTH), MAX_INPUT_LENGTH)
+		end)
+		self._tmpInputCount.gameObject:SetActive(true)
+
+		local weighted_length = string.getWeightedLength(P:getName(), MAX_INPUT_LENGTH)
+		self._tmpInputCount.text = string.format("%d/%d", weighted_length, MAX_INPUT_LENGTH)
+	end
+end
+
+function M:doSetNameAfterVerufy()
+	if self._callbackSync then
+		self._callbackSync()
+	end
+
+	P._playerRecord:incChangeNameCount()
+	P._playerProfile:setName(self._txtInput.text)
+
+	if self._callback then
+		self._callback()
+	end
+
+	self:closePanel()
+	V.showToast(SID.TIP_EDIT_SUCCESS)
+end
+
+function M:dealChangeNameWithCheckUse()
+	if not P._playerAsset:isAssetEnough(D.ResType.diamond, D._globalConfig._change_name_cost) then
+		UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+			V.formatNeedStr1(self._txtCostDiamond, P._playerAsset:getAssetNum(D.ResType.diamond), D._globalConfig._change_name_cost)
+		end)
+
+		return
+	end
+
+	local costNum = D._globalConfig._change_name_cost
+	local ret = V.tryShowDiamondConfirm(D.ResType.diamond, costNum, function ()
+		self:dealChangeNameLogic()
+	end)
+
+	if not ret then
+		self:dealChangeNameLogic()
+	end
+end
+
+function M:dealChangeNameLogic()
+	if not P._playerAsset:isAssetEnough(D.ResType.diamond, D._globalConfig._change_name_cost) then
+		UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+			V.formatNeedStr1(self._txtCostDiamond, P._playerAsset:getAssetNum(D.ResType.diamond), D._globalConfig._change_name_cost)
+		end)
+
+		return
+	end
+
+	local name = self._txtInput.text
+
+	if not name then
+		V.showToast(SID.TIP_NAME_TOO_SHORT)
+
+		return
+	elseif self:checkName(name) then
+		if not lc._isCN then
+			self:doSetNameAfterVerufy(name)
+		else
+			UIManager.showWaiting()
+			Request.sendCheckInputTextReq(name)
+
+			function self._callbackSync()
+				self._callbackSync = nil
+
+				P._playerAsset:decreaseAssetNum(D.ResType.diamond, -D._globalConfig._change_name_cost, D.LogWay.change_name)
+			end
+		end
+	end
+end
+
+function M:init(callback)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._btnFree:SetActive(P._playerRecord:getChangeNameCount() == 0)
+	self._btnDiamond:SetActive(P._playerRecord:getChangeNameCount() ~= 0)
+	V.loadItemCost(self._imgCost, self._txtCostDiamond, D.ResType.diamond, D._globalConfig._change_name_cost, self)
+
+	self._txtPlaceHolder.text = P:getName()
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

@@ -1,0 +1,70 @@
+local M = class("ArkRebuildDescPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpBan = Types.TMP_Text,
+	imgBanModule1 = Types.Image,
+	imgBanModule2 = Types.Image,
+	imgBanModule3 = Types.Image,
+	imgBanModule4 = Types.Image,
+	imgBanModule5 = Types.Image,
+	imgBanModule6 = Types.Image,
+	imgBanModule7 = Types.Image,
+	imgBanWeapon1 = Types.Image,
+	imgBanWeapon2 = Types.Image,
+	imgBanWeapon3 = Types.Image
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init(id)
+	self._id = id
+	local subType = D._activityTimeConfig[id]._subType
+	local timeCfg = P._playerActivity:readCfg(id)
+	local cfg = P._playerActivityArkRebuild:readCfg(subType)
+
+	self._tmpBan:SetLocalize(SID.ARK_REBUILD_BAN_RULE, cfg._weaponBanNum, cfg._moduleBanNum)
+
+	local banWeapons, banModules = P._playerActivityArkRebuild:getBanData(timeCfg._startTime, subType)
+
+	for i = 1, #banWeapons do
+		local img = self["_imgBanWeapon" .. i]
+
+		V.loadWeaponIcon(img, banWeapons[i])
+	end
+
+	for i = 1, #banModules do
+		local img = self["_imgBanModule" .. i]
+
+		if img then
+			self:setClick(img.transform.parent:GetComponent("Button"), function ()
+				UIManager.openPanel(PrefabDefine.ModuleDetailPanel, banModules[i])
+			end)
+		end
+
+		LuaUnity.setTPSprite(img, string.format("weekend/Module-%d", banModules[i]))
+	end
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:clear()
+end
+
+function M:OnDestroy()
+	self:clear()
+end
+
+return M

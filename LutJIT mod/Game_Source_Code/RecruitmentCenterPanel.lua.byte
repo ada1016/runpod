@@ -1,0 +1,200 @@
+local M = class("RecruitmentCenterPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+local EXCHANGE_FREE = 2301
+local EXCHAGNE_BUY_HALF = 2302
+local EXCHAGNE_BUY = 2303
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnFree = Types.Button,
+	btnBuy = Types.Button,
+	btnTip = Types.Button,
+	goItem1 = Types.GameObject,
+	goItem2 = Types.GameObject,
+	txtItem1Name = Types.TMP_Text,
+	txtItem2Name = Types.TMP_Text,
+	txtItem1Remain = Types.TMP_Text,
+	txtItem2Remain = Types.TMP_Text,
+	txtBuyCost = Types.TMP_Text,
+	goSoldout1 = Types.GameObject,
+	goSoldout2 = Types.GameObject,
+	txtTimer1 = Types.TMP_Text,
+	txtTimer2 = Types.TMP_Text,
+	goHalfTip = Types.GameObject,
+	txtInput = Types.TMP_InputField,
+	txtInputLimit = Types.TMP_Text,
+	txtRecruitmentExpireTip = Types.TMP_Text,
+	btnCopy = Types.Button,
+	btnShare = Types.Button,
+	imgShareReward = Types.Image,
+	txtShareRewardNum = Types.TMP_Text,
+	goButtom = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	if lc._isCN then
+		self._goButtom:SetActive(false)
+	end
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goItem1)
+	ItemWidget.noCreate(self._goItem2)
+end
+
+function M:addClicks()
+	self:setClick(self._btnFree, function ()
+		self:dealExchange(EXCHANGE_FREE)
+		RedDotManager.update("city.challenge")
+	end)
+	self:setClick(self._btnTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_RECRUITMENT_BUY_TIP
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnTip.gameObject
+		})
+	end)
+	self:setClick(self._btnBuy, function ()
+		self:dealExchange(P._playerExchange:getLeftExchangeCount(EXCHAGNE_BUY_HALF) <= 0 and EXCHAGNE_BUY or EXCHAGNE_BUY_HALF)
+	end)
+	self:setClick(self._btnCopy, function ()
+		UniClipboard.SetText(P._playerGlobalDefense:generateShareCode(self._txtInput.text))
+		V.showToast(SID.TIP_COPY_COORDINATE_SUCCESS)
+	end)
+	self:setClick(self._btnShare, function ()
+		UniClipboard.SetText(P._playerGlobalDefense:generateShareCode(self._txtInput.text))
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_GD)
+
+		if P._playerGlobalDefense:getDailyShareCoordinate() == 0 then
+			local rewards = D._globalConfig._recruitment_reward
+
+			P._playerAsset:increaseAssetNum(rewards[1], rewards[2], D.LogWay.share_coordinate)
+			P._playerGlobalDefense:setDailyShareCoordinate(1)
+			self._imgShareReward.transform.parent:SetActive(false)
+			V.showRewardClaimPanel({
+				rewards
+			})
+		end
+	end)
+	self._txtInput.onValueChanged:AddListener(function (pt)
+		self._txtInputLimit.text = string.format("(%d/50)", #self._txtInput.text)
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:init()
+	end)
+end
+
+function M:init()
+	self:updateUI()
+
+	if P._playerGlobalDefense:getDailyShareCoordinate() == 0 then
+		self._imgShareReward.transform.parent:SetActive(true)
+		LuaUnity.setTPSprite(self._imgShareReward, D.toSmallSprite(D._globalConfig._recruitment_reward[1]), true)
+
+		self._txtShareRewardNum.text = D._globalConfig._recruitment_reward[2]
+	else
+		self._imgShareReward.transform.parent:SetActive(false)
+	end
+
+	self._txtRecruitmentExpireTip:SetLocalize(SID.TIP_PUBLISH_RECRUITMENT, D._globalConfig._recruitment_expire_minutes / 60)
+	self:updateTime()
+end
+
+function M:updateUI()
+	local playerExchange = P._playerExchange
+	local cid, num = playerExchange:readExchangeGain(EXCHANGE_FREE)
+	local leftCount = playerExchange:getLeftExchangeCount(EXCHANGE_FREE)
+
+	self._goSoldout1:SetActive(leftCount <= 0)
+	self._btnFree:SetActive(leftCount > 0)
+	self._goItem1:init(cid, num)
+	self._txtItem1Name:SetLocalize(SID.RESOURCE_NUM, -D._itemConfig[cid]._nameSid, num)
+	self._txtItem1Remain:SetLocalize(SID.STR_REMAIN_TIMES, leftCount)
+
+	cid, num = playerExchange:readExchangeGain(EXCHAGNE_BUY)
+	leftCount = playerExchange:getLeftExchangeCount(EXCHAGNE_BUY_HALF)
+
+	self._goHalfTip:SetActive(leftCount > 0)
+
+	local cid1, num1 = playerExchange:getExchangeCost(EXCHAGNE_BUY_HALF)
+
+	if leftCount <= 0 then
+		cid1, num1 = playerExchange:getExchangeCost(EXCHAGNE_BUY)
+	end
+
+	leftCount = leftCount + playerExchange:getLeftExchangeCount(EXCHAGNE_BUY)
+	self._txtBuyCost.text = num1
+
+	self._goSoldout2:SetActive(leftCount <= 0)
+	self._btnBuy:SetActive(leftCount > 0)
+	self._goItem2:init(cid, num)
+	self._txtItem2Name:SetLocalize(SID.RESOURCE_NUM, -D._itemConfig[cid]._nameSid, num)
+	self._txtItem2Remain:SetLocalize(SID.STR_REMAIN_TIMES, leftCount)
+end
+
+function M:dealExchange(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+	local retCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode, param)
+
+		return
+	end
+
+	local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+		self:dealExchangLogic(exchangeId)
+	end)
+
+	if not ret then
+		self:dealExchangLogic(exchangeId)
+	end
+end
+
+function M:dealExchangLogic(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+	local retCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode, param)
+
+		return
+	end
+
+	P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+		V.showRewardClaimPanel(rewards)
+		self:updateUI()
+	end)
+end
+
+function M:updateTime()
+	if self._timer == nil then
+		self._timer = lc.setInterval(function ()
+			self:updateTime()
+		end, 0.5)
+	end
+
+	local targetTime = Client.getTodayZeroTimestamp(1)
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._txtTimer1, seconds)
+	V.formatLeftTime(self._txtTimer2, seconds)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._timer)
+end
+
+return M

@@ -1,0 +1,396 @@
+local M = class("PlayerGlobalDefense")
+
+function M:ctor()
+end
+
+local AREA_NUM = 10
+local DEFAULT_MSID = 30001
+local KEY = "r6gb"
+
+function M:init(meta)
+	self._meta = meta
+	self._buffData = lc.assignTable(meta, "buffData")
+	self._randomBeginDate = meta.randomBeginDate or 0
+	self._settleRewards = {}
+	self._lastMissionId = meta.lastMissionId or DEFAULT_MSID
+	self._missionTimeRecords = lc.assignTable(meta, "missionTimeRecords")
+	self._dailyCoordinateChance = meta.dailyCoordinateChance or 0
+	self._dailyShareCoordinate = meta.dailyShareCoordinate or 0
+
+	self:trySwitchMap()
+end
+
+function M:dailyReset()
+	self._dailyCoordinateChance = 0
+	self._meta.dailyCoordinateChance = 0
+	self._dailyShareCoordinate = 0
+	self._meta.dailyShareCoordinate = 0
+
+	self:trySwitchMap()
+end
+
+function M:trySwitchMap()
+	local n = #D._battleGlobalBuffConfig
+	local dayOffset = Client.getDayOffset()
+
+	if n <= dayOffset - self._randomBeginDate then
+		self._randomBeginDate = dayOffset
+		local randomer = math.randomer(dayOffset)
+
+		for i = 1, 10 do
+			self._buffData[i] = {}
+
+			for j = 1, n do
+				self._buffData[i][j] = j
+			end
+
+			table.shuffle(self._buffData[i], randomer)
+		end
+
+		for i = 2, 10 do
+			for j = 1, n do
+				if self._buffData[i][j] == self._buffData[i - 1][j] then
+					for k = n, 1, -1 do
+						if k ~= j then
+							local tmp = self._buffData[i][j]
+							self._buffData[i][j] = self._buffData[i][k]
+							self._buffData[i][k] = tmp
+
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function M:getLastMissionId()
+	return self._lastMissionId
+end
+
+function M:getLastUnlockMissionId()
+	local msId = DEFAULT_MSID
+
+	while self:isMissionUnlocked(msId) do
+		msId = msId + 1
+	end
+
+	return msId - 1
+end
+
+function M:setLastMissionId(msId)
+	self._meta.lastMissionId = msId
+	self._lastMissionId = msId
+end
+
+function M:getMissionBuff(areaId)
+	local dayOffset = Client.getDayOffset()
+
+	return self._buffData[areaId][dayOffset - self._randomBeginDate + 1]
+end
+
+function M:startBattle(code)
+	if code then
+		if self._dailyCoordinateChance >= 1 then
+			return ResultCode.COORDINATE_LIMIT
+		end
+
+		local ret = self:checkCoordinate(code)
+
+		if ret then
+			return ret
+		end
+
+		self._isInvite = true
+	else
+		self._isInvite = false
+	end
+end
+
+function M:getDailyCoordinateChance()
+	return self._dailyCoordinateChance
+end
+
+function M:getDailyShareCoordinate()
+	return self._dailyShareCoordinate
+end
+
+function M:setDailyShareCoordinate(num)
+	self._dailyShareCoordinate = num
+	self._meta.dailyShareCoordinate = num
+end
+
+function M:getUnlockEliteMission(msId)
+	local unLockEliteMission = 20000 + msId % 10000 * 10
+
+	return unLockEliteMission
+end
+
+function M:isMissionUnlocked(msId)
+	if msId % 10000 == 1 then
+		return true
+	end
+
+	return D._missionGlobalDefenseConfig[msId] and P._playerMission:getMissionIdByType(D.MissionType.Elite) % 10000 > self:getUnlockEliteMission(msId) % 10000
+end
+
+function M:isInvite()
+	return self._isInvite
+end
+
+function M:getMissionCost(msId)
+	local areaId = msId % 10000
+	local ticketCost = D._globalConfig._recruitment_ticket_cost[areaId] or D._globalConfig._recruitment_ticket_cost[lc.lenTable(D._globalConfig._recruitment_ticket_cost)]
+	local energyCost = D._globalConfig._mission_cost_energy[D.MissionType.Common] * 2
+
+	return ticketCost, energyCost
+end
+
+function M:getMissionTimeRecord(msId)
+	return self._missionTimeRecords[msId] or 0
+end
+
+function M:finishMission(msId, msType, result, battleHp, battleTime, lv)
+	if result == D.BattleResult.Win then
+		TaskHelper:updateTaskValueMax(D.TaskType.FINISH_GLOBAL_DEFENCE_MISSION, msId)
+		Trace.traceDesign(self._isInvite and "GlobalCallSuccess:%d" or "GlobalNormalSuccess:%d", msId)
+
+		if self._missionTimeRecords[msId] ~= -1 then
+			self._missionTimeRecords[msId] = -1
+		end
+	elseif self._missionTimeRecords[msId] == nil or self._missionTimeRecords[msId] ~= -1 and self._missionTimeRecords[msId] < battleTime then
+		self._missionTimeRecords[msId] = battleTime
+	end
+
+	Trace.traceDesign(self._isInvite and "GlobalCall:%d" or "GlobalNormal:%d", msId)
+	TaskHelper:increaseTaskValue(D.TaskType.CHALLENGE_GLOBAL_DEFENCE, 1)
+
+	local rewards = self:readMissionRewardsByWave(msId, msType, lv)
+	local hasMissionDrop = false
+	local equipDropCount = 0
+	local equipDropId = 0
+	local num = #rewards
+	local removePoses = {}
+	local splitPieces = false
+	local hasFirstGlobalDefenseMissionEpicEquipDrop = false
+	local hasFirstGlobalDefenseMissionLegendEquipDrop = false
+	local conf = self:getCfgByType(msType)[msId]
+
+	for i = 1, num do
+		local cid = rewards[i][1]
+
+		if cid == 11000 then
+			if rewards[i][2] >= 100 then
+				rewards[i][2] = rewards[i][2] - 100
+				splitPieces = true
+			end
+		elseif cid == D.CHIP_DROP_NORMAL or cid == D.CHIP_DROP_ELITE or cid == D.CHIP_DROP_GLOBAL_DEFENSE then
+			removePoses[#removePoses + 1] = i
+			hasMissionDrop = true
+		elseif cid >= 14501 and cid <= 14510 then
+			removePoses[#removePoses + 1] = i
+			equipDropId = D._itemConfig[cid]._val
+			equipDropCount = equipDropCount + DropHelper.randomIndexByWeights(conf._equipNumRate)
+
+			if conf._firstWinEquipDrop and P._playerRecord:hasFirstGlobalDefenseMissionEpicEquipDrop() then
+				hasFirstGlobalDefenseMissionEpicEquipDrop = true
+
+				P._playerRecord:removeFirstGlobalDefenseMissionEpicEquipDrop()
+			end
+
+			if conf._firstEquipDrop and result == D.BattleResult.Win and P._playerRecord:hasFirstGlobalDefenseMissionLegendEquipDrop() then
+				hasFirstGlobalDefenseMissionLegendEquipDrop = true
+
+				P._playerRecord:removeFirstGlobalDefenseMissionLegendEquipDrop()
+			end
+		end
+	end
+
+	table.sort(removePoses, function (a, b)
+		return b < a
+	end)
+
+	for i = 1, #removePoses do
+		table.remove(rewards, removePoses[i])
+	end
+
+	if equipDropCount > 0 then
+		for i = 1, equipDropCount do
+			if hasFirstGlobalDefenseMissionLegendEquipDrop then
+				hasFirstGlobalDefenseMissionLegendEquipDrop = false
+				rewards[#rewards + 1] = {
+					DropHelper.dropOne(D._qualityEquipConfig[conf._firstWinEquipDrop])
+				}
+			elseif hasFirstGlobalDefenseMissionEpicEquipDrop then
+				hasFirstGlobalDefenseMissionEpicEquipDrop = false
+				rewards[#rewards + 1] = {
+					DropHelper.dropOne(D._qualityEquipConfig[conf._firstEquipDrop])
+				}
+			else
+				rewards[#rewards + 1] = {
+					DropHelper.getByDropId(equipDropId)
+				}
+			end
+		end
+	end
+
+	if hasMissionDrop then
+		self:dropMissionChip(msType, msId, rewards)
+		self:dropMissionChip(msType, msId, rewards)
+	end
+
+	if self._isInvite then
+		rewards[#rewards + 1] = rewards[math.random(math.min(2, #rewards), #rewards)]
+	end
+
+	if splitPieces then
+		table.insert(rewards, 3, {
+			11000,
+			100
+		})
+	end
+
+	local ticketCost, energyCost = P._playerGlobalDefense:getMissionCost(msId)
+
+	if self._isInvite then
+		self._dailyCoordinateChance = self._dailyCoordinateChance + 1
+		self._meta.dailyCoordinateChance = self._dailyCoordinateChance
+
+		P._playerAsset:increaseAssetNum(D.ResType.global_defense_ticket, 1 - ticketCost, D.LogWay.global_defense)
+	else
+		P._playerAsset:increaseAssetNum(D.ResType.global_defense_ticket, -ticketCost, D.LogWay.global_defense)
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.energy, -energyCost, D.LogWay.global_defense)
+
+	self._settleRewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.finish_mission)
+end
+
+function M:getSettleRewards()
+	return self._settleRewards
+end
+
+function M:dropMissionChip(msType, msId, rewards)
+	local conf = self:getCfgByType(msType)[msId]
+	local qualityWeights = conf._winChipRate
+	local numWeights = conf._winChipNumRate
+	local num = DropHelper.randomIndexByWeights(numWeights)
+
+	for i = 1, num do
+		local quality = DropHelper.randomIndexByWeights(qualityWeights)
+		rewards[#rewards + 1] = {
+			DropHelper.dropOne(D._qualityGemConfig[quality])
+		}
+	end
+end
+
+function M:readMissionRewardsByWave(msId, msType, lv)
+	lv = lv or 0
+	local cids1, nums1, lvs = self:readBaseMissionRewards(msId, msType)
+	local realCids = {}
+	local realNums = {}
+
+	for i = 1, #lvs do
+		if lvs[i] <= lv then
+			realCids[#realCids + 1] = cids1[i]
+			realNums[#realNums + 1] = nums1[i]
+		end
+	end
+
+	local cids2, nums2 = self:readExtraMissionRewards(msId, msType)
+
+	return D.foldCidsAndNums(realCids, realNums, cids2, nums2, lv)
+end
+
+function M:readBaseMissionRewards(msId, msType)
+	local msCfg = self:getCfgByType(msType)[msId]
+
+	return msCfg._rewardCids, msCfg._rewardNums, msCfg._rewardLvs
+end
+
+function M:readExtraMissionRewards(msId, msType)
+	local msCfg = self:getCfgByType(msType)[msId]
+
+	return msCfg._rewardExtraCids, msCfg._rewardExtraNums
+end
+
+function M:getCfgByType(msType)
+	return D._missionConfigs[msType or D.MissionType.Common]
+end
+
+function M:addShareContent(encryptData)
+	return encryptData
+end
+
+function M:generateShareCode(text)
+	local srcData = string.format("%s|%s|%s|%s|%s|%s", C._userId, P:getName(), P._playerProfile:getAvatar(), C.getCurTime(), text, P._playerProfile:getAvatarFrame())
+	local encryptData = EncryptHelper.AESEncrypt(srcData)
+
+	return self:addShareContent(encryptData)
+end
+
+function M:parseShareCode(inputText)
+	local encryptData = V.deleteShareContent(inputText)
+	local srcData = EncryptHelper.AESDecrypt(encryptData)
+	local splits = string.split(srcData, "|")
+
+	return splits
+end
+
+function M:checkCoordinate(text)
+	local splits = self:parseShareCode(text)
+
+	if #splits < 5 then
+		return ResultCode.COORDINATE_INVALID
+	end
+
+	local id = splits[1]
+	local name = splits[2]
+	local avatar = splits[3]
+	local timestamp = splits[4]
+	local msg = splits[5]
+	local avatarFrame = splits[6] or "nil"
+	local avatar = tonumber(avatar)
+	local timestamp = tonumber(timestamp)
+
+	if not timestamp or not avatar then
+		return ResultCode.COORDINATE_INVALID
+	end
+
+	if C.getCurTime() > timestamp + D._globalConfig._recruitment_expire_minutes * 60 then
+		return ResultCode.COORDINATE_EXPIRED
+	end
+
+	self._inviteData = {
+		avatar,
+		avatarFrame,
+		name,
+		msg
+	}
+
+	if id == C._firebaseId then
+		return ResultCode.COORDINATE_SELF
+	end
+end
+
+function M:getInviteData()
+	return self._inviteData[1], self._inviteData[2], self._inviteData[3], self._inviteData[4]
+end
+
+function M:genBattleEnemeyProps(input, msId)
+	local areaId = msId % 10000
+	local buff = self:getMissionBuff(areaId)
+	input.enemyProps = input.enemyProps or {}
+	local conf = D._battleGlobalBuffConfig[buff]
+	input.enemyProps[conf._enemyBuff] = conf._enemyBuffVals
+	input.enemyProps[conf._weaponBuff] = conf._weaponBuffValue
+
+	return input
+end
+
+function M:loadBattleEnv(env)
+	self._buffs = env.buffs
+end
+
+return M

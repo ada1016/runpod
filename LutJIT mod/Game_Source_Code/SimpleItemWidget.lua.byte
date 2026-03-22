@@ -1,0 +1,256 @@
+local M = class("SimpleItemWidget")
+local item_element_path = "Assets/FW/Prefabs/UI/element/item_element/%s.prefab"
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SimpleItemWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+local txtColor = V.QUALITY_TRIANGLE
+
+function M:init(cid, num, data)
+	self._cid = cid
+	self._num = num or 0
+	self._data = data
+
+	self:update()
+end
+
+function M:update()
+	local cid = self._cid
+	local num = self._num
+	local data = self._data
+
+	if D.isItem(cid) then
+		local showCustom = D.isCustomSelectItem(cid)
+
+		if showCustom then
+			local selectedIdx = P._playerAsset:getItemCustomSelectIdx(cid)
+
+			if selectedIdx then
+				local cids, nums = P._playerAsset:getInsideAssets(self._cid)
+				cid = cids[selectedIdx]
+				num = nums[selectedIdx]
+			else
+				num = 0
+			end
+
+			self:setExchange(selectedIdx ~= nil)
+		else
+			self:setExchange(false)
+		end
+	end
+
+	LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", D.toQuality(cid)))
+	LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", D.toQuality(cid)))
+
+	if D.isSpecialItem(cid) then
+		local type = math.floor(cid / 1000) + 1
+
+		if type == D.SPItemType.ArkRebulidModule then
+			LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d_2", D.Quality.Red))
+			LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out_2", D.Quality.Red))
+			LuaUnity.setTPSprite(self._imgIcon, string.format("weekend/Module-%d_small", cid % 1000), true)
+		end
+	elseif D.isGem(cid) then
+		self:setPart(D._gemConfig[cid]._part)
+		LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+	else
+		self:setPart(false)
+		LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+	end
+
+	local quality = D.toQuality(cid)
+	self._txtNum.enableVertexGradient = quality == D.Quality.COLORFUL
+	self._txtNum.color = Color.str2Static(txtColor[quality])
+
+	if num and num > 0 then
+		self:setNum(true)
+		self:setNumText(num)
+	else
+		self:setNum(false)
+	end
+end
+
+function M:itemSelectCallback()
+	if not self._cid then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.ItemSelectPanel, self._cid, function ()
+		local selectedIdx = P._playerAsset:getItemCustomSelectIdx(self._cid)
+		local selected = selectedIdx ~= nil
+
+		self:init(self._cid, self._num, self._data)
+		self:setExchange(selected)
+	end)
+end
+
+function M:rewardclickCallback()
+	if not self._cid then
+		return
+	end
+
+	if D.isGem(self._cid) then
+		UIManager.openPanel(PrefabDefine.ChipInfoPanel, self._cid)
+	elseif D.isEquip(self._cid) then
+		local id = P._playerRole:searchNearestId(self._cid)
+		local lb = UIManager.openPanel(PrefabDefine.EquipInfoPanel, id)
+
+		lb:hideAction()
+	elseif D.isRangerEquip(self._cid) then
+		UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, self._data)
+	elseif D.isSpecialItem(self._cid) then
+		local type = math.floor(self._cid / 1000) + 1
+
+		if type == D.SPItemType.ArkRebulidModule then
+			UIManager.openPanel(PrefabDefine.ModuleDetailPanel, self._cid % 1000)
+		end
+	else
+		if D.isCustomSelectItem(self._cid) then
+			if self._isClaimed then
+				local selectedIdx, selectedId, selectNum = P._playerAsset:getItemCustomSelectIdx(self._cid)
+
+				if selectedIdx then
+					V.showItemInfoPanel(selectedId, selectNum)
+				end
+			else
+				self:itemSelectCallback()
+			end
+
+			return
+		end
+
+		V.showItemInfoPanel(self._cid, self._num)
+	end
+end
+
+function M:setLock(lock)
+	self._imgLock:SetActive(lock)
+end
+
+function M:setPart(part)
+	if not part and not self._imgPart then
+		return
+	end
+
+	if part then
+		if part < 10 then
+			LuaUnity.setTPSprite(self._imgPart, "general/g_icon_center_small_" .. part, true, true)
+
+			self._imgPart.color = Color.White
+		else
+			LuaUnity.setTPSprite(self._imgPart, "general/mini_weapon_" .. part - 100, true, true)
+
+			self._imgPart.color = Color.White
+		end
+	end
+
+	self._imgPart:SetActive(part and true or false)
+
+	self._imgPart.color = Color.White
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+function M:setNum(show)
+	self._goNum:SetActive(show)
+end
+
+function M:setClaimed(show)
+	self._isClaimed = show
+
+	self._goClaimed:SetActive(show)
+end
+
+function M:setGetAnim(show, loop)
+	if not show and not self._goAnimGet then
+		return
+	end
+
+	if not self._goAnimGet then
+		if self._tfGetLight.childCount == 0 then
+			self._goAnimGet = LuaUnity.createGameObject(string.format(item_element_path, "item_goAnimGet"), self._tfGetLight)
+		else
+			self._goAnimGet = self._tfGetLight:GetChild(0).gameObject
+		end
+	end
+
+	self._goAnimGet:SetActive(show)
+
+	if loop then
+		self._goAnimGet:GetComponent("Animator"):SetBool("loop", true)
+	end
+end
+
+function M:setCanClaim(show)
+	if not show and not self._goSweep then
+		return
+	end
+
+	if not self._goSweep then
+		if self._tfClaimLight.childCount == 0 then
+			self._goSweep = LuaUnity.createGameObject(string.format(item_element_path, "item_goSweep"), self._tfClaimLight)
+		else
+			self._goSweep = self._tfClaimLight:GetChild(0).gameObject
+		end
+	end
+
+	self._goSweep:SetActive(show)
+
+	if show then
+		self:setGetAnim(true, true)
+	else
+		self:setGetAnim(false)
+	end
+end
+
+function M:setBgLight(show, colorStr)
+	self._tfLight:SetVisible(show)
+
+	if colorStr then
+		self._imgLight.color = Color.str2Static(colorStr)
+	end
+end
+
+function M:setNumText(num)
+	self._txtNum.text = num
+end
+
+function M:setInvalid(invalid)
+	self._imgInvalid:SetActive(invalid)
+end
+
+function M:setExchange(show)
+	if not show and not self._goExchange then
+		return
+	end
+
+	if not self._goExchange then
+		self._goExchange = LuaUnity.createGameObject(string.format(item_element_path, "item_goExchange"), self._tfFullTop)
+	end
+
+	self._goExchange:SetActive(show)
+end
+
+return M

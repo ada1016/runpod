@@ -1,0 +1,179 @@
+local M = class("AccountUpgradePanel", requireLua("BasePanel"))
+M.args = {
+	btnMail = Types.Button,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	goItem = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._countdown = 8
+	self._textConfirm.text = self._countdown
+	self._stage = 1
+	local ItemWidget = requireLua("ItemWidget")
+
+	ItemWidget.noCreate(self._goItem)
+end
+
+function M:Start()
+	self:startUpdater()
+end
+
+function M:addClicks()
+	self:setClick(self._btnMail, function ()
+		lc.openUrl(D.URL_EMAIL_TO)
+	end)
+	self:setClick(self._btnConfirm, function ()
+		if self._stage == 2 then
+			self._stage = 3
+
+			self:saveData()
+			self._callback()
+			self:closePanel()
+		end
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:Update()
+	if self._stage == 1 then
+		self._countdown = self._countdown - Time.unscaledDeltaTime
+
+		if self._countdown <= 1 then
+			self._stage = 2
+			self._countdown = 1
+
+			self._textConfirm:SetLocalize(SID.OLD_ACCOUNT_TIPS_2)
+		else
+			self._textConfirm.text = math.floor(self._countdown)
+		end
+	end
+end
+
+function M:init(callback)
+	self._callback = callback
+	local saveData = Client._saveData
+	self._saveData = saveData
+	local main = saveData.main
+	local gemCount = 0
+
+	if main.store then
+		gemCount = gemCount + (main.store.payMoney or 0) * 120
+	end
+
+	if main.ad then
+		gemCount = gemCount + (main.ad.totalRewardAdWatchCount or 0) * 10
+	end
+
+	if main.mission then
+		gemCount = gemCount + (main.mission.missionId - 10000) * 200
+	end
+
+	self._gemCount = gemCount
+
+	self._goItem:init(10002, gemCount)
+end
+
+function M:saveData()
+	self:fixSaveData()
+
+	local player = requireLua("Player").create()
+
+	player:init(self._saveData)
+	self:updateSevenDayTask()
+	C.trySaveGameDataToRemote()
+	C.trySaveGameDataToLocal()
+end
+
+function M:updateSevenDayTask()
+	TaskHelper:updateTaskValue(D.TaskType.PLAYER_LEVELUP, P:getLevel())
+
+	local lastMs = P._playerMission:getMissionIdByType(D.MissionType.Common) - 1
+
+	if lastMs > 10001 then
+		TaskHelper:updateTaskValueMax(D.TaskType.FINISH_MISSION, lastMs)
+	end
+
+	local lastMs = P._playerMission:getMissionIdByType(D.MissionType.Elite) + 10000 - 1
+
+	if lastMs > 10001 then
+		TaskHelper:updateTaskValueMax(D.TaskType.FINISH_ELITE_MISSION, lastMs)
+	end
+
+	local totalWeaponLv = 0
+	local totalGatlinLv = 0
+
+	for k, lv in pairs(P._playerArmory._weaponLevels) do
+		if k == D.WEAPON_GATLIN then
+			totalGatlinLv = lv() - 1
+		else
+			totalWeaponLv = totalWeaponLv + lv() - 1
+		end
+	end
+
+	TaskHelper:updateTaskValueMax(D.TaskType.GATLIN_UPGRADE, totalGatlinLv)
+	TaskHelper:updateTaskValueMax(D.TaskType.WEAPON_UPGRADE, totalWeaponLv)
+
+	local totalEnhanceLv = 0
+
+	for i = 1, 6 do
+		totalEnhanceLv = totalEnhanceLv + (P._playerRole:getChipSystemLevelByPart(i) or 0)
+	end
+
+	TaskHelper:updateTaskValueMax(D.TaskType.CHIP_SYSTEM_UPGRADE, totalEnhanceLv)
+	TaskHelper:updateTaskValueMax(D.TaskType.LOGIN_DAY, 1)
+end
+
+function M:fixSaveData()
+	local saveData = self._saveData
+	local main = saveData.main
+	local oldNum = main.asset.props[10002] or 0
+	main.asset.props[10002] = oldNum + self._gemCount
+
+	Trace.traceResChanged(10002, false, math.abs(self._gemCount), oldNum, "compensation")
+
+	saveData.version = Application.version
+	saveData.first = false
+	local removes = {}
+	local role = main.role
+
+	if role.gems then
+		for k, v in pairs(role.gems) do
+			if D._gemConfig[k] == nil then
+				removes[#removes + 1] = k
+			elseif D._gemConfig[k]._weight == 0 then
+				removes[#removes + 1] = k
+			end
+		end
+	end
+
+	for i = 1, #removes do
+		role.gems[removes[i]] = nil
+	end
+
+	if role.gemSlots then
+		for i = 1, 3 do
+			for k = 1, 6 do
+				for j = 1, 6 do
+					if role.gemSlots[i] and role.gemSlots[i][k] and role.gemSlots[i][k][j] then
+						local id = role.gemSlots[i][k][j]
+
+						if D._gemConfig[id] == nil then
+							role.gemSlots[i][k][j] = nil
+						elseif D._gemConfig[id]._weight == 0 then
+							role.gemSlots[i][k][j] = nil
+						end
+					end
+				end
+			end
+		end
+	end
+
+	main.dome = {}
+end
+
+return M

@@ -1,0 +1,112 @@
+local M = class("SparkScoutWeaponChipWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutWeaponChipWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+
+	return go
+end
+
+function M:init(weapon, index)
+	local chips = nil
+	self._weapon = weapon
+
+	self._goEmptyArea:SetActive(false)
+	self._goDot:SetActive(false)
+
+	if weapon then
+		self._goLockArea:SetActive(false)
+		self._goContent:SetActive(true)
+
+		chips = P._playerActivitySparkScout:getEquipedChips(100 + weapon)
+
+		self._imgWeapon:SetActive(true)
+		self._goEmptyArea:SetActive(false)
+		LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. weapon, true, true)
+	else
+		chips = {}
+
+		self._imgWeapon:SetActive(false)
+
+		if P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(index) then
+			self._goLockArea:SetActive(false)
+			self._goContent:SetActive(true)
+			self._goEmptyArea:SetActive(true)
+			self._goDot:SetActive(true)
+		else
+			self._goLockArea:SetActive(true)
+			self._goContent:SetActive(false)
+			self._goEmptyArea:SetActive(false)
+
+			if P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(index - 1) then
+				self._txtUnlockCost.gameObject:SetActive(true)
+
+				self._txtUnlockCost.text = string.format("<sprite name=\"item_small_10050\">%d", P._playerActivitySparkScout:getPvpWeaponUnlockCost(index))
+
+				self._txtUnlock:SetLocalize(SID.STR_UNLOCK)
+
+				if P._playerActivitySparkScout:checkUnlockPvpWeaponSlot(index) == ResultCode.OK then
+					self._goDot:SetActive(true)
+				end
+			else
+				self._txtUnlockCost.gameObject:SetActive(false)
+				self._txtUnlock:SetLocalize(SID.STR_NOT_UNLOCK)
+			end
+		end
+	end
+
+	for j = 1, 4 do
+		if not weapon or P._playerActivitySparkScout:isChipSlotLocked(100 + weapon, j) then
+			local image = self._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image")
+
+			LuaUnity.setTPSprite(image, "general/chip-g_chip_lock")
+
+			image.color = Color.str2Static("000000_180")
+
+			self._tfGemView:GetChild(j - 1):Find("ImgLock"):SetActive(true)
+		else
+			self._tfGemView:GetChild(j - 1):Find("ImgLock"):SetActive(false)
+
+			self._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image").color = Color.White
+
+			if chips[j] then
+				LuaUnity.setTPSprite(self._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[chips[j]]._quality)
+			else
+				LuaUnity.setTPSprite(self._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_empty")
+			end
+		end
+	end
+end
+
+function M:hideChip()
+	self._anim:Play("anim_midweekWeaponMove_1")
+end
+
+function M:showChip()
+	self._anim:Play("anim_midweekWeaponMove_2")
+end
+
+function M:shake()
+	self._animShake:Play()
+end
+
+function M:stopShake()
+	self._animShake:Stop()
+	lc.setLocalRotation(self._animShake.gameObject, 0, 0, 0)
+end
+
+return M

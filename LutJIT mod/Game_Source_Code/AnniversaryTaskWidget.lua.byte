@@ -1,0 +1,85 @@
+local M = class("AnniversaryTaskWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent, taskClass)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TaskWidget_Anniversary.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem1)
+	ItemWidget.noCreate(go._goItem2)
+
+	return go
+end
+
+function M.noCreate(go)
+	lc.prefabVarPeer(go)
+	setmetatable(go.peer, M)
+	ItemWidget.noCreate(go._goItem1)
+	ItemWidget.noCreate(go._goItem2)
+
+	return go
+end
+
+function M:init(tid)
+	self._taskId = tid
+	local TaskHelper = TaskHelper
+	local finished = TaskHelper:isFinished(tid)
+	local claimed = TaskHelper:isClaimed(tid)
+	local canClaim = not claimed and finished
+
+	self:setFinished(finished)
+	self:setClaimed(claimed)
+
+	self._imgLight.color = Color.str2Static(canClaim and "DB65E0" or "7E3C84")
+
+	V.updateTaskDescProgress(tid, {
+		showBreifDesc = false,
+		red = "F2D3FA",
+		green = "F2D3FA",
+		imgBar = self._imgBar,
+		txtDesc = self._txtDesc,
+		txtProgress = self._txtProgress
+	})
+
+	local rewardCids = TaskHelper:getTaskRewardCids(tid)
+	local rewardNums = TaskHelper:getTaskRewardNums(tid)
+
+	self._goItem1:init(rewardCids[1], rewardNums[1])
+	self._goItem2:init(rewardCids[2] or 10001, rewardNums[2] or 1)
+end
+
+function M:setFinished(finished)
+	if not finished then
+		V.setBtnStyle(self._btnClaim, V.BTN_STYLE.blue, SID.STR_GOTO)
+		self._imgDot:SetActive(false)
+	else
+		V.setBtnStyle(self._btnClaim, V.BTN_STYLE.yellow, SID.STR_CLAIM)
+		self._imgDot:SetActive(true)
+	end
+end
+
+function M:setFillAmount(amount)
+	self._imgBar.fillAmount = amount
+end
+
+function M:setClaimed(claimed)
+	self._goUnclaimed:SetActive(not claimed)
+	self._goClaimed:SetActive(claimed)
+end
+
+function M:initAnimStatus()
+	self:setCellShow(false)
+end
+
+function M:setCellShow(show)
+	self._atorWidget:SetInteger("status", show and 2 or 0)
+end
+
+function M:playShowAnim()
+	self._atorWidget:ResetTrigger("showAnim")
+	self._atorWidget:SetTrigger("showAnim")
+	self._atorWidget:SetInteger("status", 1)
+end
+
+return M

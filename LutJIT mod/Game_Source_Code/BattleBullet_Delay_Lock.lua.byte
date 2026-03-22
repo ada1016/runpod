@@ -1,0 +1,34 @@
+local M = class("BattleBullet_Delay_Lock", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._dmgDelay = battleSkill:getProp(BattlePropEnum.BattlePropParam1, 1)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._dmgDelay = self._dmgDelay - dt
+
+	if self._dmgDelay <= 0 then
+		if not self._lockEnemy._isToBeDestroyed then
+			self:bulletHitEnemy(self._lockEnemy)
+		end
+
+		self:markToBeDestroyed()
+	end
+end
+
+return M

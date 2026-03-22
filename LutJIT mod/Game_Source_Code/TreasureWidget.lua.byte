@@ -1,0 +1,108 @@
+local M = class("TreasureWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TreasureWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(module)
+	self._module = module
+	self._compFloat = self._goFloat:GetComponent("FloatAnything")
+end
+
+function M:updateUI(treasureId, scale)
+	lc.setLocalScale(self._imgTreasure.transform, scale or 1)
+	LuaUnity.setTPSprite(self._imgBase, string.format("digitems/dig_item_%d_bg", treasureId), true)
+	LuaUnity.setTPSprite(self._imgTreasure, string.format("digitems/dig_item_%d", treasureId), true)
+end
+
+function M:doFlyTreasure(goFoundTreasure, scale, callFunc)
+	Client.playSound("ui_Annvy_hunting_itemshow_1")
+
+	local tfFlyTreasure = GameObject.Instantiate(self._tfTreasure.gameObject, self.transform.parent.parent).transform
+
+	self._tfTreasure.gameObject:SetActive(false)
+	lc.setPosition(tfFlyTreasure, lc.getPosition(goFoundTreasure.transform:Find("icon")))
+	tfFlyTreasure:SetLocalScale(1, 1, 1)
+
+	local x, y, z = lc.getEulerAngles(goFoundTreasure.transform)
+
+	lc.setLocalEulerAngles(tfFlyTreasure, 0, 0, z)
+
+	local seq = DOTween.Sequence():SetLink(self.gameObject)
+	local animTime = 0
+	local flyTime = 0.618
+
+	if z ~= 0 then
+		seq:Insert(animTime, tfFlyTreasure:DOLocalRotate(Vector3.static(0, 0, 0), flyTime):SetEase(V.EASE_IN_BACK))
+	end
+
+	seq:Insert(animTime, tfFlyTreasure:DOMove(Vector3.static(Screen.width / 2, Screen.height / 2, 0), flyTime):SetEase(V.EASE_IN_BACK))
+	seq:Insert(animTime, tfFlyTreasure:DOScale(1.5, flyTime):SetEase(V.EASE_IN_BACK))
+
+	animTime = animTime + flyTime
+
+	if self._compFloat then
+		self._compFloat.enabled = true
+	end
+
+	animTime = animTime + 1
+
+	seq:Insert(animTime, tfFlyTreasure:DOMove(self._tfTreasure.position, flyTime):SetEase(V.EASE_IN_BACK))
+	seq:Insert(animTime, tfFlyTreasure:DOScale(scale, flyTime):SetEase(V.EASE_IN_BACK))
+
+	animTime = animTime + flyTime
+
+	seq:InsertCallback(animTime, function ()
+		GameObject.Destroy(tfFlyTreasure.gameObject)
+		lc.setLocalScale(self._tfTreasure, scale)
+		self._tfTreasure.gameObject:SetActive(true)
+
+		if self._compFloat then
+			self._compFloat.enabled = false
+		end
+	end)
+
+	if callFunc then
+		seq:AppendCallback(callFunc)
+	end
+
+	return animTime
+end
+
+function M:setFlyView()
+	self._imgTreasure.enabled = true
+	self._imgTreasure.maskable = false
+	local arrowColor = Color.str2Static("131930")
+	self._imgArrow1.color = arrowColor
+	self._imgArrow2.color = arrowColor
+end
+
+function M:setFoundView()
+	self._imgTreasure.enabled = true
+	self._imgTreasure.maskable = true
+	local arrowColor = Color.str2Static("FFDE3B")
+	self._imgArrow1.color = arrowColor
+	self._imgArrow2.color = arrowColor
+end
+
+function M:setNotFoundView()
+	self._imgTreasure.enabled = false
+	local arrowColor = Color.str2Static("131930")
+	self._imgArrow1.color = arrowColor
+	self._imgArrow2.color = arrowColor
+end
+
+return M

@@ -1,0 +1,58 @@
+local M = class("MonopolyRankRewardPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("MonopolyRankWidget")
+M.args = {
+	goSelfRankWidget = Types.GameObject,
+	tfRankRewardContainer = Types.Transform,
+	goGloryWidget = Types.GameObject,
+	btnClaim = Types.Button,
+	btnRank = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnRank, function ()
+		UIManager.openPanel(PrefabDefine.MonopolyRankPanel, self._id, self._subType)
+	end)
+	self:setClick(self._btnClaim, function ()
+		UIManager.closeToPanelOrMain()
+
+		local rewards = P._playerActivityMonopoly:tryClaimSettleRewards()
+
+		V.showRewardClaimPanel(rewards)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(id, subType)
+	self._id = id
+	self._subType = subType
+
+	self:updateRankData()
+	self:updateRankRewards()
+end
+
+function M:updateRankData()
+	local rankData = P:genRankData()
+	rankData.rank = P._playerActivityMonopoly:getFinalRank()
+	rankData.rankValue = P._playerActivityMonopoly:getRankValue()
+
+	self._goSelfRankWidget:init(rankData)
+end
+
+function M:updateRankRewards()
+	local rewards = P._playerActivityMonopoly:getRankRewards()
+
+	V.loadRewardsWidget(self, self._tfRankRewardContainer, rewards)
+end
+
+return M

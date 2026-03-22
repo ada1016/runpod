@@ -1,0 +1,96 @@
+local M = class("DomeImproveTipPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtLevel1 = Types.TMP_Text,
+	txtLevel2 = Types.TMP_Text,
+	imgNextLevel = Types.Image,
+	txtDesc = Types.TMP_Text,
+	txtHpPercentAdd = Types.TMP_Text,
+	btnEnhance = Types.Button,
+	goBtnArea = Types.GameObject,
+	goMaxArea = Types.GameObject,
+	imgCostShard = Types.Image,
+	txtUpgradeCostShard = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnEnhance, function ()
+		local ret, param = P._playerArmory:tryUpgradeDomeTech(self._conf._tech)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+
+			return
+		end
+
+		V.showEnhanceToast(SID.TIP_ENHANCE_SUCCESS)
+		self:updateUI()
+
+		if self._callback then
+			self._callback()
+		end
+	end)
+end
+
+function M:init(conf, callback)
+	self._conf = conf
+	self._callback = callback
+
+	self:updateUI()
+
+	if P._playerArmory:isNewDomeTech(self._conf._tech) then
+		P._playerArmory:removeNewDomeTechs(self._conf._tech)
+		RedDotManager.update("city.role")
+	end
+end
+
+function M:updateUI()
+	local conf = self._conf
+	local level = P._playerArmory:getDomeTechLevel(conf._tech)
+	local isMax = level >= #conf._param
+
+	self._txtLevel1:SetLocalize(SID.STR_LEVEL_X, level)
+	self._goBtnArea:SetActive(not isMax)
+	self._goMaxArea:SetActive(isMax)
+	self._imgNextLevel:SetActive(true)
+
+	if not isMax then
+		self._txtHpPercentAdd:SetLocalizeS(SID.TIP_DOME_HP_PERCENT, "+" .. D._globalConfig._dome_tech_upgrade_hp_percent[level + 1])
+		self._txtLevel2:SetLocalize(SID.STR_LEVEL_X, level + 1)
+
+		local str = nil
+
+		if conf._tech ~= 10004 then
+			str = string.format("<color=#5CE843>%s%%</color><sprite name=\"g_bg_48\" color=#5CE843><color=#5CE843>%s%%</color>", conf._param[level], conf._param[level + 1])
+		else
+			str = string.format("<color=#5CE843>%s</color><sprite name=\"g_bg_48\" color=#5CE843><color=#5CE843>%s</color>", conf._param[level], conf._param[level + 1])
+		end
+
+		self._txtDesc:SetLocalizeS(conf._techDescSid, str)
+
+		local cost = D._globalConfig._dome_tech_upgrade_cost[level]
+
+		V.loadItemCost(self._imgCostShard, self._txtUpgradeCostShard, D.ResType.dome_tech_upgrade_mat, cost, self)
+	else
+		self._imgNextLevel:SetActive(false)
+		self._txtLevel2.gameObject:SetActive(false)
+
+		self._txtHpPercentAdd.text = ""
+
+		self._txtLevel1:SetLocalizeS(SID.STR_LEVEL_X, level)
+
+		if conf._tech ~= 10004 then
+			self._txtDesc:SetLocalizeS(conf._techDescSid, conf._param[level] .. "%")
+		else
+			self._txtDesc:SetLocalizeS(conf._techDescSid, conf._param[level])
+		end
+	end
+end
+
+return M

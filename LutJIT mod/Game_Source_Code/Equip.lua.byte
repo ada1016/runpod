@@ -1,0 +1,144 @@
+local M = class("Equip")
+
+function M:ctor(meta)
+	self._meta = meta
+	self._conf = D._equipConfig[meta.cid]
+	self._dirty = true
+end
+
+function M:cid()
+	return self._meta.cid
+end
+
+function M:part()
+	return self._conf._part
+end
+
+function M:grade()
+	return self._conf._grade
+end
+
+function M:quality()
+	return self._conf._quality
+end
+
+function M:extra()
+	return self._meta.extra
+end
+
+function M:nameSid()
+	return self._conf._nameSid
+end
+
+function M:atk()
+	return self._conf._atk + (self._meta.level or 0) * self._conf._grade
+end
+
+function M:decomposeMat()
+	local refineCount = self:refineCount()
+
+	if refineCount == 0 then
+		return self._conf._decomposeGold
+	else
+		return self._conf._decomposeGold + math.floor(refineCount * D._equipRefineConfig[self:grade() * 10 + self:quality()]._cost * 0.7)
+	end
+end
+
+function M:toInfo(id)
+	if self._dirty then
+		self._dirty = false
+		self._info = {
+			id = id,
+			cid = self._meta.cid,
+			grade = self._conf._grade,
+			quality = self._conf._quality,
+			part = self._conf._part
+		}
+	end
+
+	return self._info
+end
+
+function M:hashCode(id)
+	if D.Quality.Blue < self._conf._quality then
+		return 100000 + id
+	end
+
+	return self._meta.cid
+end
+
+local function randomAtkClass(unlockedWeapons)
+	if math.random() <= #unlockedWeapons / (#unlockedWeapons + 5) then
+		return unlockedWeapons[math.random(#unlockedWeapons)]
+	else
+		return math.random(BattlePropEnum.AtkNature1, BattlePropEnum.AtkNature5)
+	end
+end
+
+function M:doRefine(locks)
+	if self._meta.extra then
+		self._meta.refineCount = (self._meta.refineCount or 0) + 1
+		self._refineResult = {}
+		local conf = D._equipRefineConfig[self:grade() * 10 + self:quality()]
+		local unlockedWeapons = P._playerArmory:getUnlockedWeapons()
+
+		for i = 1, #self._meta.extra do
+			if locks and table.contains(locks, i) then
+				self._refineResult[#self._refineResult + 1] = {
+					self._meta.extra[i][1],
+					self._meta.extra[i][2]
+				}
+			else
+				local attribute = randomAtkClass(unlockedWeapons)
+
+				while attribute == self._meta.extra[i][1] do
+					attribute = randomAtkClass(unlockedWeapons)
+				end
+
+				self._refineResult[#self._refineResult + 1] = {
+					attribute,
+					self._meta.extra[i][2]
+				}
+			end
+		end
+
+		return self._refineResult
+	end
+end
+
+function M:isMaxRefine(locks)
+	if self:quality() ~= D.Quality.Purple + #locks then
+		return false
+	end
+
+	local conf = D._equipRefineConfig[self:grade() * 10 + self:quality()]
+
+	for i = 2, #self._meta.extra do
+		if self._meta.extra[i][2] ~= conf._atkMax then
+			return false
+		end
+	end
+
+	return self._meta.extra[1][2] == conf._guardAtkMax
+end
+
+function M:refineCount()
+	return self._meta.refineCount or 0
+end
+
+function M:refineResult()
+	return self._refineResult
+end
+
+function M:acceptRefine()
+	self._meta.extra = self._refineResult
+	self._refineResult = nil
+
+	return self._meta.extra
+end
+
+function M:abandonRefine()
+	self._refineResult = nil
+end
+
+return M

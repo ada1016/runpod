@@ -1,0 +1,872 @@
+local M = class("Player")
+
+function M:ctor()
+	_G.P = self
+	self._playerProfile = requireLua("PlayerProfile").create()
+	self._playerAsset = requireLua("PlayerAsset").create()
+	self._playerGuide = requireLua("PlayerGuide").create()
+	self._playerStore = requireLua("PlayerStore").create()
+	self._playerAd = requireLua("PlayerAd").create()
+	self._playerGift = requireLua("PlayerGift").create()
+	self._playerExchange = requireLua("PlayerExchange").create()
+	self._playerBPNew = requireLua("PlayerBattlePassNew").create()
+	self._playerBPSkin = requireLua("PlayerBattlePassSkin").create()
+	self._playerBPRanger = requireLua("PlayerBattlePassRanger").create()
+	self._playerDomeBP = requireLua("PlayerDomeBattlePass").create()
+	self._playerLevelFund = requireLua("PlayerLevelFund").create()
+	self._playerStaminaProducer = requireLua("PlayerStaminaProducer").create()
+	self._playerSevenDay = requireLua("PlayerSevenDay").create()
+	self._playerRole = requireLua("PlayerRole").create()
+	self._playerArmory = requireLua("PlayerArmory").create()
+	self._playerMission = requireLua("PlayerMission").create()
+	self._playerRecord = requireLua("PlayerRecord").create()
+	self._playerDome = requireLua("PlayerDome").create()
+	self._playerTask = requireLua("PlayerTask").create()
+	self._playerShop = requireLua("PlayerShop").create()
+	self._playerRight = requireLua("PlayerRight").create()
+	self._playerOffline = requireLua("PlayerOffline").create()
+	self._playerGlobalDefense = requireLua("PlayerGlobalDefense").create()
+	self._playerSkin = requireLua("PlayerSkin").create()
+	self._playerRanker = requireLua("PlayerRanker").create()
+	self._playerMail = requireLua("PlayerMail").create()
+	self._playerRanger = requireLua("PlayerRanger").create()
+	self._playerCrisisZone = requireLua("PlayerCrisisZone").create()
+	self._playerActivity = requireLua("PlayerActivity").create()
+	self._playerWeekLottery = requireLua("PlayerWeekLottery").create()
+	self._playerWeekLottery2 = requireLua("PlayerWeekLottery2").create()
+	self._playerActivityArkRebuild = requireLua("PlayerActivityArkRebuild").create()
+	self._playerActivityMonopoly = requireLua("PlayerActivityMonopoly").create()
+	self._playerBPMonopoly = requireLua("PlayerBattlePassMonopoly").create()
+	self._playerBPArkRebuild = requireLua("PlayerBattlePassArkRebuild").create()
+	self._playerArkRebuildOffline = requireLua("PlayerArkRebuildOffline").create()
+	self._playerArkRebuildLottery = requireLua("PlayerArkRebuildLottery").create()
+	self._playerActivitySparkScout = requireLua("PlayerActivitySparkScout").create()
+	self._playerBPSparkScout = requireLua("PlayerBattlePassSparkScout").create()
+	self._playerSparkScoutOffline = requireLua("PlayerSparkScoutOffline").create()
+	self._playerNotification = requireLua("PlayerNotification").create()
+	self._playerMonthlyCheckin = requireLua("PlayerMonthlyCheckin").create()
+	self._playerActivityAnniversary = requireLua("PlayerActivityAnniversary").create()
+	self._playerUnion = requireLua("PlayerUnion").create()
+	self._playerReturn = requireLua("PlayerReturn").create()
+end
+
+function M:getModuleData(module, key)
+	if module[key] == nil then
+		module[key] = {}
+	end
+
+	return module[key]
+end
+
+function M:init(saveData)
+	self:handleCsvCodeBeforeCreatePlayer()
+
+	self._isFirst = saveData.first
+	saveData.first = false
+	local ct = C.getCurTime()
+	saveData.playStartTimestamp = saveData.playStartTimestamp or saveData.createTimestamp or C.getCurTime()
+	self._todayZeroTimestamp = C.getZeroTimestamp(ct)
+	self._tomorrowZeroTimestamp = self._todayZeroTimestamp + D.DAY_SECONDS
+	self._gameData = saveData
+
+	self:setABTest()
+
+	local logoutTime = self:getLogoutTimeWhenLaunch()
+	local mainData = saveData.main
+
+	self._playerProfile:init(self:getModuleData(mainData, "profile"))
+	self._playerAsset:init(self:getModuleData(mainData, "asset"))
+	self._playerStore:init(self:getModuleData(mainData, "store"))
+	self._playerAd:init(self:getModuleData(mainData, "ad"))
+	self._playerGuide:init(self:getModuleData(mainData, "guide"))
+	self._playerExchange:init(self:getModuleData(mainData, "exchange"))
+	self._playerRole:init(self:getModuleData(mainData, "role"))
+	self._playerArmory:init(self:getModuleData(mainData, "armory"))
+	self._playerMission:init(self:getModuleData(mainData, "mission"))
+	self._playerRecord:init(self:getModuleData(mainData, "record"))
+	self._playerDome:init(self:getModuleData(mainData, "dome"))
+	self._playerTask:init(self:getModuleData(mainData, "task"))
+	self._playerShop:init(self:getModuleData(mainData, "shop"))
+	self._playerOffline:init(self:getModuleData(mainData, "offline"))
+	self._playerRanger:init(self:getModuleData(mainData, "ranger"))
+	self._playerCrisisZone:init(self:getModuleData(mainData, "crisis"))
+	self._playerUnion:init(self:getModuleData(mainData, "union"))
+	self._playerRight:init(self:getModuleData(mainData, "right"))
+	self._playerGift:init(self:getModuleData(mainData, "gift"))
+	self._playerDomeBP:init(self:getModuleData(mainData, "domeBp"))
+	self._playerBPNew:init(self:getModuleData(mainData, "bpNew"))
+	self._playerBPSkin:init(self:getModuleData(mainData, "bpSkin"))
+	self._playerBPRanger:init(self:getModuleData(mainData, "bpRanger"))
+	self._playerLevelFund:init(self:getModuleData(mainData, "levelfund"))
+	self._playerStaminaProducer:init(self:getModuleData(mainData, "staminaproducer"))
+	self._playerSevenDay:init(self:getModuleData(mainData, "sevenday"))
+	self._playerGlobalDefense:init(self:getModuleData(mainData, "globalDefense"))
+	self._playerSkin:init(self:getModuleData(mainData, "skin"))
+	self._playerMonthlyCheckin:init(self:getModuleData(mainData, "monthlyCheckin"))
+	self._playerReturn:init(self:getModuleData(mainData, "playerReturn"))
+	self._playerRanker:init(self:getModuleData(mainData, "ranker"))
+	self._playerMail:init(self:getModuleData(mainData, "mail"))
+	self._playerActivity:init(self:getModuleData(mainData, "activity"))
+	self._playerWeekLottery:init(self:getModuleData(mainData, "weekLottery"))
+	self._playerWeekLottery2:init(self:getModuleData(mainData, "weekLottery2"))
+	self._playerActivityMonopoly:init(self:getModuleData(mainData, "monopoly"))
+
+	local arkRebuild = self:getModuleData(saveData, "arkBuild")
+
+	self._playerActivityArkRebuild:init(arkRebuild)
+	self._playerArkRebuildLottery:init(self:getModuleData(mainData, "arkRebuildLottery"))
+
+	local sparkScout = self:getModuleData(saveData, "sparkScout")
+
+	self._playerActivitySparkScout:init(sparkScout)
+
+	local anniversary = self:getModuleData(saveData, "anniversary")
+
+	self._playerActivityAnniversary:init(anniversary)
+	self._playerNotification:init()
+
+	self._willDailyReset = self._playerRecord:getDailyResetTime() < ct
+
+	self._playerStore:start()
+	self._playerOffline:start()
+	self._playerRecord:start()
+	self._playerAsset:start()
+	self._playerTask:start()
+	self._playerProfile:start()
+	self._playerGuide:start()
+	self._playerRole:start()
+	self._playerArmory:start()
+	self._playerSkin:start()
+	self._playerDome:start()
+	self._playerRanger:start()
+	self._playerCrisisZone:start()
+	self._playerRight:start()
+	self._playerGift:start()
+	self._playerLevelFund:start()
+	self._playerBPNew:start()
+	self._playerBPSkin:start()
+	self._playerDomeBP:start()
+	self._playerStaminaProducer:start()
+	self._playerBPRanger:start()
+	self._playerReturn:start(logoutTime)
+	self._playerWeekLottery:start()
+	self._playerWeekLottery2:start()
+	self._playerActivityMonopoly:start()
+	self._playerRanker:start()
+	self._playerMail:start()
+	self._playerActivityArkRebuild:start()
+	self._playerArkRebuildLottery:start()
+	self._playerActivitySparkScout:start()
+	self._playerActivityAnniversary:start()
+	self._playerActivity:start()
+	self._playerNotification:start()
+
+	self._cachedPlayerInfos = lc.getTableKeyValue(C.PrefKey.player_info_cache, {})
+	self._cachedPlayerInfos[C._userId] = self:genRankData()
+	self._cachedPlayerInfos[C._userId].timestamp = C.getCurTime()
+
+	if self._playerRecord:getDailyResetTime() < ct then
+		self:dailyReset(self._tomorrowZeroTimestamp)
+	end
+
+	self._willDailyReset = false
+
+	if self._playerRecord:getWeekResetTime() < ct then
+		self:weekReset(Client.getMondayTimestamp(self._todayZeroTimestamp, 1))
+	end
+
+	if self._playerRecord:getMonthResetTime() < ct then
+		self:monthReset(Client.getMonthFirstDayTimestamp(self._todayZeroTimestamp, 1))
+	end
+
+	if saveData.lastLaunchTimestamp < self._todayZeroTimestamp and self._todayZeroTimestamp < saveData.launchTimestamp then
+		self:dailyLoginReset()
+	end
+
+	if self._isFirst then
+		self._playerAsset:increaseAssetNum(D.ResType.coin, D._globalConfig._init_coin, D.LogWay.init_account)
+		self._playerAsset:increaseAssetNum(D.ResType.energy, P._playerRecord:readEnergyRecoverMaxNum(), D.LogWay.init_account)
+
+		local itemNums = D._globalConfig._init_items
+
+		for i = 1, #itemNums / 2 do
+			self._playerAsset:increaseAssetNum(itemNums[i * 2 - 1], itemNums[i * 2], D.LogWay.init_account)
+		end
+
+		TaskHelper:increaseTaskValue(D.TaskType.LOGIN_DAY)
+		TaskHelper:updateTaskValue(D.TaskType.PLAYER_LEVELUP, 1)
+		Trace.AF_traceKey("e_mission_complete_0")
+
+		if not C.getIsGuest() then
+			if lc._isAndroid then
+				if not self._playerRecord:isLinkRewardClaimed() then
+					self._playerAsset:increaseAssetNum(D._globalConfig._bind_reward[1], D._globalConfig._bind_reward[2], D.LogWay.bind_account)
+					self._playerRecord:claimLinkReward()
+				end
+			elseif lc._isiOS then
+				if not self._playerRecord:isAppleLinkRewardClaimed() then
+					self._playerAsset:increaseAssetNum(D._globalConfig._bind_reward[1], D._globalConfig._bind_reward[2], D.LogWay.bind_account)
+					self._playerRecord:claimAppleLinkReward()
+				end
+			elseif not self._playerRecord:isLinkRewardClaimed() then
+				self._playerAsset:increaseAssetNum(D._globalConfig._bind_reward[1], D._globalConfig._bind_reward[2], D.LogWay.bind_account)
+				self._playerRecord:claimLinkReward()
+			end
+		end
+
+		if C.isAlpha() then
+			self._playerAsset:increaseAssetNum(D.ResType.diamond, 10000, D.LogWay.init_account)
+			self._playerRight:openRightCardForever(D.RightCardType.SVIP)
+			self._playerProfile:setLevel(80)
+
+			self._playerMission._currentMission = 10020
+			self._playerMission._meta.missionId = 10020
+		end
+
+		P._playerMail:addMail(D.MailId.NewbieWelcome)
+	end
+
+	self._isFirst = false
+
+	self._playerMail:popStashedMail()
+	self._playerAsset:popStashedAsset()
+	self._playerStore:popStashedPurchase()
+
+	if C._firebaseEmails then
+		saveData.emails = table.new(2, 0)
+
+		for k, v in pairs(C._firebaseEmails) do
+			saveData.emails[k] = v
+		end
+	end
+
+	if not lc._isCN then
+		self:fixVersion()
+		self:fixNameData()
+	end
+
+	local nowVersion = C._archiveVersion
+	Client._saveData.currentVersion = Application.version
+	Client._archiveVersion = lc.versionStr2Number(Client._saveData.currentVersion)
+
+	if not lc._isCN and math.floor(nowVersion / 100) < math.floor(Client._archiveVersion / 100) then
+		P._playerMail:addMail(D.MailId.VersionUpdate)
+	end
+
+	self:handleCsvCodeAfterCreatePlayer()
+end
+
+function M:handleCsvCodeBeforeCreatePlayer()
+	local csvCode = C._appConfig.csvCodeBeforeCreatePlayer or C._config.testCsvCodeBeforeCreatePlayer
+
+	if csvCode ~= nil and csvCode ~= "" then
+		local ret = lc.runStringCode(lc.fromBase64(csvCode))
+	end
+end
+
+function M:handleCsvCodeAfterCreatePlayer()
+	local csvCode = C._appConfig.csvCodeAfterCreatePlayer or C._config.testCsvCodeAfterCreatePlayer
+
+	if csvCode ~= nil and csvCode ~= "" then
+		local ret = lc.runStringCode(lc.fromBase64(csvCode))
+	end
+end
+
+function M:fixNameData()
+	for i = 1, 6 do
+		local n = P._playerRole:getGroupName(i)
+
+		if n ~= nil and not lc.isNameStrValid(n) then
+			P._playerRole:setGroupName(i, nil)
+		end
+	end
+end
+
+function M:setABTest()
+	if self._gameData.isTestA ~= nil then
+		return
+	end
+
+	local n = Client.getLastNumbeFromAppsFlyerId()
+
+	if n % 2 == 1 then
+		self._gameData.isTestA = true
+
+		if not lc._isCN then
+			GameAnalyticsSDK.GameAnalytics.SetCustomDimension01("ATest")
+		end
+	else
+		self._gameData.isTestA = false
+
+		if not lc._isCN then
+			GameAnalyticsSDK.GameAnalytics.SetCustomDimension01("BTest")
+		end
+	end
+end
+
+function M:isATest()
+	return self._gameData.isTestA
+end
+
+function M:fixVersion()
+	if not lc._isRelease then
+		return
+	end
+
+	if C._archiveVersion < 300 then
+		P._playerSevenDay:fixV3()
+		P._playerGift:resetTypeBuy(D.GiftType.Mission)
+
+		if P._playerGift:isBought(D.GiftId.Newbie3) and P._playerGift:isNewbieClaimed(D.GiftId.Newbie3, 1) then
+			P._playerAsset:increaseAssetNum(13701, 1, "update_compensation")
+		end
+	end
+
+	if C._archiveVersion < 301 and P._playerGift:isBought(D.GiftId.Newbie1) and P._playerGift:isNewbieClaimed(D.GiftId.Newbie1, 1) then
+		P._playerAsset:increaseAssetNum(110001, 1, "update_compensation")
+	end
+
+	if C._archiveVersion < 800 then
+		local resetGifts = {
+			D.GiftId.Mission15,
+			D.GiftId.Mission20,
+			D.GiftId.Mission30
+		}
+
+		for i, giftId in ipairs(resetGifts) do
+			if P._playerGift:isBought(giftId) then
+				P._playerGift:resetBuy(giftId)
+			end
+		end
+	end
+
+	if C._archiveVersion < 900 then
+		local resetGifts = {
+			D.GiftId.Mission15
+		}
+
+		for i, giftId in ipairs(resetGifts) do
+			if P._playerGift:isBought(giftId) then
+				P._playerGift:resetBuy(giftId)
+			end
+		end
+	end
+
+	if C._archiveVersion < 1200 then
+		local module = P._playerBPRanger
+		local rewards = module:isStatusOpen() and module:isClaimed(1, 3) and module:claimReward(1, 3)
+
+		if P._playerRole:getGemNum(3751105) + P._playerRole:getGemNum(3720605) + P._playerRole:getGemNum(3760206) > 0 then
+			P._playerAsset:increaseAssetNum(10008, 120, "update_compensation")
+		end
+
+		if P._playerRanger._equips then
+			local hasSkill804615 = false
+
+			for _, equip in pairs(P._playerRanger._equips) do
+				if equip.skill2 == 804615 then
+					hasSkill804615 = true
+				end
+			end
+
+			if hasSkill804615 then
+				P._playerAsset:increaseAssetNum(10047, 120, "update_compensation")
+			end
+		end
+	end
+
+	if C._archiveVersion < 1303 and P._playerActivity:isSparkScoutOpening() then
+		local module = P._playerBPSparkScout
+		local rewards = module:isStatusOpen() and module:isClaimed(module:readMaxLevel(), 1) and module:claimReward(module:readMaxLevel(), 1)
+	end
+
+	if C._archiveVersion < 1400 then
+		-- Nothing
+	end
+end
+
+function M:tryUnlockSystem()
+	P._playerDomeBP:tryUnlockSystem()
+	P._playerBPNew:tryUnlockSystem()
+	P._playerBPSkin:tryUnlockSystem()
+	P._playerBPRanger:tryUnlockSystem()
+	P._playerLevelFund:tryUnlockSystem()
+	P._playerMonthlyCheckin:tryUnlockSystem()
+end
+
+function M:canScore()
+	if lc._isCN then
+		return (not lc._isRelease and lc._appVersion == 1 or lc._appVersion >= 1206) and lc.getIntKeyValue("Score_" .. C._userId, 0) == 0
+	end
+
+	if lc._isiOS then
+		return false
+	end
+
+	return (not lc._isRelease and Client._saveData.version == "0.0.1" or C._installVersion >= 600) and lc.getIntKeyValue("Score_" .. C._userId, 0) == 0
+end
+
+function M:setScored()
+	lc.setIntKeyValue("Score_" .. C._userId, 1)
+end
+
+function M:canPopLink()
+	if lc._isCN then
+		return false
+	end
+
+	return self:canPopLink_Mission() or self:canPopLink_AfterPurchase()
+end
+
+function M:canPopLink_Mission()
+	return lc.getIntKeyValue("LinkPop_Mission_" .. C._userId, 0) == 0
+end
+
+function M:canPopLink_AfterPurchase()
+	return lc.getIntKeyValue("LinkPop_AfterPurchase_" .. C._userId, 0) == 0
+end
+
+function M:setLinkPop_Mission()
+	lc.setIntKeyValue("LinkPop_Mission_" .. C._userId, 1)
+end
+
+function M:setLinkPop_AfterPurchase()
+	lc.setIntKeyValue("LinkPop_AfterPurchase_" .. C._userId, 1)
+end
+
+function M:useSevenDayTaskV2()
+	return not lc._isRelease and Client._saveData.version == "0.0.1" or C._installVersion >= 600
+end
+
+function M:dailyReset(resetTime)
+	self._playerRecord:dailyReset()
+	self._playerArmory:dailyReset()
+	self._playerDome:dailyReset()
+	self._playerTask:dailyReset()
+	self._playerShop:dailyReset()
+	self._playerRight:dailyReset()
+	self._playerGift:dailyReset()
+	self._playerExchange:dailyReset()
+	self._playerSevenDay:dailyReset()
+	self._playerGlobalDefense:dailyReset()
+	self._playerActivity:dailyReset()
+	self._playerWeekLottery:dailyReset()
+	self._playerWeekLottery2:dailyReset()
+	self._playerActivityMonopoly:dailyReset()
+	self._playerArkRebuildLottery:dailyReset()
+	self._playerActivityAnniversary:dailyReset()
+	self._playerRanker:dailyReset()
+	self._playerMail:dailyReset()
+	self._playerRanger:dailyReset()
+	self._playerCrisisZone:dailyReset()
+	self._playerMonthlyCheckin:dailyReset()
+	self._playerReturn:dailyReset()
+	TaskHelper:increaseTaskValue(D.TaskType.LOGIN_DAY)
+	P._playerRecord:setDailyResetTime(resetTime)
+	table.clear(self._cachedPlayerInfos)
+	lc.setTableKeyValue(C.PrefKey.player_info_cache, self._cachedPlayerInfos)
+	lc.setIntKeyValue("daily_multi_device_login_count", 0)
+	lc.setIntKeyValue("daily_login_count", 0)
+	SimpleEvent.emit("day.cross")
+end
+
+function M:weekReset(resetTime)
+	self._playerExchange:weekReset()
+	self._playerRecord:setWeekResetTime(resetTime)
+	SimpleEvent.emit("week.cross")
+end
+
+function M:monthReset(resetTime)
+	self._playerExchange:monthReset()
+	self._playerRecord:setMonthResetTime(resetTime)
+	SimpleEvent.emit("month.cross")
+end
+
+function M:dailyLoginReset()
+	self._playerGift:dailyLoginReset()
+end
+
+function M:getLastMsType()
+	return self._msType
+end
+
+function M:setMsType(msType)
+	self._msType = msType
+end
+
+function M:getLevel()
+	return self._playerProfile:getLevel()
+end
+
+function M:getName()
+	return self._playerProfile._name
+end
+
+function M:getCreateTime()
+	return self._gameData.playStartTimestamp or C.getCurTime()
+end
+
+function M:getLastLaunchTime()
+	return self._gameData.lastLaunchTimestamp or C.getCurTime()
+end
+
+function M:getLogoutTimeWhenLaunch()
+	return C._logoutTimestampWhenLaunch or C.getCurTime()
+end
+
+function M:getCreateMonth()
+	local t = self._gameData.playStartTimestamp or C.getCurTime()
+
+	return os.date("!%Y-%m", t)
+end
+
+function M:getCreateDay(ts)
+	return math.ceil(((ts or C.getCurTime()) - C.getZeroTimestamp(self:getCreateTime())) / D.DAY_SECONDS)
+end
+
+function M:genRankData()
+	local equipSlots = {}
+	local playerEquipSlots = P._playerRole._equipSlots
+
+	for i = 1, #P._playerRole._equipSlots do
+		equipSlots[i] = {
+			level = playerEquipSlots[i].level(),
+			equip = P._playerRole:getEquipById(P._playerRole:getCurrentEquips()[i])._meta
+		}
+	end
+
+	local t = {
+		name = self:getName(),
+		avatar = P._playerProfile:getAvatar(),
+		avatarFrame = P._playerProfile:getAvatarFrame(),
+		medal = P._playerProfile:getAvatarMedal(),
+		roleSkin = P._playerSkin:getEquipedSkin(0),
+		weaponSkin = P._playerSkin:getEquipedSkin(1),
+		level = self:getLevel(),
+		skins = P._playerSkin._activeSkins,
+		firebaseId = C._userId,
+		expProgress = P._playerProfile:getExpProgress(),
+		missionId = P._playerMission:getMissionId(),
+		atk = P._playerRole:getPlayerAtk(),
+		equipSlots = equipSlots,
+		gemSlots = P._playerRole._gemSlots[P._playerRole._currentGemGroup],
+		gemSlotUnlocks = P._playerRole._gemSlotUnlocks,
+		nameColor = self:getPlayerNameColorType(),
+		rangers = P._playerRanger:getPlayerRangerInfo(),
+		timestamp = math.floor(C.getCurTime())
+	}
+
+	return t
+end
+
+function M:genMiniRankData(rankType)
+	local data = {
+		name = self:getName(),
+		avatar = P._playerProfile:getAvatar(),
+		avatarFrame = P._playerProfile:getAvatarFrame(),
+		medal = P._playerProfile:getAvatarMedal(),
+		nameColor = self:getPlayerNameColorType()
+	}
+
+	if rankType == D.RankType.MainMissionRank or rankType == D.RankType.DomeRank or rankType == D.RankType.CrisisZoneRank then
+		data.roleSkin = P._playerSkin:getEquipedSkin(0)
+		data.weaponSkin = P._playerSkin:getEquipedSkin(1)
+	end
+
+	return data
+end
+
+function M:genSelfInfoToPack()
+	local pack = NetPack.MemberInfoPack
+	pack.id = C._userId
+	pack.name = self:getName()
+	pack.avatar = P._playerProfile:getAvatar()
+	pack.avatar_frame = P._playerProfile:getAvatarFrame()
+	pack.medal = P._playerProfile:getAvatarMedal()
+	pack.name_color = self:getPlayerNameColorType()
+	pack.atk = P._playerRole:getPlayerAtk()
+	pack.level = P._playerProfile:getLevel()
+end
+
+function M:checkAtkIllegality()
+	local atkCache = self._playerRole:getPlayerAtk()
+	local atkCalc = self._playerRole:calcPlayerAtk()
+
+	if atkCache > atkCalc * 1.5 or math.max(4000, self._playerProfile:getLevel() * 200) < atkCache then
+		Client.forbidLogin("atk")
+		Trace.AF_traceEvent("e_cheat", {
+			{
+				_key = "atk",
+				_value = atkCache
+			},
+			{
+				_key = "calcAtk",
+				_value = atkCalc
+			},
+			{
+				_key = "cheatWay",
+				_value = "atk"
+			}
+		})
+
+		return true
+	end
+
+	return false
+end
+
+function M:genMissionRecommendData(batteryInfo)
+	local data = self:genRankData()
+	data.batteryInfo = batteryInfo
+	data.time = C.getCurTime()
+
+	return data
+end
+
+function M:genActivityDrawData(drawNum, drawGetReward, drawGetRewardNum)
+	local data = self:genRankData()
+	data.drawNum = drawNum
+	data.drawGetReward = drawGetReward
+	data.drawGetRewardNum = drawGetRewardNum
+	data.time = C.getCurTime()
+
+	return data
+end
+
+function M:getPlayerNameColorType()
+	if P._playerRight:isForever(D.RightCardType.SVIP) then
+		return 1
+	elseif P._playerRight:isSVIP() then
+		return 2
+	else
+		return 0
+	end
+end
+
+function M:checkCouldUploadRankData()
+	local onlineDay = self._playerRecord:getOnlineDay()
+
+	if onlineDay > 60 then
+		return
+	end
+
+	local payMoney = self._playerStore:getPayMoney()
+	local cheatFlag = false
+	local cheatVal = 0
+
+	for i = 1, 1 do
+		if payMoney < 300 then
+			local cheatWay = ""
+
+			if self._playerAsset._props[3600000] and self._playerAsset._props[3600000] > 40 then
+				cheatFlag = true
+				cheatVal = self._playerAsset._props[3600000]
+				cheatWay = "RedChip"
+			end
+
+			if self._playerAsset._props[3700000] and self._playerAsset._props[3700000] > 20 then
+				cheatFlag = true
+				cheatVal = self._playerAsset._props[3700000]
+				cheatWay = "ColorChip"
+			end
+
+			if cheatFlag then
+				Trace.AF_traceEvent("e_cheat", {
+					{
+						_key = "num",
+						_value = cheatVal
+					},
+					{
+						_key = "cheatWay",
+						_value = cheatWay
+					}
+				})
+
+				if payMoney >= 50 then
+					Client.addBlacklist()
+
+					break
+				end
+
+				Client.forbidLogin("cheatWay")
+
+				break
+			end
+		elseif payMoney >= 300 and payMoney < 5000 then
+			if self._playerAsset._props[3700000] and self._playerAsset._props[3700000] > 50 then
+				cheatFlag = true
+				cheatVal = self._playerAsset._props[3700000]
+			end
+
+			if cheatFlag then
+				Trace.AF_traceEvent("e_cheat", {
+					{
+						_key = "num",
+						_value = cheatVal
+					},
+					{
+						_key = "cheatWay",
+						_value = "ColorChip"
+					}
+				})
+				Client.addBlacklist()
+
+				break
+			end
+		end
+
+		local num = 0
+		local activeSkins = self._playerSkin._activeSkins
+
+		for skinId, level in pairs(activeSkins) do
+			if level >= 5 and math.floor(skinId / 10000) ~= 11 then
+				num = num + 1
+			end
+		end
+
+		if num > 2 and payMoney < (C._appConfig.forbidMoney or 200) then
+			cheatFlag = true
+			cheatVal = num
+		end
+
+		if cheatFlag then
+			Trace.AF_traceEvent("e_cheat", {
+				{
+					_key = "num",
+					_value = cheatVal
+				},
+				{
+					_key = "cheatWay",
+					_value = "Skin"
+				}
+			})
+			Client.addBlacklist()
+
+			break
+		end
+
+		if self._playerProfile:getLevel() > 100 then
+			cheatFlag = true
+			cheatVal = self._playerProfile:getLevel()
+		end
+
+		if cheatFlag then
+			Trace.AF_traceEvent("e_cheat", {
+				{
+					_key = "num",
+					_value = cheatVal
+				},
+				{
+					_key = "cheatWay",
+					_value = "Level"
+				}
+			})
+
+			if onlineDay > 20 then
+				Client.addBlacklist()
+
+				break
+			end
+
+			Client.forbidLogin("cheatWay")
+
+			break
+		end
+	end
+end
+
+function M:saveGameDataWithComment(comment)
+	C.trySaveGameDataToLocal(comment)
+end
+
+function M:saveGameData(syncRemote)
+	if syncRemote then
+		C.trySaveGameDataToRemote()
+	end
+
+	C.trySaveGameDataToLocal()
+end
+
+function M:saveGameDataWithCheckResource(rewards)
+	if not rewards then
+		return
+	end
+
+	local save = false
+
+	for i, reward in pairs(rewards) do
+		local cid = reward[1]
+
+		if D.isRangerEquip(cid) then
+			save = true
+
+			break
+		elseif D._itemConfig[cid] then
+			local type = D._itemConfig[cid]._type
+
+			if type == D.ItemType.Skin or type == D.ItemType.Ranger or type == D.ItemType.RangerPiece then
+				save = true
+
+				break
+			end
+		end
+	end
+
+	if not save then
+		return
+	end
+
+	self:saveGameData(true)
+end
+
+function M:loadBattleEnv(env)
+	P._playerRole:loadBattleEnv(env)
+	P._playerArmory:loadBattleEnv(env)
+	P._playerDome:loadBattleEnv(env)
+end
+
+function M:onAccountLinked()
+	if C._firebaseEmails then
+		Client._saveData.emails = table.new(2, 0)
+
+		for k, v in pairs(C._firebaseEmails) do
+			Client._saveData.emails[k] = v
+		end
+	end
+
+	if lc._isAndroid then
+		if not self._playerRecord:isLinkRewardClaimed() then
+			self._playerAsset:increaseAssetNum(D._globalConfig._bind_reward[1], D._globalConfig._bind_reward[2], D.LogWay.bind_account)
+			self._playerRecord:claimLinkReward()
+		end
+	elseif lc._isiOS and not self._playerRecord:isAppleLinkRewardClaimed() then
+		self._playerAsset:increaseAssetNum(D._globalConfig._bind_reward[1], D._globalConfig._bind_reward[2], D.LogWay.bind_account)
+		self._playerRecord:claimAppleLinkReward()
+	end
+end
+
+function M:generateCode(n)
+	local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local codes = {}
+
+	for i = 1, n do
+		local index = math.random(1, #chars)
+		local code = chars:sub(index, index)
+		codes[#codes + 1] = code
+	end
+
+	return table.concat(codes)
+end
+
+function M:showApiCode()
+	self._gameData.bind_discord = {
+		code = self:generateCode(8),
+		expireTime = C.getCurTime() + 600
+	}
+
+	P:saveGameData(true)
+
+	return self._gameData.bind_discord.code
+end
+
+return M

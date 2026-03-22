@@ -1,0 +1,434 @@
+local M = class("CrisisZoneFinalRewardPanel", requireLua("BasePanel"))
+local Types = Types
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	goReward1 = Types.GameObject,
+	goReward2 = Types.GameObject,
+	goReward3 = Types.GameObject,
+	goReward4 = Types.GameObject,
+	goReward5 = Types.GameObject,
+	goReward6 = Types.GameObject,
+	imgLight1 = Types.Image,
+	imgLight2 = Types.Image,
+	imgLight3 = Types.Image,
+	imgLight4 = Types.Image,
+	imgLight5 = Types.Image,
+	imgLight6 = Types.Image,
+	scroll = Types.ScrollRect,
+	tfRewardContainer = Types.Transform,
+	btnQuickSelect = Types.Button,
+	goReplaceCover = Types.GameObject,
+	btnCloseCover = Types.Button,
+	goTransportingItem = Types.GameObject,
+	btnUnlock1 = Types.Button,
+	btnUnlock2 = Types.Button,
+	goLock1 = Types.GameObject,
+	goLock2 = Types.GameObject
+}
+local CELL_NUM = 5
+local EMPTY_LIGHT_COLOR = "146050"
+local LIGHT_COLOR = "3EC5AA"
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goRewards = {
+		self._goReward1,
+		self._goReward2,
+		self._goReward3,
+		self._goReward4,
+		self._goReward5,
+		self._goReward6
+	}
+
+	for i = 1, #self._goRewards do
+		SimpleItemWidget.noCreate(self._goRewards[i])
+	end
+
+	self._imgLights = {
+		self._imgLight1,
+		self._imgLight2,
+		self._imgLight3,
+		self._imgLight4,
+		self._imgLight5,
+		self._imgLight6
+	}
+
+	ItemWidget.noCreate(self._goTransportingItem)
+end
+
+function M:addClicks()
+	self:setClick(self._btnQuickSelect, function ()
+		local idx = 1
+		local emptySlots = self._selectedEmptySlots
+
+		if #emptySlots == 0 then
+			V.showToast(SID.TIP_CRISIS_ZONE_REWARD_FULL)
+
+			return
+		end
+
+		for i = 1, #self._allRewards do
+			if idx > #emptySlots then
+				break
+			end
+
+			local reward = self._allRewards[i]
+			self._selectedRewards[emptySlots[idx]] = reward
+			idx = idx + 1
+		end
+
+		for i = 1, #emptySlots do
+			if self._selectedRewards[emptySlots[i]] then
+				table.erase(self._allRewards, self._selectedRewards[emptySlots[i]])
+			end
+		end
+
+		if self._rowDisplaying then
+			self._rowDisplaying._goBubble:SetActive(false)
+
+			self._rowDisplaying._displayingItem = nil
+			self._rowDisplaying = nil
+
+			self._scrollViewEx:reloadYRang()
+		end
+
+		self:updateSelectedRewards()
+		self:reloadData()
+	end)
+	self:setClick(self._btnClose, function ()
+		if self._selectedRewardsNum < self._maxSelectedRewardsNum and #self._allRewards > 0 then
+			V.showMessageBox({
+				_type = 2,
+				_content = SID.TIP_CRISIS_ZONE_REMAIN_REWARDS,
+				_confirmCallback = function ()
+					self:takeRewards()
+				end
+			})
+		else
+			self:takeRewards()
+		end
+	end)
+
+	for i = 1, #self._goRewards do
+		self:setClick(self._goRewards[i]._btnClick, function ()
+			if self._replacing then
+				local reward = self._selectedRewards[i]
+				self._selectedRewards[i] = self._allRewards[self._replacing]
+
+				table.remove(self._allRewards, self._replacing)
+				table.insert(self._allRewards, reward)
+				self._goReplaceCover:SetActive(false)
+				self._scroll.gameObject:SetActive(true)
+
+				self._replacing = nil
+
+				self:updateSelectedRewards()
+				self:sortAndReloadData()
+			elseif self._selectedRewards[i] then
+				self._goRewards[i]:rewardclickCallback(self)
+			end
+		end)
+	end
+
+	self:setClick(self._btnUnlock1, function ()
+		V._scrollToTop = true
+
+		UIManager.openPanel(PrefabDefine.BattlePassContainerPanel, {
+			"BattlePassRangerPanel"
+		})
+		V.showToast(SID.TIP_CRISIS_ZONE_BAG_UNLOCK_TIP)
+	end)
+	self:setClick(self._btnUnlock2, function ()
+		V._scrollToTop = true
+
+		UIManager.openPanel(PrefabDefine.BattlePassContainerPanel, {
+			"BattlePassRangerPanel"
+		})
+		V.showToast(SID.TIP_CRISIS_ZONE_BAG_UNLOCK_TIP)
+	end)
+	self:setClick(self._btnCloseCover, function ()
+		self._goReplaceCover:SetActive(false)
+		self._scroll.gameObject:SetActive(true)
+		self._scrollViewEx:reloadYRang()
+
+		self._replacing = nil
+	end)
+end
+
+function M:addEvents()
+	self:on("prop.dirty", function (cid, num)
+		if cid == D.ResType.crisis_zone_bag_slot then
+			self._maxSelectedRewardsNum = math.min(D._globalConfig._crisis_zone_reward_select_num + P._playerAsset:getAssetNum(D.ResType.crisis_zone_bag_slot), #self._goRewards)
+
+			self._goLock1:SetActive(self._maxSelectedRewardsNum < 5)
+			self._goLock2:SetActive(self._maxSelectedRewardsNum < 6)
+
+			self._selectedEmptySlots[self._maxSelectedRewardsNum] = self._maxSelectedRewardsNum
+
+			self:updateUI()
+		end
+	end)
+end
+
+function M:init(callback)
+	self._callback = callback
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 30,
+		topPadding = 30,
+		cellMargin = 20,
+		cellInitCount = 6
+	})
+	self._allRewards = P._playerCrisisZone:getGotRewards()
+	self._maxSelectedRewardsNum = math.min(D._globalConfig._crisis_zone_reward_select_num + P._playerAsset:getAssetNum(D.ResType.crisis_zone_bag_slot), #self._goRewards)
+
+	self._goLock1:SetActive(self._maxSelectedRewardsNum < 5)
+	self._goLock2:SetActive(self._maxSelectedRewardsNum < 6)
+
+	self._selectedRewards = {}
+	self._selectedEmptySlots = {}
+
+	for i = 1, self._maxSelectedRewardsNum do
+		self._selectedEmptySlots[i] = i
+	end
+
+	self._rowDisplaying = nil
+
+	self._goReplaceCover:SetActive(false)
+	self:updateUI()
+	self:sortAndReloadData()
+end
+
+function M:updateSelectedRewards()
+	self._selectedRewardsNum = 0
+
+	table.clear(self._selectedEmptySlots)
+
+	for i = 1, self._maxSelectedRewardsNum do
+		local reward = self._selectedRewards[i]
+
+		if reward then
+			self._goRewards[i]:SetActive(true)
+
+			if D.isRangerEquip(reward[1]) then
+				self._goRewards[i]:init(reward[1], 1, reward[2])
+			else
+				self._goRewards[i]:init(reward[1], reward[2])
+			end
+
+			self._goRewards[i]._goTag:SetActive(reward[4] and true or false)
+
+			self._selectedRewardsNum = self._selectedRewardsNum + 1
+			self._imgLights[i].color = Color.str2Static(LIGHT_COLOR)
+		else
+			self._goRewards[i]:SetActive(false)
+			table.insert(self._selectedEmptySlots, i)
+
+			self._imgLights[i].color = Color.str2Static(EMPTY_LIGHT_COLOR)
+		end
+	end
+end
+
+function M:reloadData()
+	self._scrollViewEx:reloadData()
+end
+
+function M:sortAndReloadData()
+	table.sort(self._allRewards, function (a, b)
+		if a[4] ~= b[4] then
+			return a[4] ~= nil
+		end
+
+		local qa = D.toQuality(a[1])
+		local qb = D.toQuality(b[1])
+
+		if qa ~= qb then
+			return qb < qa
+		end
+
+		local na = type(a[2]) == "number" and a[2] or 1
+		local nb = type(b[2]) == "number" and b[2] or 1
+
+		if na ~= nb then
+			return nb < na
+		end
+
+		return a[1] < b[1]
+	end)
+	self._scrollViewEx:reloadData()
+end
+
+function M:updateUI()
+	self:updateSelectedRewards()
+	self:sortAndReloadData()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	goCell._index = index
+
+	for i = 1, CELL_NUM do
+		local item = goCell._items[i]
+		local idx = (index - 1) * CELL_NUM + i
+		local reward = self._allRewards[idx]
+		item.idx = idx
+
+		if reward then
+			if D.isRangerEquip(reward[1]) then
+				item:init(reward[1], 1, reward[2])
+			else
+				item:init(reward[1], reward[2])
+			end
+
+			item:SetActive(true)
+			item._goTag:SetActive(reward[4] ~= nil)
+		else
+			item:SetActive(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local rowCell = LuaUnity.createGameObject("Assets/FW/Prefabs/UI/widget/CrisisZoneRewardRowWidget.prefab", self._tfRewardContainer)
+
+	lc.prefabVarPeer(rowCell)
+
+	rowCell._items = {}
+
+	rowCell._txtTag:SetLocalize(SID.STR_TRANSPORT)
+
+	local function toggleBtns(item, skip)
+		if rowCell._displayingItem ~= item then
+			if self._rowDisplaying and self._rowDisplaying ~= rowCell then
+				self._rowDisplaying._goBubble:SetActive(false)
+
+				self._rowDisplaying._displayingItem = nil
+			end
+
+			self._rowDisplaying = rowCell
+
+			self._scrollViewEx:reloadYRang()
+
+			rowCell._displayingItem = item
+
+			rowCell._goBubble:SetActive(true)
+
+			local x, y, z = lc.getPosition(rowCell._goBubbleArrow)
+			local x1, _, _ = lc.getPosition(item)
+
+			lc.setPosition(rowCell._goBubbleArrow, x1, y, z)
+
+			if D.isRangerEquip(item._cid) then
+				rowCell._txtTitle:SetLocalize(SID.STR_RANGER_EQUIP_NAME, D._rangerEquipConfig[item._cid]._level)
+			else
+				rowCell._txtTitle:SetLocalize(D._itemConfig[item._cid]._nameSid)
+			end
+
+			rowCell._txtTitle.text = rowCell._txtTitle.text .. " x" .. item._num
+			local _, y, _ = lc.getLocalPosition(rowCell)
+			y = y - 280
+			local _, by, _ = lc.getLocalPosition(self._tfRewardContainer)
+			local height = self._scroll.transform.rect.height
+
+			if -y >= by + height then
+				self._tfRewardContainer:DOLocalMoveY(-y - height, 0.3):SetUpdate(0, true)
+			end
+		else
+			self._rowDisplaying = nil
+
+			self._scrollViewEx:reloadYRang()
+
+			rowCell._displayingItem = nil
+
+			rowCell._goBubble:SetActive(false)
+		end
+
+		item.transform.parent:SetAsLastSibling()
+	end
+
+	self:setClick(rowCell._btnDetail, function ()
+		if rowCell._displayingItem then
+			rowCell._displayingItem:rewardclickCallback(self)
+		end
+	end)
+	self:setClick(rowCell._btnTag, function ()
+		if rowCell._displayingItem then
+			self._rowDisplaying = nil
+			local item = rowCell._displayingItem
+			rowCell._displayingItem = nil
+
+			rowCell._goBubble:SetActive(false)
+
+			if #self._selectedEmptySlots > 0 then
+				self._selectedRewards[self._selectedEmptySlots[1]] = self._allRewards[item.idx]
+
+				table.remove(self._allRewards, item.idx)
+				self:updateSelectedRewards()
+				self:reloadData()
+			else
+				self._replacing = item.idx
+
+				self._goReplaceCover:SetActive(true)
+				self._scroll.gameObject:SetActive(false)
+				self._goTransportingItem:init(item._cid, item._num)
+			end
+		end
+	end)
+
+	for i = 1, CELL_NUM do
+		local item = rowCell.transform:GetChild(i - 1)
+
+		SimpleItemWidget.noCreate(item)
+
+		rowCell._items[i] = item
+
+		self:setClick(item._btnClick, function ()
+			toggleBtns(item)
+		end)
+	end
+
+	return rowCell
+end
+
+function M:onCellHeight(index)
+	if self._rowDisplaying and self._rowDisplaying._index == index then
+		return 280
+	end
+
+	return 120
+end
+
+function M:onCellNum()
+	return math.ceil(#self._allRewards / CELL_NUM)
+end
+
+function M:takeRewards()
+	local indexes = {}
+
+	for i = 1, #self._selectedRewards do
+		table.insert(indexes, self._selectedRewards[i][3])
+	end
+
+	P._playerCrisisZone:takeRewards(indexes)
+	self:closePanel()
+
+	if self._callback then
+		self._callback()
+	end
+end
+
+function M:closePanel()
+	lc.stopTimer(self._timer)
+	M.super.closePanel(self)
+end
+
+return M

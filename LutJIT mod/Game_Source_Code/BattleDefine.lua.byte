@@ -1,0 +1,668 @@
+local M = {}
+_G.BattleDefine = M
+M.BOOSTER_SKILL_ID = 101
+M.SCREEN_ADAPTE_WIDTH = 10
+M.FIELD_OFFSET_Y = 2.4
+local D = D
+local battleConfig = requireLua("battle_global")
+M.NEARBY_RANGE = battleConfig._battle_range_nearby_dome
+M.BOOSTER_ENERGY = battleConfig._booster_energy
+M.BOOSTER_DURATION = battleConfig._booster_duration
+M.ATOR_MOVE_SPEED = battleConfig._ator_move_speed
+M.DRAG_SPEED = battleConfig._drag_speed
+M.MIN_DMG_TEXT_COUNT_ONCE_FRAME = 5
+M.LayerWorldA = LayerMask.NameToLayer("WorldA")
+M.LayerWorldB = LayerMask.NameToLayer("WorldB")
+M.ENEMY_BORN_DEGE_X1 = -4.5
+M.ENEMY_BORN_DEGE_X2 = 4.5
+M.ENEMY_BORN_DEGE_Y1 = 17
+M.BATTLE_FIELD_EDGE_X1 = -4
+M.BATTLE_FIELD_EDGE_X2 = 4
+M.BATTLE_FIELD_EDGE_Y1 = 0
+M.BATTLE_FIELD_EDGE_Y2 = 17
+M.SCREEN_DEGE_X1 = -5
+M.SCREEN_DEGE_X2 = 5
+M.SCREEN_DEGE_Y1 = 3
+M.SCREEN_DEGE_Y2 = 17
+M.PULSEDLASER_STEP_SPEED = 70
+M.BATTLE_ADD_DMG_RANGE1 = 8
+M.BATTLE_ADD_DMG_RANGE2 = 14
+M.MAX_CD_ADD_PER = 80
+M.EDGE_ZOOM_X = 2
+M.DOME_POSY = 3
+M.DOME_RADIUS = 11
+M.DOME_RADIUS_SQRT = 121
+M.DOME_RADIUS_SQRT2 = 144
+M.DOME_LEFT_ANGLE = 110
+M.DOME_RIGHT_ANGLE = 70
+M.DOME_CENTER = -8
+M.PULSEDLASER_STRAFE_SPEED = 2
+M.K_RUNNING_FIRE_INTERVAL = battleConfig._running_fire_interval
+M.KNOCKBACK_TIME = 0.1
+M.DONE_INITIAL_BLOOD = 3000
+M.BuffEffectWhen = {
+	hit = 2,
+	cast = 1
+}
+M.BuffEffectScope = {
+	bullet = 1,
+	enemy = 2
+}
+M.DamageReason = {
+	buff = 2,
+	bullet_hit = 1
+}
+M.DestroyReason = {
+	explosion = 3,
+	duration_expires = 4,
+	out_boundary = 1,
+	hit_enemy = 2
+}
+M.BuffId = {
+	resist_invisibility = 25,
+	penetrator_physics_vulnerable = 23,
+	portal_1 = 19,
+	rbp_burn = 31304,
+	invisible = 10,
+	thunderbolt_paralysis = 41501,
+	collapse = 24,
+	slowfield_drone_knockback = 406,
+	physics_vulnerableFor = 92301,
+	knockback = 4,
+	slowdown_stack = 601
+}
+M.OpType = {
+	push_rouge = 11,
+	down = 1,
+	up = 3,
+	reborn = 5,
+	rouge = 4,
+	move_y = 6,
+	move = 2
+}
+M.BattleWeaponCount = 5
+M.BattleRangerCount = 2
+M.WeaponPovit = {
+	{
+		0,
+		0
+	},
+	{
+		-3.9,
+		0
+	},
+	{
+		3.9,
+		0
+	},
+	{
+		-2.7,
+		0
+	},
+	{
+		2.7,
+		0
+	},
+	[99] = {
+		0,
+		0
+	}
+}
+M.WeaponPovit_PVP = {
+	{
+		-2.55,
+		0
+	},
+	{
+		-4.5,
+		0
+	},
+	{
+		2.55,
+		0
+	},
+	{
+		100,
+		0
+	},
+	{
+		100,
+		0
+	},
+	[99] = {
+		0,
+		0
+	}
+}
+M.WeaponRangeX = {
+	[2] = {
+		-4.4,
+		-3.4
+	},
+	[3] = {
+		3.4,
+		4.4
+	},
+	[4] = {
+		-3.2,
+		-2.2
+	},
+	[5] = {
+		2.2,
+		3.2
+	}
+}
+M.BatteryMuzzleDistance = {
+	{
+		0,
+		0
+	},
+	{
+		0.34,
+		0.8
+	},
+	{
+		0.35,
+		0.46,
+		0.19
+	},
+	[6] = {
+		0.35,
+		0.7
+	},
+	[7] = {
+		0.25,
+		0.8
+	},
+	[9] = {
+		0.3,
+		1,
+		0.1
+	},
+	[10] = {
+		0.35,
+		1.2
+	},
+	[11] = {
+		0.5,
+		1
+	},
+	[12] = {
+		0,
+		0.5
+	},
+	[99] = {
+		0,
+		0
+	}
+}
+M.BatteryRootPosition = {
+	[3] = {
+		0.1,
+		0.35
+	}
+}
+M.BatteryExtraParmas = {
+	[2] = {
+		_hasMirror = true
+	},
+	[3] = {
+		_shotAniDuration = 0.1,
+		_hasMirror = true,
+		_hasShotAni = true
+	},
+	[6] = {
+		_shotAniDuration = 0.18,
+		_shotInterval = 1,
+		_hasMirror = true,
+		_hasShotAni = true
+	},
+	[7] = {
+		_shotAniDuration = 0.88,
+		_hasShotAni = true
+	},
+	[9] = {
+		_shotAniDuration = 0.07,
+		_hasMirror = true,
+		_hasShotAni = true
+	},
+	[11] = {
+		_shotAniDuration = 1.1,
+		_hasShotAni = true
+	}
+}
+M.BattleBatteryClass = {
+	"BattleActor",
+	"BattleBattery_PulsedLaser",
+	"BattleBattery_FollowMissile",
+	"BattleBattery_Thunderbolt",
+	"BattleBattery_SlowfieldDrone",
+	"BattleBattery_Aeroblast",
+	"BattleBattery_Plasma",
+	"BattleBattery_FireDrone",
+	"BattleBattery_Penetrator",
+	"BattleBattery_Railgun",
+	"BattleBattery_GravityVortex",
+	"BattleBattery_BeeColony",
+	[100.0] = "BattleBattery_Dome",
+	[99.0] = "BattleActor"
+}
+M.BattleRangerClass = {
+	[213.0] = "BattleRanger_Nested",
+	[202.0] = "BattleRanger_202",
+	[212.0] = "BattleRanger_Nested",
+	[205.0] = "BattleRanger_Nested",
+	[211.0] = "BattleRanger_211",
+	[206.0] = "BattleRanger_Nested",
+	[208.0] = "BattleRanger_Nested",
+	[207.0] = "BattleRanger_207"
+}
+M.BattleBulletScript = {
+	"BattleBullet",
+	"BattleBullet_PulsedLaser",
+	"BattleBullet_FollowMissile",
+	nil,
+	"BattleBullet_SlowfieldDrone",
+	nil,
+	"BattleBullet_Plasma",
+	"BattleBullet_FireDrone",
+	nil,
+	"BattleBullet_Railgun",
+	"BattleBullet_GravityVortex",
+	"BattleBullet_BeeColony",
+	[113.0] = "BattleBullet_Trajectory",
+	[121.0] = "BattleBullet_Dome_7_Main",
+	[104.0] = "BattleBullet_Brust_Cone",
+	[112.0] = "BattleBullet_Delay_Lock",
+	[158.0] = "BattleBullet_Ranger_214_Main",
+	[153.0] = "BattleBullet_Ranger_ThunderBall",
+	[111.0] = "BattleBullet_GravityVortex_Container",
+	[154.0] = "BattleBullet_Ranger_204_Main",
+	[155.0] = "BattleBullet_Ranger_206_Main",
+	[102.0] = "BattleBullet_AtkInterval",
+	[110.0] = "BattleBullet_Brust_Rectangle1",
+	[156.0] = "BattleBullet_Ranger_210_Main",
+	[151.0] = "BattleBullet_Ranger_209_Main",
+	[103.0] = "BattleBullet_Drag",
+	[109.0] = "BattleBullet_Mine",
+	[108.0] = "BattleBullet_Portal_Out",
+	[101.0] = "BattleBullet_Burst",
+	[107.0] = "BattleBullet_Portal_In",
+	[152.0] = "BattleBullet_Ranger_205_Main",
+	[106.0] = "BattleBullet_Rotate_Rectangle",
+	[114.0] = "BattleBullet_AtkInterval_Ring",
+	[122.0] = "BattleBullet_Dome_10_Main",
+	[105.0] = "BattleBullet_Chain"
+}
+M.BattleBulletNoView = {
+	[151.0] = true,
+	[112.0] = true
+}
+M.BulletFactoryCapacity = {
+	16,
+	2,
+	8
+}
+M.EnemyType = {
+	Shield = 5,
+	Elite = 2,
+	Boss = 3,
+	Death = 4,
+	Holder = 7,
+	Normal = 1
+}
+M.UnitType = {
+	Enemy = 1,
+	Friendly_Bullet = 2,
+	Enemy_Bullet = 3
+}
+M.BuffMainClass = {
+	Shield = 5,
+	Paralysis = 3,
+	Drag = 10,
+	Dodge = 101,
+	Vulnerable = 11,
+	Portal = 8,
+	ATK_Slow = 12,
+	Ignite = 4,
+	Ignite_Power = 6,
+	Serious_Injury = 9,
+	Knockback = 7,
+	SpeedUp = 2,
+	SlowDown = 1
+}
+M.When = {
+	any_time = 1,
+	on_hit = 3,
+	hp_ditry = 4,
+	dying = 2
+}
+M.EnemyBuffType = {
+	DAMAGE_REDUCE = 1,
+	ZHONG_ZHUANG = 12,
+	DIE_RECOVER = 3,
+	HP = 6,
+	SPEED = 5,
+	DODGE = 7,
+	NEGATIVE_STATUS_RESIST = 8,
+	CHAOSU_DAJI = 16,
+	DAMAGE_RESIST = 9,
+	KONGJIAN_YULIAO = 11,
+	DAMAGE_ADD = 10,
+	JIAN_SU_DAI = 17,
+	DIE_SHIELD = 2,
+	RUODIAN_SHANBI = 15,
+	DIE_HEAL = 4,
+	RUO_YINLI = 13,
+	XIUFU_YIZHI = 14
+}
+M.ENEMY_BUFF_DIE_HEAL_RANGE = 2
+M.ENEMY_BUFF_DIE_SHIELD_RANGE = 2
+M.EffectParam = {
+	{
+		widget = "_audioSwitcher",
+		key = "battle_audio_on"
+	},
+	{
+		widget = "_qualitySwitcher",
+		key = "battle_render_high_quality_on"
+	},
+	{
+		widget = "_effectSwitcher",
+		key = "battle_vfx_on"
+	},
+	{
+		widget = "_shakeSwitcher",
+		key = "shake_camera"
+	},
+	{
+		widget = "_lockEliteSwitcher",
+		key = "lock_elite"
+	},
+	{
+		key = "show_lock_elite"
+	},
+	{
+		widget = "_frameSwitcher",
+		key = "frame_on"
+	}
+}
+M.ArkRebuildDuration = 180
+M.CrisisZoneDuration = 600
+M.SparkScoutDuration = 600
+M.POSITION_ENUM = {
+	{
+		5.7,
+		5.84,
+		6.2,
+		6.5,
+		6.5,
+		6.5
+	},
+	{
+		5.54,
+		5.86,
+		6.15,
+		6.4,
+		6.5,
+		6.5
+	},
+	{
+		5.65,
+		5.87,
+		6.17,
+		6.41,
+		6.41,
+		6.41
+	},
+	{
+		5.36,
+		5.59,
+		5.93,
+		6.22,
+		6.22,
+		6.22
+	},
+	{
+		5.89,
+		6.04,
+		6.28,
+		6.49,
+		6.49,
+		6.49
+	},
+	{
+		5.57,
+		5.87,
+		5.93,
+		6.02,
+		6.02,
+		6.02
+	},
+	{
+		5.49,
+		6.042,
+		6.1,
+		6.3,
+		6.3,
+		6.3
+	},
+	{
+		5.54,
+		5.95,
+		6.13,
+		6.42,
+		6.42,
+		6.42
+	},
+	{
+		5.54,
+		5.95,
+		6.13,
+		6.42,
+		6.42,
+		6.42
+	},
+	{
+		5.75,
+		6.2,
+		6.5,
+		6.55,
+		6.55,
+		6.55
+	},
+	{
+		5.75,
+		6,
+		6.25,
+		6.3,
+		6.3,
+		6.3
+	},
+	[15] = {
+		5.65,
+		5.95,
+		6.28,
+		6.24,
+		6.24,
+		6.24
+	}
+}
+M.SCALE_ENUM = {
+	{
+		1,
+		0.95,
+		0.85,
+		0.7,
+		0.7,
+		0.7
+	},
+	{
+		1,
+		0.95,
+		0.85,
+		0.7,
+		0.7,
+		0.7
+	},
+	{
+		1.1,
+		1,
+		0.9,
+		0.8,
+		0.8,
+		0.8
+	},
+	{
+		1,
+		0.95,
+		0.9,
+		0.8,
+		0.8,
+		0.8
+	},
+	{
+		1.05,
+		1,
+		0.9,
+		0.8,
+		0.8,
+		0.8
+	},
+	{
+		1.1,
+		1,
+		0.95,
+		0.9,
+		0.9,
+		0.9
+	},
+	{
+		0.85,
+		0.73,
+		0.72,
+		0.6,
+		0.6,
+		0.6
+	},
+	{
+		1,
+		0.9,
+		0.75,
+		0.65,
+		0.65,
+		0.65
+	},
+	{
+		1,
+		0.9,
+		0.75,
+		0.65,
+		0.65,
+		0.65
+	},
+	{
+		1.2,
+		1.1,
+		1,
+		0.95,
+		0.95,
+		0.95
+	},
+	{
+		1.2,
+		1,
+		0.95,
+		0.9,
+		0.9,
+		0.9
+	},
+	[15] = {
+		0.8,
+		0.65,
+		0.6,
+		0.55,
+		0.55,
+		0.55
+	}
+}
+M.GUN_MUZZLE_OFFSETX = {
+	[4] = {
+		1.36,
+		1.34,
+		1.28,
+		1,
+		12,
+		1,
+		12,
+		1,
+		12
+	}
+}
+M.GUN_MUZZLE_POSITIONY = {
+	[4] = {
+		2,
+		1.9,
+		1.8,
+		1.6,
+		1.6,
+		1.6
+	}
+}
+local RangerScaleFactor = 1.25
+M.RANGER_SHOOT_POSITION = {
+	[201] = {
+		0.5 * RangerScaleFactor,
+		0.1 * RangerScaleFactor
+	},
+	[202] = {
+		0.6 * RangerScaleFactor,
+		0 * RangerScaleFactor
+	},
+	[203] = {
+		0.225 * RangerScaleFactor,
+		0.3 * RangerScaleFactor
+	},
+	[209] = {
+		0.9 * RangerScaleFactor,
+		0
+	},
+	[211] = {
+		0.42,
+		0.4
+	},
+	[213] = {
+		0,
+		0
+	},
+	[214] = {
+		1,
+		0
+	}
+}
+M.RANGER_BODY_MIRROR = {
+	[211.0] = true,
+	[210.0] = true,
+	[207.0] = true
+}
+M.RANGER_IK_AIM = {
+	[203.0] = true,
+	[201.0] = true
+}
+M.RANGER_TRIGGER_ATTACK = {
+	[213.0] = true,
+	[208.0] = true,
+	[212.0] = true
+}
+opt.BulletParams = {
+	angle = 0,
+	x = 0,
+	y = 0
+}
+M.NEED_FIX_PS_TRAIL_BUG = {
+	[1203.0] = true,
+	[1202.0] = true,
+	[908.0] = true
+}
+
+return M

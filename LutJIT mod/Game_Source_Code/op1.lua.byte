@@ -1,0 +1,19 @@
+return {
+	seed = 10086,
+	[60] = {
+		_opType = BattleDefine.OpType.push_rouge,
+		_rouges = {
+			7,
+			102,
+			103
+		}
+	},
+	[120] = {
+		_opType = BattleDefine.OpType.push_rouge,
+		_rouges = {
+			7,
+			102,
+			103
+		}
+	}
+}

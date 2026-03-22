@@ -1,0 +1,200 @@
+local M = class("LevelFundPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	textRebate = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text
+}
+local RewardWidget = requireLua("LevelFundRewardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._module = P._playerLevelFund
+	local cellNum = self._module:readMaxLevel()
+	local cellHeight = 150
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		cellMargin = 0,
+		cellHeight = cellHeight,
+		cellInitCount = math.min(showCount + 2, cellNum)
+	})
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("level.dirty", function ()
+		self:updateUI()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaimAll, function ()
+		self:claimAllRewards()
+	end)
+	self:setClick(self._btnBuyStep2, function ()
+		self:handleBuyHighStep(2, D.IapType.LevelFund)
+	end)
+end
+
+function M:init()
+	self._level = self._module:getCurRewardLevel()
+	self._textRebate.text = D._globalConfig._levelfund_rebate_percent .. "%"
+
+	self:updateUI()
+	self._scrollViewEx:moveToItemByIndex(self._module:getFirstRewardLevel(), nil, true)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData()
+	self:updateStepUI()
+	self:updateLevelExp()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+
+	self._level = self._module:getCurRewardLevel()
+
+	self:updateUI()
+	self._scrollViewEx:moveToItemByIndex(self._module:getFirstRewardLevel(), nil, true)
+	self:addEvents()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:handleExpire()
+	self:updateUI()
+end
+
+function M:updateStepRewards(step)
+	local objs = self._scrollViewEx:getShowCellObjs()
+
+	for i, obj in ipairs(objs) do
+		obj:updateStepRewards(step)
+	end
+end
+
+function M:updateLevelRewards()
+	local newLv = self._module:getCurRewardLevel()
+
+	for level = self._level, newLv do
+		local show, goCell = self._scrollViewEx:isIdxShow(level)
+
+		if show then
+			goCell:updateUI(level)
+		end
+	end
+
+	self._level = newLv
+end
+
+function M:updateLevelExp()
+	local module = self._module
+	local maxLv = module:readMaxLevel()
+	self._exp = module:getCurExp()
+	self._requiredExp = module:readUpLevelExp(self._level)
+end
+
+function M:updateStepUI()
+	local active2 = self._module:isStepUnlock(2)
+
+	self._goStep2Bought:SetActive(active2)
+	self._goLock2:SetActive(not active2)
+	self._btnBuyStep2.gameObject:SetActive(not active2)
+
+	if not active2 then
+		local priceStr2 = P._playerStore:getDisplayPrice(D.IapType.LevelFund)
+		self._textBuyStep2.text = priceStr2
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local seconds = self._module:getExpireTime() - C.getCurTime()
+	self._textExpireTime.text = V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:handleBuyHighStep(step, iapId)
+	C.tryPurchase(iapId, function ()
+		self:updateStepRewards(step)
+		self:updateStepUI()
+		self:jumpToLevel(self._module:getFirstRewardLevel())
+	end, D.PurchaseChannel.Main)
+end
+
+function M:claimAllRewards()
+	local rewards = self._module:claimAll()
+
+	if rewards then
+		V.showRewardClaimPanel(rewards, SID.CLEAR_CHEST_REWARD_TITLE)
+		self._scrollViewEx:reloadData(true)
+		self:jumpToLevel(self._module:getFirstRewardLevel())
+	else
+		V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+	end
+end
+
+function M:jumpToLevel(jumpLevel)
+	local delta = math.abs(self._scrollViewEx:getFirstCellIdx() - jumpLevel)
+	local moveTime = Mathf.Clamp((delta - 3) / self._showCellCount * 0.5, 0.1, 0.5)
+
+	self._scrollViewEx:moveToItemByIndex(jumpLevel, moveTime, nil, , function ()
+	end)
+end
+
+function M:onCellNum()
+	return self._module:readMaxLevel()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RewardWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+	end
+
+	goCell:updateUI(index)
+	goCell:setRewardsClick(self)
+
+	return goCell
+end
+
+return M

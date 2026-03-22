@@ -1,0 +1,357 @@
+local M = {}
+local Network = Network
+
+function M.process(id, msg)
+	local msgType = msg.type
+	local msgStatus = msg.status
+	local dt = msg.dt
+
+	if msg.data_version > 0 then
+		C._serverDataVersion = msg.data_version
+	end
+
+	if dt ~= 0 and Network._luaSockets[id]:isHandled(dt) then
+		return
+	end
+
+	if msgStatus ~= "PB_STATUS_OK" and M.onError(id, msg) then
+		return
+	end
+
+	local cmd = M[msgType]
+
+	if cmd then
+		cmd(id, msg, msgStatus)
+	end
+
+	local callback = Network._cbFuncs[msg.dt]
+
+	if callback then
+		if msgStatus == "PB_STATUS_OK" then
+			local t = nil
+			local resp_msg_name = Network._cbRespNames[msg.dt]
+
+			if resp_msg_name then
+				t = pb.decode(resp_msg_name, msg.resp)
+			end
+
+			callback(t)
+		end
+
+		Network._cbFuncs[msg.dt] = nil
+	end
+end
+
+function M.onError(id, msg)
+	local msgStatus = msg.status
+
+	if msgStatus == "PB_STATUS_UNION_NAME_EXIST" then
+		V.showToast(SID.UNTION_NAME_EXIST)
+		SimpleEvent.emit("sync.waiting", false)
+
+		return true
+	elseif msgStatus == "PB_STATUS_UNION_NOT_EXIST" then
+		-- Nothing
+	elseif msgStatus == "PB_STATUS_UNION_CONDITION_NOT_SATISFIED" then
+		-- Nothing
+	elseif msgStatus == "PB_STATUS_UNION_PERMISSION_DENIED" then
+		V.showToast(SID.UNION_PERMISSION_DENIED)
+	elseif msgStatus == "PB_STATUS_UNION_NOT_IN" then
+		V.showToast(SID.UNION_NOT_IN)
+		P._playerUnion:dealNotInUnion()
+
+		return true
+	elseif msgStatus == "PB_STATUS_UNION_DATA_CHANGED" then
+		V.showToast(SID.CLINET_OPERATION_FAIL)
+		SimpleEvent.emit("union.data.changed")
+
+		return true
+	elseif msgStatus == "PB_STATUS_ERROR_DATA_EXPIRED" or msgStatus == "PB_STATUS_ERROR_SERVER_ERROR" or msgStatus == "PB_STATUS_ERROR_DATA_OUT_OF_SYNC" then
+		SimpleEvent.emit("network.msg.error.status", id, msgStatus)
+
+		return true
+	end
+end
+
+local tonumber = tonumber
+local tNumberKey = {
+	"[",
+	0,
+	"]="
+}
+local tStringKey = {
+	"[\"",
+	0,
+	"\"]="
+}
+
+local function convertJsonToLua(json_str)
+	json_str = json_str:gsub("\"([^\"]+)\":", function (key)
+		if tonumber(key) then
+			tNumberKey[2] = key
+
+			return table.concat(tNumberKey)
+		else
+			tStringKey[2] = key
+
+			return table.concat(tStringKey)
+		end
+	end)
+
+	return json_str
+end
+
+function M.PB_TYPE_AUTHENTICATION(id, msg)
+	Network._luaSockets[id]:finishAuthentication()
+
+	if id == Network.SocketId.game then
+		if not C._serverDataVersion then
+			Request.sendUserLogin()
+		else
+			Request.sendUserRelogin()
+		end
+	end
+end
+
+function M.PB_TYPE_USER_LOGIN(id, msg)
+	if lc._isCN then
+		local t = pb.decode("r6.UserLoginResp", msg.resp)
+		local j = EncryptHelper.DecompressGZip(t.player_data)
+
+		if t.server_info then
+			local serverDomain = C._config.gameDomain or C._appConfig.gameDomain or "192.168.0.125:8001"
+			C._notifyPayUrl = "https://" .. serverDomain .. t.server_info.pay_url
+		end
+
+		C._remoteJsonData = j
+	else
+		C._serverDataVersion = 0
+
+		P._playerUnion:tryGetUnionDetailReq()
+	end
+end
+
+function M.PB_TYPE_USER_RELOGIN(id, msg)
+end
+
+function M.PB_TYPE_USER_RESET_ACCOUNT(id, msg)
+	SimpleEvent.emit("firebase.auth.logout")
+end
+
+function M.PB_TYPE_SYNC_DATA_CHANGE(id, msg)
+	C._isSendingDiff = false
+	C._serverDataVersion = C._serverDataVersion + 1
+
+	if C._isNeedSendDiffOnceMore then
+		C._isNeedSendDiffOnceMore = false
+
+		C.saveGameDataToLocal()
+	end
+end
+
+function M.PB_TYPE_USER_CHANGE_NAME(id, msg, msgStatus)
+	if msgStatus == "PB_STATUS_TEXT_SENSITIVE" then
+		SimpleEvent.emit("verify.text.result", false)
+	else
+		SimpleEvent.emit("verify.text.result", true)
+	end
+end
+
+function M.PB_TYPE_USER_COMMAND(id, msg)
+	if msg.dt == 0 then
+		local t = pb.decode("r6.GMCommandResp", msg.resp)
+		local ret = lc.runStringCode(t.json)
+
+		Request.sendUserCommandResp(ret)
+	end
+end
+
+function M.PB_TYPE_SERVER_MAINTAINING(id, msg)
+	local t = pb.decode("r6.MaintainResp", msg.resp)
+
+	SimpleEvent.emit("server.maintain", t.msg, t.endTime)
+end
+
+function M.PB_TYPE_GAME_GUIDE_STEP(id, msg)
+	local t = pb.decode("r6.IntResp", msg.resp)
+
+	if lc._isCN and GuideManager then
+		GuideManager._txtDebugGuide.text = GuideManager._txtDebugGuide.text .. "\nServer:" .. t.i32
+	end
+end
+
+function M.PB_TYPE_USER_MAIL_RECEIVE(id, msg)
+	local t = pb.decode("r6.Mail", msg.resp)
+
+	P._playerMail:receiveMailFromServer(t)
+end
+
+function M.PB_TYPE_RANK_REGISTER_RANKER(id, msg)
+	local t = pb.decode("r6.RegisterRankerResp", msg.resp)
+
+	Network._cbFuncs[msg.dt](t.rank_id)
+
+	Network._cbFuncs[msg.dt] = nil
+end
+
+function M.PB_TYPE_RANK_GET_RANK_DATA(id, msg)
+	local t = pb.decode("r6.GetRankDataResp", msg.resp)
+
+	P._playerRanker:setRankGroupByServer(t.type, t.rank_id)
+
+	local d = {}
+
+	for i = 1, #t.rank_datas do
+		local tt = t.rank_datas[i]
+
+		if tt.name == "" then
+			tt.name = "守护者" .. string.sub(tt.id, -6, -1)
+		end
+
+		d[tt.id] = tt
+	end
+
+	Network._cbFuncs[msg.dt](d)
+
+	Network._cbFuncs[msg.dt] = nil
+end
+
+function M.PB_TYPE_RANK_UPLOAD_RANK_DATA(id, msg)
+end
+
+function M.PB_TYPE_RANK_GET_PLAYER_INFO(id, msg)
+	local t = pb.decode("r6.GetPlayerInfoResp", msg.resp)
+
+	Network._cbFuncs[msg.dt](convertJsonToLua(t.player_info))
+
+	Network._cbFuncs[msg.dt] = nil
+end
+
+function M.PB_TYPE_RANK_UPLOAD_PLAYER_INFO(id, msg)
+end
+
+function M.PB_TYPE_IAP_START(id, msg)
+	Network._cbFuncs[msg.dt]()
+
+	Network._cbFuncs[msg.dt] = nil
+end
+
+function M.PB_TYPE_IAP_FINISH(id, msg)
+	local t = pb.decode("r6.IapFinishResp", msg.resp)
+
+	P._playerStore:onPurchaseSucceed(t.product_id, {
+		[3] = t.txn_id,
+		[4] = t
+	})
+
+	if lc._isCN then
+		V.showToast("购买成功")
+	end
+end
+
+function M.PB_TYPE_SOCIAL_GET_PLAYER_UNION_DETAIL(id, msg)
+	local t = pb.decode("r6.UnionDetailResp", msg.resp)
+
+	P._playerUnion:onGetUnionDetailResp(t)
+end
+
+function M.PB_TYPE_SOCIAL_GET_UNION_DETAIL(id, msg)
+	local t = pb.decode("r6.UnionDetailResp", msg.resp)
+
+	SimpleEvent.emit("union.view.detail.resp", t)
+end
+
+function M.PB_TYPE_SOCIAL_CREATE_UNION(id, msg, msgStatus)
+	local t = pb.decode("r6.UnionDetailResp", msg.resp)
+
+	if msgStatus == "PB_STATUS_UNION_ALREADY_IN" then
+		P._playerUnion:onJoinUnionResp(t)
+	else
+		P._playerUnion:onCreateUnionResp(t)
+	end
+end
+
+function M.PB_TYPE_SOCIAL_GET_UNION_LIST(id, msg)
+	local t = pb.decode("r6.UnionListResp", msg.resp)
+
+	P._playerUnion:onGetRecmdUnionsResp(t)
+end
+
+function M.PB_TYPE_SOCIAL_APPLY_UNION(id, msg, msgStatus)
+	if msgStatus == "PB_STATUS_UNION_MEMBER_FULL" then
+		V.showToast(SID.UNION_APPLY_TIPS3)
+		SimpleEvent.emit("union.hide.sync.wait")
+
+		return
+	elseif msgStatus == "PB_STATYS_UNION_NOT_CONFORM" then
+		V.showToast(SID.UNION_NOT_CONFORM)
+		SimpleEvent.emit("union.hide.sync.wait")
+
+		return
+	elseif msgStatus == "PB_STATUS_UNION_NOT_EXIST" then
+		V.showToast(SID.UNION_NOT_EXIST)
+		SimpleEvent.emit("union.hide.sync.wait")
+
+		return
+	end
+
+	local t = pb.decode("r6.UnionDetailResp", msg.resp)
+
+	if t.union then
+		P._playerUnion:onJoinUnionResp(t)
+	else
+		V.showToast(SID.UNION_BTN_APPLYED)
+		SimpleEvent.emit("union.hide.sync.wait")
+		SimpleEvent.emit("union.apply.resp")
+	end
+end
+
+function M.PB_TYPE_SOCIAL_LEAVE_UNION(id, msg)
+	P._playerUnion:onLeaveUnionResp()
+end
+
+function M.PB_TYPE_SOCIAL_UNION_LOG(id, msg)
+	local t = pb.decode("r6.UnionLogResp", msg.resp)
+
+	P._playerUnion:onGetUnionLogResp(t)
+end
+
+function M.PB_TYPE_SOCIAL_EDIT_UNION(id, msg)
+	P._playerUnion:onEditUnionInfoResp()
+end
+
+function M.PB_TYPE_SOCIAL_DEAL_UNION_APPLY(id, msg)
+	local t = pb.decode("r6.UnionDealApplyResp", msg.resp)
+
+	P._playerUnion:onDealApplyResp(t)
+end
+
+function M.PB_TYPE_SOCIAL_KICK_MEMBER(id, msg)
+	local t = pb.decode("r6.StringReq", msg.resp)
+
+	if t.str:len() > 0 then
+		P._playerUnion:onKickMember(t)
+	end
+end
+
+function M.PB_TYPE_SOCIAL_UNION_APPOINT(id, msg)
+	P._playerUnion:onAppointResp()
+end
+
+function M.PB_TYPE_SOCIAL_CHAT_LIST(id, msg)
+	local t = pb.decode("r6.ChatListResp", msg.resp)
+
+	P._playerUnion:onChatList(t)
+end
+
+function M.PB_TYPE_SOCIAL_CHAT(id, msg)
+	P._playerUnion:onChatResp()
+end
+
+function M.PB_TYPE_SOCIAL_CHAT_RECEIVE(id, msg)
+	local t = pb.decode("r6.ChatReceiveResp", msg.resp)
+
+	P._playerUnion:onChatNotify(t)
+end
+
+return M

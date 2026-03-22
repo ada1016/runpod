@@ -1,0 +1,198 @@
+local M = superclass(BLB)
+M.args = {
+	goAnnounce = Types.GameObject,
+	animAnnounce = Types.Animation,
+	textAnnounce1 = Types.TMP_Text,
+	textAnnounce2 = Types.TMP_Text
+}
+local AnnounceStatus = {
+	displaying = 2,
+	waiting = 1,
+	closed = 3
+}
+local AnnounceType = {
+	week_lottery1 = 2,
+	rank = 1,
+	none = 0
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.Announce = self
+
+	self:on("announcement.new.cache", function ()
+		self:dealShowAnnounce()
+	end)
+
+	self._timers = {}
+	self._textsWaiting = {
+		self._textAnnounce1,
+		self._textAnnounce2
+	}
+	self._status = AnnounceStatus.closed
+	self._displayingNum = 0
+	self._checkTimer = lc.setInterval(function ()
+		self:dealShowAnnounce()
+	end, 10)
+
+	self._checkTimer:Stop()
+	self:resetAnnounce()
+	self._goAnnounce:SetVisible(false)
+end
+
+function M:OnDestroy()
+	lc.stopMapTimers(self._timers)
+	lc.stopTimer(self._checkTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:isClosed()
+	return self._status == AnnounceStatus.closed
+end
+
+function M:isDisplaying()
+	return self._status == AnnounceStatus.displaying
+end
+
+function M:isWaiting()
+	return self._status == AnnounceStatus.waiting
+end
+
+local type2AnnouceText = {
+	[AnnounceType.rank] = SID.ANNOUNCE_RANK_TOPRANK,
+	[AnnounceType.week_lottery1] = SID.ANNOUNCE_WEEK_LOTTERY1
+}
+local maskWidth = 450
+local speed = 50
+local fadeAnimTime = 1
+
+function M:showAnnounce()
+	self._goAnnounce:SetVisible(true)
+	self._animAnnounce:Play("anim_main_horseracelamp_come")
+
+	self._status = AnnounceStatus.waiting
+end
+
+function M:hideAnnounce()
+	self._status = AnnounceStatus.waiting
+
+	self._goAnnounce:SetVisible(false)
+
+	self._status = AnnounceStatus.closed
+end
+
+function M:getAnnounceData()
+	local data = P:haveCachedAnnounce()
+
+	if data then
+		P:removeCachedAnnounce()
+	end
+
+	return data
+end
+
+function M:dealShowAnnounce()
+	if not self:isClosed() then
+		return
+	end
+
+	local data = self:getAnnounceData()
+
+	if not data then
+		return
+	end
+
+	self._checkTimer:Stop()
+	self:showAnnounce()
+
+	self._timers.fadeIn = lc.setTimer(function ()
+		self._status = AnnounceStatus.displaying
+
+		self:showAnnounceText(data)
+	end, fadeAnimTime)
+end
+
+function M:tryShowNextAnnounce()
+	if #self._textsWaiting == 0 then
+		return false
+	end
+
+	local data = self:getAnnounceData()
+
+	if not data then
+		return false
+	end
+
+	self:showAnnounceText(data)
+end
+
+function M:setAnnounceText(textAnnounce, type, params)
+	if type == 1 then
+		local str = D.RANKTYPE2TITLE[tonumber(params[2])]
+
+		textAnnounce:SetLocalizeExS(type2AnnouceText[type], {
+			params[1],
+			D.getTextStr(str),
+			params[3]
+		})
+	else
+		textAnnounce:SetLocalize(type2AnnouceText[type], unpack(params))
+	end
+end
+
+function M:showAnnounceText(data)
+	local textAnnounce = self._textsWaiting[#self._textsWaiting]
+	self._textsWaiting[#self._textsWaiting] = nil
+	self._displayingNum = self._displayingNum + 1
+	local tfAnnounce = textAnnounce.transform
+	data = data or {}
+	local type = data.type or AnnounceType.rank
+	local params = data.params
+
+	self:setAnnounceText(textAnnounce, type, params)
+
+	local width = textAnnounce.preferredWidth
+
+	lc.setAnchoredPosition(tfAnnounce, maskWidth, 0)
+
+	local len = width + maskWidth
+	local duration1 = maskWidth / speed
+	local duration2 = width / speed
+	local duration3 = len / speed
+	local seq = DOTween.Sequence()
+
+	if maskWidth < width then
+		seq:Append(tfAnnounce:DOAnchorPosX(-width, duration3))
+		seq:InsertCallback(duration2 + 1, function ()
+			local ret = self:tryShowNextAnnounce()
+		end)
+	else
+		seq:Append(tfAnnounce:DOAnchorPosX(0, duration1))
+		seq:AppendInterval(1)
+		seq:Append(tfAnnounce:DOAnchorPosX(-width, duration2))
+		seq:InsertCallback(duration1 + 1 + 1, function ()
+			local ret = self:tryShowNextAnnounce()
+		end)
+	end
+
+	seq:OnComplete(function ()
+		self._displayingNum = self._displayingNum - 1
+		self._textsWaiting[#self._textsWaiting + 1] = textAnnounce
+
+		lc.setAnchoredPosition(tfAnnounce, maskWidth, 0)
+
+		if self._displayingNum == 0 then
+			self:hideAnnounce()
+			self._checkTimer:Start()
+		end
+	end):SetLink(self.gameObject)
+end
+
+function M:resetAnnounce()
+	for i, v in ipairs(self._textsWaiting) do
+		lc.setAnchoredPosition(v.transform, maskWidth, 0)
+	end
+end
+
+return M

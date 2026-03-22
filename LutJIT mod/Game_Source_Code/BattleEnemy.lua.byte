@@ -1,0 +1,2471 @@
+local M = class("BattleEnemy")
+local BattleEntityFactory = BattleEntityFactory
+local math_max = math.max
+local table = table
+local band = bit.band
+local TablePool = TablePool
+local BattleDefine = BattleDefine
+local DamageReason = BattleDefine.DamageReason
+local DestroyReason = BattleDefine.DestroyReason
+local BattleBuffEnum = BattleBuffEnum
+local BattleEnemySubScript = requireLua("BattleEnemySubScript")
+local BattleEnemyBullet_Plasma = requireLua("BattleEnemyBullet_Plasma")
+local EnemyMovement = requireLua("EnemyMovement")
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._position = {
+		x = 0,
+		y = 0
+	}
+	self._buffsMap = table.new(0, 4)
+	self._buffTypesMap = table.new(0, 4)
+	self._buffs = table.new(4, 0)
+	self._size = {
+		0,
+		0
+	}
+	self._dir = {
+		0,
+		1
+	}
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleEnemyView").new(battleSession)
+	end
+end
+
+function M:init(id, cid)
+	self._at = 0
+	self._id = id
+	self._cid = cid
+	self._position.x = 0
+	self._position.y = 0
+	self._scale = 1
+	self._isToBeDestroyed = nil
+	self._destroyReason = nil
+	self._destroySource = nil
+	self._reviveLeftCount = nil
+	self._cfg = D._battleEnemyConfig[cid]
+	self._originId = self._cfg._originId or self._cid
+	self._speed = self._cfg._speed
+	self._speedXFactor = self._cfg._speedXFactor or 1
+	self._radius = self._cfg._radius
+	self._hp = self._cfg._hp
+	self._moveMode = self._cfg._moveMode
+	self._noRotation = self._cfg._noRotation
+	self._weakness = self._cfg._weakness
+	self._weaknessFactor = self._cfg._weaknessFactor
+	self._resistance = self._cfg._resistance
+	self._resistanceFactor = self._cfg._resistanceFactor
+	self._ignoreBuff = self._cfg._ignoreBuff
+	self._prefab = self._cfg._prefab
+	self._destroyVfxPrefab = self._cfg._destroyPrefab
+	self._destroyPrefabDuration = self._cfg._destroyPrefabDuration
+	self._followVFXScale = self._cfg._followVFXScale or 1
+	self._bulletPrefab = self._cfg._bulletPrefab
+	self._bulletType = self._cfg._bulletType
+	self._bulletOffsetY = self._cfg._bulletOffsetY or 0
+	self._destroyAudio = self._cfg._destroyAudio
+	self._hitAudio = self._cfg._hitAudio
+	self._race = self._cfg._race
+	self._atk = self._cfg._dmgRate
+	self._atkType = self._cfg._atkType
+	self._hpDmg = self._cfg._hpDmg
+	self._atkRange = self._cfg._atkRange or 0
+	self._atkInterval = self._cfg._atkInterval
+	self._atkRawInterval = self._atkInterval
+	self._readyAtk = false
+	self._hitShake = self._cfg._hitShake
+	self._speedFactor = 1
+	self._aniType = self._cfg._aniType
+	self._type = self._cfg._type
+	self._hitPivot = self._cfg._hitPivot
+	self._enemyBullet = nil
+	self._receiveInvisibilityDmgTime = nil
+	self._giveExp = self._type == BattleDefine.EnemyType.Normal and 1 or 0
+	self._ignoreAllBuff = nil
+
+	if self._type == BattleDefine.EnemyType.Boss then
+		self._ignoreRegulateBuf = true
+		self._ignoreNegativeBuf = true
+	elseif self._type == BattleDefine.EnemyType.Death then
+		self._ignoreRegulateBuf = true
+		self._ignoreNegativeBuf = true
+		self._ignoreAllBuff = true
+	elseif self._type == BattleDefine.EnemyType.Holder then
+		self._ignoreRegulateBuf = true
+		self._ignoreNegativeBuf = true
+		self._ignoreAllBuff = true
+	else
+		self._ignoreRegulateBuf = false
+		self._ignoreNegativeBuf = false
+	end
+
+	if self._cid == 2484 then
+		self._ignoreRegulateBuf = true
+	end
+
+	if self._battleSession:pvpIsRangeTime() then
+		self._ignoreRegulateBuf = true
+	end
+
+	self._ignoreSlowDownBuf = false
+	self._hitDelay = self._cfg._hitDelay
+	self._hitPrefab = self._cfg._hitPrefab
+	self._hitVFXOffSetY = self._cfg._hitVFXOffSetY or 0
+	self._bulletSpeed = self._cfg._bulletSpeed
+	self._takeDmgDelayCD = nil
+	self._params = self._cfg._params
+	self._attacked = nil
+	self._forceSpeedEx = nil
+	self._forceSpeed = nil
+	self._delayMoveCount = nil
+	self._invincible = false
+	self._conceal = nil
+	self._effect406Time = nil
+	self._beDraging = nil
+	self._formationPos = nil
+	self._formationPos0 = nil
+	self._skill204Triggered = nil
+	self._inAtkStatus = nil
+	self._stopAtkPlayer = nil
+	self._stopAction = nil
+	self._maxHp = self._hp
+	self._maxHpInitial = self._maxHp
+	self._inMatrix = nil
+	self._coutdown = nil
+	self._ignorePVPProtal = nil
+	self._initialRaduis = self._radius
+	self._size[1] = self._radius * 2
+	self._size[2] = self._radius * 2
+	self._dir[1] = 0
+	self._dir[2] = -1
+	self._angle = -90
+	self._dmgShield = 0
+	self._initialSpeed = self._speed
+	self._invisibility = nil
+	self._knockbackStatus = nil
+	self._knockbackSpeed = nil
+	self._knockbackDir = {
+		0,
+		0
+	}
+	self._ignoreDrag = nil
+	self._dmgReducePerCommom = 0
+	self._knockbacked = false
+	self._draged = false
+	self._portaled = false
+	self._effectByEffect303 = nil
+	self._effectByEffect304 = nil
+	self._buffCount = 0
+
+	table.clear(self._buffsMap)
+	table.clear(self._buffs)
+	table.clear(self._buffTypesMap)
+
+	self._script = self._cfg._script
+	self._scriptBehavior = BattleEnemySubScript[self._script]
+
+	if self._scriptBehavior and self._scriptBehavior.init then
+		self._scriptBehavior.init(self)
+	end
+
+	if self._view then
+		self._view:init(self)
+	end
+
+	if self._scriptBehavior and self._scriptBehavior.init_end then
+		self._scriptBehavior.init_end(self)
+	end
+end
+
+function M:reduceMaxHp(per)
+	self._maxHp = self._maxHp - self._maxHp * per
+end
+
+function M:hitPosition()
+	if self._hitPivot == 1 then
+		return self._position.x, self._position.y - self._radius
+	end
+
+	return self._position.x, self._position.y
+end
+
+function M:prefab()
+	return self._prefab
+end
+
+function M:destroyVfxPrefab()
+	return self._destroyVfxPrefab, self._destroyPrefabDuration
+end
+
+function M:setPos(x, y)
+	self._position.x = x
+	self._position.y = y
+end
+
+function M:setScale(s)
+	self._scale = s
+	self._radius = self._initialRaduis * s
+	self._size[1] = self._radius * 2
+	self._size[2] = self._radius * 2
+end
+
+function M:setDirByAngle(angle)
+	local rad = math.rad(angle)
+	self._dir[1] = math.cos(rad)
+	self._dir[2] = math.sin(rad)
+
+	if not self._noRotation then
+		self._angle = angle
+	end
+end
+
+function M:setDir(x, y)
+	self._dir[1] = x
+	self._dir[2] = y
+
+	if not self._noRotation then
+		self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+	end
+
+	if self._view then
+		self._view:rotationEvent()
+	end
+end
+
+function M:updateAngle()
+	self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+end
+
+function M:step(dt, elapsedTime)
+	if self._delayToDestroy then
+		self._delayToDestroy = self._delayToDestroy - dt
+
+		if self._delayToDestroy <= 0 then
+			self._delayToDestroy = nil
+
+			self:toDestroy()
+		end
+
+		return
+	end
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._delayStepCount then
+		self._delayStepCount = self._delayStepCount - dt
+
+		if self._delayStepCount <= 0 then
+			self._delayStepCount = nil
+		end
+
+		return
+	end
+
+	if self._view then
+		self._view:stepEvent(dt)
+	end
+
+	self:stepBuff(dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_REDUCE) and self._receiveDamageTime and self._battleSession:elapsedTime() > self._receiveDamageTime + self._dmgReduceDt then
+		self._dmgReduceStack = 0
+	end
+
+	self:stepMove(dt)
+
+	if self._receiveInvisibilityDmgTime and self._params and self._params[1] == BattleDefine.BuffId.invisible and self._battleSession:elapsedTime() > self._receiveInvisibilityDmgTime + 3 then
+		self:addBuff(self._params[1], self._params[2])
+
+		self._receiveInvisibilityDmgTime = nil
+	end
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._scriptBehavior and self._scriptBehavior.step then
+		self._scriptBehavior.step(self, dt)
+	end
+end
+
+function M:stepBuff(dt)
+	local cnt = self._buffCount
+
+	if cnt == 0 then
+		return
+	end
+
+	local temp = nil
+
+	for id, buff in pairs(self._buffsMap) do
+		buff:step(dt)
+
+		if buff._isToBeDestroyed then
+			if temp == nil then
+				temp = TablePool.fetch2()
+			end
+
+			temp[#temp + 1] = id
+		end
+	end
+
+	if temp then
+		for i = 1, #temp do
+			self:removeBuff(temp[i])
+		end
+
+		TablePool.release2(temp)
+	end
+end
+
+function M:stepMove(dt)
+	if self:isImprison() then
+		return
+	end
+
+	if self._beSwallowing then
+		self:doSwallow(dt)
+
+		self._beSwallowingDuration = self._beSwallowingDuration - dt
+
+		if self._beSwallowingDuration <= 0 then
+			self._beSwallowing = false
+		end
+
+		return
+	end
+
+	if self._affectedBySkill10029Param then
+		self._position.y = self._position.y + dt * self._affectedBySkill10029Param
+	elseif self._beDraging then
+		self:doDrag()
+
+		self._beDragingDuration = self._beDragingDuration - dt
+
+		if self._beDragingDuration <= 0 then
+			self._beDraging = false
+
+			Vector2.release(self._beDragCenter)
+
+			self._beDragCenter = nil
+
+			self:recalculateSpeed()
+		end
+	elseif self._knockbackStatus then
+		if self._cid == 2382 then
+			if self._stage and self._stage == 2 then
+				self._position.x = self._position.x + self._knockbackDir[1] * dt * self._knockbackSpeed
+				self._position.y = self._position.y + self._knockbackDir[2] * dt * self._knockbackSpeed
+
+				if self._position.x - self._radius <= self._battleSession._screenEdgeX1 then
+					self._knockbackDir[1] = math.abs(self._knockbackDir[1])
+				elseif self._battleSession._screenEdgeX2 <= self._position.x + self._radius then
+					self._knockbackDir[1] = -math.abs(self._knockbackDir[1])
+				end
+
+				if self._battleSession._screenEdgeY2 <= self._position.y + self._radius then
+					self._knockbackDir[2] = -math.abs(self._knockbackDir[2])
+				elseif self._position.y - self._radius <= self._battleSession._screenEdgeY1 then
+					self._knockbackDir[2] = math.abs(self._knockbackDir[2])
+				end
+			else
+				self._position.x = self._battleSession:limitEnemyPositionX(self._position.x + self._knockbackDir[1] * dt * self._knockbackSpeed)
+				self._position.y = self._battleSession:limitEnemyPositionY(math_max(0, self._position.y + self._knockbackDir[2] * dt * self._knockbackSpeed))
+			end
+		else
+			self._position.x = self._battleSession:limitEnemyPositionX(self._position.x + self._knockbackDir[1] * dt * self._knockbackSpeed)
+			self._position.y = self._battleSession:limitEnemyPositionY(math_max(0, self._position.y + math.max(self._knockbackDir[2], 0) * dt * self._knockbackSpeed))
+		end
+
+		if self._view then
+			self._view:posEvent()
+		end
+
+		return
+	end
+
+	if self._stopAction then
+		return
+	end
+
+	if self:isParalysis() then
+		return
+	end
+
+	if not self._beDraging and (self._forceSpeed == nil or self._forceSpeed ~= 0) and (self._forceSpeedEx == nil or self._forceSpeedEx ~= 0) and self._moveMode and self._moveMode > 0 then
+		local funcMovement = EnemyMovement[self._moveMode] or EnemyMovement[1]
+
+		funcMovement(self, dt)
+	end
+
+	if self._battleSession._domeWeapon:hasEffect10004() then
+		local x = self._position.x
+		local y = self._position.y - self._radius
+
+		if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT2 then
+			self._battleSession._domeWeapon:tryCastSkill1004()
+		end
+	end
+
+	if self._battleSession._elapsedTime >= 240 and self._position.y <= 0 and (self._position.x < self._battleSession._screenEdgeX1 - 1 or self._position.x > self._battleSession._screenEdgeX2 + 1) then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	self._readyAtk = false
+
+	if self._originId == 1309 and self._atkType == 1 and self._form == 1 then
+		if self:inAttackRange() then
+			self._stopAction = true
+			self._countdown = 0.5
+			self._form = 3
+			self._atkType = 2
+			self._ignoreRegulateBuf = true
+			self._atk = self._atk - self._atk * self._params[2] / 100
+			self._initialSpeed = self._initialSpeed - self._initialSpeed * self._params[3] / 100
+			self._speed = self._speed - self._speed * self._params[3] / 100
+
+			if self._view then
+				self._view:playSpriteAnimation(3)
+			end
+		end
+	elseif self._originId == 1208 and self._stage == 1 then
+		local x = self._position.x
+		local y = self._position.y - self._radius
+
+		if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT then
+			local atk = self._atk / self._cfg._dmgRate * D._battleEnemyConfig[self._params[2]]._dmgRate
+
+			self:takeDamageToPlayer(nil, atk)
+			self._scriptBehavior.doTrans(self)
+
+			return
+		end
+	elseif self._atkType == 1 then
+		if self._invincibleFromRanger206 then
+			return
+		end
+
+		local x = self._position.x
+		local y = self._position.y - self._radius
+
+		if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT then
+			self:attackPlayer()
+			self:markToBeDestroyed()
+
+			if self._view then
+				self._battleView:shakeCamera(self._battleSession)
+			end
+
+			return
+		end
+
+		if y <= 0 then
+			self:markToBeDestroyed()
+
+			return
+		end
+
+		if self._moveMode ~= 5 and self._moveMode < 100 and self._type == BattleDefine.EnemyType.Normal then
+			if self._dir[1] <= 0 and self._position.x - self._radius < self._battleSession._screenEdgeX1 then
+				self:markToBeDestroyed()
+
+				return
+			elseif self._dir[1] >= 0 and self._battleSession._screenEdgeX2 < self._position.x + self._radius then
+				self:markToBeDestroyed()
+
+				return
+			end
+		end
+	elseif self:inAttackRange() then
+		self._forceSpeed = 0
+		self._readyAtk = true
+
+		if self._scriptBehavior and self._scriptBehavior.readyAttack then
+			self._scriptBehavior.readyAttack(self)
+		end
+
+		if self._moveMode == 3 and not self._noRotation then
+			self:setDir(0, self._dir[2])
+		end
+
+		if self._attacked == nil and (self._cid == 2581 or self._originId == 1306) then
+			local xx = self._position.x
+			local yy = self._position.y - BattleDefine.DOME_CENTER
+			local angle = math.deg(math.atan2(yy, xx))
+
+			if self._view then
+				self._view._tf:DOLocalRotate(opt.vec3_1:SetXYZ(0, 0, angle - 90), 0.3)
+			end
+		end
+	else
+		self._forceSpeed = nil
+
+		if self._enemyBullet then
+			self._enemyBullet:markToBeDestroyed()
+
+			self._enemyBullet = nil
+
+			if self._originId == 2283 then
+				self._atkInterval = self._atkRawInterval
+
+				if self._view then
+					self._view._ator:SetTrigger("attack_end")
+				end
+			elseif self._originId == 2483 then
+				self._atkInterval = self._atkRawInterval
+				self._addAtkPer = 0
+
+				if self._view then
+					self._view:playSpriteAnimation(4)
+				end
+			end
+		end
+	end
+
+	if self._readyAtk then
+		local stepDt = 1
+
+		if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.CHAOSU_DAJI) and self:existBuffClass(BattleDefine.BuffMainClass.SlowDown) then
+			local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.CHAOSU_DAJI)
+			stepDt = stepDt + stepDt * prop[1] / 100
+		end
+
+		self._atkInterval = self._atkInterval - dt * stepDt
+
+		if self._atkInterval <= 0 then
+			self._atkInterval = self._atkRawInterval
+			self._atkInterval = self._atkInterval * (1 + (self._atkIntervalAddPer or 0) / 100)
+
+			self:attackPlayer()
+		end
+
+		if self._takeDmgDelayCD then
+			self._takeDmgDelayCD = self._takeDmgDelayCD - dt
+
+			if self._takeDmgDelayCD <= 0 then
+				self._takeDmgDelayCD = nil
+
+				if self._atkType == 3 then
+					self:createEnemyBullet()
+				else
+					self:takeDamageToPlayer()
+				end
+			end
+		end
+	end
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:inAttackRange()
+	if self._inMatrix then
+		return false
+	end
+
+	if self._cid == 3201 and (self._position.x < -1 or self._position.x > 1) then
+		return false
+	end
+
+	if self._position.x < self._battleSession._screenEdgeX1 or self._battleSession._screenEdgeX2 < self._position.x then
+		return false
+	end
+
+	if self._position.y - self._atkRange <= 1.5 then
+		return true
+	end
+
+	if self._position.y - self._atkRange <= BattleDefine.DOME_POSY then
+		local x = self._position.x
+		local y = self._position.y - self._atkRange
+
+		if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:cancelHalo(buffid)
+	if not self._haloEffecting then
+		return
+	end
+
+	self._haloEffecting = false
+	self._forceSpeedEx = nil
+
+	if self._view then
+		self._view:haloEvent(false)
+	end
+
+	if self._affectedEnemys then
+		buffid = buffid or self._params[5]
+
+		for id, enemy in pairs(self._affectedEnemys) do
+			if enemy:hasBuff(buffid) then
+				enemy:removeHalo(buffid, self._id)
+			end
+		end
+
+		TablePool.release8(self._affectedEnemys)
+
+		self._affectedEnemys = nil
+	end
+end
+
+function M:stepHalo(dt)
+	if self._affectedEnemys == nil then
+		self._affectedEnemys = TablePool.fetch8()
+	end
+
+	local dis_sq = (self._params[4] * self._scale)^2
+	local enemys = self._battleSession:getAllEnemys()
+	local cnt = #enemys
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and self._id ~= enemy._id and enemy._type == BattleDefine.EnemyType.Normal then
+			if BattleMathLib.dis_square(self._position, enemy._position) <= dis_sq then
+				if not enemy:hasBuff(self._params[5], self._id) then
+					enemy:addHalo(self._params[5], self._id)
+
+					self._affectedEnemys[enemy._id] = enemy
+				end
+			elseif enemy:hasBuff(self._params[5], self._id) then
+				enemy:removeHalo(self._params[5], self._id)
+
+				self._affectedEnemys[enemy._id] = nil
+			end
+		end
+	end
+end
+
+function M:stepHalo_Rect(dt)
+	if self._affectedEnemys == nil then
+		self._affectedEnemys = TablePool.fetch8()
+	end
+
+	local mx = self._position.x
+	local my = self._position.y
+	local w = self._params[1]
+	local h = self._params[2]
+	local x1 = mx - w / 2
+	local x2 = mx + w / 2
+	local y1 = my - h
+	local y2 = my
+	local enemys = self._battleSession:getAllEnemys()
+	local cnt = #enemys
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and self._id ~= enemy._id and (enemy._ignoreHaloEnemy == nil or enemy._ignoreHaloEnemy._id ~= self._id) and enemy._type == BattleDefine.EnemyType.Normal then
+			local ex = enemy._position.x
+			local ey = enemy._position.y
+			local inRange = x1 <= ex and ex <= x2 and y1 <= ey and ey <= y2 + enemy._radius
+
+			if inRange then
+				if not enemy:hasBuff(self._params[3], self._id) then
+					enemy:addHalo(self._params[3], self._id)
+
+					self._affectedEnemys[enemy._id] = enemy
+				end
+			elseif enemy:hasBuff(self._params[3], self._id) then
+				enemy:removeHalo(self._params[3], self._id)
+
+				self._affectedEnemys[enemy._id] = nil
+			end
+		end
+	end
+end
+
+function M:createEnemyBullet(index)
+	if self._bulletType == 1 then
+		local enemyBullet = self._battleSession:createOrGetEnemyBullet()
+
+		enemyBullet:init(self)
+
+		if self._cid == 1406 then
+			if index == nil then
+				enemyBullet:setPos(self._position.x - 0.35 * self._scale, self._position.y - 0.15 * self._scale)
+			else
+				enemyBullet:setPos(self._position.x + 0.35 * self._scale, self._position.y - 0.15 * self._scale)
+			end
+		elseif self._cid == 2406 then
+			if index == nil then
+				enemyBullet:setPos(self._position.x - 0.58 * self._scale, self._position.y - 0.15 * self._scale)
+			else
+				enemyBullet:setPos(self._position.x + 0.58 * self._scale, self._position.y - 0.15 * self._scale)
+			end
+		else
+			enemyBullet:setPos(self._position.x, self._position.y + self._bulletOffsetY)
+		end
+
+		self._battleSession:pushEnemyBullet(enemyBullet)
+	elseif self._bulletType == 2 then
+		self._enemyBullet = BattleEnemyBullet_Plasma.create(self._battleSession)
+
+		self._enemyBullet:init(self)
+		self._enemyBullet:lockPos(self._position)
+		self._battleSession:pushEnemyBullet(self._enemyBullet)
+
+		self._atkInterval = 0.1
+
+		if self._view then
+			Client.playBattleSound("se_Enemy_23_laser")
+		end
+	end
+end
+
+function M:attackPlayer()
+	if self._stopAtkPlayer then
+		return
+	end
+
+	if self:isParalysis() or self:isImprison() then
+		return
+	end
+
+	self._attacked = true
+
+	self:cancelHalo()
+
+	if self._atkType == 3 then
+		if self._bulletType == 1 then
+			if self._hitDelay then
+				self._takeDmgDelayCD = self._hitDelay
+			else
+				self:createEnemyBullet()
+			end
+		elseif self._bulletType == 2 then
+			if not self._enemyBullet then
+				if self._hitDelay then
+					self._takeDmgDelayCD = self._hitDelay
+
+					if self._originId == 1105 then
+						self._view._spAnimation.nextBehavior = 4
+
+						self._view._spAnimation:SetBehavior(2)
+					elseif self._originId == 1107 then
+						self._view:playSpriteAnimation(2)
+					elseif self._originId == 2283 then
+						self._view:attackEvent()
+
+						if self._view then
+							self._view._ator:SetTrigger("attack")
+						end
+					elseif self._originId == 2483 then
+						self._view:playSpriteAnimation(2)
+					end
+				else
+					self:createEnemyBullet()
+				end
+			else
+				self._enemyBullet:hit()
+				self:takeDamageToPlayer()
+			end
+		end
+	elseif self._atkType == 2 then
+		self._takeDmgDelayCD = self._hitDelay
+	elseif self._atkType == 1 then
+		self:takeDamageToPlayer()
+	end
+
+	if self._view then
+		self._view:attackEvent()
+	end
+
+	self:removeInvisibilityIf()
+
+	if self._scriptBehavior and self._scriptBehavior.attackPlayer then
+		self._scriptBehavior.attackPlayer(self)
+	end
+end
+
+function M:takeDamageToPlayer(bullet, atk)
+	if self._view then
+		self._view:hitEvent()
+	end
+
+	if self._vampiric then
+		local addHp = self._maxHp * self._params[1] / 100
+		self._hp = math.min(self._hp + addHp, self._maxHp)
+
+		if self._view then
+			self._view:hpEvent(addHp)
+		end
+	end
+
+	local atk = atk or self._atk
+
+	if self._atkFinalAddPer2283 then
+		atk = atk * (1 + self._atkFinalAddPer2283 / 100)
+	end
+
+	if self._type == BattleDefine.EnemyType.Elite then
+		local v1 = self._battleSession:getEffect(20006)
+
+		if v1 then
+			atk = atk - atk * v1 / 100
+		end
+	end
+
+	if self._atkType == 1 then
+		local v1 = self._battleSession:getEffect(20028)
+
+		if v1 then
+			atk = atk - atk * v1 / 100
+		end
+	end
+
+	if self._addAtkPer then
+		atk = atk + atk * self._addAtkPer / 100
+	end
+
+	if self._atkType == 1 then
+		if self._hpDmg == 2 then
+			atk = atk * self._scale
+		elseif self._hpDmg == 1 then
+			if self._originId == 1407 then
+				atk = atk * self._speed / self._cfg._speed * self._params[3]
+			end
+
+			if self._hp < self._maxHp then
+				local index = math.floor(self._hp / self._maxHp * 100 / 10) + 1
+				atk = atk * D._battleGlobalConfig._battle_explosion_enemy_dmg_factor[index] / 100 or self._atk
+			end
+		end
+	end
+
+	local buffId = self:hasBuffType(BattleBuffEnum.Collapse)
+
+	if buffId then
+		local buff = self:getBuff(buffId)
+		atk = atk + atk * buff._val / 100
+	end
+
+	if self._scriptBehavior and self._scriptBehavior.takeDamageToPlayer then
+		self._scriptBehavior.takeDamageToPlayer(self, bullet)
+	end
+
+	if self._originId ~= 1206 then
+		self._battleSession:beHit(-atk, self)
+	end
+end
+
+function M:removeInvisibilityIf()
+	if self._invisibility then
+		self:removeBuff(BattleDefine.BuffId.invisible)
+
+		self._receiveInvisibilityDmgTime = self._battleSession:elapsedTime()
+	end
+end
+
+function M:tryRemoveEnemyBulletPlasma()
+	if self._enemyBullet then
+		if self._originId == 2483 then
+			self._view:playSpriteAnimation(1)
+		end
+
+		self._enemyBullet:markToBeDestroyed()
+
+		self._enemyBullet = nil
+	end
+end
+
+function M:toDestroy()
+	if self._enemyBullet then
+		self._enemyBullet:markToBeDestroyed()
+
+		self._enemyBullet = nil
+	end
+
+	if self:hasBuffType(BattleBuffEnum.DieBrust) then
+		self:triggerWhenBuffRemoved()
+	end
+
+	local buff = self:existBuffClass(BattleDefine.BuffMainClass.Ignite)
+
+	if buff then
+		local battleWeapon = self._battleSession:getWeapon(3)
+
+		if battleWeapon and battleWeapon:getEffect(301) then
+			local params = D.getBattleEffectParams(301)
+			local subSkill = battleWeapon:getSkill(params[1])
+			local bullet = subSkill:castSkill()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+
+	self:clearBuffs()
+
+	if self._scriptBehavior and self._scriptBehavior.toDestroy then
+		self._scriptBehavior.toDestroy(self)
+	end
+
+	self._battleSession:onEnemyDestroyed(self)
+	BattleManager:onEnemyKilledByBullet(self)
+
+	if self._view then
+		self._view:destroyedEvent()
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DIE_SHIELD) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DIE_SHIELD)
+
+		if self._battleRandomLib:randomTrue(prop[1]) then
+			local allEnemys = self._battleSession:getEnemysInRange(self._position, BattleDefine.ENEMY_BUFF_DIE_SHIELD_RANGE)
+
+			for i = 1, #allEnemys do
+				local enemy = allEnemys[i]
+
+				if not enemy._isToBeDestroyed then
+					local new = true
+
+					if enemy:hasBuff(33) then
+						new = false
+					end
+
+					local buff = enemy:addBuff(33, 36000)
+
+					if new and buff then
+						buff._stack = prop[2]
+						buff._maxStack = prop[3]
+					end
+				end
+			end
+
+			if self._view then
+				local obj = self._sessionView:createAndPlayVFX("Enemy_1504_wave", 0.7)
+
+				if obj then
+					obj:SetLocalScale(BattleDefine.ENEMY_BUFF_DIE_SHIELD_RANGE)
+					obj:SetPosition(self._position.x, self._position.y, 0)
+				end
+			end
+		end
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DIE_HEAL) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DIE_HEAL)
+
+		if self._battleRandomLib:randomTrue(prop[1]) then
+			local dt = self._maxHp * prop[2] / 100
+			local allEnemys = self._battleSession:getEnemysInRange(self._position, BattleDefine.ENEMY_BUFF_DIE_HEAL_RANGE)
+
+			for i = 1, #allEnemys do
+				local enemy = allEnemys[i]
+
+				if not enemy._isToBeDestroyed then
+					enemy:receiveRecoverHP(dt)
+				end
+			end
+
+			if self._view then
+				local obj = self._sessionView:createAndPlayVFX("Enemy_1504_wave", 0.7)
+
+				if obj then
+					obj:SetLocalScale(BattleDefine.ENEMY_BUFF_DIE_SHIELD_RANGE)
+					obj:SetPosition(self._position.x, self._position.y, 0)
+				end
+			end
+		end
+	end
+end
+
+function M:markToBeDestroyed(damageSkill)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._recycleTick = 1
+	self._isToBeDestroyed = true
+	self._beLockedBy1409 = nil
+	self._invincibleFromRanger206 = nil
+	self._affectedBySkill10029 = nil
+	self._affectedByRanger13 = nil
+	self._dmgAddPerBySkill21304 = nil
+	self._hitByRanger212Count = nil
+	self._invincibleFrom2183Parent = nil
+	self._beSwallowing = nil
+	self._effectByBuff59 = nil
+
+	self:removeInvisibilityIf()
+
+	if self._scriptBehavior and self._scriptBehavior.markToBeDestroyed then
+		self._scriptBehavior.markToBeDestroyed(self)
+	end
+
+	if self._cid == 120601 then
+		self._battleSession._120601Num = self._battleSession._120601Num - 1
+	elseif self._cid == 220601 then
+		self._battleSession._220601Num = self._battleSession._220601Num - 1
+	end
+
+	if self._destroyCallback2283 then
+		self:_destroyCallback2283()
+
+		self._destroyCallback2283 = nil
+	end
+
+	if self._destroyCallbackRanger212 then
+		self:_destroyCallbackRanger212()
+
+		self._destroyCallbackRanger212 = nil
+	end
+
+	if self._originId == 1205 then
+		self._delayToDestroy = 0.5
+
+		if self._view then
+			self._view._spAnimation:SetBehavior(3)
+		end
+	else
+		self:toDestroy()
+	end
+end
+
+function M:destroy()
+	if self._scriptBehavior and self._scriptBehavior.destroy then
+		self._scriptBehavior.destroy(self)
+	end
+
+	self._battleSession:recycleEnemy(self)
+end
+
+function M:addDmgShield(cnt)
+	self._dmgShield = self._dmgShield + cnt
+
+	if self._view then
+		self._view:shieldEvent(true)
+	end
+end
+
+function M:tryDmgShield()
+	if self._dmgShield > 0 then
+		local flag = false
+
+		if not flag then
+			local buff = self._buffsMap[31]
+
+			if buff and buff._stack > 0 then
+				self._buffsMap[31]:reduceStack()
+
+				flag = true
+			end
+		end
+
+		if not flag then
+			local buff = self._buffsMap[32]
+
+			if buff and buff._stack > 0 then
+				self._buffsMap[32]:reduceStack()
+
+				flag = true
+			end
+		end
+
+		if not flag then
+			local buff = self._buffsMap[33]
+
+			if buff and buff._stack > 0 then
+				self._buffsMap[33]:reduceStack()
+
+				flag = true
+			end
+		end
+
+		if flag and self._view then
+			self._battleView:showStatusText(self, SID.STR_HOLD_OFF)
+		end
+
+		return true
+	end
+
+	return false
+end
+
+function M:onHit(battleBullet, damage)
+	if self._scriptBehavior and self._scriptBehavior.onHitBefore then
+		self._scriptBehavior.onHitBefore(self, battleBullet)
+	end
+
+	if self._invincible then
+		return
+	end
+
+	if battleBullet._battleSkill._readDmgMode ~= 2 and battleBullet._battleSkill._dmgRate <= 0 then
+		return
+	end
+
+	if self:tryDmgShield() then
+		return
+	end
+
+	local buff = self:existBuffClass(BattleDefine.BuffMainClass.Dodge)
+
+	if buff and self._battleRandomLib:randomTrue(buff._val) then
+		if self._view then
+			self._view._battleView:showStatusText(self, SID.STR_DODGE)
+		end
+
+		return
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.RUODIAN_SHANBI) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.RUODIAN_SHANBI)
+
+		if self:existBuffClass(BattleDefine.BuffMainClass.Vulnerable) and self._battleRandomLib:randomTrue(prop[1]) then
+			if self._view then
+				self._view._battleView:showStatusText(self, SID.STR_DODGE)
+			end
+
+			return
+		end
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DODGE) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DODGE)
+
+		if self._battleRandomLib:randomTrue(prop[1]) then
+			if self._view then
+				self._view._battleView:showStatusText(self, SID.STR_DODGE)
+			end
+
+			return
+		end
+	end
+
+	if self._view then
+		self._view:strickenEvent(battleBullet)
+	end
+
+	local isCrit = false
+
+	if damage == nil then
+		damage, isCrit = battleBullet:damage(self)
+	end
+
+	self:receiveDamage(damage, battleBullet._battleSkill, isCrit, battleBullet)
+
+	if self._isToBeDestroyed then
+		battleBullet:tryTriggerWhenEnemyKilled(self)
+
+		if battleBullet._battleSkill then
+			battleBullet._battleWeapon:onEnemyKilled(battleBullet, self)
+		end
+	end
+
+	if self._scriptBehavior and self._scriptBehavior.onHit then
+		self._scriptBehavior.onHit(self, battleBullet)
+	end
+
+	if not self._isToBeDestroyed and self:hasBuff(57) then
+		local weapon = self._battleSession:getWeapon(4)
+
+		if weapon and weapon:getEffect(406) and battleBullet._battleSkill._cid ~= 402 and battleBullet._battleSkill._cid ~= 404 and (self._effect406Time == nil or self._effect406Time < self._battleSession:elapsedTime()) then
+			local params = D.getBattleEffectParams(406)
+			local castSkill = weapon:getSkill(404)
+			local bullet = castSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+			bullet:setBeganTargt(self)
+
+			self._effect406Time = self._battleSession:elapsedTime() + params[2]
+		end
+	end
+end
+
+function M:multipyDamage(damage, skill)
+	local damagePer = 0
+	local damagePer2 = 0
+	local buffId = self:hasBuffType(BattleBuffEnum.Vulnerable)
+
+	if buffId then
+		local buff = self:getBuff(buffId)
+		damagePer = damagePer + buff._val
+	end
+
+	local buffId = self:hasBuffType(BattleBuffEnum.Vulnerable2)
+
+	if buffId then
+		local buff = self:getBuff(buffId)
+		damagePer = damagePer + buff._val
+	end
+
+	if self._weakness and band(skill._dmgType, self._weakness) > 0 then
+		damagePer = damagePer + self._weaknessFactor
+	end
+
+	local buffId = self:hasBuffType(BattleBuffEnum.VulnerableForPhysics)
+
+	if buffId then
+		local buff = self:getBuff(buffId)
+
+		if band(skill._dmgType, 1) > 0 then
+			damagePer = damagePer + buff._val + skill:getProp(BattlePropEnum.IntensityUpAddPerPenetratorPhysicsVulnerable, 0)
+		end
+	end
+
+	local ignoreResistance = false
+	local effPar = self._battleSession:getEffect(18)
+
+	if effPar then
+		ignoreResistance = self._battleRandomLib:randomTrue(effPar)
+	end
+
+	if not ignoreResistance and self._resistance and band(skill._dmgType, self._resistance) > 0 then
+		damagePer = damagePer - self._resistanceFactor
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.ZHONG_ZHUANG) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.ZHONG_ZHUANG)
+		local buffId = self:hasBuffType(BattleBuffEnum.Collapse)
+
+		if buffId then
+			local buff = self:getBuff(buffId)
+
+			if buff then
+				damagePer2 = damagePer2 - buff._stack * prop[1]
+			end
+		end
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_REDUCE) then
+		damagePer2 = damagePer2 - self._dmgReducePer * self._dmgReduceStack
+		self._dmgReduceStack = math.min(self._dmgReduceStack + 1, self._dmgReduceMaxStack)
+	end
+
+	if not ignoreResistance and self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_RESIST) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_RESIST)
+
+		if band(skill._dmgType, 2^(prop[2] - 1)) > 0 then
+			damagePer2 = damagePer2 - prop[1]
+		end
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_ADD) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_ADD)
+
+		if band(skill._dmgType, 2^(prop[2] - 1)) > 0 then
+			damage = damage * (100 + prop[1]) / 100
+		end
+	end
+
+	if skill._battleWeapon:getEffect(21304) then
+		if self._dmgAddPerBySkill21304 == nil then
+			self._dmgAddPerBySkill21304 = 0
+		else
+			local p1 = skill._battleWeapon._mainSkill:getProp(BattlePropEnum.BattlePropParam5, 0)
+			local p2 = skill._battleWeapon._mainSkill:getProp(BattlePropEnum.BattlePropParam6, 100)
+			self._dmgAddPerBySkill21304 = math.min(self._dmgAddPerBySkill21304 + p1, p2)
+		end
+	end
+
+	if self._hitByRanger212Count and skill and skill._cid == 21203 then
+		local battleWeapon = self._battleSession._rangersMap[212]
+
+		if battleWeapon then
+			local p = skill:getProp(BattlePropEnum.BattlePropParam3, 0)
+			damagePer = damagePer + p * self._hitByRanger212Count
+		end
+	end
+
+	if self._damageSubPer2283 then
+		damagePer = damagePer - self._damageSubPer2283
+	end
+
+	if self._dmgAddPerBySkill21304 then
+		damagePer = damagePer + self._dmgAddPerBySkill21304
+	end
+
+	damagePer = damagePer + (self._dmgReducePerCommom or 0)
+	damage = damage * (100 + damagePer) / 100 * (100 + damagePer2) / 100
+
+	if damage < 0 then
+		damage = 0
+	end
+
+	return damage
+end
+
+function M:getHpSeg(maxSeg)
+	local segHp = self._maxHp / maxSeg
+	local remainSeg = math.floor(self._hp / segHp)
+	local remainSegHp = self._hp - segHp * remainSeg
+
+	if remainSegHp == 0 then
+		remainSegHp = segHp
+		remainSeg = remainSeg - 1
+	end
+
+	return remainSeg
+end
+
+function M:receiveDamage(damage, damageSkill, isCrit, battleBullet, critLevel, percentDmg)
+	if self._conceal or self._invincible then
+		return
+	end
+
+	if self._invincibleFromRanger206 and damageSkill._cid ~= 20601 then
+		return
+	end
+
+	if self._recvDmgCount and self._recvDmgCount > 0 then
+		self._recvDmgCount = self._recvDmgCount - 1
+
+		if self._originId == 1208 then
+			if self._view then
+				self._battleView:showStatusText(self, SID.STR_HOLD_OFF)
+			end
+
+			if self._recvDmgCount == 0 then
+				self._scriptBehavior.doTrans(self)
+			end
+		elseif self._originId == 131001 and self._recvDmgCount == 0 then
+			self:markToBeDestroyed()
+		end
+
+		return
+	end
+
+	if self._invincibleFrom2183Parent then
+		local shieldEnemy = self._invincibleFrom2183Parent
+
+		if shieldEnemy._hpShieldValue2183 then
+			shieldEnemy._hpShieldValue2183 = shieldEnemy._hpShieldValue2183 - math.abs(damage)
+
+			if shieldEnemy._hpShieldValue2183 <= 0 then
+				shieldEnemy._scriptBehavior.shieldDestroyed(shieldEnemy)
+			end
+		end
+
+		return
+	end
+
+	if damageSkill and (self._type == BattleDefine.EnemyType.Elite or self._type == BattleDefine.EnemyType.Boss) then
+		local dmgDouble = damageSkill:getProp(BattlePropEnum.BulletDoubleDmgToEliteOrBoss, 0)
+		damage = damage + damage * dmgDouble
+	end
+
+	critLevel = critLevel or 1
+	self._receiveDamageTime = self._battleSession:elapsedTime()
+
+	if not percentDmg then
+		damage = self:multipyDamage(damage, damageSkill)
+	end
+
+	local oldDamage = damage
+	damage = math.floor(damage * 10) / 10
+
+	if damageSkill and band(damageSkill._dmgType, 64) > 0 then
+		self:removeInvisibilityIf()
+	end
+
+	local finalDmgCut = self._damageFinalCutPer or 1
+	local totalDmg = 0
+	local rawDamage = damage
+	local effPar = self._battleSession:getEffect(25)
+
+	if effPar and damageSkill and not percentDmg then
+		local dmg = self._maxHp * effPar[1] / 100
+
+		if isCrit then
+			dmg = math.min(dmg, rawDamage * effPar[2])
+		else
+			dmg = math.min(dmg, rawDamage * effPar[2] * damageSkill:getCritDmgRate())
+		end
+
+		dmg = dmg * finalDmgCut
+		totalDmg = totalDmg + dmg
+
+		if self._view then
+			self._view:hpEvent(-dmg, nil, damageSkill, 2)
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(24)
+
+	if effPar and damageSkill and isCrit and not percentDmg then
+		local dmg = math.min(self._maxHp * effPar[1] / 100, rawDamage * effPar[2])
+		dmg = dmg * finalDmgCut
+		totalDmg = totalDmg + dmg
+
+		if self._view then
+			self._view:hpEvent(-dmg, nil, damageSkill, 2)
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(31)
+
+	if effPar and not percentDmg and self._battleRandomLib:randomTrue(effPar[1]) then
+		local dmg = rawDamage * effPar[2]
+
+		if not isCrit then
+			dmg = dmg * damageSkill:getCritDmgRate()
+		end
+
+		dmg = dmg * finalDmgCut
+		totalDmg = totalDmg + dmg
+
+		if self._view then
+			self._view:hpEvent(-dmg, nil, damageSkill, 2)
+		end
+	end
+
+	if damageSkill and damageSkill._id == 20801 and self:isParalysis() then
+		local dmg = self._maxHp * damageSkill:getProp(BattlePropEnum.BattlePropParam2, 0) / 100
+		dmg = math.min(dmg, damageSkill._battleWeapon.atk * damageSkill:getProp(BattlePropEnum.BattlePropParam3, 1))
+		totalDmg = totalDmg + dmg
+
+		if self._view then
+			self._view:hpEvent(-dmg, nil, damageSkill)
+		end
+	end
+
+	if self._maxHp == self._hp and not percentDmg then
+		local effPar = self._battleSession:getEffect(30)
+
+		if effPar then
+			damage = damage * effPar
+			critLevel = 2
+		end
+	end
+
+	if damageSkill and damageSkill._id == 10030 and self._type == BattleDefine.EnemyType.Normal then
+		local params = damageSkill._battleWeapon._effectParams
+		local maxDmg = damageSkill:getProp(BattlePropEnum.Atk, 0) * params[3]
+
+		if BattleRandomLib:randomTrue(params[2]) then
+			local dmg = math.min(self._hp, maxDmg)
+			totalDmg = totalDmg + dmg
+
+			if self._view then
+				self._view:hpEvent(-dmg, nil, damageSkill, 2)
+			end
+		end
+	end
+
+	damage = damage * finalDmgCut
+	totalDmg = totalDmg + damage
+
+	damageSkill:recordDamage(math.min(self._hp, totalDmg), self, battleBullet, self._hp <= totalDmg)
+
+	local preSeg = nil
+
+	if self._cid == 2484 and self._battleSession._msType == D.MissionType.CrisisZone then
+		preSeg = self:getHpSeg(10)
+	end
+
+	if self._hpSheild and self._hpSheild > 0 then
+		self._hpSheild = self._hpSheild - totalDmg
+
+		if self._hpSheild < 0 then
+			self._hp = math.max(self._hp + self._hpSheild, 0)
+			self._hpSheild = 0
+		end
+	else
+		self._hp = math.max(self._hp - totalDmg, 0)
+	end
+
+	if self._scriptBehavior and self._scriptBehavior.receiveDamage then
+		self._scriptBehavior.receiveDamage(self, totalDmg)
+	end
+
+	if self._view and damage > 0 then
+		self._view:hpEvent(-damage, isCrit, damageSkill, critLevel)
+	end
+
+	if self._cid == 2484 and self._battleSession._msType == D.MissionType.CrisisZone then
+		local afterSeg = self:getHpSeg(10)
+
+		if preSeg ~= afterSeg then
+			for i = preSeg, afterSeg + 1, -1 do
+				if P then
+					local reward = P._playerCrisisZone:tryDropBonusReward(self._battleSession._msId)
+
+					if reward then
+						SimpleEvent.emit("mission.crisis.reward", reward, self._position.x, self._position.y)
+					end
+				end
+			end
+		end
+	end
+
+	if self._hp <= 0 then
+		local dieFlag = true
+
+		if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DIE_RECOVER) and (self._reviveLeftCount == nil or self._reviveLeftCount > 0) then
+			local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DIE_RECOVER)
+
+			if self._reviveLeftCount == nil then
+				self._reviveLeftCount = prop[1]
+			end
+
+			self._reviveLeftCount = self._reviveLeftCount - 1
+			dieFlag = false
+			self._hp = self._maxHp * prop[2] / 100
+
+			if self._view then
+				self._view:hpEvent(self._hp)
+			end
+		end
+
+		if self._originId == 1506 then
+			if self._stage == 1 then
+				dieFlag = false
+
+				if self._scriptBehavior and self._scriptBehavior.dieBefore then
+					self._scriptBehavior.dieBefore(self)
+				end
+			end
+		elseif self._originId == 2583 then
+			dieFlag = false
+
+			if self._stage == 1 then
+				if self._cid == 2583 then
+					self._battleSession._2583Dormancy = true
+				elseif self._cid == 2584 then
+					self._battleSession._2584Dormancy = true
+				end
+
+				if self._battleSession._2583Dormancy and self._battleSession._2584Dormancy then
+					self._battleSession._enemy2583:markToBeDestroyed(damageSkill)
+					self._battleSession._enemy2584:markToBeDestroyed(damageSkill)
+
+					self._battleSession._2583Dormancy = nil
+					self._battleSession._2584Dormancy = nil
+				elseif self._scriptBehavior and self._scriptBehavior.dieBefore then
+					self._scriptBehavior.dieBefore(self)
+				end
+			end
+		end
+
+		if dieFlag then
+			self:markToBeDestroyed(damageSkill)
+		end
+	end
+end
+
+function M:clearBuffs()
+	self._buffSpeedRev = nil
+
+	if self._buffSpeedRevs then
+		TablePool.release4(self._buffSpeedRevs)
+
+		self._buffSpeedRevs = nil
+	end
+
+	if self._buffCount > 0 then
+		table.clear(self._buffsMap)
+		table.clear(self._buffs)
+		table.clear(self._buffTypesMap)
+	end
+end
+
+function M:hasBuff(id, from)
+	local buff = self._buffsMap[id]
+
+	if buff == nil then
+		return false
+	end
+
+	if from then
+		return from == buff._from
+	end
+
+	return true
+end
+
+function M:hasRemovedBuff()
+	for id, buff in pairs(self._buffsMap) do
+		if not buff._isToBeDestroyed and buff._removed then
+			return id
+		end
+	end
+end
+
+function M:getBuff(id)
+	return self._buffsMap[id]
+end
+
+function M:removeBuffs()
+	opt.array_arg8:clear()
+
+	for id, buff in pairs(self._buffsMap) do
+		if not buff._isToBeDestroyed and buff._removed then
+			opt.array_arg8[#opt.array_arg8 + 1] = id
+		end
+	end
+
+	for i = 1, #opt.array_arg8 do
+		self:removeBuff(opt.array_arg8[i])
+	end
+
+	opt.array_arg8:clear()
+end
+
+function M:addHalo(id, from)
+	local buff = self._buffsMap[id]
+
+	if buff then
+		return
+	end
+
+	self:addBuff(id, 10, nil, from)
+
+	buff = self._buffsMap[id]
+
+	if buff then
+		buff._from = from
+	end
+end
+
+function M:removeHalo(id, from)
+	local buff = self._buffsMap[id]
+
+	if buff == nil then
+		return
+	end
+
+	if from == buff._from then
+		self:removeBuff(id)
+
+		if id == BattleDefine.BuffId.invisible then
+			self:removeBuff(BattleDefine.BuffId.resist_invisibility)
+		end
+	end
+end
+
+function M:hasBuffType(type)
+	return self._buffTypesMap[type]
+end
+
+function M:isParalysis()
+	return self:hasBuffType(BattleBuffEnum.Paralysis) or self:hasBuffType(41501)
+end
+
+function M:isSlowDown()
+	if self._buffSpeedRevs then
+		return true
+	end
+
+	return false
+end
+
+function M:isImprison()
+	return self:hasBuffType(BattleBuffEnum.Imprison)
+end
+
+function M:onBuffCast(buff, skill, hpDitry)
+	if hpDitry == 5 then
+		if buff._id == 41501 and skill._battleWeapon:getEffect(408) then
+			local castSkill = skill._battleWeapon:getSkill(403)
+
+			if castSkill then
+				local bullet = castSkill:createBullet()
+
+				bullet:setPos(self._position.x, self._position.y)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		end
+
+		return
+	end
+
+	if self:tryDmgShield() then
+		return
+	end
+
+	if hpDitry == 1 then
+		local battleSkill = skill._battleWeapon:getSkill(buff._params[2])
+
+		if battleSkill then
+			local val, isCrit = battleSkill:damage(nil, buff._target, battleSkill._extraRate)
+			val = val * (buff._stack or 1)
+
+			self:receiveDamage(val, battleSkill, isCrit)
+		end
+	elseif hpDitry == 2 then
+		self:receiveDamage(buff._val, skill)
+	elseif hpDitry == 3 then
+		if buff._val == 0 then
+			if buff._id == 111304 then
+				if self:existBuffClass(BattleDefine.BuffMainClass.Ignite) then
+					local effPar = self._battleSession:getEffect(buff._params[2])
+					local dmg = effPar[1] / 100 * self._maxHp / math.floor(buff._initialDuration)
+					dmg = skill:limitSkillDmg(dmg, effPar[2] / math.floor(buff._initialDuration) or 1)
+
+					self:receiveDamage(dmg, skill, nil, , 2, true)
+				end
+			else
+				local effPar = self._battleSession:getEffect(buff._params[2])
+				local v = nil
+
+				if buff._params[2] == 654 then
+					v = effPar[1] / math.floor(buff._initialDuration)
+				end
+
+				local dmg = v / 100 * self._maxHp
+				dmg = skill:limitSkillDmg(dmg, effPar[2] / math.floor(buff._initialDuration) or 1)
+
+				self:receiveDamage(dmg, skill, nil, , 2, true)
+			end
+		else
+			local dmg = buff._val / 100 * self._maxHp
+			dmg = skill:limitSkillDmg(dmg, buff._maxDmgRate or 1)
+
+			self:receiveDamage(dmg, skill, nil, , 2, true)
+		end
+	elseif hpDitry == 4 then
+		local battleSkill = skill._battleWeapon:getSkill(buff._params[2])
+		local val, isCrit = battleSkill:damage(nil, buff._target, nil, 2)
+
+		self:receiveDamage(val, battleSkill, isCrit)
+	end
+end
+
+function M:addBuff(id, duration, skill, bullet)
+	if id == 59 then
+		if self._race == 1 then
+			return
+		end
+
+		if self._originId == 1308 and (self._stage == 2 or self._stage == 3) then
+			return
+		end
+	end
+
+	if self._ignoreAllBuff then
+		return
+	end
+
+	if self._ignoreSlowDownBuf then
+		local mainClass = D._battleBuffConfig[id]._mainClass
+
+		if mainClass and mainClass == BattleDefine.BuffMainClass.SlowDown then
+			return
+		end
+	end
+
+	if self._ignoreRegulateBuf and id ~= 36 and D._battleBuffConfig[id]._isRegulate then
+		return
+	end
+
+	if self._inMatrix and D._battleBuffConfig[id]._isRegulate then
+		return
+	end
+
+	if self._battleSession:pvpIsRangeTime() and D._battleBuffConfig[id]._isRegulate then
+		return
+	end
+
+	if self._ignoreNegativeBuf and D._battleBuffConfig[id]._negative then
+		return
+	end
+
+	if self:hasBuff(56) and D._battleBuffConfig[id]._negative then
+		return
+	end
+
+	if self._ignoreBuff then
+		local mainClass = D._battleBuffConfig[id]._mainClass
+
+		if mainClass and band(self._ignoreBuff, 2^(mainClass - 1)) > 0 then
+			return
+		end
+	end
+
+	if id == BattleDefine.BuffId.invisible and self:hasBuff(BattleDefine.BuffId.resist_invisibility) then
+		return
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.NEGATIVE_STATUS_RESIST) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.NEGATIVE_STATUS_RESIST)
+		local buffType = D._battleBuffConfig[id]._type
+
+		if prop[2] == buffType then
+			duration = duration * (1 - prop[1] / 100)
+		end
+	end
+
+	local buff = self._buffsMap[id]
+
+	if buff == nil then
+		self._buffCount = self._buffCount + 1
+		buff = self._battleSession:createOrGetEnemyBuff()
+
+		buff:init(id, duration, self, skill)
+
+		self._buffsMap[id] = buff
+
+		if buff._type == BattleBuffEnum.Knockback then
+			if self._knockbackStatus == nil then
+				self._knockbacked = true
+				self._knockbackStatus = true
+				self._knockbackSpeed = buff._val / duration
+
+				if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.JIAN_SU_DAI) then
+					local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.JIAN_SU_DAI)
+					self._knockbackSpeed = self._knockbackSpeed * (1 - prop[1] / 100)
+				end
+
+				if id == BattleDefine.BuffId.slowfield_drone_knockback then
+					if self._position.x < 0 then
+						self._knockbackDir[1] = 1
+					elseif self._position.x > 0 then
+						self._knockbackDir[1] = -1
+					end
+
+					self._knockbackDir[2] = self._dir[2]
+				elseif bullet then
+					if bullet._cid == 21301 then
+						self._knockbackDir[1] = 0
+						self._knockbackDir[2] = 1
+					elseif bullet._brust then
+						if bullet._dir[1] == 0 and bullet._dir[2] == 0 then
+							local x = self._position.x - bullet._position.x
+							local y = self._position.y - bullet._position.y
+
+							opt.vec2_1:Set(x, y):SetNormalize()
+						else
+							opt.vec2_1:Set(bullet._dir[1], bullet._dir[2]):SetNormalize()
+						end
+
+						self._knockbackDir[1] = opt.vec2_1.x
+						self._knockbackDir[2] = opt.vec2_1.y
+					else
+						self._knockbackDir[1] = bullet._dir[1]
+						self._knockbackDir[2] = bullet._dir[2]
+					end
+				else
+					self._knockbackDir[1] = 0
+					self._knockbackDir[2] = 1
+				end
+			end
+		elseif buff._type == BattleBuffEnum.Portal then
+			self:removeBuff(14)
+
+			if bullet then
+				local eff = bullet._battleWeapon:getEffect(505)
+
+				if eff then
+					local params = D.getBattleEffectParams(505)
+					local dmg = self._maxHp * params[1] / 100
+					dmg = bullet._battleSkill:limitSkillDmg(dmg, params[2])
+
+					self:receiveDamage(dmg, bullet._battleSkill, nil, , , true)
+				end
+			end
+
+			self._invincible = true
+
+			if self._view then
+				self._view:portalInEvent(bullet and bullet._battleSkill)
+			end
+		elseif buff._mainClass == BattleDefine.BuffMainClass.Shield then
+			self._dmgShield = self._dmgShield + 1
+
+			if self._dmgShield == 1 then
+				self._view:shieldEvent(true)
+			end
+		elseif buff._mainClass == BattleDefine.BuffMainClass.ATK_Slow then
+			if self._atkInterval then
+				self._atkIntervalAddPer = buff._val
+				self._atkInterval = self._atkInterval * (1 + self._atkIntervalAddPer / 100)
+			end
+		elseif buff._mainClass == BattleDefine.BuffMainClass.SlowDown or buff._mainClass == BattleDefine.BuffMainClass.SpeedUp then
+			if self._buffSpeedRevs == nil then
+				self._buffSpeedRevs = TablePool.fetch4()
+			end
+
+			self._buffSpeedRevs[#self._buffSpeedRevs + 1] = id
+
+			self:recalculateSpeed()
+		elseif id == 59 then
+			self._dirOldX = self._dir[1]
+			self._dirOldY = self._dir[2]
+			self._dir[1] = -self._dir[1]
+			self._dir[2] = -self._dir[2]
+			self._forceSpeed = nil
+			self._speedFactorOld = self._speedFactor
+			self._speedFactor = self._speedFactor + self._speedFactor * 200 / 100
+		end
+
+		if buff._type then
+			self._buffTypesMap[buff._type] = id
+		end
+
+		if id == BattleDefine.BuffId.invisible then
+			self._invisibility = true
+		end
+
+		if self._scriptBehavior and self._scriptBehavior.addBuff then
+			self._scriptBehavior.addBuff(self, id, buff)
+		end
+
+		if self._view then
+			self._view:buffAddEvent(buff)
+		end
+	else
+		local isMaxStack = buff:isMaxStack()
+
+		buff:resetDuration(duration)
+
+		if self._scriptBehavior and self._scriptBehavior.addBuffTwice then
+			self._scriptBehavior.addBuffTwice(self, id, buff)
+		end
+
+		if id == 21202 then
+			if isMaxStack then
+				buff._duration = 0
+				buff._stack = 1
+				local battleSkill = buff._skill._battleWeapon:getSkill(21203)
+				local bullet = battleSkill:createBullet()
+
+				bullet:setPos(self._position.x, self._position.y, 0)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		elseif id == BattleDefine.BuffId.slowdown_stack then
+			self:recalculateSpeed()
+		elseif id == BattleDefine.BuffId.collapse and isMaxStack and bullet then
+			local battleWeapon = self._battleSession:getWeapon(5)
+
+			if battleWeapon then
+				local eff = battleWeapon:getEffect(506)
+
+				if eff then
+					local duration = buff._duration
+					local params = D.getBattleEffectParams(506)
+					local battleSkill = battleWeapon:getSkill(params[1])
+					local extraDmgAdd = 0
+
+					if battleWeapon:getEffect(508) then
+						local p = D.getBattleEffectParams(508)
+						extraDmgAdd = p[1] / 100
+					end
+
+					local val, isCrit = battleSkill:damage(nil, buff._target, extraDmgAdd)
+
+					self:receiveDamage(val, battleSkill, isCrit)
+
+					if self._view then
+						local vfx = self._sessionView:createAndPlayVFX("Bullet_5_unravel_md", 1)
+
+						if vfx then
+							vfx:SetPosition(self._position.x, self._position.y, 0)
+						end
+					end
+				end
+
+				local eff2 = battleWeapon:getEffect(507)
+
+				if eff2 then
+					local duration = buff._duration
+					local params2 = D.getBattleEffectParams(507)
+					local battleSkill = battleWeapon:getSkill(params2[1])
+					local extraDmgAdd = 0
+
+					if battleWeapon:getEffect(508) then
+						local p = D.getBattleEffectParams(508)
+						extraDmgAdd = p[1] / 100
+					end
+
+					local val, isCrit = battleSkill:damage(nil, buff._target, extraDmgAdd)
+					local allEnemys = self._battleSession:getEnemysInRange(buff._target._position, params2[2])
+
+					for i = 1, #allEnemys do
+						local enemy = allEnemys[i]
+
+						enemy:receiveDamage(val, battleSkill, isCrit)
+					end
+
+					if self._view then
+						local vfx = self._sessionView:createAndPlayVFX("Bullet_5_unravel_aoe", 1)
+
+						if vfx then
+							vfx:SetPosition(self._position.x, self._position.y, 0)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if id == BattleDefine.BuffId.rbp_burn and bullet then
+		local effPar = bullet._battleWeapon:getEffect(352)
+
+		if effPar then
+			local param = D.getBattleEffectParams(352)
+			local skill = bullet._battleWeapon:getSkill(buff._params[2])
+			local buff = self:addBuff(param[1], param[2], skill)
+			buff._val = effPar[1] / param[2]
+			buff._maxDmgRate = effPar[2] / param[2]
+		end
+	end
+
+	return buff
+end
+
+function M:recalculateSpeed()
+	self._speed = self._initialSpeed
+
+	if self._buffSpeedRevs then
+		local cnt = #self._buffSpeedRevs
+
+		for i = 1, cnt do
+			local buff = self:getBuff(self._buffSpeedRevs[i])
+
+			if buff then
+				self._speed = self._speed + self._speed * buff._val / 100
+			else
+				self._buffSpeedRevs[i] = nil
+			end
+		end
+
+		self:buffSpeedRevsAfterNil(cnt)
+
+		self._speed = math.max(self._initialSpeed * D._battleGlobalConfig._battle_min_speed_percent / 100, self._speed)
+	end
+end
+
+function M:triggerWhenBuffRemoved()
+	local battleWeapon = self._battleSession:getWeapon(6)
+
+	if battleWeapon and battleWeapon:getEffect(602) then
+		local params = D.getBattleEffectParams(602)
+		local subSkill = battleWeapon:getSkill(params[1])
+		local bullet = subSkill:castSkill()
+
+		bullet:setPos(self._position.x, self._position.y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+end
+
+function M:buffSpeedRevsAfterNil(cnt)
+	table.removeNilValuesOutOrder(self._buffSpeedRevs, cnt)
+
+	if #self._buffSpeedRevs == 0 then
+		TablePool.release4(self._buffSpeedRevs)
+
+		self._buffSpeedRevs = nil
+	end
+end
+
+function M:removeSlowDownBuffs()
+	opt.array_arg8:clear()
+
+	for id, buff in pairs(self._buffsMap) do
+		if not buff._isToBeDestroyed and buff._mainClass == BattleDefine.BuffMainClass.SlowDown then
+			opt.array_arg8[#opt.array_arg8 + 1] = id
+		end
+	end
+
+	for i = 1, #opt.array_arg8 do
+		self:removeBuff(opt.array_arg8[i])
+	end
+
+	opt.array_arg8:clear()
+end
+
+function M:removeBuff(id)
+	local buff = self._buffsMap[id]
+
+	if buff == nil then
+		return
+	end
+
+	if id == 21304 then
+		self._dmgAddPerBySkill21304 = nil
+	elseif id == 59 then
+		self._dir[1] = self._dirOldX
+		self._dir[2] = self._dirOldY
+		self._speedFactor = self._speedFactorOld
+		local battleWeapon = self._battleSession._rangersMap[214]
+
+		if battleWeapon and battleWeapon:getEffect(21403) then
+			local triggerSkill = battleWeapon:getSkill(21402)
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			bullet._isSplit = true
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	elseif buff._mainClass == BattleDefine.BuffMainClass.SlowDown or buff._mainClass == BattleDefine.BuffMainClass.SpeedUp then
+		local cnt = #self._buffSpeedRevs
+
+		for i = 1, cnt do
+			if self._buffSpeedRevs[i] == id then
+				self._buffSpeedRevs[i] = nil
+
+				break
+			end
+		end
+
+		self:buffSpeedRevsAfterNil(cnt)
+		self:recalculateSpeed()
+	elseif buff._mainClass == BattleDefine.BuffMainClass.ATK_Slow then
+		self._atkIntervalAddPer = nil
+	elseif buff._mainClass == BattleDefine.BuffMainClass.Shield then
+		self._dmgShield = self._dmgShield - 1
+
+		if self._dmgShield == 0 then
+			self._view:shieldEvent(false)
+		end
+	elseif buff._type == BattleBuffEnum.Knockback then
+		self._knockbackStatus = nil
+		self._knockbackSpeed = nil
+	elseif buff._type == BattleBuffEnum.DieBrust then
+		self:triggerWhenBuffRemoved()
+	elseif buff._type == BattleBuffEnum.Portal then
+		self._invincible = false
+
+		if self._portalOutPosX then
+			self._position.x = self._portalOutPosX
+			self._position.y = self._portalOutPosY
+			self._portaled = true
+		elseif buff._id == BattleDefine.BuffId.portal_1 then
+			local dtY = self._battleRandomLib:randomMN(buff._params[1], buff._params[2])
+			self._position.y = self._position.y + dtY
+
+			if self._battleSession._battleFieldEdgeY2 < self._position.y then
+				self._position.y = self._battleSession._battleFieldEdgeY2
+			end
+		else
+			self._position.y = self._battleSession._battleFieldEdgeY2
+		end
+
+		if self._view then
+			self._view:posEvent()
+			self._view:portalOutEvent(buff._skill)
+		end
+
+		if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.KONGJIAN_YULIAO) then
+			local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.KONGJIAN_YULIAO)
+
+			self:receiveRecoverHP(self._maxHp * prop[1] / 100)
+		end
+	end
+
+	if buff._type then
+		self._buffTypesMap[buff._type] = nil
+	end
+
+	self._buffCount = self._buffCount - 1
+
+	if id == BattleDefine.BuffId.invisible then
+		self._invisibility = nil
+
+		self:addBuff(BattleDefine.BuffId.resist_invisibility, 3600)
+	end
+
+	self._buffsMap[id] = nil
+
+	self._battleSession:recycleEnemyBuff(buf)
+
+	if self._scriptBehavior and self._scriptBehavior.removeBuff then
+		self._scriptBehavior.removeBuff(self, id)
+	end
+
+	if self._view then
+		self._view:buffRemEvent(buff)
+	end
+end
+
+function M:negativeBuffCount()
+	local count = 0
+
+	for id, buff in pairs(self._buffsMap) do
+		if not buff._isToBeDestroyed and buff._negative then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
+function M:existBuffClass(mainClss)
+	for id, buff in pairs(self._buffsMap) do
+		if not buff._isToBeDestroyed and buff._mainClass == mainClss then
+			return buff
+		end
+	end
+
+	return nil
+end
+
+function M:doPortal(x, y)
+	if self._view then
+		self._view:portalInEvent()
+	end
+
+	if x then
+		self._position.x = x
+	end
+
+	if y then
+		self._position.y = y
+
+		if self._battleSession._battleFieldEdgeY2 < self._position.y then
+			self._position.y = self._battleSession._battleFieldEdgeY2
+		end
+	end
+
+	if self._view then
+		self._view:posEvent()
+		self._view:portalOutEvent()
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.KONGJIAN_YULIAO) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.KONGJIAN_YULIAO)
+
+		self:receiveRecoverHP(self._maxHp * prop[1] / 100)
+	end
+end
+
+function M:couldBeDraged()
+	if self._ignoreRegulateBuf then
+		return false
+	end
+
+	if self._ignoreDrag then
+		return false
+	end
+
+	if self._inMatrix then
+		return false
+	end
+
+	if self._ignoreBuff then
+		local mainClass = BattleDefine.BuffMainClass.Drag
+
+		if mainClass and band(self._ignoreBuff, 2^(mainClass - 1)) > 0 then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:couldBeSwallow()
+	if self._ignoreRegulateBuf then
+		return false
+	end
+
+	if self._inMatrix then
+		return false
+	end
+
+	if self._type == BattleDefine.EnemyType.Boss then
+		return false
+	end
+
+	if self._originId == 248201 and self._parentEnemy then
+		return false
+	end
+
+	return true
+end
+
+function M:appendSwallow(center, duration)
+	if not self:couldBeSwallow() then
+		return
+	end
+
+	self._beSwallowCenterX = center.x
+	self._beSwallowCenterY = center.y
+	self._beSwallowing = true
+	self._beSwallowingDuration = duration
+	self._oriDis = Vector2.Distance(center, self._position)
+	self._beSwallowingSpeed = self._oriDis / duration
+	self._stepSwallowScale = self._scale / duration
+	self._swallowScale = self._scale
+
+	self:tryRemoveEnemyBulletPlasma()
+
+	if self._originId == 1409 then
+		self._scriptBehavior.endCast(self)
+	end
+end
+
+function M:doSwallow(dt)
+	local x = self._beSwallowCenterX
+	local y = self._beSwallowCenterY
+	local speed = self._beSwallowingSpeed
+
+	opt.vec2_1:Set(x - self._position.x, y - self._position.y):SetNormalize()
+
+	self._position.x = self._position.x + speed * opt.vec2_1.x * dt
+	self._position.y = self._position.y + speed * opt.vec2_1.y * dt
+	self._position.x = self._battleSession:limitEnemyPositionX(self._position.x)
+	self._position.y = self._battleSession:limitEnemyPositionY(self._position.y)
+
+	if self._originId == 2482 and self._enemy and not self._enemy._isToBeDestroyed then
+		self._enemy:setPos(self._position.x, self._position.y - 0.35)
+
+		if self._enemy._view then
+			self._enemy._view:posEvent()
+		end
+	end
+
+	if self._view then
+		self._view:posEvent()
+
+		self._swallowScale = math.max(self._swallowScale - self._stepSwallowScale * dt, 0)
+
+		self._view._obj:SetLocalScale(self._swallowScale)
+	end
+end
+
+function M:beDraged(center, duration, speed, offsetDistance)
+	if not self:couldBeDraged() then
+		return
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.RUO_YINLI) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.RUO_YINLI)
+		speed = speed * (1 - prop[1] / 100)
+	end
+
+	if speed <= 0 then
+		return
+	end
+
+	self._offsetDistance = offsetDistance
+	self._draged = true
+	self._beDraging = true
+
+	if self._beDragCenter == nil then
+		self._beDragCenter = Vector2.retain(center.x, center.y)
+	else
+		self._beDragCenter.x = center.x
+		self._beDragCenter.y = center.y
+	end
+
+	self._beDragingDuration = duration
+	self._beDragingSpeed = speed
+
+	self:doDrag()
+end
+
+function M:doDrag()
+	local x = self._beDragCenter.x
+	local y = self._beDragCenter.y
+	local speed = self._beDragingSpeed
+
+	if self._offsetDistance and Vector2.Distance(opt.vec2_1:Set(x, y), self._position) <= self._offsetDistance then
+		return
+	end
+
+	opt.vec2_1:Set(x - self._position.x, y - self._position.y):SetNormalize()
+
+	self._position.x = self._position.x + speed * opt.vec2_1.x
+	self._position.y = self._position.y + speed * opt.vec2_1.y
+	self._position.x = self._battleSession:limitEnemyPositionX(self._position.x)
+	self._position.y = self._battleSession:limitEnemyPositionY(self._position.y)
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:stepDrag(dt, center, speed)
+	local x = center.x
+	local y = center.y
+
+	opt.vec2_1:Set(x - self._position.x, y - self._position.y):SetNormalize()
+
+	self._position.x = self._position.x + speed * opt.vec2_1.x * dt
+	self._position.y = self._position.y + speed * opt.vec2_1.y * dt
+	self._position.x = self._battleSession:limitEnemyPositionX(self._position.x)
+	self._position.y = self._battleSession:limitEnemyPositionY(self._position.y)
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:receiveRecoverHP(dt)
+	local buff = self:existBuffClass(BattleDefine.BuffMainClass.Serious_Injury)
+
+	if buff then
+		dt = dt * buff._val / 100
+	end
+
+	local v1 = self._battleSession:getEffect(20023)
+
+	if v1 then
+		dt = dt - dt * v1 / 100
+	end
+
+	self._hp = math.min(self._hp + dt, self._maxHp)
+
+	if self._view then
+		self._view:hpEvent(dt)
+	end
+end
+
+function M:canBeChoseAsTarget()
+	if self._isToBeDestroyed then
+		return false
+	end
+
+	if self._conceal then
+		return false
+	end
+
+	if self._invincibleFromRanger206 then
+		return false
+	end
+
+	if self._type == BattleDefine.EnemyType.Death then
+		return false
+	end
+
+	if self._type == BattleDefine.EnemyType.Shield then
+		return false
+	end
+
+	return true
+end
+
+return M

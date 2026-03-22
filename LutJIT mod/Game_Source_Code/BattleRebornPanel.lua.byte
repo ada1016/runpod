@@ -1,0 +1,158 @@
+local M = class("BattleRebornPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnADReborn = Types.Button,
+	tmpLeftADRebornNum = Types.TMP_Text,
+	btnDiamondReborn = Types.Button,
+	imgDiamond = Types.Image,
+	tmpDiamonds = Types.TMP_Text,
+	tmpSecond = Types.TMP_Text,
+	goRemoveAdBtn = Types.GameObject
+}
+local RightCardEntranceBtnWidget = requireLua("RightCardEntranceBtnWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	RightCardEntranceBtnWidget.noCreate(self._goRemoveAdBtn)
+	self._goRemoveAdBtn:setShowBtn(P._playerRecord:getDailyAdRebornNum() > 0)
+	self:setClick(self._goRemoveAdBtn._btnClick, function ()
+		self:stopCountDown()
+		UIManager.openPanel(PrefabDefine.RightCardPanel, function ()
+			self:startCountDown()
+		end, D.PurchaseChannel.Battle)
+	end)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:dealDefeat()
+		self:closePanel()
+	end)
+	self:setClick(self._btnADReborn, function ()
+		self:dealAdBtnLogic()
+	end)
+	self:setClick(self._btnDiamondReborn, function ()
+		self:dealDiamondBtnLogic()
+	end)
+end
+
+function M:addEvents()
+	self:on("finished.ad", function (adType)
+		if adType == D.AdType.Battle_Reborn then
+			self:dealFinishedAd()
+		end
+	end, 10, true)
+	self:on("rightcard.update", function (rightCardType)
+		if rightCardType == D.RightCardType.SVIP then
+			V.loadAdButton1(self._btnADReborn.gameObject)
+		end
+	end)
+end
+
+function M:init()
+	V.loadAdButton1(self._btnADReborn.gameObject)
+	BattleManager:stopTime()
+
+	self._lose = false
+	self._leftTime = 10
+	self._countDown = true
+	self._delayTimer = lc.setInterval(function ()
+		self:secondTick()
+	end, 1, true)
+
+	self:secondTick()
+	self:updateUI()
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._delayTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._delayTimer)
+
+	self._delayTimer = nil
+
+	if not self._lose and BattleView then
+		BattleManager:revertStopTime()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:dealDefeat()
+	self._lose = true
+
+	self._battleSession:settleBattle(D.BattleResult.Lose)
+end
+
+function M:secondTick()
+	if self._countDown then
+		self._leftTime = self._leftTime - 1
+	end
+
+	if self._leftTime < 0 then
+		self:dealDefeat()
+		self:closePanel()
+
+		return
+	end
+
+	self._tmpSecond.text = self._leftTime
+end
+
+function M:updateUI()
+	self._tmpLeftADRebornNum:SetLocalize(SID.TODAY_LEFT_NUM, P._playerRecord:getDailyAdRebornNum(), D._globalConfig._battle_daily_ad_reborn_num)
+	V.loadItemCost(self._imgDiamond, self._tmpDiamonds, D.ResType.diamond, D._globalConfig._battle_diamond_reborn_cost, self)
+end
+
+function M:dealAdBtnLogic()
+	local leftNum = P._playerRecord:getDailyAdRebornNum()
+
+	if leftNum == 0 then
+		V.showResultCode(ResultCode.AD_NUM_MAX)
+
+		return
+	end
+
+	P._playerAd:tryStartRewardAd(D.AdType.Battle_Reborn)
+end
+
+function M:dealFinishedAd()
+	P._playerRecord:recordAdReborn()
+	self:dealReborn()
+end
+
+function M:dealDiamondBtnLogic()
+	local costNum = D._globalConfig._battle_diamond_reborn_cost
+	local enough = P._playerAsset:isAssetEnough(D.ResType.diamond, costNum)
+
+	if not enough then
+		self:stopCountDown()
+		UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+			V.loadItemCost(self._imgDiamond, self._tmpDiamonds, D.ResType.diamond, D._globalConfig._battle_diamond_reborn_cost, self)
+			self:startCountDown()
+		end)
+
+		return
+	end
+
+	P._playerAsset:decreaseAssetNum(D.ResType.diamond, -costNum, D.LogWay.battle_reborn)
+	self:dealReborn()
+end
+
+function M:stopCountDown()
+	self._countDown = false
+end
+
+function M:startCountDown()
+	self._countDown = true
+end
+
+function M:dealReborn()
+	self._battleSession:addOperation(BattleDefine.OpType.reborn)
+	self:closePanel()
+end
+
+return M

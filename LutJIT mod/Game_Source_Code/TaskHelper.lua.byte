@@ -1,0 +1,525 @@
+local M = {}
+
+declare("TaskHelper", M)
+
+local taskConfig = requireLua("task")
+local taskTracer = {}
+local taskDatas = {}
+local taskOrders = {}
+local taskMaps = {}
+local taskChapterOrders = {}
+M.TaskStatus = {
+	finished = 2,
+	notFinished = 1,
+	claimed = 3
+}
+
+local function is_confused_task(taskClass)
+	if taskClass == D.TaskClass.Monopoly then
+		return true
+	end
+
+	return false
+end
+
+local function get_confused_task_tag(taskClass)
+	if taskClass == D.TaskClass.Monopoly then
+		return "MonopolyTask"
+	end
+
+	return false
+end
+
+M.TaskEvent = {}
+
+for k, v in pairs(D.TaskClass) do
+	M.TaskEvent[v] = "sync.task.group" .. v
+end
+
+for i, task in pairs(taskConfig) do
+	taskOrders[task._group] = taskOrders[task._group] or {}
+	taskMaps[task._group] = taskMaps[task._group] or {}
+	taskChapterOrders[task._group] = taskChapterOrders[task._group] or {}
+	local group = taskOrders[task._group]
+
+	if not group[task._order] then
+		group[task._order] = {}
+	end
+
+	table.insert(group[task._order], i)
+
+	if not taskMaps[task._group][task._type] then
+		taskMaps[task._group][task._type] = {}
+	end
+
+	table.insert(taskMaps[task._group][task._type], i)
+
+	if not taskChapterOrders[task._group][task._chapter] then
+		taskChapterOrders[task._group][task._chapter] = {}
+	end
+
+	local chapters = taskChapterOrders[task._group][task._chapter]
+
+	if not chapters[task._order] then
+		chapters[task._order] = {}
+	end
+
+	table.insert(chapters[task._order], i)
+end
+
+for group, groupOrders in pairs(taskOrders) do
+	for idx, sameOrders in pairs(groupOrders) do
+		table.sort(sameOrders, function (a, b)
+			return a < b
+		end)
+	end
+end
+
+for group, chapters in pairs(taskChapterOrders) do
+	for group, chapterOrders in pairs(chapters) do
+		for idx, sameOrders in pairs(chapterOrders) do
+			table.sort(sameOrders, function (a, b)
+				return a < b
+			end)
+		end
+	end
+end
+
+local function isXNumberTask(taskType)
+	return false
+end
+
+local function generateKey(taskType, taskParam)
+	local key = nil
+
+	if isXNumberTask(taskType) then
+		key = string.format("%d|", taskType)
+	else
+		key = string.format("%d|%d", taskType, taskParam)
+	end
+
+	return key
+end
+
+function M:loadTaskData(taskClass, taskData)
+	taskDatas[taskClass] = taskData
+	taskData.curTasks = taskData.curTasks or {}
+	taskData.taskValues = taskData.taskValues or {}
+	taskData.finishedTasks = taskData.finishedTasks or {}
+
+	if is_confused_task(taskClass) then
+		for k, v in pairs(taskData.taskValues) do
+			taskData.taskValues[k] = ConfusedNumber.create(v, get_confused_task_tag(taskClass))
+		end
+	end
+end
+
+function M:clearTaskData(taskClass)
+	taskDatas[taskClass] = nil
+end
+
+function M:resetTaskData(taskClass, taskType, taskParam)
+	if taskClass then
+		if not taskDatas[taskClass] then
+			return
+		end
+
+		if taskType then
+			taskDatas[taskClass].taskValues[generateKey(taskType, taskParam)] = nil
+		else
+			taskDatas[taskClass].curTasks = {}
+			taskDatas[taskClass].taskValues = {}
+			taskDatas[taskClass].finishedTasks = {}
+		end
+	else
+		for _, v in pairs(taskDatas) do
+			v.curTasks = {}
+			v.taskValues = {}
+			v.finishedTasks = {}
+		end
+	end
+end
+
+function M:resetTask(taskId)
+	local task = taskConfig[taskId]
+	local key = generateKey(task._type, task._param)
+	taskDatas[task._group].taskValues[key] = nil
+
+	table.erase(taskDatas[task._group].finishedTasks, taskId)
+end
+
+function M:getTasksTypeMapByClass(taskClass)
+	return taskMaps[taskClass]
+end
+
+function M:getTasksOrderByClass(taskClass)
+	return taskOrders[taskClass]
+end
+
+function M:getTasksChapterOrderByClass(taskClass, chapter)
+	return taskChapterOrders[taskClass][chapter]
+end
+
+function M:getTaskOrder(taskId)
+	return taskConfig[taskId]._order
+end
+
+function M:getBreifSid(taskId)
+	return taskConfig[taskId]._mainDescSid
+end
+
+function M:getTitleSid(taskId)
+	return taskConfig[taskId]._titleSid
+end
+
+function M:getDescSid(taskId)
+	return taskConfig[taskId]._descSid
+end
+
+function M:getTaskRewardCids(taskId)
+	return taskConfig[taskId]._rewardId
+end
+
+function M:getTaskRewardNums(taskId)
+	return taskConfig[taskId]._rewardNum
+end
+
+function M:getTaskProgress(taskId)
+	if isXNumberTask(taskConfig[taskId]._type) then
+		return string.format("%d%s", taskConfig[taskId]._progress, largeNumberConfig[taskConfig[taskId]._param]._text)
+	end
+
+	return taskConfig[taskId]._progress
+end
+
+function M:getTaskType(taskId)
+	return taskConfig[taskId]._type
+end
+
+function M:getTaskGroup(taskId)
+	return taskConfig[taskId]._group
+end
+
+function M:getTaskChapter(taskId)
+	return taskConfig[taskId]._chapter
+end
+
+function M:getTaskParam(taskId)
+	return taskConfig[taskId]._param
+end
+
+function M:getTaskIsSign(taskId)
+	return taskConfig[taskId]._reset
+end
+
+function M:getTaskGo(taskId)
+	return taskConfig[taskId]._go
+end
+
+function M:getTaskGoBtn(taskId)
+	return taskConfig[taskId]._goBtn
+end
+
+function M:getTaskModule(taskId)
+	return taskDatas[taskConfig[taskId]._group]
+end
+
+function M:getTaskValue(taskId)
+	local module = self:getTaskModule(taskId)
+	local key = generateKey(taskConfig[taskId]._type, taskConfig[taskId]._param)
+
+	if isXNumberTask(taskConfig[taskId]._type) then
+		if module.taskValues[key] then
+			return module.taskValues[key]:toString()
+		end
+
+		return 0
+	end
+
+	return module.taskValues[key] or 0
+end
+
+function M:getTaskPercent(taskId)
+	if isXNumberTask(taskConfig[taskId]._type) then
+		local module = self:getTaskModule(taskId)
+		local key = string.format("%d|", taskConfig[taskId]._type)
+
+		if module.taskValues[key] then
+			local targetVal = {
+				taskConfig[taskId]._progress,
+				taskConfig[taskId]._param
+			}
+
+			return module.taskValues[key]:div(XNumber.static(XNumber.NumberType.large, targetVal))
+		end
+
+		return 0
+	end
+
+	return self:getTaskValue(taskId) / self:getTaskProgress(taskId)
+end
+
+function M:isFinished(taskId)
+	return self:getTaskPercent(taskId) >= 1
+end
+
+function M:isClaimed(taskId)
+	if self:getTaskModule(taskId).finishedTasks then
+		return table.contains(self:getTaskModule(taskId).finishedTasks, taskId)
+	end
+
+	return false
+end
+
+function M:claimTaskReward(taskId)
+	if not self:isFinished(taskId) then
+		return
+	end
+
+	table.insert(self:getTaskModule(taskId).finishedTasks, taskId)
+	SimpleEvent.emit("claim.task.reward")
+
+	return taskConfig[taskId]._rewardId, self:getTaskRewardNums(taskId)
+end
+
+local function updateTaskValueInner(taskClass, key, value)
+	local module = taskDatas[taskClass]
+
+	if is_confused_task(taskClass) then
+		if module.taskValues[key] == nil then
+			module.taskValues[key] = ConfusedNumber.create(value, get_confused_task_tag(taskClass))
+		else
+			module.taskValues[key]:reset2Value(value)
+		end
+	else
+		module.taskValues[key] = value
+	end
+end
+
+local notifyTaskIds = table.new(20, 0)
+
+function M:updateTaskValue(taskType, value, taskParam)
+	value = value or 1
+	taskParam = taskParam or 0
+	local key = generateKey(taskType, taskParam)
+
+	table.clear(notifyTaskIds)
+
+	for taskClass, module in pairs(taskDatas) do
+		updateTaskValueInner(taskClass, key, value)
+
+		for i = 1, #module.curTasks do
+			if taskConfig[module.curTasks[i]]._type == taskType then
+				table.insert(notifyTaskIds, module.curTasks[i])
+			end
+		end
+	end
+
+	if #notifyTaskIds > 0 then
+		SimpleEvent.emit("sync.task", taskType, notifyTaskIds)
+	end
+end
+
+function M:setTaskValue(taskId, value)
+	local task = taskConfig[taskId]
+	local taskClass = task._group
+	local key = generateKey(task._type, task._param)
+
+	updateTaskValueInner(taskClass, key, value)
+end
+
+function M:setTaskValueByType(taskClass, taskType, taskParam, value)
+	taskParam = taskParam or 0
+	local key = generateKey(taskType, taskParam)
+
+	updateTaskValueInner(taskClass, key, value)
+end
+
+function M:getTaskValueByType(taskClass, taskType, taskParam)
+	taskParam = taskParam or 0
+	local key = generateKey(taskType, taskParam)
+	local module = taskDatas[taskClass]
+
+	if isXNumberTask(taskConfig[taskType]) then
+		if module.taskValues[key] then
+			return module.taskValues[key]:toString()
+		end
+
+		return 0
+	end
+
+	if is_confused_task(taskClass) then
+		if module.taskValues[key] == nil then
+			return 0
+		else
+			return module.taskValues[key]
+		end
+	else
+		return module.taskValues[key] or 0
+	end
+end
+
+local function updateTaskValueMaxInner(module, key, value, taskClass)
+	if is_confused_task(taskClass) then
+		if module.taskValues[key] == nil then
+			module.taskValues[key] = ConfusedNumber.create(value, get_confused_task_tag(taskClass))
+
+			return true
+		end
+
+		if module.taskValues[key]() < value then
+			module.taskValues[key]:reset2Value(value)
+
+			return true
+		end
+	elseif module.taskValues[key] == nil or module.taskValues[key] < value then
+		module.taskValues[key] = value
+
+		return true
+	end
+
+	return false
+end
+
+function M:updateTaskValueMax(taskType, value, taskParam)
+	value = value or 1
+	taskParam = taskParam or 0
+	local key = string.format("%d|%d", taskType, taskParam)
+
+	table.clear(notifyTaskIds)
+
+	for k, module in pairs(taskDatas) do
+		updateTaskValueMaxInner(module, key, value, k)
+
+		for i = 1, #module.curTasks do
+			if taskConfig[module.curTasks[i]]._type == taskType then
+				table.insert(notifyTaskIds, module.curTasks[i])
+			end
+		end
+	end
+
+	if #notifyTaskIds > 0 then
+		SimpleEvent.emit("sync.task", taskType, notifyTaskIds)
+	end
+end
+
+local function increaseTaskValueInner(module, key, value, isXNumberTask, taskClass)
+	if isXNumberTask then
+		if not module.taskValues[key] then
+			module.taskValues[key] = XNumber.retain(XNumber.NumberType.large, 0)
+		else
+			module.taskValues[key]:add(value)
+		end
+	elseif is_confused_task(taskClass) then
+		if module.taskValues[key] == nil then
+			module.taskValues[key] = ConfusedNumber.create(value, get_confused_task_tag(taskClass))
+		else
+			module.taskValues[key] = module.taskValues[key] + value
+		end
+	else
+		module.taskValues[key] = (module.taskValues[key] or 0) + value
+	end
+end
+
+function M:increaseTaskValue(taskType, value, taskParam)
+	value = value or 1
+	taskParam = taskParam or 0
+
+	table.clear(notifyTaskIds)
+
+	if isXNumberTask(taskType) then
+		local key = string.format("%d|", taskType)
+
+		for _, module in pairs(taskDatas) do
+			increaseTaskValueInner(module, key, value, true)
+
+			for i = 1, #module.curTasks do
+				if taskConfig[module.curTasks[i]]._type == taskType then
+					table.insert(notifyTaskIds, module.curTasks[i])
+				end
+			end
+		end
+	else
+		local key = string.format("%d|%d", taskType, taskParam)
+
+		for k, module in pairs(taskDatas) do
+			increaseTaskValueInner(module, key, value, false, k)
+
+			for i = 1, #module.curTasks do
+				if taskConfig[module.curTasks[i]]._type == taskType then
+					table.insert(notifyTaskIds, module.curTasks[i])
+				end
+			end
+		end
+	end
+
+	if #notifyTaskIds > 0 then
+		SimpleEvent.emit("sync.task", taskType, notifyTaskIds)
+	end
+end
+
+function M:completeTask(taskId)
+	if self:isFinished(taskId) then
+		return
+	end
+
+	local task = taskConfig[taskId]
+
+	if task._type ~= D.TaskType.get_dollor_num then
+		if task._param == 0 then
+			self:updateTaskValue(task._type, self:getTaskProgress(task._id))
+		else
+			self:updateTaskValue(task._type, self:getTaskProgress(task._id), task._param)
+		end
+	else
+		self:updateTaskValue(task._type, XNumber.retain(XNumber.NumberType.large, self:getTaskProgress(task._id)))
+	end
+end
+
+function M:traceTaskCompleted(tid)
+	if taskTracer[tid] then
+		return false
+	end
+
+	if self:isFinished(tid) and not self:isClaimed(tid) then
+		taskTracer[tid] = true
+
+		return true
+	end
+
+	return false
+end
+
+function M:getTaskStatus(taskId)
+	if self:isClaimed(taskId) then
+		return M.TaskStatus.claimed
+	elseif self:isFinished(taskId) then
+		return M.TaskStatus.finished
+	else
+		return M.TaskStatus.notFinished
+	end
+end
+
+function M:canClaim(taskId)
+	return self:getTaskStatus(taskId) == M.TaskStatus.finished
+end
+
+function M:getTaskSortOrder(taskId)
+	if self:isClaimed(taskId) then
+		return 3
+	elseif self:isFinished(taskId) then
+		return 1
+	else
+		return 2
+	end
+end
+
+function M:getTaskClaimWay(taskId)
+	return taskConfig[taskId]._getWay
+end
+
+function M:isAdClaim(taskId)
+	return self:getTaskClaimWay(taskId) == 2
+end
+
+return M

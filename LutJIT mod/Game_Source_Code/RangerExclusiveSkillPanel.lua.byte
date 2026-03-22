@@ -1,0 +1,70 @@
+local M = class("RangerExclusiveSkillPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goSkill1 = Types.GameObject,
+	goSkill2 = Types.GameObject,
+	goSkill3 = Types.GameObject,
+	goSkill4 = Types.GameObject,
+	txtSkill1 = Types.TMP_Text,
+	txtSkill2 = Types.TMP_Text,
+	txtSkill3 = Types.TMP_Text,
+	txtSkill4 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goSkills = {
+		self._goSkill1,
+		self._goSkill2,
+		self._goSkill3,
+		self._goSkill4
+	}
+	self._txtSkills = {
+		self._txtSkill1,
+		self._txtSkill2,
+		self._txtSkill3,
+		self._txtSkill4
+	}
+
+	for i = 1, #self._goSkills do
+		lc.prefabVarPeer(self._goSkills[i])
+	end
+end
+
+function M:addClicks()
+end
+
+function M:init(rangerId)
+	local skillList = D._rangerSkillList[rangerId]
+
+	for i = 1, #self._goSkills do
+		local skillCfg = skillList[i]
+		local quality = skillCfg._quality
+		local level = skillCfg._level
+		local equipId = 40000 + quality * 100 + level
+
+		LuaUnity.setTPSprite(self._goSkills[i]._imgIcon, "item/ranger_chip_" .. equipId)
+
+		if skillCfg._value then
+			if #skillCfg._value == 1 then
+				self._txtSkills[i]:SetLocalizeS(skillCfg._descSid, lc.toStr(skillCfg._value[1]))
+			elseif #skillCfg._value == 2 then
+				self._txtSkills[i]:SetLocalizeS(skillCfg._descSid, lc.toStr(skillCfg._value[1]), lc.toStr(skillCfg._value[2]))
+			elseif #skillCfg._value == 3 then
+				self._txtSkills[i]:SetLocalizeS(skillCfg._descSid, lc.toStr(skillCfg._value[1]), lc.toStr(skillCfg._value[2]), lc.toStr(skillCfg._value[3]))
+			else
+				self._txtSkills[i]:SetLocalizeS(skillCfg._descSid, lc.toStr(skillCfg._value[1]), lc.toStr(skillCfg._value[2]), lc.toStr(skillCfg._value[3]), lc.toStr(skillCfg._value[4]))
+			end
+		else
+			self._txtSkills[i]:SetLocalize(skillCfg._descSid)
+		end
+
+		V.setBuffLinkClick(self._txtSkills[i], true)
+	end
+end
+
+return M

@@ -1,0 +1,19 @@
+local M = class("BattleBullet_BeeColony", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+end
+
+return M

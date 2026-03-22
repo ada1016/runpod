@@ -1,0 +1,118 @@
+local M = class("BattleAbility")
+
+function M:addTriggerOn(val)
+	if self._triggerOnsMap == nil then
+		self._triggerOnsMap = table.new(0, 4)
+	end
+
+	self._triggerOnsMap[val] = true
+end
+
+function M:hasTriggerOn(val)
+	if self._triggerOnsMap == nil then
+		return false
+	end
+
+	return self._triggerOnsMap[val]
+end
+
+function M:copyTriggerOnsFromOrigin(origin)
+	if origin._triggerOnsMap == nil then
+		return
+	end
+
+	if self._triggerOnsMap == nil then
+		self._triggerOnsMap = table.new(0, 4)
+	end
+
+	table.copy(origin._triggerOnsMap, self._triggerOnsMap)
+end
+
+function M:initAttachBuffs()
+	if self._id == 20800 then
+		if self._cfg._attachBuffs then
+			self._attachBuffsMap = table.deepcopy(self._cfg._attachBuffs)
+		end
+	elseif self._cfg._attachBuffs then
+		self._attachBuffsMap = table.new(0, 4)
+
+		table.copy(self._cfg._attachBuffs, self._attachBuffsMap)
+	end
+end
+
+function M:addAttachBuff(k, v)
+	if self._attachBuffsMap == nil then
+		self._attachBuffsMap = table.new(0, 4)
+	end
+
+	if type(v) == "number" then
+		self._attachBuffsMap[k] = (self._attachBuffsMap[k] or 0) + v
+	elseif self._attachBuffsMap[k] == nil then
+		self._attachBuffsMap[k] = {
+			v[1],
+			v[2],
+			v[3]
+		}
+	else
+		self._attachBuffsMap[k][1] = self._attachBuffsMap[k][1] + v[1]
+		self._attachBuffsMap[k][3] = self._attachBuffsMap[k][3] + (v[3] or 0)
+	end
+end
+
+function M:copyAttachBuffsFromOrigin(origin)
+	if origin._attachBuffsMap == nil then
+		return
+	end
+
+	self._attachBuffsMap = clone(origin._attachBuffsMap)
+end
+
+function M:initProps()
+	if self._cfg._props then
+		self._propsMap = table.new(0, 8)
+
+		table.copy(self._cfg._props, self._propsMap)
+	end
+end
+
+function M:addProp(k, v)
+	if self._propsMap == nil then
+		self._propsMap = table.new(0, 8)
+	end
+
+	self._propsMap[k] = (self._propsMap[k] or 0) + v
+end
+
+function M:copyPropsFromOrigin(origin)
+	if origin._propsMap == nil then
+		return
+	end
+
+	if self._propsMap == nil then
+		self._propsMap = table.new(0, 8)
+	end
+
+	table.copy(origin._propsMap, self._propsMap)
+end
+
+function M:addOutProp(k, v)
+	if self._propsOutMap == nil then
+		self._propsOutMap = table.new(0, 4)
+	end
+
+	self._propsOutMap[k] = (self._propsOutMap[k] or 0) + v
+end
+
+function M:copyOutPropsFromOrigin(origin)
+	if origin._propsOutMap == nil then
+		return
+	end
+
+	if self._propsOutMap == nil then
+		self._propsOutMap = table.new(0, 4)
+	end
+
+	table.copy(origin._propsOutMap, self._propsOutMap)
+end
+
+return M

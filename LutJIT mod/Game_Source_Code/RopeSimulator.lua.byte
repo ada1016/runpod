@@ -1,0 +1,175 @@
+local M = class("RopeSimulator")
+local TablePool = TablePool
+local Vector2 = Vector2
+local opt = opt
+
+local function createPoint()
+	return {
+		const = false,
+		mass = 100,
+		pos = Vector2.retain(0, 0),
+		lastPos = Vector2.retain(0, 0),
+		velocity = Vector2.retain(0, 0),
+		force = Vector2.retain(0, 0)
+	}
+end
+
+local function createJoint(p1, p2, k)
+	return {
+		restLen = 0,
+		k = k,
+		p1 = p1,
+		p2 = p2
+	}
+end
+
+function M:ctor(count)
+	self._points = {}
+	self._joints = {}
+	self._pointCount = count
+	self._verletDamping = Mathf.Clamp01(0.1)
+	self._k = 10000
+	self._gravity = Vector2.retain(0, -9.81)
+
+	for i = 1, count do
+		self._points[i] = createPoint()
+
+		if i > 1 then
+			self._joints[#self._joints + 1] = createJoint(self._points[i], self._points[i - 1], self._k)
+		end
+	end
+
+	self._points[1].const = true
+	self._points[self._pointCount].const = true
+end
+
+function M:release()
+	Vector2.release(self._gravity)
+
+	for i, point in ipairs(self._points) do
+		Vector2.release(point.pos)
+		Vector2.release(point.lastPos)
+		Vector2.release(point.velocity)
+		Vector2.release(point.force)
+	end
+end
+
+function M:init(x, y)
+	self:changeStartPoint(x, y)
+	self:resetAllPoints2Start()
+end
+
+function M:getPoint(idx)
+	return self._points[idx]
+end
+
+function M:setGravityDirection(x, y)
+	self._gravity:Set(x * 9.81, y * 9.81)
+end
+
+function M:changeTotalLength(len)
+	local jointNum = self._pointCount - 1
+
+	if jointNum == 0 then
+		return
+	end
+
+	self._len = len
+	local eachLen = len / jointNum
+
+	for i, joint in ipairs(self._joints) do
+		if i > jointNum / 2 then
+			joint.restLen = eachLen / 3 / 3
+		else
+			joint.restLen = eachLen / 3
+		end
+	end
+end
+
+function M:changeStartPoint(x, y)
+	self._points[1].pos:Set(x, y)
+end
+
+function M:resetAllPoints2Start()
+	self._len = 0
+	local startPoint = self._points[1]
+
+	for i = 1, self._pointCount do
+		local point = self._points[i]
+
+		if not point.const then
+			local x, y = startPoint.pos:Get()
+
+			point.pos:Set(x, y)
+			point.lastPos:Set(x, y)
+		end
+
+		point.force:Set(0, 0)
+	end
+
+	for i, joint in ipairs(self._joints) do
+		joint.restLen = 0
+	end
+end
+
+function M:changeEndPoint(x, y)
+	local startPoint = self._points[1]
+	local endPoint = self._points[self._pointCount]
+
+	endPoint.pos:Set(x, y)
+
+	local len = (endPoint.pos - startPoint.pos):Magnitude()
+
+	self:changeTotalLength(len)
+end
+
+function M:simulateVerlet(dt)
+	for i = 1, self._pointCount do
+		local point = self._points[i]
+
+		if not point.const then
+			local tempX = point.pos.x
+			local tempY = point.pos.y
+			point.force.x = point.force.x + self._gravity.x
+			point.force.y = point.force.y + self._gravity.y
+			local deltaPos = opt.vec2_1:Set(point.pos:Get()):Sub(point.lastPos):Mul(1 - self._verletDamping):Add(opt.vec2_2:Set(point.force:Get()):Mul(dt * dt / point.mass))
+
+			point.pos:Add(deltaPos)
+
+			point.lastPos.x = tempX
+			point.lastPos.y = tempY
+		end
+
+		point.force:Set(0, 0)
+	end
+
+	for i, joint in ipairs(self._joints) do
+		local dir = opt.vec2_1:Set(joint.p2.pos:Get()):Sub(joint.p1.pos)
+		local force = opt.vec2_2:Set(0, 0)
+
+		if not dir:Equals(Vector2.constZero()) then
+			local length = M.sqrt_optimized(dir:SqrMagnitude(), 4)
+			force = dir:Mul(joint.k * (length - joint.restLen) / length)
+		end
+
+		joint.p1.force:Add(force)
+		joint.p2.force:Sub(force)
+	end
+end
+
+function M.sqrt_optimized(num, step)
+	local x = num
+
+	for i = 1, step or 8 do
+		local y = x
+		x = (x + num / x) / 2
+
+		if x == y then
+			break
+		end
+	end
+
+	return x
+end
+
+return M

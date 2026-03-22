@@ -1,0 +1,185 @@
+local M = class("PlayerReturnPopPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	tfCheckinContainer = Types.Transform,
+	btnCheckin = Types.Button
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goCheckWidgets = {}
+	self._goCheckItemWidgets = {}
+
+	for i = 1, 7 do
+		self._goCheckWidgets[i] = self._tfCheckinContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goCheckWidgets[i])
+
+		self._goCheckItemWidgets[i] = self._goCheckWidgets[i]._goItem
+
+		SimpleItemWidget.noCreate(self._goCheckWidgets[i]._goItem)
+		self:setClickWithoutAction(self._goCheckWidgets[i]._goItem._btnClick, function ()
+			self:handleClaimCheckRewardBtn(i)
+		end)
+	end
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+	end)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnCheckin, function ()
+		self:handleCheckinBtn()
+	end)
+end
+
+function M:init()
+	self._module = P._playerReturn
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateCheckBtn()
+	self:updateCheckinWidgets()
+	self:updateExpireTime()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	lc.stopTimer(self._intervalShow)
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._intervalShow)
+	M.super.OnDestroy(self)
+end
+
+function M:updateCheckBtn()
+	if self._module:canCheckin() and not self._module:isTodayCheckedIn() then
+		V.setBtnStyle(self._btnCheckin, V.BTN_STYLE.yellow, SID.STR_CLAIM)
+	else
+		V.setBtnStyle(self._btnCheckin, V.BTN_STYLE.gray, SID.STR_CLAIMED)
+	end
+
+	self._btnCheckin.dot:SetActive(self._module:canCheckin() and not self._module:isTodayCheckedIn())
+end
+
+function M:updateCheckinWidgets()
+	for i = 1, 7 do
+		self:updateCheckin(i)
+	end
+end
+
+function M:updateCheckin(dayIdx)
+	local tfCheckin = self._tfCheckinContainer:GetChild(dayIdx - 1)
+	local goCheckin = tfCheckin.gameObject
+	local cids, nums = self._module:readCheckinRewards(dayIdx)
+	local todayIdx = self._module:getTodayCheckinIdx()
+	local isUnlock = dayIdx <= todayIdx
+	local checkedIn = self._module:haveBeenCheckedIn(dayIdx)
+
+	self._goCheckItemWidgets[dayIdx]:init(cids[1], nums[1])
+	self._goCheckItemWidgets[dayIdx]:setClaimed(checkedIn)
+	self._goCheckItemWidgets[dayIdx]:setCanClaim(isUnlock and not checkedIn)
+	self._goCheckWidgets[dayIdx]._txtDay:SetLocalize(SID.STR_NUM_DAY, dayIdx)
+
+	self._goCheckWidgets[dayIdx]._imgColor.color = Color.str2Static(checkedIn and "CE89ED" or "362946")
+end
+
+function M:updateExpireTime()
+	local seconds = Client.getZeroTimestamp(self._module:getStartTime()) + self._module:readDurationDay() * D.DAY_SECONDS - C.getCurTime()
+
+	if self._secondTimer == nil then
+		if seconds > 0 then
+			self._secondTimer = lc.setInterval(function ()
+				self:updateExpireTime()
+			end, 0.5)
+		else
+			return
+		end
+	end
+
+	if seconds <= 0 then
+		seconds = 0
+
+		lc.stopTimer(self._secondTimer)
+	end
+
+	local d, h, m, s = C.getTimeEndArgs(seconds)
+
+	if d >= 2 then
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:handleClaimCheckRewardBtn(dayIdx)
+	if self._module:isExpired() then
+		V.showToast(SID.TIP_EVENT_END)
+		self:closePanel()
+
+		return
+	end
+
+	local checkedIn = self._module:haveBeenCheckedIn(dayIdx)
+	local todayIdx = self._module:getTodayCheckinIdx()
+	local isUnlock = dayIdx <= todayIdx
+
+	if isUnlock and not checkedIn then
+		local ret, rewards = self._module:tryCheckin()
+
+		if ret ~= ResultCode.OK then
+			self._goCheckItemWidgets[todayIdx]:rewardclickCallback()
+
+			return
+		end
+
+		V.showRewardClaimPanel(rewards)
+		self:updateCheckin(todayIdx)
+		self:updateCheckBtn()
+		RedDotManager.update("city.home.playerReturn")
+	else
+		self._goCheckItemWidgets[dayIdx]:rewardclickCallback()
+	end
+end
+
+function M:handleCheckinBtn()
+	if self._module:isExpired() then
+		V.showToast(SID.TIP_EVENT_END)
+		self:closePanel()
+
+		return
+	end
+
+	local todayIdx = self._module:getTodayCheckinIdx()
+	local ret, rewards = self._module:tryCheckin()
+
+	if ret ~= ResultCode.OK then
+		self:closePanel()
+
+		return
+	end
+
+	V.showRewardClaimPanel(rewards)
+	self:updateCheckin(todayIdx)
+	self:updateCheckBtn()
+	RedDotManager.update("city.home.playerReturn")
+end
+
+return M

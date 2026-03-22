@@ -1,0 +1,67 @@
+local M = class("ArkRebuildMilestonePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	tfContainer = Types.Transform
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(subType)
+	self._subType = subType
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local unlock = D.isSystemUnlocked(D.SystemType.ArkRebuild_Entrance)
+	local isOpening = unlock and P._playerActivity:getArkProjActivityNum() > 0
+	local curExp = 0
+
+	if isOpening then
+		curExp = P._playerActivityArkRebuild:getCurMilestoneExp()
+	end
+
+	local rewardsCfg = P._playerActivityArkRebuild:readMilestoneCfg(self._subType)
+	local milestoneCnt = #rewardsCfg
+	local claimIdx = 0
+
+	for i = 1, milestoneCnt do
+		if rewardsCfg[i]._exp <= curExp then
+			claimIdx = i
+		else
+			break
+		end
+	end
+
+	for i = 1, math.max(milestoneCnt, self._tfContainer.childCount) do
+		local widget = self._tfContainer:GetChild(i - 1)
+		widget = widget or GameObject.Instantiate(self._tfContainer:GetChild(0).gameObject, self._tfContainer).gameObject
+
+		if i <= milestoneCnt then
+			widget:SetActive(true)
+			widget:GetChild(0):SetActive(i <= claimIdx)
+			widget:GetChild(1):SetActive(claimIdx < i)
+			widget:GetChild(2):SetActive(claimIdx < i)
+
+			widget:GetChild(2):GetComponent("TMP_Text").text = i
+			local goItem = widget:GetChild(3).gameObject
+
+			SimpleItemWidget.noCreate(goItem)
+			goItem:init(rewardsCfg[i]._cids[1], rewardsCfg[i]._nums[1])
+			self:setClick(goItem._btnClick, function ()
+				goItem:rewardclickCallback()
+			end)
+		else
+			widget:SetActive(false)
+		end
+	end
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

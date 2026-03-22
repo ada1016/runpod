@@ -1,0 +1,94 @@
+local M = class("NotificationGroup")
+
+function M:ctor(rootImage)
+	self._image = rootImage
+	self._tmp = rootImage.transform:GetChild(0):GetComponent("TextMeshProUGUI")
+	self._animator = rootImage.transform:GetComponent("Animator")
+	self._nodes = {}
+	self._prevSatisfiedIndex = 0
+	self._isRead = false
+end
+
+function M:addNode(notificationNode)
+	self._nodes[#self._nodes + 1] = notificationNode
+
+	notificationNode:addRefGroup(self)
+end
+
+function M:satisfiedIndex()
+	for i = 1, #self._nodes do
+		if self._nodes[i]:isSatisfied() then
+			return i
+		end
+	end
+
+	return 0
+end
+
+function M:isRead()
+	return self._isRead
+end
+
+function M:setRead()
+	if self._prevSatisfiedIndex ~= 0 then
+		self._isRead = true
+
+		self:updateUI()
+	end
+end
+
+function M:updateNotificationGroup()
+	local curSatisfiedIndex = self:satisfiedIndex()
+
+	if curSatisfiedIndex == 0 then
+		self._isRead = false
+	end
+
+	self._prevSatisfiedIndex = curSatisfiedIndex
+
+	self:updateUI()
+end
+
+function M:notificationTypeAndText()
+	if self._isRead or self._prevSatisfiedIndex == 0 then
+		return NotificationMgr.NotificationType.none
+	else
+		return self._nodes[self._prevSatisfiedIndex]:notificationTypeAndText()
+	end
+end
+
+function M:updateUI()
+	local notificationType, textSid, textSatisified = self:notificationTypeAndText()
+
+	if notificationType == NotificationMgr.NotificationType.none then
+		self._image.gameObject:SetActive(false)
+
+		return
+	end
+
+	if notificationType == NotificationMgr.NotificationType.green or notificationType == NotificationMgr.NotificationType.green_animate then
+		LuaUnity.setTPSprite(self._image, "general/NavBarNotifGreen")
+	end
+
+	if self._tmp then
+		if textSatisified then
+			self._tmp.text = textSatisified
+		else
+			self._tmp:SetLocalize(textSid or SID.EXCLAMATION_MARK)
+		end
+	end
+
+	local isAnimate = notificationType == NotificationMgr.NotificationType.red_animate or notificationType == NotificationMgr.NotificationType.green_animate
+
+	if self._animator then
+		self._animator.enabled = isAnimate
+	end
+
+	self._image.gameObject:SetActive(true)
+
+	if not isAnimate then
+		self._image.transform:ForceRebuildLayoutImmediate()
+	end
+end
+
+return M

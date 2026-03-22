@@ -1,0 +1,399 @@
+local M = class("RangerFoundryPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	goHangar = Types.GameObject,
+	tfNewEggContainer = Types.Transform,
+	tfTopAnimLayer = Types.Transform,
+	btnIssue = Types.Button,
+	btnDraw = Types.Button,
+	txtDrawTip = Types.TMP_Text,
+	btnSkipAnim = Types.Button,
+	tfEggContainers = Types.Transform,
+	btnExchange = Types.Button,
+	btnRangerBP = Types.Button,
+	goVfx1 = Types.GameObject,
+	goVfx2 = Types.GameObject,
+	goVfx3 = Types.GameObject,
+	goVfxQuality2 = Types.GameObject,
+	goVfxQuality3 = Types.GameObject,
+	goVfxQuality4 = Types.GameObject,
+	goVfxQuality5 = Types.GameObject,
+	goVfxQuality6 = Types.GameObject,
+	goVfxQuality6Smoke = Types.GameObject
+}
+local EggWidget = requireLua("RangerFoundryEggWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._animHanger = self._goHangar:GetComponent("SpineUIAnimation")
+	self._eggWidgets = {}
+	self._anim = self.gameObject:GetComponent("Animation")
+
+	for i = 1, 3 do
+		local goWidget = self._tfEggContainers:GetChild(i - 1).gameObject
+
+		EggWidget.noCreate(goWidget)
+		goWidget:init(i)
+		goWidget:setBtnClicks(self)
+
+		self._eggWidgets[i] = goWidget
+	end
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("ranger.egg.canBirth", function ()
+		self:updateEggs()
+	end)
+	self:on("ranger.egg.startIncubate", function ()
+		self:updateEggs()
+	end)
+	self:on("ranger.egg.cancelIncubate", function ()
+		self:updateEggs()
+	end)
+	self:on("prop.dirty", function (cid, num)
+		if cid == D.ResType.ranger_draw_token and num > 0 then
+			self:updateDrawArea()
+		end
+	end)
+	self:on("day.cross", function ()
+		self:updateRedDot()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnDraw, function ()
+		self:handleDrawBtn()
+	end)
+	self:setClick(self._btnExchange, function ()
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.ranger_exchange_token, 13000)
+	end)
+	self:setClick(self._btnIssue, function ()
+		UIManager.openPanel(PrefabDefine.RangerEggOddsPanel, self._module:getDrawDropIdCommon(), true)
+	end)
+	self:setClick(self._btnSkipAnim, function ()
+		self:dealSkipAnimBtn()
+	end)
+	self:setClick(self._btnRangerBP, function ()
+		UIManager.openPanel(PrefabDefine.BattlePassContainerPanel, {
+			"BattlePassRangerPanel"
+		})
+	end)
+end
+
+function M:init(panel)
+	self._parentPanel = panel
+	self._module = P._playerRanger
+
+	self._btnDraw.transform:GetChild(1):GetComponent("TMP_Text"):SetLocalize(SID.RANGER_EGG_DRAW_X, 1)
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:updateUI()
+	self:addEvents()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:OnFocus()
+	self:updateRedDot()
+end
+
+function M:handleDrawBtn()
+	local resultCode, params = self._module:checkDrawEgg()
+
+	if resultCode ~= ResultCode.OK then
+		if resultCode == ResultCode.RANGER_SLOT_FULL then
+			V.showToast(SID.RANGER_SLOT_FULL)
+
+			return
+		end
+
+		V.showResultCode(resultCode, params)
+
+		return
+	end
+
+	local function dealFunc()
+		local insertSlot = self._module:findEmptyEggSlot()
+		resultCode, params = self._module:tryDrawEgg()
+
+		if resultCode ~= ResultCode.OK then
+			return
+		end
+
+		self._lastEggSlotIdx = insertSlot
+		local data = self._module:getEggData(insertSlot)
+		self._lastEggQuality = data.eggQuality
+
+		if self:getSkipAnim() then
+			self:dealAfterDraw(true)
+		else
+			self:playDrawAnim()
+		end
+	end
+
+	local r1, p1 = self._module:checkTicketDrawEgg()
+
+	if r1 ~= ResultCode.OK then
+		local r2, p2 = self._module:checkDiamondDrawEgg()
+
+		if r2 == ResultCode.OK then
+			local show = V.tryShowDiamondConfirm(D.ResType.diamond, self._module:readDiamondDrawCost(), dealFunc)
+
+			if not show then
+				dealFunc()
+			end
+		else
+			V.showResultCode(r2, p2)
+		end
+	else
+		dealFunc()
+	end
+end
+
+local Quality2AnimQuality = {
+	1,
+	1,
+	1,
+	2,
+	3,
+	4,
+	4
+}
+local Quality2Sound = {
+	"ui_Egg_bluegreen_light_1",
+	"ui_Egg_bluegreen_light_1",
+	"ui_Egg_bluegreen_light_1",
+	"ui_Egg_purple_light_1",
+	"ui_Egg_orange_light_1",
+	"ui_Egg_red_light_1",
+	"ui_Egg_red_light_1"
+}
+
+function M:playDrawAnim()
+	local x, y, z = lc.getPosition(self._eggWidgets[self._lastEggSlotIdx]._tfEggParent)
+
+	Client.playSound("ui_Egg_draw_1")
+
+	self._targetPos = {
+		x,
+		y,
+		z
+	}
+
+	SimpleEvent.emit("rangerPanel.hide", true)
+	MainGameRoot:showGlobalMask()
+	self._goVfx1:SetActive(false)
+	self._goVfx2:SetActive(false)
+	self._goVfx3:SetActive(false)
+	self._goVfxQuality2:SetActive(false)
+	self._goVfxQuality3:SetActive(false)
+	self._goVfxQuality4:SetActive(false)
+	self._goVfxQuality5:SetActive(false)
+	self._goVfxQuality6:SetActive(false)
+	self._goVfxQuality6Smoke:SetActive(false)
+	self._goVfx1:SetActive(true)
+	self._goVfx2:SetActive(true)
+	self._anim:Play("ani_rangerEgg_01")
+	self._animHanger:Clear()
+	self._animHanger:AddStepFromLua("up", false, false, 0, 0)
+	self._animHanger:AddStepFromLua("build", false, true, 0.1, 0, function ()
+		self:showEggOnHangar(self._lastEggQuality)
+		self._goVfx3:SetActive(true)
+
+		if self._lastEggQuality == 6 then
+			lc.delayFunc(0.8, function ()
+				self._goVfxQuality6Smoke:SetActive(true)
+			end, self.gameObject)
+		end
+
+		local anim = Quality2AnimQuality[self._lastEggQuality]
+		local delayShowLightTime = 0
+
+		if anim == 1 then
+			delayShowLightTime = 0.1
+		elseif anim == 2 then
+			delayShowLightTime = 0.7
+		else
+			delayShowLightTime = 1.3
+		end
+
+		lc.delayFunc(delayShowLightTime, function ()
+			local vfx = self["_goVfxQuality" .. self._lastEggQuality] or self._goVfxQuality2
+
+			vfx:SetActive(true)
+			Client.playSound(Quality2Sound[self._lastEggQuality])
+		end, self.gameObject)
+	end)
+
+	self._lastBuildAnimName = "build" .. Quality2AnimQuality[self._lastEggQuality]
+
+	self._animHanger:AddStepFromLua(self._lastBuildAnimName, false, true, 0, 0, function ()
+		self._timer = lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+			self:playAfterDrawAnim()
+		end, 0.5)
+	end)
+	self._animHanger:Play()
+end
+
+function M:showEggOnHangar(eggType)
+	if self._showEgg then
+		GameObject.Destroy(self._showEgg)
+
+		self._showEgg = nil
+	end
+
+	if eggType then
+		self._showEgg = LuaUnity.createGameObject(string.format("Assets/FW/Prefabs/UI/element/EggQ%d.prefab", eggType), self._tfNewEggContainer)
+
+		lc.setAnchoredPosition(self._showEgg, 0, -20)
+		lc.setLocalScale(self._showEgg, 0.85, 0.85, 0.85)
+	end
+end
+
+function M:playAfterDrawAnim()
+	local tfEgg = self._showEgg.transform
+
+	tfEgg:SetParent(self._tfTopAnimLayer)
+	MainGameRoot:showGlobalMask()
+
+	local seq = DOTween.Sequence()
+	local tfEgg = self._showEgg.transform
+	local animTime = 0
+	local x, y, z = lc.getPosition(tfEgg)
+
+	seq:Insert(0, tfEgg:DOScale(Vector3.static(1.2, 1.2, 1.2), 0.2))
+	seq:Insert(0, tfEgg:DOMove(Vector3.static(x, y + 100, z), 0.2):SetEase(V.EASE_OUT_SINE))
+
+	animTime = animTime + 0.5
+
+	seq:InsertCallback(animTime, function ()
+		self._anim:Play("ani_rangerEgg_02")
+	end)
+	seq:Insert(animTime, tfEgg:DOScale(Vector3.static(0.9, 0.9, 0.9), 0.4))
+	seq:Insert(animTime, tfEgg:DOMove(Vector3.static(self._targetPos[1], self._targetPos[2], self._targetPos[3]), 0.4):SetEase(V.EASE_IN_SINE))
+	seq:OnComplete(function ()
+		MainGameRoot:hideGlobalMask()
+		SimpleEvent.emit("rangerPanel.hide", false)
+		self:dealAfterDraw()
+	end)
+end
+
+function M:dealAfterDraw(isSkip)
+	self:showEggOnHangar()
+
+	if isSkip then
+		V._showEggVfx = true
+
+		Client.playSound(Quality2Sound[self._lastEggQuality])
+	end
+
+	self._eggWidgets[self._lastEggSlotIdx]:updateUIBySlotStatus(true)
+
+	V._showEggVfx = false
+
+	self:updateDrawArea()
+	self:updateRedDot()
+end
+
+function M:updateUI()
+	self._goVfx1:SetActive(false)
+	self._goVfx2:SetActive(false)
+	self._goVfx3:SetActive(false)
+	self._goVfxQuality2:SetActive(false)
+	self._goVfxQuality3:SetActive(false)
+	self._goVfxQuality4:SetActive(false)
+	self._goVfxQuality5:SetActive(false)
+	self._goVfxQuality6:SetActive(false)
+	self._goVfxQuality6Smoke:SetActive(false)
+	self:updateSkip()
+	self:updateTimer()
+	self:updateEggs()
+	self:updateDrawArea()
+	self:updateRedDot()
+end
+
+function M:updateRedDot()
+	self._btnRangerBP.dot:SetVisible(RedDotManager.getPathFlag("city.home.special.battlepassranger"))
+end
+
+function M:updateSkip()
+	local isSkip = self:getSkipAnim()
+
+	self._btnSkipAnim.transform:GetChild(1):SetActive(isSkip)
+end
+
+function M:dealSkipAnimBtn()
+	local newValue = self:getSkipAnim() and 0 or 1
+
+	lc.setIntKeyValue("ranger_egg_lottery_skip_anim", newValue)
+	self:updateSkip()
+end
+
+function M:getSkipAnim()
+	return lc.getIntKeyValue("ranger_egg_lottery_skip_anim", 0) == 1
+end
+
+function M:updateEggs()
+	for i, eggWidget in pairs(self._eggWidgets) do
+		eggWidget:updateUIBySlotStatus()
+	end
+end
+
+function M:updateTimer()
+	if self._secondTimer then
+		lc.stopTimer(self._secondTimer)
+	end
+
+	self._secondTimer = lc.setInterval(function ()
+		self:updateTimes()
+	end, 0.5)
+end
+
+function M:updateTimes()
+	local ct = C.getCurTime()
+
+	for i, eggWidget in pairs(self._eggWidgets) do
+		eggWidget:updateLeftTime(ct)
+	end
+end
+
+function M:updateDrawArea()
+	local leftNum = self._module:getBaseDrawLeftNum()
+
+	self._txtDrawTip:SetLocalize(SID.RANGER_DRAW_TIP1, leftNum)
+
+	local costTicket = P._playerAsset:isAssetEnough(D.ResType.ranger_draw_token, 1)
+	local tmpCost = self._btnDraw.transform:Find("cost"):GetComponent("TMP_Text")
+
+	if costTicket then
+		tmpCost.text = string.format("%s %d", D.getTMPSpriteRichText("item_small_" .. D.ResType.ranger_draw_token), 1)
+	else
+		tmpCost.text = string.format("%s %d", D.getTMPSpriteRichText("item_small_" .. D.ResType.diamond), self._module:readDiamondDrawCost())
+	end
+
+	self._btnSkipAnim.transform.parent:SetActive(self._module:canJumpDrawAnim())
+end
+
+return M

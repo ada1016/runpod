@@ -1,0 +1,85 @@
+local M = class("SparkScoutGradeRewardPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform
+}
+local RankRewardWidget = requireLua("SparkScoutGradeRewardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	local cellHeight = 240
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		direction = -1,
+		bottomPadding = 0,
+		cellMargin = 0,
+		cellInitCount = 7,
+		cellHeight = cellHeight
+	})
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init()
+	self._module = P._playerActivitySparkScout
+	self._showGrades = clone(self._module:getRewardGradeIds())
+
+	if P._playerActivity:isSparkScoutOpening() then
+		local curGradeId = P._playerActivitySparkScout:getMaxHistoryGradeId()
+		self._showGradeId = curGradeId
+	else
+		self._showGradeId = P._playerActivitySparkScout:getBaseGradeId()
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData(0)
+
+	local curGradeId = self._showGradeId
+
+	if P._playerActivity:isSparkScoutOpening() then
+		if curGradeId ~= P._playerActivitySparkScout:getBaseGradeId() then
+			local idx = table.findArray(self._showGrades, curGradeId - curGradeId % 10)
+
+			self._scrollViewEx:moveToItemByIndex(idx, nil)
+		end
+	end
+end
+
+function M:closePanel(enter)
+	M.super.closePanel(self)
+end
+
+function M:onCellNum()
+	return #self._showGrades or 0
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RankRewardWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+		self:setClick(goCell._goItem._btnClick, function ()
+			goCell._goItem:rewardclickCallback(self)
+		end)
+	end
+
+	goCell:updateUI(index, self._showGrades, self._showGradeId)
+
+	return goCell
+end
+
+function M:onRecycleCell(goCell, index)
+end
+
+return M

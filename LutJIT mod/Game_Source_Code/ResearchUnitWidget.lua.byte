@@ -1,0 +1,124 @@
+local color1 = "36FFEE"
+local color2 = "FFC471"
+local M = class("ResearchUnitWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ResearchUnitWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._goResearchs = {
+		go._goResearch1,
+		go._goResearch2,
+		go._goResearch3,
+		go._goResearch4
+	}
+
+	lc.prefabVarPeer(go._goResearch1)
+	lc.prefabVarPeer(go._goResearch2)
+	lc.prefabVarPeer(go._goResearch3)
+	lc.prefabVarPeer(go._goResearch4)
+
+	go._goResearch1._imgNext = go._goResearch1._imgLeftUp
+	go._goResearch2._imgNext = go._goResearch2._imgRightUp
+	go._goResearch3._imgNext = go._goResearch3._imgRightUp
+	go._goResearch4._imgNext = go._goResearch4._imgLeftUp
+
+	for i = 1, 4 do
+		go._goResearchs[i]._imgGradient = go._goResearchs[i]._imgNext:GetComponent("UIGradient")
+		go._goResearchs[i]._showAnim = go._goResearchs[i]:GetComponent("Animation")
+	end
+
+	return go
+end
+
+function M:init(level, curLevel)
+	for i = 1, 4 do
+		local tLevel = level + i - 1
+		local conf = D._gatlinUpgradeConfig[tLevel]
+
+		if conf then
+			if conf._rouge then
+				self._goResearchs[i]._btnItem:SetActive(true)
+				self._goResearchs[i]._btnItemSmall:SetActive(false)
+				self._goResearchs[i]._goLock:SetActive(curLevel < tLevel)
+				self._goResearchs[i]._goItem:SetActive(tLevel <= curLevel)
+
+				local sprite = D.toResearchSprite(conf)
+
+				LuaUnity.setTPSprite(self._goResearchs[i]._imgIcon, sprite, true)
+				LuaUnity.setTPSprite(self._goResearchs[i]._imgLockIcon, sprite, true)
+				self._goResearchs[i]._imgDot:SetActive(tLevel == curLevel + 1 and P._playerArmory:canUpgradeGatlin())
+			else
+				self._goResearchs[i]._btnItem:SetActive(false)
+				self._goResearchs[i]._btnItemSmall:SetActive(true)
+				self._goResearchs[i]._goLockSmall:SetActive(curLevel < tLevel)
+				self._goResearchs[i]._goItemSmall:SetActive(tLevel <= curLevel)
+
+				local sprite = D.toResearchSprite(conf)
+
+				LuaUnity.setTPSprite(self._goResearchs[i]._imgIconSmall, sprite, true)
+				LuaUnity.setTPSprite(self._goResearchs[i]._imgLockIconSmall, sprite, true)
+				self._goResearchs[i]._imgDotSmall:SetActive(tLevel == curLevel + 1 and P._playerArmory:canUpgradeGatlin())
+			end
+
+			if D._gatlinUpgradeConfig[tLevel + 1] then
+				self._goResearchs[i]._imgNext.transform.parent:SetActive(true)
+			else
+				self._goResearchs[i]._imgNext.transform.parent:SetActive(false)
+			end
+
+			if conf._rouge then
+				self._goResearchs[i]._imgGradient.m_color1 = Color.str2Static(color1)
+				self._goResearchs[i]._imgGradient.m_color2 = Color.str2Static(color2)
+			elseif D._gatlinUpgradeConfig[tLevel + 1] and D._gatlinUpgradeConfig[tLevel + 1]._rouge then
+				self._goResearchs[i]._imgGradient.m_color1 = Color.str2Static(color2)
+				self._goResearchs[i]._imgGradient.m_color2 = Color.str2Static(color1)
+			else
+				self._goResearchs[i]._imgGradient.m_color1 = Color.str2Static(color1)
+				self._goResearchs[i]._imgGradient.m_color2 = Color.str2Static(color1)
+			end
+
+			self._goResearchs[i]._imgGradient.enabled = false
+			self._goResearchs[i]._imgGradient.enabled = true
+
+			if curLevel < tLevel then
+				if i > 2 then
+					self._goResearchs[i]._imgNext.fillAmount = 0
+				else
+					self._goResearchs[i]._imgNext.fillAmount = 0
+				end
+			elseif i > 2 then
+				self._goResearchs[i]._imgNext.fillAmount = 1
+			else
+				self._goResearchs[i]._imgNext.fillAmount = 1
+			end
+		else
+			self._goResearchs[i]._imgNext.transform.parent:SetActive(false)
+			self._goResearchs[i]._goLock:SetActive(false)
+			self._goResearchs[i]._goItem:SetActive(false)
+			self._goResearchs[i]._goLockSmall:SetActive(false)
+			self._goResearchs[i]._goItemSmall:SetActive(false)
+		end
+	end
+end
+
+function M:updateDot(level, curLevel)
+	for i = 1, 4 do
+		local tLevel = level + i - 1
+
+		if D._gatlinUpgradeConfig[tLevel] then
+			if D._gatlinUpgradeConfig[tLevel]._rouge then
+				self._goResearchs[i]._imgDot:SetActive(tLevel == curLevel + 1 and P._playerArmory:canUpgradeGatlin())
+			else
+				self._goResearchs[i]._imgDotSmall:SetActive(tLevel == curLevel + 1 and P._playerArmory:canUpgradeGatlin())
+			end
+		end
+	end
+end
+
+function M:playActiveAnim(index)
+end
+
+return M

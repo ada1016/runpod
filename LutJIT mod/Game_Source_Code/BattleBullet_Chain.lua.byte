@@ -1,0 +1,283 @@
+local M = class("BattleBullet_Chain", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local sqrt = math.sqrt
+local TablePool = TablePool
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local opt = opt
+local BattleMathLib = BattleMathLib
+local FLY_TIME = 0.25
+local WAIT_TIME = 1
+local HAS_VIEW = true
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._targetEnemysMap = table.new(0, 0)
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		self._objBullets = table.new(8, 0)
+		self._awlayCD = table.new(8, 0)
+		self._targetEnemys = table.new(8, 0)
+		self._targetPositions = table.new(8, 0)
+		self._enemyCount = 1
+	end
+end
+
+function M:init(id, battleSkill)
+	battleSkill._viewScript = nil
+
+	SUPER.init(self, id, battleSkill)
+	table.clear(self._targetEnemysMap)
+end
+
+function M:setBeganPosition(position, endTarget)
+	local x = position.x
+	local y = position.y
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		table.clear(self._targetEnemys)
+		table.clear(self._targetPositions)
+		table.clear(self._objBullets)
+
+		self._enemyCount = 1
+		self._targetEnemys[self._enemyCount] = nil
+		self._enemyCount = self._enemyCount + 1
+		local t = TablePool.fetch2()
+		t[1] = x
+		t[2] = y
+		self._targetPositions[#self._targetPositions + 1] = t
+	end
+
+	self._endTarget = endTarget
+
+	self:startSeekEnemys(x, y)
+end
+
+function M:setBeganTargt(beganEnemy, endTarget)
+	local x = beganEnemy._position.x
+	local y = beganEnemy._position.y
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		table.clear(self._targetEnemys)
+		table.clear(self._targetPositions)
+
+		self._enemyCount = 1
+		self._targetEnemys[self._enemyCount] = beganEnemy
+		self._enemyCount = self._enemyCount + 1
+		local t = TablePool.fetch2()
+		t[1] = x
+		t[2] = y
+		self._targetPositions[#self._targetPositions + 1] = t
+
+		table.clear(self._objBullets)
+	end
+
+	self._endTarget = endTarget
+
+	self:startSeekEnemys(x, y)
+end
+
+function M:startSeekEnemys(x, y)
+	local num = 1
+	num = num + self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+	local left = false
+
+	if x <= self._battleSession._battleFieldEdgeX1 + 1 then
+		left = false
+	elseif x >= self._battleSession._battleFieldEdgeX2 - 1 then
+		left = true
+	else
+		left = self._battleRandomLib:randomTrue()
+	end
+
+	self:findEnemy(x, y, left, num)
+end
+
+function M:findEnemy(x, y, left, num)
+	if num == 0 then
+		self._finishCD = WAIT_TIME
+
+		return
+	end
+
+	local enemy = self._endTarget or self._battleSession:randomOneEnemy(self._targetEnemysMap)
+
+	if enemy == nil then
+		self._finishCD = WAIT_TIME
+
+		return
+	end
+
+	self:bulletHitEnemy(enemy)
+
+	self._targetEnemysMap[enemy._id] = true
+	local x_e = enemy._position.x
+	local y_e = enemy._position.y
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		local prefab = self:prefab()
+		local obj = self._sessionView:createBullet(prefab)
+
+		obj:SetPosition(x_e, y_e, 0)
+		obj:GetChild(2):SetActive(false)
+
+		local index = #self._objBullets + 1
+
+		if self._objBullets[index - 1] then
+			self._objBullets[index - 1]:GetChild(2):SetActive(true)
+		end
+
+		self._objBullets[index] = obj
+		self._awlayCD[index] = FLY_TIME + WAIT_TIME
+		self._targetEnemys[self._enemyCount] = enemy
+		self._enemyCount = self._enemyCount + 1
+		local t = TablePool.fetch2()
+		t[1] = x_e
+		t[2] = y_e
+		self._targetPositions[#self._targetPositions + 1] = t
+		local length = sqrt((x - x_e)^2 + (y - y_e)^2)
+
+		obj:GetChild(1):SetLocalScale(1, length, 1)
+		opt.vec3_1:SetXYZ(x - x_e, y - y_e, 0):SetNormalize()
+
+		local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+
+		obj:SetLocalRotation(0, 0, angle)
+		Client.playBattleSound("se_Bullet_4_chain")
+	end
+
+	num = num - 1
+
+	if num == 0 then
+		self._finishCD = WAIT_TIME
+
+		return
+	end
+
+	if x_e <= self._battleSession._battleFieldEdgeX1 + 1 then
+		left = false
+	elseif y_e >= self._battleSession._battleFieldEdgeX2 - 1 then
+		left = true
+	end
+
+	self._nextCD = FLY_TIME
+	self._nextXe = x_e
+	self._nextYe = y_e
+	self._nextLeft = left
+	self._nextNum = num
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._finishCD then
+		self._finishCD = self._finishCD - dt
+
+		if self._finishCD <= 0 then
+			self._finishCD = nil
+
+			self:markToBeDestroyed()
+
+			return
+		end
+	end
+
+	if self._id == 39 then
+		local a = 1
+	end
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		for i = 1, 8 do
+			if self._awlayCD[i] then
+				self._awlayCD[i] = self._awlayCD[i] - dt
+
+				if self._awlayCD[i] <= 0 then
+					self._awlayCD[i] = nil
+
+					self._objBullets[i]:SetActive(false)
+				end
+			end
+
+			local enemy_began = self._targetEnemys[i]
+			local enemy_end = self._targetEnemys[i + 1]
+
+			if enemy_began then
+				if not enemy_began._isToBeDestroyed then
+					self._targetPositions[i][1] = enemy_began._position.x
+					self._targetPositions[i][2] = enemy_began._position.y
+				else
+					self._targetEnemys[i] = nil
+				end
+			end
+
+			if enemy_end then
+				if not enemy_end._isToBeDestroyed then
+					self._targetPositions[i + 1][1] = enemy_end._position.x
+					self._targetPositions[i + 1][2] = enemy_end._position.y
+				else
+					self._targetEnemys[i + 1] = nil
+				end
+			end
+
+			if self._targetPositions[i] and self._targetPositions[i + 1] then
+				local x_b = self._targetPositions[i][1]
+				local y_b = self._targetPositions[i][2]
+
+				if self._targetPositions[i + 1] == nil then
+					local a = 1
+				end
+
+				local x_e = self._targetPositions[i + 1][1]
+				local y_e = self._targetPositions[i + 1][2]
+				local obj = self._objBullets[i]
+				local length = sqrt((x_b - x_e)^2 + (y_b - y_e)^2)
+
+				obj:GetChild(1):SetLocalScale(1, length, 1)
+				opt.vec3_1:SetXYZ(x_b - x_e, y_b - y_e, 0):SetNormalize()
+
+				local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+
+				obj:SetLocalRotation(0, 0, angle)
+				obj:SetPosition(x_e, y_e, 0)
+			end
+		end
+	end
+
+	if self._nextCD then
+		self._nextCD = self._nextCD - dt
+
+		if self._nextCD <= 0 then
+			self._nextCD = nil
+
+			self:findEnemy(self._nextXe, self._nextYe, self._nextLeft, self._nextNum)
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+
+	if HAS_VIEW and not self._battleSession:isSkipView() then
+		for i = 1, #self._objBullets do
+			self._battleSession._battleView:recycleUnit(self._objBullets[i])
+		end
+
+		table.clear(self._objBullets)
+		table.clear(self._awlayCD)
+		table.clear(self._targetEnemys)
+
+		for i = 1, #self._targetPositions do
+			TablePool.release2(self._targetPositions[i])
+		end
+
+		table.clear(self._targetPositions)
+	end
+end
+
+return M

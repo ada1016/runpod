@@ -1,0 +1,122 @@
+local M = class("BattleNewStagePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	cgBg = Types.CanvasGroup,
+	goWeaponCard = Types.GameObject,
+	txtTitle = Types.TMP_Text,
+	btnJump = Types.Button,
+	goTxtClick2Jump = Types.GameObject
+}
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._atorTitle = self._goWeaponCard.transform.parent:Find("Battle_Title"):GetComponent("Animator")
+
+	WeaponCardWidget.noCreate(self._goWeaponCard)
+end
+
+function M:addClicks()
+	self:setClick(self._btnJump, function ()
+		self:dealJump()
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(weaponCard, isLast, callback)
+	self._canJump = true
+	self._battleSession = BattleManager:getSession()
+
+	self._txtTitle:SetLocalize(SID.ROGUE_NEW_STARTSTAGE)
+	self:updateJumpBtn()
+
+	self._jump = false
+	self._closeCallback = callback
+	self._isLast = isLast
+
+	if weaponCard then
+		weaponCard:copy2Card(self._goWeaponCard)
+
+		local wId = weaponCard._weaponId
+		self._canJump = not self._battleSession._battleRouge._pool:isSuperSelected(wId)
+	end
+
+	self._goTxtClick2Jump:SetActive(self._canJump)
+
+	self._cgBg.alpha = 0
+
+	self._cgBg:DOFade(1, 0.3):SetUpdate(0, true):SetLink(self.gameObject)
+
+	local x, y, z = lc.getPosition(weaponCard.transform)
+	local start = Vector3.new(lc.getPosition(weaponCard.transform))
+	local target = Vector3.new(Screen.width / 2, Screen.height / 2)
+
+	lc.setPosition(self._goWeaponCard, x, y, z)
+	self._goWeaponCard:updateStarUI(4)
+
+	self._seq = self._goWeaponCard:playNewStageAnimation(start, target, {
+		onUpgrade = function ()
+			self._goWeaponCard:updateUINewStageFullStar()
+		end,
+		onSuperStart = function ()
+			self._atorTitle:SetTrigger("change")
+		end,
+		onSuperChange = function ()
+			self._txtTitle:SetLocalize(SID.ROGUE_ADD_SUPERMOD_TITLE)
+		end,
+		onComplete = function ()
+			weaponCard:updateUINewStage()
+
+			if self._isLast then
+				self:closePanel()
+			else
+				self._cgBg:DOFade(0, 0.3):SetUpdate(0, true):OnComplete(function ()
+					self:closePanel()
+				end)
+			end
+		end
+	})
+end
+
+function M:dealJump()
+	if not self._canJump then
+		return
+	end
+
+	self._jump = true
+	self._isLast = true
+
+	if self._seq then
+		self._seq:Complete(true)
+
+		self._seq = nil
+	end
+
+	self._btnJump.transform.parent:SetActive(false)
+end
+
+function M:updateJumpBtn()
+	local canShow = P._playerMission:getMissionId() > (D._globalConfig._jump_upgrade_mission or 10005) and self._canJump
+
+	if canShow then
+		MainGameRoot:hideGlobalMask()
+	end
+
+	self._btnJump.transform.parent:SetActive(canShow)
+end
+
+function M:closePanel()
+	MainGameRoot:showGlobalMask()
+	M.super.closePanel(self)
+
+	if self._closeCallback then
+		self._closeCallback(self._jump)
+
+		self._closeCallback = nil
+	end
+end
+
+return M

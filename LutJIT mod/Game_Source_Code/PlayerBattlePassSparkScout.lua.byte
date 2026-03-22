@@ -1,0 +1,76 @@
+local M = class("PlayerBattlePassSparkScout", requireLua("PlayerBattlePassActivityBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.SparkScout
+	self._bpLevelCfg = D._battlePassSparkScoutConfig
+	self._bpLogWay = D.LogWay.spark_scout_bp
+end
+
+function M:addRewards(level, step)
+	local rewards = nil
+	local cid, num = self:readReward(level, step)
+
+	if D.isSparkChipCustom(cid) then
+		local selectedIdx, selectedId, selectedNum = P._playerAsset:getItemCustomSelectIdx(cid)
+
+		if not selectedIdx then
+			selectedIdx, selectedId, selectedNum = P._playerAsset:getCustomItemCidNumByIdx(cid, selectedIdx)
+		end
+
+		rewards = P._playerActivitySparkScout:addChip(selectedId)
+	else
+		local cids, nums = self:readRewards(level, step)
+		rewards = P._playerAsset:increaseAssetNums(cids, nums, self._bpLogWay)
+	end
+
+	return rewards
+end
+
+function M:batchAddRewards(rewards)
+	local resultRewards = {}
+	local chipCustom = {}
+	local common = {}
+
+	for i = 1, #rewards do
+		local cid = rewards[i][1]
+		local num = rewards[i][2]
+
+		if D.isSparkChipCustom(cid) then
+			local selectedIdx, selectedId, selectedNum = P._playerAsset:getItemCustomSelectIdx(cid)
+
+			if not selectedIdx then
+				selectedIdx, selectedId, selectedNum = P._playerAsset:getCustomItemCidNumByIdx(cid, selectedIdx)
+			end
+
+			if D.isGem(selectedId) then
+				chipCustom[#chipCustom + 1] = rewards[i]
+			else
+				common[#common + 1] = rewards[i]
+			end
+		else
+			common[#common + 1] = rewards[i]
+		end
+	end
+
+	if #common > 0 then
+		D.foldRewards(resultRewards, P._playerAsset:increaseAssetNumsByList(common, self._bpLogWay))
+	end
+
+	if #chipCustom > 0 then
+		for i = 1, #chipCustom do
+			local cid = chipCustom[i][1]
+			local num = chipCustom[i][2]
+			local selectedIdx, selectedId, selectedNum = P._playerAsset:getItemCustomSelectIdx(cid)
+
+			if not selectedIdx then
+				selectedIdx, selectedId, selectedNum = P._playerAsset:getCustomItemCidNumByIdx(cid, selectedIdx)
+			end
+
+			D.foldRewards(resultRewards, P._playerActivitySparkScout:addChip(selectedId))
+		end
+	end
+
+	return resultRewards
+end
+
+return M

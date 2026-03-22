@@ -1,0 +1,164 @@
+local M = class("LevelFundRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+local steps = 2
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/LevelFundRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	for i = 1, steps do
+		ItemWidget.noCreate(self["_goItem" .. i])
+	end
+
+	self._goItems = {
+		{
+			self._goItem1
+		},
+		{
+			self._goItem2
+		}
+	}
+	self._module = P._playerLevelFund
+end
+
+function M:updateUI(level)
+	self._level = level
+
+	self:updateRewards()
+	self:updateLevelExp()
+end
+
+function M:getShowPlayerLvByStep(step)
+	return step < 1 and 1 or self._module:readUpLevelExp(step)
+end
+
+function M:updateLevelExp()
+	local showPlayerLv = self:getShowPlayerLvByStep(self._level)
+
+	self._tmpLv:SetLocalize(SID.BATTLE_LV, showPlayerLv)
+
+	local maxLv = self._module:readMaxLevel()
+
+	if self._level == 1 then
+		self._goProgress1:SetVisible(false)
+		self._goProgress2:SetVisible(true)
+	elseif self._level == maxLv then
+		self._goProgress1:SetVisible(true)
+		self._goProgress2:SetVisible(false)
+	else
+		self._goProgress1:SetVisible(true)
+		self._goProgress2:SetVisible(true)
+	end
+
+	local curLv = self._module:getCurRewardLevel()
+	local curPLv = P:getLevel()
+
+	if curLv < self._level then
+		local lastPlayerLv = self:getShowPlayerLvByStep(self._level - 1)
+		self._imgFill2.fillAmount = 0
+
+		if self._level - curLv == 1 then
+			self._imgFill1.fillAmount = (curPLv - lastPlayerLv) / (showPlayerLv - lastPlayerLv) * 2 - 1
+		else
+			self._imgFill1.fillAmount = 0
+		end
+	elseif self._level == curLv then
+		self._imgFill1.fillAmount = 1
+		self._imgFill2.fillAmount = 0
+
+		if self._level ~= maxLv then
+			local nextLv = self._level ~= maxLv and self._module:readUpLevelExp(self._level + 1)
+			self._imgFill2.fillAmount = (curPLv - showPlayerLv) / (nextLv - showPlayerLv) * 2
+		end
+	else
+		self._imgFill1.fillAmount = 1
+		self._imgFill2.fillAmount = 1
+	end
+
+	self._goLock:SetActive(curLv < self._level)
+end
+
+function M:updateRewards()
+	for step = 1, steps do
+		self:updateStepRewards(step)
+	end
+end
+
+function M:updateStepRewards(step)
+	local cids, nums = self._module:readRewards(self._level, step)
+	local goItems = self._goItems[step]
+	local len_cids = cids.c or #cids
+	local tfRewards = self["_tfRewards" .. step]
+	local max = math.max(#goItems, len_cids)
+	local canClaim = self._module:canClaim(self._level, step)
+	local claimed = self._module:isClaimed(self._level, step)
+
+	for i = 1, max do
+		local goItem = goItems[i]
+
+		if i <= len_cids then
+			local cid = cids[i]
+			local num = nums[i]
+
+			if not goItem then
+				goItem = GameObject.Instantiate(goItems[1], tfRewards)
+				goItems[i] = goItem
+
+				ItemWidget.noCreate(goItem)
+			end
+
+			goItem:init(cid, num)
+			goItem:setLock(not canClaim)
+			goItem:setClaimed(claimed)
+			goItem:setCanClaim(canClaim and not claimed)
+			goItem:setBgLight(canClaim and not claimed)
+			goItem:SetActive(true)
+		else
+			goItem:SetActive(false)
+		end
+	end
+end
+
+function M:setRewardsClick(panel)
+	self._panel = panel
+
+	for step = 1, steps do
+		local goItems = self._goItems[step]
+		local cids, nums = self._module:readRewards(self._level, step)
+
+		for i = 1, lc.lenTable(cids) do
+			local goItem = goItems[i]
+
+			panel:setClick(goItem._btnClick, function ()
+				if self._module:canClaim(self._level, step) and not self._module:isClaimed(self._level, step) then
+					local rewards = self._module:claimReward(self._level, step)
+
+					V.showRewardClaimPanel(rewards)
+					self:updateStepRewards(step)
+
+					return
+				end
+
+				goItem:rewardclickCallback()
+			end)
+		end
+	end
+end
+
+return M

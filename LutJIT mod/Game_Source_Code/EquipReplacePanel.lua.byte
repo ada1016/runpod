@@ -1,0 +1,98 @@
+local M = class("EquipReplacePanel", requireLua("BasePanel"))
+local Types = Types
+local Equip = requireLua("Equip")
+M.args = {
+	btnBg = Types.Button,
+	btnReplace = Types.Button,
+	btnUpgrade = Types.Button,
+	btnDecompose = Types.Button,
+	btnLock = Types.Button,
+	imgLock = Types.Image,
+	goAttributeLeft = Types.GameObject,
+	goAttributeRight = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		UIManager.openPanel(PrefabDefine.EquipImprovePanel, self._thisEquip:part())
+	end)
+	self:setClick(self._btnDecompose, function ()
+		self:dealDecompose()
+	end)
+	self:setClick(self._btnReplace, function ()
+		if self._replaceCallback then
+			self._replaceCallback()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnLock, function ()
+		if P._playerRole:isEquipLocked(self._id) then
+			P._playerRole:unlockEquip(self._id)
+			LuaUnity.setTPSprite(self._imgLock, "general/g_icon_lock02_big")
+		else
+			P._playerRole:lockEquip(self._id)
+			LuaUnity.setTPSprite(self._imgLock, "general/g_icon_lock_big")
+		end
+	end)
+end
+
+function M:init(id, replaceCallback)
+	if type(id) == "number" then
+		self._id = id
+		self._thisEquip = P._playerRole:getEquipById(id)
+		self._part = self._thisEquip:part()
+	else
+		self._thisEquip = Equip.create(id)
+		self._part = self._thisEquip:part()
+
+		self:hideAction()
+		self._btnLock:SetActive(false)
+	end
+
+	self._replaceCallback = replaceCallback
+	local targetId = P._playerRole:getCurrentEquips()[self._thisEquip:part()]
+	self._targetEquip = P._playerRole:getEquipById(targetId)
+
+	self._btnUpgrade:SetActive(false)
+	LuaUnity.setTPSprite(self._imgLock, P._playerRole:isEquipLocked(self._id) and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+	self:updateUI()
+end
+
+function M:updateUI()
+	V.loadEquipAttribute(self._goAttributeLeft, self._thisEquip)
+	V.loadEquipAttribute(self._goAttributeRight, self._targetEquip)
+end
+
+function M:dealDecompose()
+	local inUse = false
+
+	for i = 1, P._playerRole:getGroupNum() do
+		if table.contains(P._playerRole._equipSlotsNew[i], self._id) then
+			inUse = true
+		end
+	end
+
+	if inUse then
+		V.showToast(SID.TIP_EQUIP_IN_USE)
+	else
+		UIManager.openPanel(PrefabDefine.EquipDecomposePanel)
+		self:closePanel()
+	end
+end
+
+function M:hideAction()
+	self._btnReplace:SetActive(false)
+	self._btnUpgrade:SetActive(false)
+	self._btnDecompose:SetActive(false)
+	self._btnDecompose.transform.parent:SetActive(false)
+end
+
+return M

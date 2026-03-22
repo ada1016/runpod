@@ -1,0 +1,240 @@
+local M = class("ChallengePage", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	tfContainer = Types.Transform,
+	goDomeTrail = Types.GameObject,
+	goGlobalDefense = Types.GameObject,
+	goArkRebuild = Types.GameObject,
+	goRangerChallenge = Types.GameObject,
+	goSparkScoutChallenge = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goDomeTrail)
+	lc.prefabVarPeer(self._goGlobalDefense)
+	lc.prefabVarPeer(self._goArkRebuild)
+	lc.prefabVarPeer(self._goRangerChallenge)
+	lc.prefabVarPeer(self._goSparkScoutChallenge)
+end
+
+function M:addClicks()
+	self:setClick(self._goDomeTrail._btnEnter, function ()
+		UIManager.openPanel(PrefabDefine.DomeHomePanel)
+	end)
+	self:setClick(self._goGlobalDefense._btnEnter, function ()
+		UIManager.getMainPanel()._canvasGroup.alpha = 0
+
+		UIManager.openPanel(PrefabDefine.GlobalDefensePanel)
+	end)
+	self:setClick(self._goArkRebuild._btnEnter, function ()
+		V.checkActivityVersion(function ()
+			if not P._playerRecord:hasChallengeEnterArkRebuildFlag() then
+				P._playerRecord:setChallengeEnterArkRebuildFlag(true)
+				self._goArkRebuild._btnEnter.dot:SetActive(false)
+			end
+
+			self:dealArkProj()
+			RedDotManager.update("city.challenge")
+		end, D.ActivityType.ArkRebuild)
+	end)
+	self:setClick(self._goRangerChallenge._btnEnter, function ()
+		UIManager.openPanel(PrefabDefine.CrisisZoneHomePanel)
+	end)
+	self:setClick(self._goSparkScoutChallenge._btnEnter, function ()
+		V.checkActivityVersion(function ()
+			self:dealSparkScout()
+			RedDotManager.update("city.challenge")
+		end, D.ActivityType.SparkScout)
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateDot()
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._lockedNum = 0
+
+	self:loadChallenge(self._goDomeTrail, D.ChallengeId.Dome)
+	self:loadChallenge(self._goGlobalDefense, D.ChallengeId.GlobalDefense)
+	self:loadChallenge(self._goArkRebuild, D.ChallengeId.ArkRebuild)
+	self:loadChallenge(self._goRangerChallenge, D.ChallengeId.RangerChallenge)
+	self:loadChallenge(self._goSparkScoutChallenge, D.ChallengeId.SparkScout)
+	self._tfContainer:GetChild(self._tfContainer.childCount - 1).gameObject._goLine:SetActive(false)
+
+	if D.isSystemUnlocked(D._challengeConfig[D.ChallengeId.RangerChallenge]._systemUnlock) then
+		self._goRangerChallenge.transform:SetSiblingIndex(self._goArkRebuild.transform:GetSiblingIndex() - 1)
+	end
+
+	self:updateDot()
+
+	if lc._isCN then
+		self._goSparkScoutChallenge:SetActive(false)
+		self._goRangerChallenge:SetActive(false)
+		self._goArkRebuild:SetActive(false)
+	end
+end
+
+function M:loadChallenge(go, challengeId)
+	local conf = D._challengeConfig[challengeId]
+
+	if challengeId == D.ChallengeId.SparkScout then
+		if P._playerActivitySparkScout:isBeta() then
+			go._txtTitle:SetLocalize(SID.TEST_MARK, -conf._nameSid)
+		else
+			go._txtTitle:SetLocalize(conf._nameSid)
+		end
+	else
+		go._txtTitle:SetLocalize(conf._nameSid)
+	end
+
+	go._txtDesc:SetLocalize(conf._descSid)
+
+	if not D.isSystemUnlocked(conf._systemUnlock) then
+		self._lockedNum = self._lockedNum + 1
+
+		go.transform:SetAsLastSibling()
+		go._goLockArea:SetActive(true)
+		go._goTitleLock:SetActive(true)
+		go._goRewardArea:SetActive(false)
+		go._btnEnter:SetActive(false)
+
+		local type = D._systemUnlockConfig[conf._systemUnlock]._unlockType
+		local val = D._systemUnlockConfig[conf._systemUnlock]._unlockVal
+
+		if type == 3 or type == 4 then
+			val = -P._playerMission:readMissionName(val, math.floor(val / 10000))
+		end
+
+		go._txtLockTip:SetLocalize(SID["TIP_SYSTEM_UNLOCK_TIP_" .. type], val)
+
+		if challengeId == D.ChallengeId.RangerChallenge then
+			go._goComingSoon:SetActive(false)
+		end
+
+		if self._lockedNum > 2 then
+			go:SetActive(false)
+		else
+			go:SetActive(true)
+		end
+	else
+		go._goLockArea:SetActive(false)
+		go._goTitleLock:SetActive(false)
+		go._goRewardArea:SetActive(true)
+		go._btnEnter:SetActive(true)
+
+		local rewards = conf._rewards
+
+		if challengeId == D.ChallengeId.SparkScout and P._playerActivitySparkScout:isBeta() then
+			rewards = {}
+		end
+
+		for i = 1, 3 do
+			if rewards[i] then
+				local item = go._tfRewardContainer:GetChild(i - 1).gameObject
+
+				item:SetActive(true)
+				ItemWidget.noCreate(item)
+				item:init(rewards[i], 0)
+				item:setNum(false)
+				self:setClick(item._btnClick, function ()
+					item:rewardclickCallback()
+				end)
+			else
+				go._tfRewardContainer:GetChild(i - 1):SetActive(false)
+			end
+		end
+	end
+end
+
+function M:dealArkProj()
+	if P._playerActivityArkRebuild:hasSettleRewards() then
+		UIManager.openPanel(PrefabDefine.ArkRebuildSettlementRewardPanel)
+
+		return
+	end
+
+	local isOpening = P._playerActivity:getArkProjActivityNum() > 0
+
+	if isOpening then
+		if P._playerActivityArkRebuild:isEntered() then
+			UIManager.openPanel(PrefabDefine.ArkRebuildMainPanel, "mainBtn")
+			Trace.traceDesign_Activity("RebuildMainPanel_Enter:%s", nil, D.ActivityType.ArkRebuild, P._playerActivityArkRebuild:getSubType())
+
+			return
+		else
+			UIManager.openPanel(PrefabDefine.ArkRebuildPreviewPanel)
+		end
+	else
+		local showPreview, cfg = P._playerActivity:canPreview(D.ActivityType.ArkRebuild)
+
+		if showPreview then
+			UIManager.openPanel(PrefabDefine.ArkRebuildPreviewPanel)
+		elseif not cfg then
+			V.showToast(SID.STR_ACTIVITY_NOT_OPEN)
+		end
+	end
+end
+
+function M:dealSparkScout()
+	if P._playerActivitySparkScout:hasSettleRewards() then
+		UIManager.openPanel(PrefabDefine.SparkScoutSettlementRewardPanel)
+
+		return
+	end
+
+	local isOpening = P._playerActivity:getSparkScoutActivityNum() > 0
+
+	if isOpening then
+		if P._playerActivitySparkScout:isEntered() then
+			UIManager.openPanel(PrefabDefine.SparkScoutMainPanel, "mainBtn")
+			Trace.traceDesign_Activity("ScoutMainPanel_Enter:%s", nil, D.ActivityType.SparkScout, P._playerActivitySparkScout:getSubType())
+
+			return
+		else
+			UIManager.openPanel(PrefabDefine.SparkScoutPreviewPanel)
+		end
+	else
+		local showPreview, cfg = P._playerActivity:canPreview(D.ActivityType.SparkScout)
+
+		if showPreview then
+			UIManager.openPanel(PrefabDefine.SparkScoutPreviewPanel)
+		elseif not cfg then
+			V.showToast(SID.STR_ACTIVITY_NOT_OPEN)
+		end
+	end
+end
+
+function M:updateDot()
+	self._goDomeTrail._btnEnter.dot:SetActive(RedDotManager.getPathFlag("city.challenge.dome"))
+	self._goGlobalDefense._btnEnter.dot:SetActive(RedDotManager.getPathFlag("city.challenge.globalDefense"))
+	self._goArkRebuild._btnEnter.dot:SetActive(RedDotManager.getPathFlag("city.challenge.arkRebuild"))
+	self._goRangerChallenge._btnEnter.dot:SetActive(RedDotManager.getPathFlag("city.challenge.crisisZone"))
+	self._goSparkScoutChallenge._btnEnter.dot:SetActive(false)
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:updateUI()
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+return M

@@ -1,0 +1,141 @@
+local M = class("SevenDayRewardWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SevenDayRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	ItemWidget.noCreate(self._goItem)
+
+	self._module = P._playerSevenDay
+end
+
+function M:updateUI(step)
+	local curNum = P._playerAsset:getAssetNum(D.ResType.seven_day_exp)
+	self._step = step
+	self._startNum = self._step == 1 and 0 or self._module:readExp(self._step - 1)
+	self._endNum = self._module:readExp(self._step)
+
+	self:updateRewards()
+end
+
+function M:updateRewards()
+	local curNum = P._playerAsset:getAssetNum(D.ResType.seven_day_exp)
+	local goItem = self._goItem
+	local canClaim = self._module:canClaim(self._step)
+	local cids, nums = self._module:readRewards(self._step)
+
+	goItem:init(cids[1], nums[1])
+
+	local claimed = self._module:isClaimed(self._step)
+
+	goItem:setLock(not canClaim)
+	goItem:setClaimed(claimed)
+	goItem:setCanClaim(canClaim and not claimed)
+	goItem:SetActive(true)
+
+	self._tmpNeedNum.text = self._endNum
+	local len_cids = cids.c or #cids
+
+	self._goBox:SetActive(len_cids > 1)
+	self._goItem:SetActive(len_cids == 1)
+
+	local imgIcon = self._imgBoxIcon
+	local imgDi = self._imgBoxDi
+	local imgLight = self._goBoxLight
+	local anim = self._animBox
+
+	if canClaim then
+		if claimed then
+			LuaUnity.setTPSprite(imgIcon, "general/g_icon_03", true, true)
+
+			imgDi.color = Color.static(255, 255, 255, 50)
+
+			imgLight:SetActive(false)
+
+			anim.enabled = false
+		else
+			LuaUnity.setTPSprite(imgIcon, "general/g_icon_04", true, true)
+
+			imgDi.color = Color.static(255, 255, 255, 255)
+
+			imgLight:SetActive(true)
+
+			anim.enabled = true
+		end
+
+		LuaUnity.setTPSprite(imgDi, "general/g_bg_05", true, true)
+	else
+		anim.enabled = false
+		imgDi.color = Color.static(255, 255, 255, 255)
+
+		LuaUnity.setTPSprite(imgIcon, "general/g_icon_05", true, true)
+		LuaUnity.setTPSprite(imgDi, "general/g_bg_04", true, true)
+		imgLight:SetActive(false)
+	end
+
+	self._imgFill.fillAmount = 0
+end
+
+function M:setRewardsClick(panel)
+	local goItem = self._goItem
+
+	panel:setClick(goItem._btnClick, function ()
+		local canClaim = self._module:canClaim(self._step)
+		local claimed = self._module:isClaimed(self._step)
+
+		if canClaim and not claimed then
+			local rewards = self._module:claimStepRewards(self._step)
+
+			if rewards then
+				V.showRewardClaimPanel(rewards)
+				self:updateRewards()
+			end
+
+			return
+		end
+
+		goItem:rewardclickCallback()
+	end)
+	panel:setClick(self._btnBox, function ()
+		local canClaim = self._module:canClaim(self._step)
+		local claimed = self._module:isClaimed(self._step)
+
+		if canClaim and not claimed then
+			local rewards = self._module:claimStepRewards(self._step)
+
+			if rewards then
+				V.showRewardClaimPanel(rewards)
+				self:updateRewards()
+			end
+
+			return
+		end
+
+		local cids, nums = self._module:readRewards(self._step)
+		local rewards = D.formatRewards(cids, nums)
+
+		V.showRewardsBubblePanel({
+			rewards = rewards,
+			target = self._btnBox
+		})
+	end)
+end
+
+return M

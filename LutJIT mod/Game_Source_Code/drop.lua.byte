@@ -1,0 +1,11581 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		11103,
+		3,
+		2475 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		2,
+		11000,
+		nil,
+		2477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		3,
+		11000,
+		nil,
+		2478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		4,
+		11000,
+		nil,
+		2479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		5,
+		11000,
+		nil,
+		2480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		6,
+		11000,
+		nil,
+		2481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		7,
+		11000,
+		nil,
+		2482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		8,
+		11000,
+		nil,
+		2483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		9,
+		11000,
+		nil,
+		2484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		10,
+		11000,
+		nil,
+		2485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		11,
+		11000,
+		nil,
+		2486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		12,
+		11000,
+		nil,
+		2487 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		13,
+		11101,
+		nil,
+		2478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		14,
+		11102,
+		nil,
+		2481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		15,
+		12000,
+		3,
+		3575 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		16,
+		12100,
+		nil,
+		3476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		17,
+		12100,
+		nil,
+		3477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		18,
+		12100,
+		nil,
+		3478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		19,
+		12100,
+		nil,
+		3479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		20,
+		12100,
+		nil,
+		3480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		21,
+		12100,
+		nil,
+		3481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		22,
+		12200,
+		nil,
+		3476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		23,
+		12200,
+		nil,
+		3477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		24,
+		12200,
+		nil,
+		3478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		25,
+		12200,
+		nil,
+		3479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		26,
+		12200,
+		nil,
+		3480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		27,
+		12200,
+		nil,
+		3481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		28,
+		14101,
+		2,
+		-8424 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		29,
+		14101,
+		2,
+		-8324 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		30,
+		14101,
+		2,
+		-8224 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		31,
+		14101,
+		2,
+		-8124 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		32,
+		14101,
+		2,
+		-8024 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		33,
+		14102,
+		2,
+		-8423 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		34,
+		14102,
+		2,
+		-8323 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		35,
+		14102,
+		2,
+		-8223 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		36,
+		14102,
+		2,
+		-8123 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		37,
+		14102,
+		2,
+		-8023 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		38,
+		14103,
+		2,
+		-8422 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		39,
+		14103,
+		2,
+		-8322 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		40,
+		14103,
+		2,
+		-8222 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		41,
+		14103,
+		2,
+		-8122 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		42,
+		14103,
+		2,
+		-8022 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		43,
+		14104,
+		2,
+		-8421 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		44,
+		14104,
+		2,
+		-8321 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		45,
+		14104,
+		2,
+		-8221 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		46,
+		14104,
+		2,
+		-8121 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		47,
+		14104,
+		2,
+		-8021 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		48,
+		14105,
+		2,
+		-8420 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		49,
+		14105,
+		2,
+		-8320 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		50,
+		14105,
+		2,
+		-8220 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		51,
+		14105,
+		2,
+		-8120 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		52,
+		14105,
+		2,
+		-8020 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		53,
+		14106,
+		2,
+		-8419 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		54,
+		14106,
+		2,
+		-8319 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		55,
+		14106,
+		2,
+		-8219 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		56,
+		14106,
+		2,
+		-8119 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		57,
+		14106,
+		2,
+		-8019 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		58,
+		14107,
+		2,
+		-8418 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		59,
+		14107,
+		2,
+		-8318 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		60,
+		14107,
+		2,
+		-8218 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		61,
+		14107,
+		2,
+		-8118 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		62,
+		14107,
+		2,
+		-8018 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		63,
+		14108,
+		2,
+		-8417 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		64,
+		14108,
+		2,
+		-8317 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		65,
+		14108,
+		2,
+		-8217 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		66,
+		14108,
+		2,
+		-8117 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		67,
+		14108,
+		2,
+		-8017 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		68,
+		14109,
+		2,
+		-8416 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		69,
+		14109,
+		2,
+		-8316 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		70,
+		14109,
+		2,
+		-8216 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		71,
+		14109,
+		2,
+		-8116 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		72,
+		14109,
+		2,
+		-8016 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		73,
+		14110,
+		2,
+		-8415 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		74,
+		14110,
+		2,
+		-8315 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		75,
+		14110,
+		2,
+		-8215 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		76,
+		14110,
+		2,
+		-8115 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		77,
+		14110,
+		2,
+		-8015 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		78,
+		14111,
+		2,
+		-8414 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		79,
+		14111,
+		2,
+		-8314 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		80,
+		14111,
+		2,
+		-8214 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		81,
+		14111,
+		2,
+		-8114 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		82,
+		14111,
+		2,
+		-8014 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		83,
+		14112,
+		2,
+		-8413 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		84,
+		14112,
+		2,
+		-8313 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		85,
+		14112,
+		2,
+		-8213 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		86,
+		14112,
+		2,
+		-8113 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		87,
+		14112,
+		2,
+		-8013 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		88,
+		14113,
+		2,
+		-8412 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		89,
+		14113,
+		2,
+		-8312 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		90,
+		14113,
+		2,
+		-8212 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		91,
+		14113,
+		2,
+		-8112 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		92,
+		14113,
+		2,
+		-8012 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		93,
+		14114,
+		2,
+		-8411 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		94,
+		14114,
+		2,
+		-8311 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		95,
+		14114,
+		2,
+		-8211 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		96,
+		14114,
+		2,
+		-8111 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		97,
+		14114,
+		2,
+		-8011 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		98,
+		14115,
+		2,
+		-8410 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		99,
+		14115,
+		2,
+		-8310 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		100,
+		14115,
+		2,
+		-8210 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		101,
+		14115,
+		2,
+		-8110 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		102,
+		14115,
+		2,
+		-8010 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		103,
+		14116,
+		2,
+		-8409 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		104,
+		14116,
+		2,
+		-8309 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		105,
+		14116,
+		2,
+		-8209 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		106,
+		14116,
+		2,
+		-8109 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		107,
+		14116,
+		2,
+		-8009 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		108,
+		14117,
+		2,
+		-8408 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		109,
+		14117,
+		2,
+		-8308 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		110,
+		14117,
+		2,
+		-8208 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		111,
+		14117,
+		2,
+		-8108 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		112,
+		14117,
+		2,
+		-8008 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		113,
+		14118,
+		2,
+		-8407 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		114,
+		14118,
+		2,
+		-8307 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		115,
+		14118,
+		2,
+		-8207 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		116,
+		14118,
+		2,
+		-8107 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		117,
+		14118,
+		2,
+		-8007 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		118,
+		14119,
+		2,
+		-8406 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		119,
+		14119,
+		2,
+		-8306 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		120,
+		14119,
+		2,
+		-8206 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		121,
+		14119,
+		2,
+		-8106 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		122,
+		14119,
+		2,
+		-8006 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		123,
+		14120,
+		2,
+		-8405 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		124,
+		14120,
+		2,
+		-8305 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		125,
+		14120,
+		2,
+		-8205 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		126,
+		14120,
+		2,
+		-8105 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		127,
+		14120,
+		2,
+		-8005 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		128,
+		14201,
+		2,
+		-8424 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		129,
+		14201,
+		2,
+		-8324 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		130,
+		14201,
+		2,
+		-8224 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		131,
+		14201,
+		2,
+		-8124 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		132,
+		14201,
+		2,
+		-8024 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		133,
+		14202,
+		2,
+		-8423 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		134,
+		14202,
+		2,
+		-8323 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		135,
+		14202,
+		2,
+		-8223 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		136,
+		14202,
+		2,
+		-8123 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		137,
+		14202,
+		2,
+		-8023 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		138,
+		14203,
+		2,
+		-8422 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		139,
+		14203,
+		2,
+		-8322 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		140,
+		14203,
+		2,
+		-8222 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		141,
+		14203,
+		2,
+		-8122 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		142,
+		14203,
+		2,
+		-8022 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		143,
+		14204,
+		2,
+		-8421 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		144,
+		14204,
+		2,
+		-8321 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		145,
+		14204,
+		2,
+		-8221 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		146,
+		14204,
+		2,
+		-8121 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		147,
+		14204,
+		2,
+		-8021 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		148,
+		14205,
+		2,
+		-8420 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		149,
+		14205,
+		2,
+		-8320 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		150,
+		14205,
+		2,
+		-8220 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		151,
+		14205,
+		2,
+		-8120 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		152,
+		14205,
+		2,
+		-8020 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		153,
+		14206,
+		2,
+		-8419 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		154,
+		14206,
+		2,
+		-8319 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		155,
+		14206,
+		2,
+		-8219 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		156,
+		14206,
+		2,
+		-8119 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		157,
+		14206,
+		2,
+		-8019 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		158,
+		14207,
+		2,
+		-8418 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		159,
+		14207,
+		2,
+		-8318 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		160,
+		14207,
+		2,
+		-8218 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		161,
+		14207,
+		2,
+		-8118 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		162,
+		14207,
+		2,
+		-8018 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		163,
+		14208,
+		2,
+		-8417 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		164,
+		14208,
+		2,
+		-8317 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		165,
+		14208,
+		2,
+		-8217 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		166,
+		14208,
+		2,
+		-8117 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		167,
+		14208,
+		2,
+		-8017 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		168,
+		14209,
+		2,
+		-8416 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		169,
+		14209,
+		2,
+		-8316 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		170,
+		14209,
+		2,
+		-8216 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		171,
+		14209,
+		2,
+		-8116 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		172,
+		14209,
+		2,
+		-8016 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		173,
+		14210,
+		2,
+		-8415 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		174,
+		14210,
+		2,
+		-8315 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		175,
+		14210,
+		2,
+		-8215 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		176,
+		14210,
+		2,
+		-8115 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		177,
+		14210,
+		2,
+		-8015 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		178,
+		14211,
+		2,
+		-8414 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		179,
+		14211,
+		2,
+		-8314 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		180,
+		14211,
+		2,
+		-8214 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		181,
+		14211,
+		2,
+		-8114 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		182,
+		14211,
+		2,
+		-8014 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		183,
+		14212,
+		2,
+		-8413 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		184,
+		14212,
+		2,
+		-8313 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		185,
+		14212,
+		2,
+		-8213 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		186,
+		14212,
+		2,
+		-8113 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		187,
+		14212,
+		2,
+		-8013 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		188,
+		14213,
+		2,
+		-8412 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		189,
+		14213,
+		2,
+		-8312 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		190,
+		14213,
+		2,
+		-8212 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		191,
+		14213,
+		2,
+		-8112 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		192,
+		14213,
+		2,
+		-8012 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		193,
+		14214,
+		2,
+		-8411 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		194,
+		14214,
+		2,
+		-8311 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		195,
+		14214,
+		2,
+		-8211 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		196,
+		14214,
+		2,
+		-8111 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		197,
+		14214,
+		2,
+		-8011 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		198,
+		14215,
+		2,
+		-8410 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		199,
+		14215,
+		2,
+		-8310 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		200,
+		14215,
+		2,
+		-8210 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		201,
+		14215,
+		2,
+		-8110 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		202,
+		14215,
+		2,
+		-8010 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		203,
+		14216,
+		2,
+		-8409 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		204,
+		14216,
+		2,
+		-8309 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		205,
+		14216,
+		2,
+		-8209 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		206,
+		14216,
+		2,
+		-8109 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		207,
+		14216,
+		2,
+		-8009 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		208,
+		14217,
+		2,
+		-8408 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		209,
+		14217,
+		2,
+		-8308 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		210,
+		14217,
+		2,
+		-8208 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		211,
+		14217,
+		2,
+		-8108 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		212,
+		14217,
+		2,
+		-8008 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		213,
+		14218,
+		2,
+		-8407 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		214,
+		14218,
+		2,
+		-8307 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		215,
+		14218,
+		2,
+		-8207 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		216,
+		14218,
+		2,
+		-8107 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		217,
+		14218,
+		2,
+		-8007 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		218,
+		14219,
+		2,
+		-8406 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		219,
+		14219,
+		2,
+		-8306 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		220,
+		14219,
+		2,
+		-8206 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		221,
+		14219,
+		2,
+		-8106 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		222,
+		14219,
+		2,
+		-8006 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		223,
+		14220,
+		2,
+		-8405 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7800
+	},
+	{
+		224,
+		14220,
+		2,
+		-8305 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		225,
+		14220,
+		2,
+		-8205 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		226,
+		14220,
+		2,
+		-8105 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		227,
+		14220,
+		2,
+		-8005 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		228,
+		14301,
+		2,
+		-8424 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		229,
+		14301,
+		2,
+		-8324 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		230,
+		14301,
+		2,
+		-8224 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		231,
+		14301,
+		2,
+		-8124 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		232,
+		14301,
+		2,
+		-8024 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		233,
+		14302,
+		2,
+		-8423 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		234,
+		14302,
+		2,
+		-8323 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		235,
+		14302,
+		2,
+		-8223 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		236,
+		14302,
+		2,
+		-8123 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		237,
+		14302,
+		2,
+		-8023 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		238,
+		14303,
+		2,
+		-8422 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		239,
+		14303,
+		2,
+		-8322 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		240,
+		14303,
+		2,
+		-8222 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		241,
+		14303,
+		2,
+		-8122 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		242,
+		14303,
+		2,
+		-8022 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		243,
+		14304,
+		2,
+		-8421 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		244,
+		14304,
+		2,
+		-8321 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		245,
+		14304,
+		2,
+		-8221 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		246,
+		14304,
+		2,
+		-8121 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		247,
+		14304,
+		2,
+		-8021 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		248,
+		14305,
+		2,
+		-8420 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		249,
+		14305,
+		2,
+		-8320 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		250,
+		14305,
+		2,
+		-8220 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		251,
+		14305,
+		2,
+		-8120 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		252,
+		14305,
+		2,
+		-8020 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		253,
+		14306,
+		2,
+		-8419 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		254,
+		14306,
+		2,
+		-8319 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		255,
+		14306,
+		2,
+		-8219 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		256,
+		14306,
+		2,
+		-8119 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		257,
+		14306,
+		2,
+		-8019 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		258,
+		14307,
+		2,
+		-8418 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		259,
+		14307,
+		2,
+		-8318 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		260,
+		14307,
+		2,
+		-8218 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		261,
+		14307,
+		2,
+		-8118 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		262,
+		14307,
+		2,
+		-8018 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		263,
+		14308,
+		2,
+		-8417 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		264,
+		14308,
+		2,
+		-8317 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		265,
+		14308,
+		2,
+		-8217 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		266,
+		14308,
+		2,
+		-8117 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		267,
+		14308,
+		2,
+		-8017 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		268,
+		14309,
+		2,
+		-8416 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		269,
+		14309,
+		2,
+		-8316 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		270,
+		14309,
+		2,
+		-8216 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		271,
+		14309,
+		2,
+		-8116 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		272,
+		14309,
+		2,
+		-8016 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		273,
+		14310,
+		2,
+		-8415 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		274,
+		14310,
+		2,
+		-8315 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		275,
+		14310,
+		2,
+		-8215 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		276,
+		14310,
+		2,
+		-8115 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		277,
+		14310,
+		2,
+		-8015 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		278,
+		14311,
+		2,
+		-8414 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		279,
+		14311,
+		2,
+		-8314 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		280,
+		14311,
+		2,
+		-8214 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		281,
+		14311,
+		2,
+		-8114 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		282,
+		14311,
+		2,
+		-8014 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		283,
+		14312,
+		2,
+		-8413 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		284,
+		14312,
+		2,
+		-8313 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		285,
+		14312,
+		2,
+		-8213 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		286,
+		14312,
+		2,
+		-8113 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		287,
+		14312,
+		2,
+		-8013 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		288,
+		14313,
+		2,
+		-8412 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		289,
+		14313,
+		2,
+		-8312 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		290,
+		14313,
+		2,
+		-8212 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		291,
+		14313,
+		2,
+		-8112 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		292,
+		14313,
+		2,
+		-8012 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		293,
+		14314,
+		2,
+		-8411 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		294,
+		14314,
+		2,
+		-8311 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		295,
+		14314,
+		2,
+		-8211 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		296,
+		14314,
+		2,
+		-8111 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		297,
+		14314,
+		2,
+		-8011 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		298,
+		14315,
+		2,
+		-8410 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		299,
+		14315,
+		2,
+		-8310 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		300,
+		14315,
+		2,
+		-8210 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		301,
+		14315,
+		2,
+		-8110 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		302,
+		14315,
+		2,
+		-8010 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		303,
+		14316,
+		2,
+		-8409 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		304,
+		14316,
+		2,
+		-8309 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		305,
+		14316,
+		2,
+		-8209 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		306,
+		14316,
+		2,
+		-8109 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		307,
+		14316,
+		2,
+		-8009 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		308,
+		14317,
+		2,
+		-8408 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		309,
+		14317,
+		2,
+		-8308 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		310,
+		14317,
+		2,
+		-8208 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		311,
+		14317,
+		2,
+		-8108 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		312,
+		14317,
+		2,
+		-8008 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		313,
+		14318,
+		2,
+		-8407 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		314,
+		14318,
+		2,
+		-8307 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		315,
+		14318,
+		2,
+		-8207 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		316,
+		14318,
+		2,
+		-8107 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		317,
+		14318,
+		2,
+		-8007 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		318,
+		14319,
+		2,
+		-8406 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		319,
+		14319,
+		2,
+		-8306 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		320,
+		14319,
+		2,
+		-8206 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		321,
+		14319,
+		2,
+		-8106 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		322,
+		14319,
+		2,
+		-8006 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		323,
+		14320,
+		2,
+		-8405 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3500
+	},
+	{
+		324,
+		14320,
+		2,
+		-8305 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4300
+	},
+	{
+		325,
+		14320,
+		2,
+		-8205 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		326,
+		14320,
+		2,
+		-8105 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		327,
+		14320,
+		2,
+		-8005 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		328,
+		14401,
+		2,
+		-8424 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		329,
+		14401,
+		2,
+		-8324 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		330,
+		14401,
+		2,
+		-8224 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		331,
+		14401,
+		2,
+		-8124 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		332,
+		14401,
+		2,
+		-8024 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		333,
+		14402,
+		2,
+		-8423 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		334,
+		14402,
+		2,
+		-8323 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		335,
+		14402,
+		2,
+		-8223 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		336,
+		14402,
+		2,
+		-8123 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		337,
+		14402,
+		2,
+		-8023 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		338,
+		14403,
+		2,
+		-8422 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		339,
+		14403,
+		2,
+		-8322 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		340,
+		14403,
+		2,
+		-8222 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		341,
+		14403,
+		2,
+		-8122 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		342,
+		14403,
+		2,
+		-8022 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		343,
+		14404,
+		2,
+		-8421 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		344,
+		14404,
+		2,
+		-8321 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		345,
+		14404,
+		2,
+		-8221 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		346,
+		14404,
+		2,
+		-8121 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		347,
+		14404,
+		2,
+		-8021 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		348,
+		14405,
+		2,
+		-8420 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		349,
+		14405,
+		2,
+		-8320 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		350,
+		14405,
+		2,
+		-8220 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		351,
+		14405,
+		2,
+		-8120 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		352,
+		14405,
+		2,
+		-8020 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		353,
+		14406,
+		2,
+		-8419 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		354,
+		14406,
+		2,
+		-8319 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		355,
+		14406,
+		2,
+		-8219 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		356,
+		14406,
+		2,
+		-8119 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		357,
+		14406,
+		2,
+		-8019 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		358,
+		14407,
+		2,
+		-8418 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		359,
+		14407,
+		2,
+		-8318 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		360,
+		14407,
+		2,
+		-8218 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		361,
+		14407,
+		2,
+		-8118 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		362,
+		14407,
+		2,
+		-8018 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		363,
+		14408,
+		2,
+		-8417 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		364,
+		14408,
+		2,
+		-8317 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		365,
+		14408,
+		2,
+		-8217 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		366,
+		14408,
+		2,
+		-8117 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		367,
+		14408,
+		2,
+		-8017 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		368,
+		14409,
+		2,
+		-8416 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		369,
+		14409,
+		2,
+		-8316 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		370,
+		14409,
+		2,
+		-8216 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		371,
+		14409,
+		2,
+		-8116 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		372,
+		14409,
+		2,
+		-8016 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		373,
+		14410,
+		2,
+		-8415 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		374,
+		14410,
+		2,
+		-8315 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		375,
+		14410,
+		2,
+		-8215 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		376,
+		14410,
+		2,
+		-8115 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		377,
+		14410,
+		2,
+		-8015 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		378,
+		14411,
+		2,
+		-8414 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		379,
+		14411,
+		2,
+		-8314 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		380,
+		14411,
+		2,
+		-8214 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		381,
+		14411,
+		2,
+		-8114 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		382,
+		14411,
+		2,
+		-8014 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		383,
+		14412,
+		2,
+		-8413 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		384,
+		14412,
+		2,
+		-8313 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		385,
+		14412,
+		2,
+		-8213 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		386,
+		14412,
+		2,
+		-8113 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		387,
+		14412,
+		2,
+		-8013 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		388,
+		14413,
+		2,
+		-8412 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		389,
+		14413,
+		2,
+		-8312 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		390,
+		14413,
+		2,
+		-8212 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		391,
+		14413,
+		2,
+		-8112 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		392,
+		14413,
+		2,
+		-8012 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		393,
+		14414,
+		2,
+		-8411 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		394,
+		14414,
+		2,
+		-8311 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		395,
+		14414,
+		2,
+		-8211 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		396,
+		14414,
+		2,
+		-8111 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		397,
+		14414,
+		2,
+		-8011 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		398,
+		14415,
+		2,
+		-8410 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		399,
+		14415,
+		2,
+		-8310 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		400,
+		14415,
+		2,
+		-8210 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		401,
+		14415,
+		2,
+		-8110 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		402,
+		14415,
+		2,
+		-8010 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		403,
+		14416,
+		2,
+		-8409 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		404,
+		14416,
+		2,
+		-8309 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		405,
+		14416,
+		2,
+		-8209 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		406,
+		14416,
+		2,
+		-8109 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		407,
+		14416,
+		2,
+		-8009 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		408,
+		14417,
+		2,
+		-8408 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		409,
+		14417,
+		2,
+		-8308 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		410,
+		14417,
+		2,
+		-8208 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		411,
+		14417,
+		2,
+		-8108 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		412,
+		14417,
+		2,
+		-8008 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		413,
+		14418,
+		2,
+		-8407 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		414,
+		14418,
+		2,
+		-8307 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		415,
+		14418,
+		2,
+		-8207 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		416,
+		14418,
+		2,
+		-8107 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		417,
+		14418,
+		2,
+		-8007 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		418,
+		14419,
+		2,
+		-8406 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		419,
+		14419,
+		2,
+		-8306 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		420,
+		14419,
+		2,
+		-8206 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		421,
+		14419,
+		2,
+		-8106 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		422,
+		14419,
+		2,
+		-8006 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		423,
+		14420,
+		2,
+		-8405 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		424,
+		14420,
+		2,
+		-8305 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		425,
+		14420,
+		2,
+		-8205 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		426,
+		14420,
+		2,
+		-8105 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		427,
+		14420,
+		2,
+		-8005 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		428,
+		14501,
+		2,
+		-8424 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		429,
+		14501,
+		2,
+		-8324 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		430,
+		14501,
+		2,
+		-8224 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		431,
+		14501,
+		2,
+		-8124 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		432,
+		14501,
+		2,
+		-8024 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		433,
+		14502,
+		2,
+		-8423 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		434,
+		14502,
+		2,
+		-8323 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		435,
+		14502,
+		2,
+		-8223 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		436,
+		14502,
+		2,
+		-8123 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		437,
+		14502,
+		2,
+		-8023 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		438,
+		14503,
+		2,
+		-8422 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		439,
+		14503,
+		2,
+		-8322 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		440,
+		14503,
+		2,
+		-8222 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		441,
+		14503,
+		2,
+		-8122 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		442,
+		14503,
+		2,
+		-8022 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		443,
+		14504,
+		2,
+		-8421 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		444,
+		14504,
+		2,
+		-8321 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		445,
+		14504,
+		2,
+		-8221 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		446,
+		14504,
+		2,
+		-8121 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		447,
+		14504,
+		2,
+		-8021 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		448,
+		14505,
+		2,
+		-8420 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		449,
+		14505,
+		2,
+		-8320 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		450,
+		14505,
+		2,
+		-8220 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		451,
+		14505,
+		2,
+		-8120 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		452,
+		14505,
+		2,
+		-8020 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		453,
+		14506,
+		2,
+		-8419 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		454,
+		14506,
+		2,
+		-8319 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		455,
+		14506,
+		2,
+		-8219 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		456,
+		14506,
+		2,
+		-8119 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		457,
+		14506,
+		2,
+		-8019 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		458,
+		14507,
+		2,
+		-8418 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		459,
+		14507,
+		2,
+		-8318 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		460,
+		14507,
+		2,
+		-8218 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		461,
+		14507,
+		2,
+		-8118 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		462,
+		14507,
+		2,
+		-8018 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		463,
+		14508,
+		2,
+		-8417 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		464,
+		14508,
+		2,
+		-8317 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		465,
+		14508,
+		2,
+		-8217 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		466,
+		14508,
+		2,
+		-8117 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		467,
+		14508,
+		2,
+		-8017 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		468,
+		14509,
+		2,
+		-8416 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		469,
+		14509,
+		2,
+		-8316 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		470,
+		14509,
+		2,
+		-8216 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		471,
+		14509,
+		2,
+		-8116 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		472,
+		14509,
+		2,
+		-8016 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		473,
+		14510,
+		2,
+		-8415 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		474,
+		14510,
+		2,
+		-8315 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2500
+	},
+	{
+		475,
+		14510,
+		2,
+		-8215 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		476,
+		14510,
+		2,
+		-8115 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		477,
+		14510,
+		2,
+		-8015 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		500
+	},
+	{
+		478,
+		13101,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4574
+	},
+	{
+		479,
+		13101,
+		1,
+		-8524 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		2058
+	},
+	{
+		480,
+		13101,
+		1,
+		-8524 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1372
+	},
+	{
+		481,
+		13101,
+		1,
+		-8524 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		686
+	},
+	{
+		482,
+		13101,
+		1,
+		-8524 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		457
+	},
+	{
+		483,
+		13101,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		476
+	},
+	{
+		484,
+		13101,
+		1,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		238
+	},
+	{
+		485,
+		13101,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		119
+	},
+	{
+		486,
+		13101,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		17
+	},
+	{
+		487,
+		13101,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3
+	},
+	{
+		488,
+		13102,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4474
+	},
+	{
+		489,
+		13102,
+		1,
+		-8524 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		2013
+	},
+	{
+		490,
+		13102,
+		1,
+		-8524 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1342
+	},
+	{
+		491,
+		13102,
+		1,
+		-8524 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		671
+	},
+	{
+		492,
+		13102,
+		1,
+		-8524 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		447
+	},
+	{
+		493,
+		13102,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		588
+	},
+	{
+		494,
+		13102,
+		1,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		294
+	},
+	{
+		495,
+		13102,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		147
+	},
+	{
+		496,
+		13102,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		21
+	},
+	{
+		497,
+		13102,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3
+	},
+	{
+		498,
+		13103,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4397
+	},
+	{
+		499,
+		13103,
+		1,
+		-8524 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1978
+	},
+	{
+		500,
+		13103,
+		1,
+		-8524 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1319
+	},
+	{
+		501,
+		13103,
+		1,
+		-8524 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		659
+	},
+	{
+		502,
+		13103,
+		1,
+		-8524 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		440
+	},
+	{
+		503,
+		13103,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		672
+	},
+	{
+		504,
+		13103,
+		1,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		336
+	},
+	{
+		505,
+		13103,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		168
+	},
+	{
+		506,
+		13103,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		24
+	},
+	{
+		507,
+		13103,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7
+	},
+	{
+		508,
+		13401,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		9147
+	},
+	{
+		509,
+		13401,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		714
+	},
+	{
+		510,
+		13401,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		119
+	},
+	{
+		511,
+		13401,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		512,
+		13401,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		513,
+		13402,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8947
+	},
+	{
+		514,
+		13402,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		882
+	},
+	{
+		515,
+		13402,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		147
+	},
+	{
+		516,
+		13402,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		24
+	},
+	{
+		517,
+		13402,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		518,
+		13403,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8793
+	},
+	{
+		519,
+		13403,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1008
+	},
+	{
+		520,
+		13403,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		168
+	},
+	{
+		521,
+		13403,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		31
+	},
+	{
+		522,
+		13403,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		523,
+		13003,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		524,
+		13004,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		525,
+		13005,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		526,
+		13006,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		527,
+		13007,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		528,
+		13008,
+		1,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		529,
+		13009,
+		1,
+		-8518 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		530,
+		1,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		6000
+	},
+	{
+		531,
+		1,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3000
+	},
+	{
+		532,
+		1,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		985
+	},
+	{
+		533,
+		1,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10
+	},
+	{
+		534,
+		1,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5
+	},
+	{
+		535,
+		10,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		536,
+		10,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		537,
+		10,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		9850
+	},
+	{
+		538,
+		10,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		539,
+		10,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		540,
+		2,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		541,
+		2,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		6000
+	},
+	{
+		542,
+		2,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3000
+	},
+	{
+		543,
+		2,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		850
+	},
+	{
+		544,
+		2,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		134
+	},
+	{
+		545,
+		2,
+		1,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		14
+	},
+	{
+		546,
+		2,
+		1,
+		-8518 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2
+	},
+	{
+		547,
+		20,
+		1,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		548,
+		20,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		549,
+		20,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		0
+	},
+	{
+		550,
+		20,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8500
+	},
+	{
+		551,
+		20,
+		1,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1340
+	},
+	{
+		552,
+		20,
+		1,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		140
+	},
+	{
+		553,
+		20,
+		1,
+		-8518 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		554,
+		11,
+		1,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		555,
+		21,
+		1,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		556,
+		22,
+		1,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		557,
+		13600,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		558,
+		13600,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		559,
+		13600,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		560,
+		13600,
+		nil,
+		121976 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		561,
+		13600,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		562,
+		13601,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		563,
+		13601,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		564,
+		13602,
+		nil,
+		121976 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		565,
+		13602,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		566,
+		13602,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		567,
+		13603,
+		nil,
+		122176 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		568,
+		13603,
+		nil,
+		122276 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		569,
+		13603,
+		nil,
+		122676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		570,
+		13604,
+		nil,
+		122376 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		571,
+		13604,
+		nil,
+		122476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		572,
+		13604,
+		nil,
+		122576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		573,
+		13605,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		574,
+		13605,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		575,
+		13605,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		576,
+		13605,
+		nil,
+		121976 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		577,
+		13605,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		578,
+		13605,
+		nil,
+		122176 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		579,
+		13605,
+		nil,
+		122376 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		580,
+		13605,
+		nil,
+		122276 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		581,
+		13606,
+		nil,
+		122376 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		582,
+		13606,
+		nil,
+		122476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		583,
+		13607,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		584,
+		13607,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		585,
+		13607,
+		nil,
+		121976 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		586,
+		13608,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		587,
+		13608,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		588,
+		13608,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		589,
+		13608,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		590,
+		13609,
+		nil,
+		122576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		591,
+		13609,
+		nil,
+		122676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		592,
+		13610,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		593,
+		13610,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		594,
+		13611,
+		nil,
+		121977 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		595,
+		13611,
+		nil,
+		121677 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		596,
+		13611,
+		nil,
+		122377 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		597,
+		13612,
+		nil,
+		121676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		598,
+		13612,
+		nil,
+		121776 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		599,
+		13612,
+		nil,
+		121876 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		600,
+		13612,
+		nil,
+		121976 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		601,
+		13612,
+		nil,
+		122076 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		602,
+		13613,
+		nil,
+		122176 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		603,
+		13613,
+		nil,
+		122276 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		604,
+		13613,
+		nil,
+		122376 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		605,
+		13613,
+		nil,
+		122476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		606,
+		13613,
+		nil,
+		122576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		607,
+		13613,
+		nil,
+		122676 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		608,
+		13614,
+		nil,
+		121777 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		609,
+		13614,
+		nil,
+		121877 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		610,
+		13614,
+		nil,
+		122577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		611,
+		13615,
+		nil,
+		122477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		612,
+		13615,
+		nil,
+		122277 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		613,
+		13615,
+		nil,
+		122677 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		614,
+		13616,
+		nil,
+		121777 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		615,
+		13616,
+		nil,
+		121877 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		616,
+		13616,
+		nil,
+		122577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		617,
+		13616,
+		nil,
+		121977 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		618,
+		13616,
+		nil,
+		121677 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		619,
+		13616,
+		nil,
+		122377 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		620,
+		13700,
+		nil,
+		111476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		621,
+		13700,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		622,
+		13700,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		623,
+		13700,
+		nil,
+		111479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		624,
+		13700,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		625,
+		13701,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		626,
+		13701,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		627,
+		13702,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		628,
+		13702,
+		nil,
+		111479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		629,
+		13703,
+		nil,
+		111481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		630,
+		13703,
+		nil,
+		111482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		631,
+		13703,
+		nil,
+		111486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		632,
+		13704,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		633,
+		13704,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		634,
+		13705,
+		nil,
+		111476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		635,
+		13705,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		636,
+		13705,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		637,
+		13705,
+		nil,
+		111479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		638,
+		13705,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		639,
+		13705,
+		nil,
+		111482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		640,
+		13705,
+		nil,
+		111483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		641,
+		13705,
+		nil,
+		111481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		642,
+		13706,
+		nil,
+		111483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		643,
+		13706,
+		nil,
+		111484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		644,
+		13707,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		645,
+		13707,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		646,
+		13707,
+		nil,
+		111476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		647,
+		13708,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		648,
+		13708,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		649,
+		13708,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		650,
+		13708,
+		nil,
+		111479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		651,
+		13709,
+		nil,
+		111485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		652,
+		13709,
+		nil,
+		111486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		653,
+		13710,
+		nil,
+		111481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		654,
+		13710,
+		nil,
+		111482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		655,
+		13710,
+		nil,
+		111484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		656,
+		13711,
+		nil,
+		111490 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		657,
+		13711,
+		nil,
+		111487 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		658,
+		13711,
+		nil,
+		111489 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		659,
+		13712,
+		nil,
+		111476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		660,
+		13712,
+		nil,
+		111477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		661,
+		13712,
+		nil,
+		111478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		662,
+		13712,
+		nil,
+		111479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		663,
+		13712,
+		nil,
+		111480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		664,
+		13713,
+		nil,
+		111481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		665,
+		13713,
+		nil,
+		111482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		666,
+		13713,
+		nil,
+		111483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		667,
+		13713,
+		nil,
+		111484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		668,
+		13713,
+		nil,
+		111485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		669,
+		13713,
+		nil,
+		111486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		670,
+		13714,
+		nil,
+		111483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		671,
+		13714,
+		nil,
+		111484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		672,
+		13714,
+		nil,
+		111485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		673,
+		13715,
+		nil,
+		111496 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		674,
+		13715,
+		nil,
+		111494 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		675,
+		13715,
+		nil,
+		111491 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		676,
+		13716,
+		nil,
+		111493 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		677,
+		13716,
+		nil,
+		111497 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		678,
+		13716,
+		nil,
+		111498 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		679,
+		13717,
+		nil,
+		111496 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		680,
+		13717,
+		nil,
+		111494 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		681,
+		13717,
+		nil,
+		111491 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		682,
+		13717,
+		nil,
+		111490 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		683,
+		13717,
+		nil,
+		111487 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		684,
+		13717,
+		nil,
+		111489 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		685,
+		13800,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		686,
+		13800,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		687,
+		13800,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		688,
+		13800,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		689,
+		13800,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		690,
+		13801,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		691,
+		13801,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		692,
+		13802,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		693,
+		13802,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		694,
+		13802,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		695,
+		13803,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		696,
+		13803,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		697,
+		13804,
+		nil,
+		101481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		698,
+		13804,
+		nil,
+		101482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		699,
+		13804,
+		nil,
+		101486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		700,
+		13805,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		701,
+		13805,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		702,
+		13806,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		703,
+		13806,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		704,
+		13806,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		705,
+		13806,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		706,
+		13806,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		707,
+		13806,
+		nil,
+		101482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		708,
+		13806,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		709,
+		13807,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		710,
+		13807,
+		nil,
+		101484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		711,
+		13808,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		712,
+		13808,
+		nil,
+		101484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		713,
+		13808,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		714,
+		13808,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		715,
+		13808,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		716,
+		13808,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		717,
+		13808,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		718,
+		13809,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		719,
+		13809,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		720,
+		13809,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		721,
+		13809,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		722,
+		13809,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		723,
+		13810,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		724,
+		13810,
+		nil,
+		101484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		725,
+		13810,
+		nil,
+		101485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		726,
+		13810,
+		nil,
+		101486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		727,
+		13811,
+		nil,
+		101490 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		728,
+		13811,
+		nil,
+		101487 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		729,
+		13811,
+		nil,
+		101489 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		730,
+		13812,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		731,
+		13812,
+		nil,
+		101484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		732,
+		13812,
+		nil,
+		101486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		733,
+		13813,
+		nil,
+		101496 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		734,
+		13813,
+		nil,
+		101494 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		735,
+		13813,
+		nil,
+		101491 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		736,
+		13814,
+		nil,
+		101476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		737,
+		13814,
+		nil,
+		101477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		738,
+		13814,
+		nil,
+		101478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		739,
+		13814,
+		nil,
+		101479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		740,
+		13814,
+		nil,
+		101480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		741,
+		13814,
+		nil,
+		101481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		742,
+		13814,
+		nil,
+		101482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		743,
+		13814,
+		nil,
+		101483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		744,
+		13814,
+		nil,
+		101484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		745,
+		13814,
+		nil,
+		101485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		746,
+		13814,
+		nil,
+		101486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		747,
+		13815,
+		nil,
+		101493 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		748,
+		13815,
+		nil,
+		101497 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		749,
+		13815,
+		nil,
+		101498 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		750,
+		101,
+		nil,
+		1476 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		560
+	},
+	{
+		751,
+		101,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		752,
+		101,
+		nil,
+		2578 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		560
+	},
+	{
+		753,
+		101,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		754,
+		101,
+		nil,
+		1486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1650
+	},
+	{
+		755,
+		101,
+		nil,
+		1484 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		756,
+		101,
+		nil,
+		5177 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		757,
+		101,
+		nil,
+		2578 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		1650
+	},
+	{
+		758,
+		101,
+		nil,
+		3475 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		560
+	},
+	{
+		759,
+		101,
+		nil,
+		1476 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		1650
+	},
+	{
+		760,
+		111,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		761,
+		102,
+		nil,
+		1476 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		560
+	},
+	{
+		762,
+		102,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		763,
+		102,
+		nil,
+		2578 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		560
+	},
+	{
+		764,
+		102,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		765,
+		102,
+		nil,
+		1486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1650
+	},
+	{
+		766,
+		102,
+		nil,
+		1484 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		767,
+		102,
+		nil,
+		5176 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		768,
+		102,
+		nil,
+		2578 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		1650
+	},
+	{
+		769,
+		102,
+		nil,
+		3475 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		560
+	},
+	{
+		770,
+		102,
+		nil,
+		1476 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		1650
+	},
+	{
+		771,
+		112,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		772,
+		103,
+		nil,
+		1476 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		560
+	},
+	{
+		773,
+		103,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		774,
+		103,
+		nil,
+		2578 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		560
+	},
+	{
+		775,
+		103,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		776,
+		103,
+		nil,
+		1486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1650
+	},
+	{
+		777,
+		103,
+		nil,
+		1484 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1650
+	},
+	{
+		778,
+		103,
+		nil,
+		5183 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		779,
+		103,
+		nil,
+		2578 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		1650
+	},
+	{
+		780,
+		103,
+		nil,
+		3475 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		560
+	},
+	{
+		781,
+		103,
+		nil,
+		1476 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		1650
+	},
+	{
+		782,
+		113,
+		nil,
+		1576 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		50
+	},
+	{
+		783,
+		201,
+		nil,
+		1480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		784,
+		201,
+		nil,
+		2578 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		1100
+	},
+	{
+		785,
+		201,
+		nil,
+		1577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		786,
+		201,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		787,
+		201,
+		nil,
+		1483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		788,
+		201,
+		nil,
+		2476 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		1100
+	},
+	{
+		789,
+		201,
+		nil,
+		1484 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		790,
+		201,
+		nil,
+		1482 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		791,
+		201,
+		nil,
+		1476 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		1100
+	},
+	{
+		792,
+		201,
+		nil,
+		1486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		793,
+		211,
+		nil,
+		1490 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		600
+	},
+	{
+		794,
+		211,
+		nil,
+		1481 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		2900
+	},
+	{
+		795,
+		211,
+		nil,
+		5178 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		796,
+		211,
+		nil,
+		5078 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		797,
+		211,
+		nil,
+		1483 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		2900
+	},
+	{
+		798,
+		211,
+		nil,
+		1480 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		2900
+	},
+	{
+		799,
+		211,
+		nil,
+		5279 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		550
+	},
+	{
+		800,
+		202,
+		nil,
+		1480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		801,
+		202,
+		nil,
+		2578 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		1100
+	},
+	{
+		802,
+		202,
+		nil,
+		1577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		803,
+		202,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		804,
+		202,
+		nil,
+		1483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		805,
+		202,
+		nil,
+		2476 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		1100
+	},
+	{
+		806,
+		202,
+		nil,
+		1484 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		807,
+		202,
+		nil,
+		1482 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1100
+	},
+	{
+		808,
+		202,
+		nil,
+		1476 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		1100
+	},
+	{
+		809,
+		202,
+		nil,
+		1486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1100
+	},
+	{
+		810,
+		212,
+		nil,
+		1490 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		600
+	},
+	{
+		811,
+		212,
+		nil,
+		1481 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		2900
+	},
+	{
+		812,
+		212,
+		nil,
+		5189 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		813,
+		212,
+		nil,
+		5079 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		814,
+		212,
+		nil,
+		1483 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		2900
+	},
+	{
+		815,
+		212,
+		nil,
+		1480 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		2900
+	},
+	{
+		816,
+		212,
+		nil,
+		5287 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		550
+	},
+	{
+		817,
+		13901,
+		nil,
+		131476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		818,
+		13901,
+		nil,
+		131477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		819,
+		13902,
+		nil,
+		131478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		820,
+		13902,
+		nil,
+		131479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		821,
+		13903,
+		nil,
+		131480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		822,
+		13903,
+		nil,
+		131481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		823,
+		13904,
+		nil,
+		131482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		824,
+		13904,
+		nil,
+		131483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		825,
+		13905,
+		nil,
+		131485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		826,
+		13905,
+		nil,
+		131486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1
+	},
+	{
+		827,
+		221,
+		nil,
+		1480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		180
+	},
+	{
+		828,
+		221,
+		nil,
+		1477 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		150
+	},
+	{
+		829,
+		221,
+		nil,
+		1502 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		400
+	},
+	{
+		830,
+		221,
+		nil,
+		1580 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		831,
+		221,
+		nil,
+		1477 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		50
+	},
+	{
+		832,
+		221,
+		nil,
+		1502 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		200
+	},
+	{
+		833,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		350
+	},
+	{
+		834,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		300
+	},
+	{
+		835,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		250
+	},
+	{
+		836,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		200
+	},
+	{
+		837,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-6025 - lc._encryptOffset,
+		-6025 - lc._encryptOffset,
+		150
+	},
+	{
+		838,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		100
+	},
+	{
+		839,
+		222,
+		nil,
+		1501 - lc._encryptOffset,
+		-5025 - lc._encryptOffset,
+		-5025 - lc._encryptOffset,
+		50
+	},
+	{
+		840,
+		223,
+		nil,
+		1480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		841,
+		223,
+		nil,
+		3475 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		150
+	},
+	{
+		842,
+		223,
+		nil,
+		1476 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		200
+	},
+	{
+		843,
+		223,
+		nil,
+		1484 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		250
+	},
+	{
+		844,
+		223,
+		nil,
+		2578 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		300
+	},
+	{
+		845,
+		301,
+		nil,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		6000
+	},
+	{
+		846,
+		301,
+		nil,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3000
+	},
+	{
+		847,
+		301,
+		nil,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		808
+	},
+	{
+		848,
+		301,
+		nil,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		160
+	},
+	{
+		849,
+		301,
+		nil,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		32
+	},
+	{
+		850,
+		302,
+		nil,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8080
+	},
+	{
+		851,
+		302,
+		nil,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1600
+	},
+	{
+		852,
+		302,
+		nil,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		320
+	},
+	{
+		853,
+		303,
+		nil,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		854,
+		304,
+		nil,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		855,
+		305,
+		nil,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		856,
+		17001,
+		5,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		857,
+		17002,
+		5,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		858,
+		17003,
+		5,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		859,
+		17004,
+		5,
+		-8518 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		860,
+		17101,
+		4,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		861,
+		17102,
+		4,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		862,
+		17103,
+		4,
+		-8519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		863,
+		17104,
+		4,
+		-8518 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		864,
+		321,
+		nil,
+		1520 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		10000
+	},
+	{
+		865,
+		322,
+		nil,
+		8476 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		10000
+	},
+	{
+		866,
+		331,
+		nil,
+		1520 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		10000
+	},
+	{
+		867,
+		332,
+		nil,
+		8476 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		8000
+	},
+	{
+		868,
+		332,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		869,
+		341,
+		nil,
+		1520 - lc._encryptOffset,
+		-8485 - lc._encryptOffset,
+		-8485 - lc._encryptOffset,
+		10000
+	},
+	{
+		870,
+		342,
+		nil,
+		8476 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		5000
+	},
+	{
+		871,
+		342,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		5000
+	},
+	{
+		872,
+		343,
+		nil,
+		8576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		873,
+		351,
+		nil,
+		1520 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		10000
+	},
+	{
+		874,
+		352,
+		nil,
+		8476 - lc._encryptOffset,
+		-8509 - lc._encryptOffset,
+		-8509 - lc._encryptOffset,
+		2000
+	},
+	{
+		875,
+		352,
+		nil,
+		8477 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		8000
+	},
+	{
+		876,
+		353,
+		nil,
+		8576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8000
+	},
+	{
+		877,
+		353,
+		nil,
+		8577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		878,
+		361,
+		nil,
+		1520 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		10000
+	},
+	{
+		879,
+		362,
+		nil,
+		8477 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		8000
+	},
+	{
+		880,
+		362,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		881,
+		363,
+		nil,
+		8576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		882,
+		363,
+		nil,
+		8577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5000
+	},
+	{
+		883,
+		323,
+		nil,
+		1520 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		10000
+	},
+	{
+		884,
+		333,
+		nil,
+		1520 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		10000
+	},
+	{
+		885,
+		334,
+		nil,
+		8476 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		10000
+	},
+	{
+		886,
+		344,
+		nil,
+		1520 - lc._encryptOffset,
+		-8485 - lc._encryptOffset,
+		-8485 - lc._encryptOffset,
+		10000
+	},
+	{
+		887,
+		345,
+		nil,
+		8476 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		10000
+	},
+	{
+		888,
+		346,
+		nil,
+		8576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		889,
+		354,
+		nil,
+		1520 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		10000
+	},
+	{
+		890,
+		355,
+		nil,
+		8477 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		10000
+	},
+	{
+		891,
+		356,
+		nil,
+		8576 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		892,
+		364,
+		nil,
+		1520 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		10000
+	},
+	{
+		893,
+		365,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		894,
+		366,
+		nil,
+		8577 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10000
+	},
+	{
+		895,
+		14600,
+		nil,
+		141476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		896,
+		14600,
+		nil,
+		141477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		897,
+		14600,
+		nil,
+		141478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		898,
+		14600,
+		nil,
+		141479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		899,
+		14600,
+		nil,
+		141480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		900,
+		14601,
+		nil,
+		141481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		901,
+		14601,
+		nil,
+		141482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		902,
+		14602,
+		nil,
+		141483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		903,
+		14602,
+		nil,
+		141484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		904,
+		14603,
+		nil,
+		141488 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		905,
+		14603,
+		nil,
+		141489 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		906,
+		14604,
+		nil,
+		141485 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		907,
+		14604,
+		nil,
+		141486 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		908,
+		14604,
+		nil,
+		141487 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		909,
+		14700,
+		nil,
+		141476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		910,
+		14700,
+		nil,
+		141477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		911,
+		14700,
+		nil,
+		141478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		912,
+		14700,
+		nil,
+		141479 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		913,
+		14700,
+		nil,
+		141480 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		914,
+		14700,
+		nil,
+		141481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		915,
+		14700,
+		nil,
+		141482 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		916,
+		14700,
+		nil,
+		141483 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		917,
+		14700,
+		nil,
+		141484 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		918,
+		14701,
+		nil,
+		1477 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		2000
+	},
+	{
+		919,
+		14701,
+		nil,
+		1477 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		450
+	},
+	{
+		920,
+		14701,
+		nil,
+		1477 - lc._encryptOffset,
+		-3525 - lc._encryptOffset,
+		-3525 - lc._encryptOffset,
+		50
+	},
+	{
+		921,
+		14701,
+		nil,
+		1483 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		-8495 - lc._encryptOffset,
+		2000
+	},
+	{
+		922,
+		14701,
+		nil,
+		1483 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		450
+	},
+	{
+		923,
+		14701,
+		nil,
+		1483 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		50
+	},
+	{
+		924,
+		14701,
+		nil,
+		1481 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		2000
+	},
+	{
+		925,
+		14701,
+		nil,
+		1481 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		450
+	},
+	{
+		926,
+		14701,
+		nil,
+		1481 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		50
+	},
+	{
+		927,
+		14701,
+		nil,
+		1519 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		2000
+	},
+	{
+		928,
+		14701,
+		nil,
+		1519 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		450
+	},
+	{
+		929,
+		14701,
+		nil,
+		1519 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		50
+	},
+	{
+		930,
+		701,
+		nil,
+		31778 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		931,
+		701,
+		nil,
+		31781 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		932,
+		701,
+		nil,
+		31784 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		933,
+		701,
+		nil,
+		31787 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		934,
+		701,
+		nil,
+		31790 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		935,
+		702,
+		nil,
+		31878 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		936,
+		702,
+		nil,
+		31881 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		937,
+		702,
+		nil,
+		31884 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		938,
+		702,
+		nil,
+		31887 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		939,
+		702,
+		nil,
+		31890 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		940,
+		703,
+		nil,
+		31978 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		941,
+		703,
+		nil,
+		31981 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		942,
+		703,
+		nil,
+		31984 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		943,
+		703,
+		nil,
+		31987 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		944,
+		703,
+		nil,
+		31990 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		945,
+		704,
+		nil,
+		32078 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		946,
+		704,
+		nil,
+		32081 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		947,
+		704,
+		nil,
+		32084 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		948,
+		704,
+		nil,
+		32087 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		949,
+		704,
+		nil,
+		32090 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		950,
+		17201,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		951,
+		17202,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		952,
+		17203,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		953,
+		17204,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		954,
+		104,
+		nil,
+		1579 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		50
+	},
+	{
+		955,
+		104,
+		nil,
+		1476 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		1760
+	},
+	{
+		956,
+		104,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		350
+	},
+	{
+		957,
+		104,
+		nil,
+		2578 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		1760
+	},
+	{
+		958,
+		104,
+		nil,
+		1477 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		350
+	},
+	{
+		959,
+		104,
+		nil,
+		5285 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		960,
+		104,
+		nil,
+		1484 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		1760
+	},
+	{
+		961,
+		104,
+		nil,
+		1520 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		1760
+	},
+	{
+		962,
+		104,
+		nil,
+		1481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		350
+	},
+	{
+		963,
+		104,
+		nil,
+		3475 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		1760
+	},
+	{
+		964,
+		114,
+		nil,
+		1579 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		10000
+	},
+	{
+		965,
+		201001,
+		nil,
+		1476 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		310
+	},
+	{
+		966,
+		201001,
+		nil,
+		1476 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		-8025 - lc._encryptOffset,
+		105
+	},
+	{
+		967,
+		201001,
+		nil,
+		1476 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		35
+	},
+	{
+		968,
+		201001,
+		nil,
+		1520 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		370
+	},
+	{
+		969,
+		201001,
+		nil,
+		1520 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		-8475 - lc._encryptOffset,
+		120
+	},
+	{
+		970,
+		201001,
+		nil,
+		1520 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		40
+	},
+	{
+		971,
+		201001,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		270
+	},
+	{
+		972,
+		201001,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		90
+	},
+	{
+		973,
+		201001,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		30
+	},
+	{
+		974,
+		201001,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1800
+	},
+	{
+		975,
+		201001,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		600
+	},
+	{
+		976,
+		201001,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		100
+	},
+	{
+		977,
+		201001,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1010
+	},
+	{
+		978,
+		201001,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		300
+	},
+	{
+		979,
+		201001,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		100
+	},
+	{
+		980,
+		201001,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		300
+	},
+	{
+		981,
+		201001,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		100
+	},
+	{
+		982,
+		201001,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10
+	},
+	{
+		983,
+		201001,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1505
+	},
+	{
+		984,
+		201001,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		250
+	},
+	{
+		985,
+		201001,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		986,
+		201001,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5
+	},
+	{
+		987,
+		201001,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1800
+	},
+	{
+		988,
+		201001,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		600
+	},
+	{
+		989,
+		201001,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		100
+	},
+	{
+		990,
+		201002,
+		nil,
+		1476 - lc._encryptOffset,
+		-8415 - lc._encryptOffset,
+		-8415 - lc._encryptOffset,
+		310
+	},
+	{
+		991,
+		201002,
+		nil,
+		1476 - lc._encryptOffset,
+		-7975 - lc._encryptOffset,
+		-7975 - lc._encryptOffset,
+		105
+	},
+	{
+		992,
+		201002,
+		nil,
+		1476 - lc._encryptOffset,
+		-6325 - lc._encryptOffset,
+		-6325 - lc._encryptOffset,
+		35
+	},
+	{
+		993,
+		201002,
+		nil,
+		1520 - lc._encryptOffset,
+		-8514 - lc._encryptOffset,
+		-8514 - lc._encryptOffset,
+		370
+	},
+	{
+		994,
+		201002,
+		nil,
+		1520 - lc._encryptOffset,
+		-8470 - lc._encryptOffset,
+		-8470 - lc._encryptOffset,
+		120
+	},
+	{
+		995,
+		201002,
+		nil,
+		1520 - lc._encryptOffset,
+		-8305 - lc._encryptOffset,
+		-8305 - lc._encryptOffset,
+		40
+	},
+	{
+		996,
+		201002,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		245
+	},
+	{
+		997,
+		201002,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		110
+	},
+	{
+		998,
+		201002,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		35
+	},
+	{
+		999,
+		201002,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1715
+	},
+	{
+		1000,
+		201002,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		650
+	},
+	{
+		1001,
+		201002,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		135
+	},
+	{
+		1002,
+		201002,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		928
+	},
+	{
+		1003,
+		201002,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		330
+	},
+	{
+		1004,
+		201002,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		110
+	},
+	{
+		1005,
+		201002,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		330
+	},
+	{
+		1006,
+		201002,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		110
+	},
+	{
+		1007,
+		201002,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		12
+	},
+	{
+		1008,
+		201002,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1474
+	},
+	{
+		1009,
+		201002,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		275
+	},
+	{
+		1010,
+		201002,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		55
+	},
+	{
+		1011,
+		201002,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		6
+	},
+	{
+		1012,
+		201002,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1725
+	},
+	{
+		1013,
+		201002,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		660
+	},
+	{
+		1014,
+		201002,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		115
+	},
+	{
+		1015,
+		201003,
+		nil,
+		1476 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		310
+	},
+	{
+		1016,
+		201003,
+		nil,
+		1476 - lc._encryptOffset,
+		-7925 - lc._encryptOffset,
+		-7925 - lc._encryptOffset,
+		105
+	},
+	{
+		1017,
+		201003,
+		nil,
+		1476 - lc._encryptOffset,
+		-6125 - lc._encryptOffset,
+		-6125 - lc._encryptOffset,
+		35
+	},
+	{
+		1018,
+		201003,
+		nil,
+		1520 - lc._encryptOffset,
+		-8513 - lc._encryptOffset,
+		-8513 - lc._encryptOffset,
+		370
+	},
+	{
+		1019,
+		201003,
+		nil,
+		1520 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		120
+	},
+	{
+		1020,
+		201003,
+		nil,
+		1520 - lc._encryptOffset,
+		-8285 - lc._encryptOffset,
+		-8285 - lc._encryptOffset,
+		40
+	},
+	{
+		1021,
+		201003,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		220
+	},
+	{
+		1022,
+		201003,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		130
+	},
+	{
+		1023,
+		201003,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		40
+	},
+	{
+		1024,
+		201003,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1630
+	},
+	{
+		1025,
+		201003,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		700
+	},
+	{
+		1026,
+		201003,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		170
+	},
+	{
+		1027,
+		201003,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		846
+	},
+	{
+		1028,
+		201003,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		360
+	},
+	{
+		1029,
+		201003,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		120
+	},
+	{
+		1030,
+		201003,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		360
+	},
+	{
+		1031,
+		201003,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		120
+	},
+	{
+		1032,
+		201003,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		14
+	},
+	{
+		1033,
+		201003,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1443
+	},
+	{
+		1034,
+		201003,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		300
+	},
+	{
+		1035,
+		201003,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		60
+	},
+	{
+		1036,
+		201003,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		7
+	},
+	{
+		1037,
+		201003,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1650
+	},
+	{
+		1038,
+		201003,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		720
+	},
+	{
+		1039,
+		201003,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		130
+	},
+	{
+		1040,
+		201004,
+		nil,
+		1476 - lc._encryptOffset,
+		-8395 - lc._encryptOffset,
+		-8395 - lc._encryptOffset,
+		310
+	},
+	{
+		1041,
+		201004,
+		nil,
+		1476 - lc._encryptOffset,
+		-7875 - lc._encryptOffset,
+		-7875 - lc._encryptOffset,
+		105
+	},
+	{
+		1042,
+		201004,
+		nil,
+		1476 - lc._encryptOffset,
+		-5925 - lc._encryptOffset,
+		-5925 - lc._encryptOffset,
+		35
+	},
+	{
+		1043,
+		201004,
+		nil,
+		1520 - lc._encryptOffset,
+		-8512 - lc._encryptOffset,
+		-8512 - lc._encryptOffset,
+		370
+	},
+	{
+		1044,
+		201004,
+		nil,
+		1520 - lc._encryptOffset,
+		-8460 - lc._encryptOffset,
+		-8460 - lc._encryptOffset,
+		120
+	},
+	{
+		1045,
+		201004,
+		nil,
+		1520 - lc._encryptOffset,
+		-8265 - lc._encryptOffset,
+		-8265 - lc._encryptOffset,
+		40
+	},
+	{
+		1046,
+		201004,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		195
+	},
+	{
+		1047,
+		201004,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		150
+	},
+	{
+		1048,
+		201004,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		45
+	},
+	{
+		1049,
+		201004,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1545
+	},
+	{
+		1050,
+		201004,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		750
+	},
+	{
+		1051,
+		201004,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		205
+	},
+	{
+		1052,
+		201004,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		764
+	},
+	{
+		1053,
+		201004,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		390
+	},
+	{
+		1054,
+		201004,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		130
+	},
+	{
+		1055,
+		201004,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		390
+	},
+	{
+		1056,
+		201004,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		130
+	},
+	{
+		1057,
+		201004,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		16
+	},
+	{
+		1058,
+		201004,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1412
+	},
+	{
+		1059,
+		201004,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		325
+	},
+	{
+		1060,
+		201004,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		65
+	},
+	{
+		1061,
+		201004,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		8
+	},
+	{
+		1062,
+		201004,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1575
+	},
+	{
+		1063,
+		201004,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		780
+	},
+	{
+		1064,
+		201004,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		145
+	},
+	{
+		1065,
+		201005,
+		nil,
+		1476 - lc._encryptOffset,
+		-8385 - lc._encryptOffset,
+		-8385 - lc._encryptOffset,
+		310
+	},
+	{
+		1066,
+		201005,
+		nil,
+		1476 - lc._encryptOffset,
+		-7825 - lc._encryptOffset,
+		-7825 - lc._encryptOffset,
+		105
+	},
+	{
+		1067,
+		201005,
+		nil,
+		1476 - lc._encryptOffset,
+		-5725 - lc._encryptOffset,
+		-5725 - lc._encryptOffset,
+		35
+	},
+	{
+		1068,
+		201005,
+		nil,
+		1520 - lc._encryptOffset,
+		-8511 - lc._encryptOffset,
+		-8511 - lc._encryptOffset,
+		370
+	},
+	{
+		1069,
+		201005,
+		nil,
+		1520 - lc._encryptOffset,
+		-8455 - lc._encryptOffset,
+		-8455 - lc._encryptOffset,
+		120
+	},
+	{
+		1070,
+		201005,
+		nil,
+		1520 - lc._encryptOffset,
+		-8245 - lc._encryptOffset,
+		-8245 - lc._encryptOffset,
+		40
+	},
+	{
+		1071,
+		201005,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		170
+	},
+	{
+		1072,
+		201005,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		170
+	},
+	{
+		1073,
+		201005,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		50
+	},
+	{
+		1074,
+		201005,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1460
+	},
+	{
+		1075,
+		201005,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		800
+	},
+	{
+		1076,
+		201005,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		240
+	},
+	{
+		1077,
+		201005,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		682
+	},
+	{
+		1078,
+		201005,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		420
+	},
+	{
+		1079,
+		201005,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		140
+	},
+	{
+		1080,
+		201005,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		420
+	},
+	{
+		1081,
+		201005,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		140
+	},
+	{
+		1082,
+		201005,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		18
+	},
+	{
+		1083,
+		201005,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1381
+	},
+	{
+		1084,
+		201005,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		350
+	},
+	{
+		1085,
+		201005,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		70
+	},
+	{
+		1086,
+		201005,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		9
+	},
+	{
+		1087,
+		201005,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1500
+	},
+	{
+		1088,
+		201005,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		840
+	},
+	{
+		1089,
+		201005,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		160
+	},
+	{
+		1090,
+		201006,
+		nil,
+		1476 - lc._encryptOffset,
+		-8375 - lc._encryptOffset,
+		-8375 - lc._encryptOffset,
+		310
+	},
+	{
+		1091,
+		201006,
+		nil,
+		1476 - lc._encryptOffset,
+		-7775 - lc._encryptOffset,
+		-7775 - lc._encryptOffset,
+		105
+	},
+	{
+		1092,
+		201006,
+		nil,
+		1476 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		35
+	},
+	{
+		1093,
+		201006,
+		nil,
+		1520 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		370
+	},
+	{
+		1094,
+		201006,
+		nil,
+		1520 - lc._encryptOffset,
+		-8450 - lc._encryptOffset,
+		-8450 - lc._encryptOffset,
+		120
+	},
+	{
+		1095,
+		201006,
+		nil,
+		1520 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		40
+	},
+	{
+		1096,
+		201006,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		145
+	},
+	{
+		1097,
+		201006,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		190
+	},
+	{
+		1098,
+		201006,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		55
+	},
+	{
+		1099,
+		201006,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1375
+	},
+	{
+		1100,
+		201006,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		850
+	},
+	{
+		1101,
+		201006,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		275
+	},
+	{
+		1102,
+		201006,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		600
+	},
+	{
+		1103,
+		201006,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		450
+	},
+	{
+		1104,
+		201006,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		150
+	},
+	{
+		1105,
+		201006,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		450
+	},
+	{
+		1106,
+		201006,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		150
+	},
+	{
+		1107,
+		201006,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		20
+	},
+	{
+		1108,
+		201006,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1350
+	},
+	{
+		1109,
+		201006,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		375
+	},
+	{
+		1110,
+		201006,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		75
+	},
+	{
+		1111,
+		201006,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		10
+	},
+	{
+		1112,
+		201006,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1425
+	},
+	{
+		1113,
+		201006,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		900
+	},
+	{
+		1114,
+		201006,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		175
+	},
+	{
+		1115,
+		201007,
+		nil,
+		1476 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		-8365 - lc._encryptOffset,
+		310
+	},
+	{
+		1116,
+		201007,
+		nil,
+		1476 - lc._encryptOffset,
+		-7725 - lc._encryptOffset,
+		-7725 - lc._encryptOffset,
+		105
+	},
+	{
+		1117,
+		201007,
+		nil,
+		1476 - lc._encryptOffset,
+		-5325 - lc._encryptOffset,
+		-5325 - lc._encryptOffset,
+		35
+	},
+	{
+		1118,
+		201007,
+		nil,
+		1520 - lc._encryptOffset,
+		-8509 - lc._encryptOffset,
+		-8509 - lc._encryptOffset,
+		370
+	},
+	{
+		1119,
+		201007,
+		nil,
+		1520 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		-8445 - lc._encryptOffset,
+		120
+	},
+	{
+		1120,
+		201007,
+		nil,
+		1520 - lc._encryptOffset,
+		-8205 - lc._encryptOffset,
+		-8205 - lc._encryptOffset,
+		40
+	},
+	{
+		1121,
+		201007,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		120
+	},
+	{
+		1122,
+		201007,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		210
+	},
+	{
+		1123,
+		201007,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		60
+	},
+	{
+		1124,
+		201007,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1290
+	},
+	{
+		1125,
+		201007,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		900
+	},
+	{
+		1126,
+		201007,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		310
+	},
+	{
+		1127,
+		201007,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		518
+	},
+	{
+		1128,
+		201007,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		480
+	},
+	{
+		1129,
+		201007,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		160
+	},
+	{
+		1130,
+		201007,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		480
+	},
+	{
+		1131,
+		201007,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		160
+	},
+	{
+		1132,
+		201007,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		22
+	},
+	{
+		1133,
+		201007,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1319
+	},
+	{
+		1134,
+		201007,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		400
+	},
+	{
+		1135,
+		201007,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		80
+	},
+	{
+		1136,
+		201007,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		11
+	},
+	{
+		1137,
+		201007,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1350
+	},
+	{
+		1138,
+		201007,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		960
+	},
+	{
+		1139,
+		201007,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		190
+	},
+	{
+		1140,
+		201008,
+		nil,
+		1476 - lc._encryptOffset,
+		-8355 - lc._encryptOffset,
+		-8355 - lc._encryptOffset,
+		310
+	},
+	{
+		1141,
+		201008,
+		nil,
+		1476 - lc._encryptOffset,
+		-7675 - lc._encryptOffset,
+		-7675 - lc._encryptOffset,
+		105
+	},
+	{
+		1142,
+		201008,
+		nil,
+		1476 - lc._encryptOffset,
+		-5125 - lc._encryptOffset,
+		-5125 - lc._encryptOffset,
+		35
+	},
+	{
+		1143,
+		201008,
+		nil,
+		1520 - lc._encryptOffset,
+		-8508 - lc._encryptOffset,
+		-8508 - lc._encryptOffset,
+		370
+	},
+	{
+		1144,
+		201008,
+		nil,
+		1520 - lc._encryptOffset,
+		-8440 - lc._encryptOffset,
+		-8440 - lc._encryptOffset,
+		120
+	},
+	{
+		1145,
+		201008,
+		nil,
+		1520 - lc._encryptOffset,
+		-8185 - lc._encryptOffset,
+		-8185 - lc._encryptOffset,
+		40
+	},
+	{
+		1146,
+		201008,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		95
+	},
+	{
+		1147,
+		201008,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		230
+	},
+	{
+		1148,
+		201008,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		65
+	},
+	{
+		1149,
+		201008,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1205
+	},
+	{
+		1150,
+		201008,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		950
+	},
+	{
+		1151,
+		201008,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		345
+	},
+	{
+		1152,
+		201008,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		436
+	},
+	{
+		1153,
+		201008,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		510
+	},
+	{
+		1154,
+		201008,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		170
+	},
+	{
+		1155,
+		201008,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		510
+	},
+	{
+		1156,
+		201008,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		170
+	},
+	{
+		1157,
+		201008,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		24
+	},
+	{
+		1158,
+		201008,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1288
+	},
+	{
+		1159,
+		201008,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		425
+	},
+	{
+		1160,
+		201008,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		85
+	},
+	{
+		1161,
+		201008,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		12
+	},
+	{
+		1162,
+		201008,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1275
+	},
+	{
+		1163,
+		201008,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		1020
+	},
+	{
+		1164,
+		201008,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		205
+	},
+	{
+		1165,
+		201009,
+		nil,
+		1476 - lc._encryptOffset,
+		-8345 - lc._encryptOffset,
+		-8345 - lc._encryptOffset,
+		310
+	},
+	{
+		1166,
+		201009,
+		nil,
+		1476 - lc._encryptOffset,
+		-7625 - lc._encryptOffset,
+		-7625 - lc._encryptOffset,
+		105
+	},
+	{
+		1167,
+		201009,
+		nil,
+		1476 - lc._encryptOffset,
+		-4925 - lc._encryptOffset,
+		-4925 - lc._encryptOffset,
+		35
+	},
+	{
+		1168,
+		201009,
+		nil,
+		1520 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		370
+	},
+	{
+		1169,
+		201009,
+		nil,
+		1520 - lc._encryptOffset,
+		-8435 - lc._encryptOffset,
+		-8435 - lc._encryptOffset,
+		120
+	},
+	{
+		1170,
+		201009,
+		nil,
+		1520 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		40
+	},
+	{
+		1171,
+		201009,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		70
+	},
+	{
+		1172,
+		201009,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		250
+	},
+	{
+		1173,
+		201009,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		70
+	},
+	{
+		1174,
+		201009,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1120
+	},
+	{
+		1175,
+		201009,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1000
+	},
+	{
+		1176,
+		201009,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		380
+	},
+	{
+		1177,
+		201009,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		354
+	},
+	{
+		1178,
+		201009,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		540
+	},
+	{
+		1179,
+		201009,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		180
+	},
+	{
+		1180,
+		201009,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		540
+	},
+	{
+		1181,
+		201009,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		180
+	},
+	{
+		1182,
+		201009,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		26
+	},
+	{
+		1183,
+		201009,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1257
+	},
+	{
+		1184,
+		201009,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		450
+	},
+	{
+		1185,
+		201009,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		90
+	},
+	{
+		1186,
+		201009,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		13
+	},
+	{
+		1187,
+		201009,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1200
+	},
+	{
+		1188,
+		201009,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		1080
+	},
+	{
+		1189,
+		201009,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		220
+	},
+	{
+		1190,
+		201010,
+		nil,
+		1476 - lc._encryptOffset,
+		-8335 - lc._encryptOffset,
+		-8335 - lc._encryptOffset,
+		310
+	},
+	{
+		1191,
+		201010,
+		nil,
+		1476 - lc._encryptOffset,
+		-7575 - lc._encryptOffset,
+		-7575 - lc._encryptOffset,
+		105
+	},
+	{
+		1192,
+		201010,
+		nil,
+		1476 - lc._encryptOffset,
+		-4725 - lc._encryptOffset,
+		-4725 - lc._encryptOffset,
+		35
+	},
+	{
+		1193,
+		201010,
+		nil,
+		1520 - lc._encryptOffset,
+		-8506 - lc._encryptOffset,
+		-8506 - lc._encryptOffset,
+		370
+	},
+	{
+		1194,
+		201010,
+		nil,
+		1520 - lc._encryptOffset,
+		-8430 - lc._encryptOffset,
+		-8430 - lc._encryptOffset,
+		120
+	},
+	{
+		1195,
+		201010,
+		nil,
+		1520 - lc._encryptOffset,
+		-8145 - lc._encryptOffset,
+		-8145 - lc._encryptOffset,
+		40
+	},
+	{
+		1196,
+		201010,
+		nil,
+		1522 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		45
+	},
+	{
+		1197,
+		201010,
+		nil,
+		1522 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		270
+	},
+	{
+		1198,
+		201010,
+		nil,
+		1522 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		75
+	},
+	{
+		1199,
+		201010,
+		nil,
+		1519 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1035
+	},
+	{
+		1200,
+		201010,
+		nil,
+		1519 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1050
+	},
+	{
+		1201,
+		201010,
+		nil,
+		1519 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		415
+	},
+	{
+		1202,
+		201010,
+		nil,
+		8476 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		272
+	},
+	{
+		1203,
+		201010,
+		nil,
+		8476 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		570
+	},
+	{
+		1204,
+		201010,
+		nil,
+		8476 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		190
+	},
+	{
+		1205,
+		201010,
+		nil,
+		8477 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		570
+	},
+	{
+		1206,
+		201010,
+		nil,
+		8477 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		190
+	},
+	{
+		1207,
+		201010,
+		nil,
+		8478 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		28
+	},
+	{
+		1208,
+		201010,
+		3,
+		-7824 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1226
+	},
+	{
+		1209,
+		201010,
+		3,
+		-7823 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		475
+	},
+	{
+		1210,
+		201010,
+		3,
+		-7822 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		95
+	},
+	{
+		1211,
+		201010,
+		3,
+		-7821 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		14
+	},
+	{
+		1212,
+		201010,
+		nil,
+		1523 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		-8465 - lc._encryptOffset,
+		1125
+	},
+	{
+		1213,
+		201010,
+		nil,
+		1523 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		-8405 - lc._encryptOffset,
+		1140
+	},
+	{
+		1214,
+		201010,
+		nil,
+		1523 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		-8165 - lc._encryptOffset,
+		235
+	},
+	{
+		1215,
+		1001,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4500
+	},
+	{
+		1216,
+		1001,
+		nil,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3000
+	},
+	{
+		1217,
+		1001,
+		nil,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1500
+	},
+	{
+		1218,
+		1001,
+		nil,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		800
+	},
+	{
+		1219,
+		1001,
+		nil,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		1220,
+		1002,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		4500
+	},
+	{
+		1221,
+		1002,
+		nil,
+		-8523 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		3000
+	},
+	{
+		1222,
+		1002,
+		nil,
+		-8522 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1500
+	},
+	{
+		1223,
+		1002,
+		nil,
+		-8521 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		800
+	},
+	{
+		1224,
+		1002,
+		nil,
+		-8520 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		200
+	},
+	{
+		1225,
+		1101,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5
+	},
+	{
+		1226,
+		1101,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		1227,
+		1101,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		1228,
+		1101,
+		nil,
+		1541 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		245
+	},
+	{
+		1229,
+		1101,
+		nil,
+		1539 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		1200
+	},
+	{
+		1230,
+		1101,
+		nil,
+		1541 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1200
+	},
+	{
+		1231,
+		1101,
+		nil,
+		1539 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1200
+	},
+	{
+		1232,
+		1101,
+		nil,
+		1477 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		2000
+	},
+	{
+		1233,
+		1101,
+		nil,
+		1477 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		2000
+	},
+	{
+		1234,
+		1101,
+		nil,
+		1476 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		2000
+	},
+	{
+		1235,
+		1102,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5
+	},
+	{
+		1236,
+		1102,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		1237,
+		1102,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		1238,
+		1102,
+		nil,
+		1541 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		-8517 - lc._encryptOffset,
+		245
+	},
+	{
+		1239,
+		1102,
+		nil,
+		1539 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		-8510 - lc._encryptOffset,
+		1200
+	},
+	{
+		1240,
+		1102,
+		nil,
+		1541 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1200
+	},
+	{
+		1241,
+		1102,
+		nil,
+		1539 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		1200
+	},
+	{
+		1242,
+		1102,
+		nil,
+		1477 - lc._encryptOffset,
+		-8075 - lc._encryptOffset,
+		-8075 - lc._encryptOffset,
+		2000
+	},
+	{
+		1243,
+		1102,
+		nil,
+		1477 - lc._encryptOffset,
+		-8375 - lc._encryptOffset,
+		-8375 - lc._encryptOffset,
+		2000
+	},
+	{
+		1244,
+		1102,
+		nil,
+		1476 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		-7025 - lc._encryptOffset,
+		2000
+	},
+	{
+		1245,
+		1103,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		5
+	},
+	{
+		1246,
+		1103,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		50
+	},
+	{
+		1247,
+		1103,
+		nil,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		100
+	},
+	{
+		1248,
+		1103,
+		nil,
+		1541 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		245
+	},
+	{
+		1249,
+		1103,
+		nil,
+		1539 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		1200
+	},
+	{
+		1250,
+		1103,
+		nil,
+		1541 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		1200
+	},
+	{
+		1251,
+		1103,
+		nil,
+		1539 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		1200
+	},
+	{
+		1252,
+		1103,
+		nil,
+		1477 - lc._encryptOffset,
+		-7925 - lc._encryptOffset,
+		-7925 - lc._encryptOffset,
+		2000
+	},
+	{
+		1253,
+		1103,
+		nil,
+		1477 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		-8325 - lc._encryptOffset,
+		2000
+	},
+	{
+		1254,
+		1103,
+		nil,
+		1476 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		-6525 - lc._encryptOffset,
+		2000
+	},
+	{
+		1255,
+		1104,
+		nil,
+		1477 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		-8520 - lc._encryptOffset,
+		4000
+	},
+	{
+		1256,
+		1104,
+		nil,
+		1477 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		-8505 - lc._encryptOffset,
+		3000
+	},
+	{
+		1257,
+		1104,
+		nil,
+		1477 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		800
+	},
+	{
+		1258,
+		1104,
+		nil,
+		1539 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		2000
+	},
+	{
+		1259,
+		1104,
+		nil,
+		1539 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		200
+	},
+	{
+		1260,
+		14702,
+		nil,
+		1481 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1000
+	},
+	{
+		1261,
+		14702,
+		nil,
+		1481 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		600
+	},
+	{
+		1262,
+		14702,
+		nil,
+		1481 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		50
+	},
+	{
+		1263,
+		14702,
+		nil,
+		1477 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		-8425 - lc._encryptOffset,
+		1000
+	},
+	{
+		1264,
+		14702,
+		nil,
+		1477 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		-8225 - lc._encryptOffset,
+		600
+	},
+	{
+		1265,
+		14702,
+		nil,
+		1477 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		50
+	},
+	{
+		1266,
+		14702,
+		nil,
+		1483 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		-8519 - lc._encryptOffset,
+		1000
+	},
+	{
+		1267,
+		14702,
+		nil,
+		1483 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		-8507 - lc._encryptOffset,
+		600
+	},
+	{
+		1268,
+		14702,
+		nil,
+		1483 - lc._encryptOffset,
+		-8471 - lc._encryptOffset,
+		-8471 - lc._encryptOffset,
+		50
+	},
+	{
+		1269,
+		14702,
+		nil,
+		1476 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		-7525 - lc._encryptOffset,
+		1000
+	},
+	{
+		1270,
+		14702,
+		nil,
+		1476 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		-5525 - lc._encryptOffset,
+		600
+	},
+	{
+		1271,
+		14702,
+		nil,
+		1476 - lc._encryptOffset,
+		1475 - lc._encryptOffset,
+		1475 - lc._encryptOffset,
+		100
+	},
+	{
+		1272,
+		14702,
+		nil,
+		1539 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1000
+	},
+	{
+		1273,
+		14702,
+		nil,
+		1539 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		-8522 - lc._encryptOffset,
+		600
+	},
+	{
+		1274,
+		14702,
+		nil,
+		1539 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		-8515 - lc._encryptOffset,
+		100
+	},
+	{
+		1275,
+		14702,
+		nil,
+		1541 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		-8524 - lc._encryptOffset,
+		1000
+	},
+	{
+		1276,
+		14702,
+		nil,
+		1541 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		-8523 - lc._encryptOffset,
+		600
+	},
+	{
+		1277,
+		14702,
+		nil,
+		1541 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		-8521 - lc._encryptOffset,
+		50
+	}
+}
+local mapKeyIndex = {
+	k1644150 = 1,
+	k9427419 = 4,
+	k3554818 = 2,
+	k10527364 = 6,
+	k8916744 = 3,
+	k488890 = 7,
+	k12013215 = 5
+}
+local mapKeyDimension = {
+	k10527364 = 0,
+	k9427419 = 0,
+	k12013215 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 8525
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 8525
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

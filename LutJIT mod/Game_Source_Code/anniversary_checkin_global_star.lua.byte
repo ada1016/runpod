@@ -1,0 +1,2961 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		10296884 - lc._encryptOffset
+	},
+	{
+		2,
+		17864909 - lc._encryptOffset
+	},
+	{
+		3,
+		25774040 - lc._encryptOffset
+	},
+	{
+		4,
+		33481829 - lc._encryptOffset
+	},
+	{
+		5,
+		42195976 - lc._encryptOffset
+	},
+	{
+		6,
+		49841413 - lc._encryptOffset
+	},
+	{
+		7,
+		56535922 - lc._encryptOffset
+	},
+	{
+		8,
+		64078520 - lc._encryptOffset
+	},
+	{
+		9,
+		71603304 - lc._encryptOffset
+	},
+	{
+		10,
+		81313068 - lc._encryptOffset
+	},
+	{
+		11,
+		89019427 - lc._encryptOffset
+	},
+	{
+		12,
+		99684665 - lc._encryptOffset
+	},
+	{
+		13,
+		107639474 - lc._encryptOffset
+	},
+	{
+		14,
+		117415875 - lc._encryptOffset
+	},
+	{
+		15,
+		125154803 - lc._encryptOffset
+	},
+	{
+		16,
+		134592126 - lc._encryptOffset
+	},
+	{
+		17,
+		141751830 - lc._encryptOffset
+	},
+	{
+		18,
+		151717278 - lc._encryptOffset
+	},
+	{
+		19,
+		160270564 - lc._encryptOffset
+	},
+	{
+		20,
+		167914081 - lc._encryptOffset
+	},
+	{
+		21,
+		174903019 - lc._encryptOffset
+	},
+	{
+		22,
+		184212771 - lc._encryptOffset
+	},
+	{
+		23,
+		193474027 - lc._encryptOffset
+	},
+	{
+		24,
+		200937967 - lc._encryptOffset
+	},
+	{
+		25,
+		210732412 - lc._encryptOffset
+	},
+	{
+		26,
+		224301845 - lc._encryptOffset
+	},
+	{
+		27,
+		237355767 - lc._encryptOffset
+	},
+	{
+		28,
+		249367316 - lc._encryptOffset
+	},
+	{
+		29,
+		257674131 - lc._encryptOffset
+	},
+	{
+		30,
+		268951062 - lc._encryptOffset
+	},
+	{
+		31,
+		282911323 - lc._encryptOffset
+	},
+	{
+		32,
+		295275112 - lc._encryptOffset
+	},
+	{
+		33,
+		303258926 - lc._encryptOffset
+	},
+	{
+		34,
+		313852832 - lc._encryptOffset
+	},
+	{
+		35,
+		325139132 - lc._encryptOffset
+	},
+	{
+		36,
+		339461700 - lc._encryptOffset
+	},
+	{
+		37,
+		353865233 - lc._encryptOffset
+	},
+	{
+		38,
+		362137232 - lc._encryptOffset
+	},
+	{
+		39,
+		371773459 - lc._encryptOffset
+	},
+	{
+		40,
+		382135936 - lc._encryptOffset
+	},
+	{
+		41,
+		394829767 - lc._encryptOffset
+	},
+	{
+		42,
+		406644350 - lc._encryptOffset
+	},
+	{
+		43,
+		419391422 - lc._encryptOffset
+	},
+	{
+		44,
+		433117026 - lc._encryptOffset
+	},
+	{
+		45,
+		446538313 - lc._encryptOffset
+	},
+	{
+		46,
+		456480270 - lc._encryptOffset
+	},
+	{
+		47,
+		470847260 - lc._encryptOffset
+	},
+	{
+		48,
+		485031165 - lc._encryptOffset
+	},
+	{
+		49,
+		499589917 - lc._encryptOffset
+	},
+	{
+		50,
+		509969134 - lc._encryptOffset
+	},
+	{
+		51,
+		522487362 - lc._encryptOffset
+	},
+	{
+		52,
+		537529976 - lc._encryptOffset
+	},
+	{
+		53,
+		549341604 - lc._encryptOffset
+	},
+	{
+		54,
+		559602619 - lc._encryptOffset
+	},
+	{
+		55,
+		571914130 - lc._encryptOffset
+	},
+	{
+		56,
+		581690286 - lc._encryptOffset
+	},
+	{
+		57,
+		592660487 - lc._encryptOffset
+	},
+	{
+		58,
+		606338475 - lc._encryptOffset
+	},
+	{
+		59,
+		617647413 - lc._encryptOffset
+	},
+	{
+		60,
+		630771622 - lc._encryptOffset
+	},
+	{
+		61,
+		639713391 - lc._encryptOffset
+	},
+	{
+		62,
+		651170065 - lc._encryptOffset
+	},
+	{
+		63,
+		660258300 - lc._encryptOffset
+	},
+	{
+		64,
+		675210941 - lc._encryptOffset
+	},
+	{
+		65,
+		685531732 - lc._encryptOffset
+	},
+	{
+		66,
+		695119651 - lc._encryptOffset
+	},
+	{
+		67,
+		709926462 - lc._encryptOffset
+	},
+	{
+		68,
+		722602999 - lc._encryptOffset
+	},
+	{
+		69,
+		734131568 - lc._encryptOffset
+	},
+	{
+		70,
+		745552671 - lc._encryptOffset
+	},
+	{
+		71,
+		755761131 - lc._encryptOffset
+	},
+	{
+		72,
+		768240667 - lc._encryptOffset
+	},
+	{
+		73,
+		785573603 - lc._encryptOffset
+	},
+	{
+		74,
+		796785698 - lc._encryptOffset
+	},
+	{
+		75,
+		813241701 - lc._encryptOffset
+	},
+	{
+		76,
+		828276934 - lc._encryptOffset
+	},
+	{
+		77,
+		841340298 - lc._encryptOffset
+	},
+	{
+		78,
+		851900430 - lc._encryptOffset
+	},
+	{
+		79,
+		866601454 - lc._encryptOffset
+	},
+	{
+		80,
+		879021315 - lc._encryptOffset
+	},
+	{
+		81,
+		888955325 - lc._encryptOffset
+	},
+	{
+		82,
+		902091623 - lc._encryptOffset
+	},
+	{
+		83,
+		919616694 - lc._encryptOffset
+	},
+	{
+		84,
+		932613197 - lc._encryptOffset
+	},
+	{
+		85,
+		946529381 - lc._encryptOffset
+	},
+	{
+		86,
+		957342858 - lc._encryptOffset
+	},
+	{
+		87,
+		974913314 - lc._encryptOffset
+	},
+	{
+		88,
+		989978860 - lc._encryptOffset
+	},
+	{
+		89,
+		1001368127 - lc._encryptOffset
+	},
+	{
+		90,
+		1011516621 - lc._encryptOffset
+	},
+	{
+		91,
+		1028418347 - lc._encryptOffset
+	},
+	{
+		92,
+		1043668017 - lc._encryptOffset
+	},
+	{
+		93,
+		1058820293 - lc._encryptOffset
+	},
+	{
+		94,
+		1070804398 - lc._encryptOffset
+	},
+	{
+		95,
+		1083671459 - lc._encryptOffset
+	},
+	{
+		96,
+		1100203927 - lc._encryptOffset
+	},
+	{
+		97,
+		1114426865 - lc._encryptOffset
+	},
+	{
+		98,
+		1128152376 - lc._encryptOffset
+	},
+	{
+		99,
+		1146806044 - lc._encryptOffset
+	},
+	{
+		100,
+		1165298743 - lc._encryptOffset
+	},
+	{
+		101,
+		1177580351 - lc._encryptOffset
+	},
+	{
+		102,
+		1189855779 - lc._encryptOffset
+	},
+	{
+		103,
+		1207998493 - lc._encryptOffset
+	},
+	{
+		104,
+		1219449094 - lc._encryptOffset
+	},
+	{
+		105,
+		1233877149 - lc._encryptOffset
+	},
+	{
+		106,
+		1247276739 - lc._encryptOffset
+	},
+	{
+		107,
+		1262342744 - lc._encryptOffset
+	},
+	{
+		108,
+		1276133994 - lc._encryptOffset
+	},
+	{
+		109,
+		1289397890 - lc._encryptOffset
+	},
+	{
+		110,
+		1303563606 - lc._encryptOffset
+	},
+	{
+		111,
+		1316220443 - lc._encryptOffset
+	},
+	{
+		112,
+		1329325866 - lc._encryptOffset
+	},
+	{
+		113,
+		1347611001 - lc._encryptOffset
+	},
+	{
+		114,
+		1360215883 - lc._encryptOffset
+	},
+	{
+		115,
+		1378983807 - lc._encryptOffset
+	},
+	{
+		116,
+		1392879289 - lc._encryptOffset
+	},
+	{
+		117,
+		1409233242 - lc._encryptOffset
+	},
+	{
+		118,
+		1423813717 - lc._encryptOffset
+	},
+	{
+		119,
+		1434177230 - lc._encryptOffset
+	},
+	{
+		120,
+		1447421698 - lc._encryptOffset
+	},
+	{
+		121,
+		1459215791 - lc._encryptOffset
+	},
+	{
+		122,
+		1477081118 - lc._encryptOffset
+	},
+	{
+		123,
+		1493782938 - lc._encryptOffset
+	},
+	{
+		124,
+		1513460614 - lc._encryptOffset
+	},
+	{
+		125,
+		1531807406 - lc._encryptOffset
+	},
+	{
+		126,
+		1545175945 - lc._encryptOffset
+	},
+	{
+		127,
+		1564948682 - lc._encryptOffset
+	},
+	{
+		128,
+		1576858110 - lc._encryptOffset
+	},
+	{
+		129,
+		1595931191 - lc._encryptOffset
+	},
+	{
+		130,
+		1607652279 - lc._encryptOffset
+	},
+	{
+		131,
+		1627869740 - lc._encryptOffset
+	},
+	{
+		132,
+		1642648231 - lc._encryptOffset
+	},
+	{
+		133,
+		1658043410 - lc._encryptOffset
+	},
+	{
+		134,
+		1674679007 - lc._encryptOffset
+	},
+	{
+		135,
+		1686427150 - lc._encryptOffset
+	},
+	{
+		136,
+		1706004997 - lc._encryptOffset
+	},
+	{
+		137,
+		1725480842 - lc._encryptOffset
+	},
+	{
+		138,
+		1742561397 - lc._encryptOffset
+	},
+	{
+		139,
+		1758168738 - lc._encryptOffset
+	},
+	{
+		140,
+		1776186634 - lc._encryptOffset
+	},
+	{
+		141,
+		1793660348 - lc._encryptOffset
+	},
+	{
+		142,
+		1808730541 - lc._encryptOffset
+	},
+	{
+		143,
+		1827430855 - lc._encryptOffset
+	},
+	{
+		144,
+		1840241638 - lc._encryptOffset
+	},
+	{
+		145,
+		1852712662 - lc._encryptOffset
+	},
+	{
+		146,
+		1864501973 - lc._encryptOffset
+	},
+	{
+		147,
+		1882331305 - lc._encryptOffset
+	},
+	{
+		148,
+		1892442418 - lc._encryptOffset
+	},
+	{
+		149,
+		1904584155 - lc._encryptOffset
+	},
+	{
+		150,
+		1919963921 - lc._encryptOffset
+	},
+	{
+		151,
+		1934221507 - lc._encryptOffset
+	},
+	{
+		152,
+		1951653558 - lc._encryptOffset
+	},
+	{
+		153,
+		1968760428 - lc._encryptOffset
+	},
+	{
+		154,
+		1984173059 - lc._encryptOffset
+	},
+	{
+		155,
+		1996023412 - lc._encryptOffset
+	},
+	{
+		156,
+		2010707212 - lc._encryptOffset
+	},
+	{
+		157,
+		2023226170 - lc._encryptOffset
+	},
+	{
+		158,
+		2034741849 - lc._encryptOffset
+	},
+	{
+		159,
+		2050092665 - lc._encryptOffset
+	},
+	{
+		160,
+		2067863631 - lc._encryptOffset
+	},
+	{
+		161,
+		2079715072 - lc._encryptOffset
+	},
+	{
+		162,
+		2096604583 - lc._encryptOffset
+	},
+	{
+		163,
+		2109978723 - lc._encryptOffset
+	},
+	{
+		164,
+		2120859024 - lc._encryptOffset
+	},
+	{
+		165,
+		2137935447 - lc._encryptOffset
+	},
+	{
+		166,
+		2152164904.0 - lc._encryptOffset
+	},
+	{
+		167,
+		2167775207.0 - lc._encryptOffset
+	},
+	{
+		168,
+		2182786883.0 - lc._encryptOffset
+	},
+	{
+		169,
+		2196954562.0 - lc._encryptOffset
+	},
+	{
+		170,
+		2205562679.0 - lc._encryptOffset
+	},
+	{
+		171,
+		2217437562.0 - lc._encryptOffset
+	},
+	{
+		172,
+		2227938282.0 - lc._encryptOffset
+	},
+	{
+		173,
+		2236193579.0 - lc._encryptOffset
+	},
+	{
+		174,
+		2245759498.0 - lc._encryptOffset
+	},
+	{
+		175,
+		2257805188.0 - lc._encryptOffset
+	},
+	{
+		176,
+		2270369729.0 - lc._encryptOffset
+	},
+	{
+		177,
+		2281525381.0 - lc._encryptOffset
+	},
+	{
+		178,
+		2291252150.0 - lc._encryptOffset
+	},
+	{
+		179,
+		2302223542.0 - lc._encryptOffset
+	},
+	{
+		180,
+		2315523967.0 - lc._encryptOffset
+	},
+	{
+		181,
+		2324654423.0 - lc._encryptOffset
+	},
+	{
+		182,
+		2334037646.0 - lc._encryptOffset
+	},
+	{
+		183,
+		2348047474.0 - lc._encryptOffset
+	},
+	{
+		184,
+		2357250973.0 - lc._encryptOffset
+	},
+	{
+		185,
+		2371086467.0 - lc._encryptOffset
+	},
+	{
+		186,
+		2382609153.0 - lc._encryptOffset
+	},
+	{
+		187,
+		2392738561.0 - lc._encryptOffset
+	},
+	{
+		188,
+		2400614900.0 - lc._encryptOffset
+	},
+	{
+		189,
+		2410840563.0 - lc._encryptOffset
+	},
+	{
+		190,
+		2424445303.0 - lc._encryptOffset
+	},
+	{
+		191,
+		2434424846.0 - lc._encryptOffset
+	},
+	{
+		192,
+		2443802960.0 - lc._encryptOffset
+	},
+	{
+		193,
+		2452936679.0 - lc._encryptOffset
+	},
+	{
+		194,
+		2461236951.0 - lc._encryptOffset
+	},
+	{
+		195,
+		2468460808.0 - lc._encryptOffset
+	},
+	{
+		196,
+		2477501846.0 - lc._encryptOffset
+	},
+	{
+		197,
+		2484826612.0 - lc._encryptOffset
+	},
+	{
+		198,
+		2495106408.0 - lc._encryptOffset
+	},
+	{
+		199,
+		2503770615.0 - lc._encryptOffset
+	},
+	{
+		200,
+		2512579231.0 - lc._encryptOffset
+	},
+	{
+		201,
+		2522692616.0 - lc._encryptOffset
+	},
+	{
+		202,
+		2530250116.0 - lc._encryptOffset
+	},
+	{
+		203,
+		2540280823.0 - lc._encryptOffset
+	},
+	{
+		204,
+		2546722145.0 - lc._encryptOffset
+	},
+	{
+		205,
+		2555453843.0 - lc._encryptOffset
+	},
+	{
+		206,
+		2564053486.0 - lc._encryptOffset
+	},
+	{
+		207,
+		2572236273.0 - lc._encryptOffset
+	},
+	{
+		208,
+		2578097010.0 - lc._encryptOffset
+	},
+	{
+		209,
+		2586322894.0 - lc._encryptOffset
+	},
+	{
+		210,
+		2591876071.0 - lc._encryptOffset
+	},
+	{
+		211,
+		2601323031.0 - lc._encryptOffset
+	},
+	{
+		212,
+		2610358260.0 - lc._encryptOffset
+	},
+	{
+		213,
+		2619078500.0 - lc._encryptOffset
+	},
+	{
+		214,
+		2627661477.0 - lc._encryptOffset
+	},
+	{
+		215,
+		2633539025.0 - lc._encryptOffset
+	},
+	{
+		216,
+		2640861254.0 - lc._encryptOffset
+	},
+	{
+		217,
+		2647719632.0 - lc._encryptOffset
+	},
+	{
+		218,
+		2653618904.0 - lc._encryptOffset
+	},
+	{
+		219,
+		2659103454.0 - lc._encryptOffset
+	},
+	{
+		220,
+		2667194400.0 - lc._encryptOffset
+	},
+	{
+		221,
+		2672170477.0 - lc._encryptOffset
+	},
+	{
+		222,
+		2678795492.0 - lc._encryptOffset
+	},
+	{
+		223,
+		2683357374.0 - lc._encryptOffset
+	},
+	{
+		224,
+		2689326106.0 - lc._encryptOffset
+	},
+	{
+		225,
+		2696766153.0 - lc._encryptOffset
+	},
+	{
+		226,
+		2703138115.0 - lc._encryptOffset
+	},
+	{
+		227,
+		2708834591.0 - lc._encryptOffset
+	},
+	{
+		228,
+		2714532130.0 - lc._encryptOffset
+	},
+	{
+		229,
+		2720749208.0 - lc._encryptOffset
+	},
+	{
+		230,
+		2728292211.0 - lc._encryptOffset
+	},
+	{
+		231,
+		2736462597.0 - lc._encryptOffset
+	},
+	{
+		232,
+		2744327971.0 - lc._encryptOffset
+	},
+	{
+		233,
+		2750503469.0 - lc._encryptOffset
+	},
+	{
+		234,
+		2756732392.0 - lc._encryptOffset
+	},
+	{
+		235,
+		2761915996.0 - lc._encryptOffset
+	},
+	{
+		236,
+		2769442583.0 - lc._encryptOffset
+	},
+	{
+		237,
+		2777650945.0 - lc._encryptOffset
+	},
+	{
+		238,
+		2784062769.0 - lc._encryptOffset
+	},
+	{
+		239,
+		2791958576.0 - lc._encryptOffset
+	},
+	{
+		240,
+		2796802908.0 - lc._encryptOffset
+	},
+	{
+		241,
+		2802015651.0 - lc._encryptOffset
+	},
+	{
+		242,
+		2806233825.0 - lc._encryptOffset
+	},
+	{
+		243,
+		2812618764.0 - lc._encryptOffset
+	},
+	{
+		244,
+		2819284484.0 - lc._encryptOffset
+	},
+	{
+		245,
+		2825707738.0 - lc._encryptOffset
+	},
+	{
+		246,
+		2829832275.0 - lc._encryptOffset
+	},
+	{
+		247,
+		2835284406.0 - lc._encryptOffset
+	},
+	{
+		248,
+		2839363533.0 - lc._encryptOffset
+	},
+	{
+		249,
+		2844614140.0 - lc._encryptOffset
+	},
+	{
+		250,
+		2850805810.0 - lc._encryptOffset
+	},
+	{
+		251,
+		2855014742.0 - lc._encryptOffset
+	},
+	{
+		252,
+		2861612507.0 - lc._encryptOffset
+	},
+	{
+		253,
+		2865927294.0 - lc._encryptOffset
+	},
+	{
+		254,
+		2870245083.0 - lc._encryptOffset
+	},
+	{
+		255,
+		2874723762.0 - lc._encryptOffset
+	},
+	{
+		256,
+		2878775556.0 - lc._encryptOffset
+	},
+	{
+		257,
+		2884070813.0 - lc._encryptOffset
+	},
+	{
+		258,
+		2888564068.0 - lc._encryptOffset
+	},
+	{
+		259,
+		2892459078.0 - lc._encryptOffset
+	},
+	{
+		260,
+		2897584272.0 - lc._encryptOffset
+	},
+	{
+		261,
+		2901664252.0 - lc._encryptOffset
+	},
+	{
+		262,
+		2906327100.0 - lc._encryptOffset
+	},
+	{
+		263,
+		2910682672.0 - lc._encryptOffset
+	},
+	{
+		264,
+		2916698864.0 - lc._encryptOffset
+	},
+	{
+		265,
+		2922002540.0 - lc._encryptOffset
+	},
+	{
+		266,
+		2928264111.0 - lc._encryptOffset
+	},
+	{
+		267,
+		2933395129.0 - lc._encryptOffset
+	},
+	{
+		268,
+		2939780911.0 - lc._encryptOffset
+	},
+	{
+		269,
+		2945633380.0 - lc._encryptOffset
+	},
+	{
+		270,
+		2952335786.0 - lc._encryptOffset
+	},
+	{
+		271,
+		2959186709.0 - lc._encryptOffset
+	},
+	{
+		272,
+		2965366041.0 - lc._encryptOffset
+	},
+	{
+		273,
+		2970783195.0 - lc._encryptOffset
+	},
+	{
+		274,
+		2975887560.0 - lc._encryptOffset
+	},
+	{
+		275,
+		2979841036.0 - lc._encryptOffset
+	},
+	{
+		276,
+		2985256072.0 - lc._encryptOffset
+	},
+	{
+		277,
+		2990001575.0 - lc._encryptOffset
+	},
+	{
+		278,
+		2996118348.0 - lc._encryptOffset
+	},
+	{
+		279,
+		2999972894.0 - lc._encryptOffset
+	},
+	{
+		280,
+		3003786919.0 - lc._encryptOffset
+	},
+	{
+		281,
+		3007605414.0 - lc._encryptOffset
+	},
+	{
+		282,
+		3011478928.0 - lc._encryptOffset
+	},
+	{
+		283,
+		3015800424.0 - lc._encryptOffset
+	},
+	{
+		284,
+		3020698026.0 - lc._encryptOffset
+	},
+	{
+		285,
+		3026301138.0 - lc._encryptOffset
+	},
+	{
+		286,
+		3030961639.0 - lc._encryptOffset
+	},
+	{
+		287,
+		3035919899.0 - lc._encryptOffset
+	},
+	{
+		288,
+		3039658206.0 - lc._encryptOffset
+	},
+	{
+		289,
+		3044385038.0 - lc._encryptOffset
+	},
+	{
+		290,
+		3049174151.0 - lc._encryptOffset
+	},
+	{
+		291,
+		3053386175.0 - lc._encryptOffset
+	},
+	{
+		292,
+		3057828256.0 - lc._encryptOffset
+	},
+	{
+		293,
+		3062057372.0 - lc._encryptOffset
+	},
+	{
+		294,
+		3065829567.0 - lc._encryptOffset
+	},
+	{
+		295,
+		3069581859.0 - lc._encryptOffset
+	},
+	{
+		296,
+		3075668642.0 - lc._encryptOffset
+	},
+	{
+		297,
+		3081131964.0 - lc._encryptOffset
+	},
+	{
+		298,
+		3087796590.0 - lc._encryptOffset
+	},
+	{
+		299,
+		3093296718.0 - lc._encryptOffset
+	},
+	{
+		300,
+		3098252067.0 - lc._encryptOffset
+	},
+	{
+		301,
+		3104739384.0 - lc._encryptOffset
+	},
+	{
+		302,
+		3110200358.0 - lc._encryptOffset
+	},
+	{
+		303,
+		3114342944.0 - lc._encryptOffset
+	},
+	{
+		304,
+		3119054091.0 - lc._encryptOffset
+	},
+	{
+		305,
+		3123088743.0 - lc._encryptOffset
+	},
+	{
+		306,
+		3127205228.0 - lc._encryptOffset
+	},
+	{
+		307,
+		3133020516.0 - lc._encryptOffset
+	},
+	{
+		308,
+		3139582324.0 - lc._encryptOffset
+	},
+	{
+		309,
+		3143811398.0 - lc._encryptOffset
+	},
+	{
+		310,
+		3149723186.0 - lc._encryptOffset
+	},
+	{
+		311,
+		3156554054.0 - lc._encryptOffset
+	},
+	{
+		312,
+		3160436212.0 - lc._encryptOffset
+	},
+	{
+		313,
+		3164384401.0 - lc._encryptOffset
+	},
+	{
+		314,
+		3171195110.0 - lc._encryptOffset
+	},
+	{
+		315,
+		3177383680.0 - lc._encryptOffset
+	},
+	{
+		316,
+		3182194303.0 - lc._encryptOffset
+	},
+	{
+		317,
+		3185971019.0 - lc._encryptOffset
+	},
+	{
+		318,
+		3190223319.0 - lc._encryptOffset
+	},
+	{
+		319,
+		3195006543.0 - lc._encryptOffset
+	},
+	{
+		320,
+		3201499054.0 - lc._encryptOffset
+	},
+	{
+		321,
+		3205934842.0 - lc._encryptOffset
+	},
+	{
+		322,
+		3210295340.0 - lc._encryptOffset
+	},
+	{
+		323,
+		3214296544.0 - lc._encryptOffset
+	},
+	{
+		324,
+		3218838028.0 - lc._encryptOffset
+	},
+	{
+		325,
+		3223415982.0 - lc._encryptOffset
+	},
+	{
+		326,
+		3227833465.0 - lc._encryptOffset
+	},
+	{
+		327,
+		3233241385.0 - lc._encryptOffset
+	},
+	{
+		328,
+		3239126043.0 - lc._encryptOffset
+	},
+	{
+		329,
+		3245933642.0 - lc._encryptOffset
+	},
+	{
+		330,
+		3251553636.0 - lc._encryptOffset
+	},
+	{
+		331,
+		3256054400.0 - lc._encryptOffset
+	},
+	{
+		332,
+		3261818529.0 - lc._encryptOffset
+	},
+	{
+		333,
+		3266729850.0 - lc._encryptOffset
+	},
+	{
+		334,
+		3271135090.0 - lc._encryptOffset
+	},
+	{
+		335,
+		3276271959.0 - lc._encryptOffset
+	},
+	{
+		336,
+		3280994326.0 - lc._encryptOffset
+	},
+	{
+		337,
+		3287123349.0 - lc._encryptOffset
+	},
+	{
+		338,
+		3292714529.0 - lc._encryptOffset
+	},
+	{
+		339,
+		3298593944.0 - lc._encryptOffset
+	},
+	{
+		340,
+		3302361872.0 - lc._encryptOffset
+	},
+	{
+		341,
+		3308952066.0 - lc._encryptOffset
+	},
+	{
+		342,
+		3313365872.0 - lc._encryptOffset
+	},
+	{
+		343,
+		3318111702.0 - lc._encryptOffset
+	},
+	{
+		344,
+		3322237081.0 - lc._encryptOffset
+	},
+	{
+		345,
+		3328054200.0 - lc._encryptOffset
+	},
+	{
+		346,
+		3332736984.0 - lc._encryptOffset
+	},
+	{
+		347,
+		3336737762.0 - lc._encryptOffset
+	},
+	{
+		348,
+		3343418992.0 - lc._encryptOffset
+	},
+	{
+		349,
+		3347540771.0 - lc._encryptOffset
+	},
+	{
+		350,
+		3351765914.0 - lc._encryptOffset
+	},
+	{
+		351,
+		3356181563.0 - lc._encryptOffset
+	},
+	{
+		352,
+		3359893199.0 - lc._encryptOffset
+	},
+	{
+		353,
+		3364722100.0 - lc._encryptOffset
+	},
+	{
+		354,
+		3371022840.0 - lc._encryptOffset
+	},
+	{
+		355,
+		3377093457.0 - lc._encryptOffset
+	},
+	{
+		356,
+		3383181064.0 - lc._encryptOffset
+	},
+	{
+		357,
+		3388231750.0 - lc._encryptOffset
+	},
+	{
+		358,
+		3393805917.0 - lc._encryptOffset
+	},
+	{
+		359,
+		3399538971.0 - lc._encryptOffset
+	},
+	{
+		360,
+		3403889357.0 - lc._encryptOffset
+	},
+	{
+		361,
+		3408507647.0 - lc._encryptOffset
+	},
+	{
+		362,
+		3412896335.0 - lc._encryptOffset
+	},
+	{
+		363,
+		3417914912.0 - lc._encryptOffset
+	},
+	{
+		364,
+		3423182406.0 - lc._encryptOffset
+	},
+	{
+		365,
+		3428807973.0 - lc._encryptOffset
+	},
+	{
+		366,
+		3432785245.0 - lc._encryptOffset
+	},
+	{
+		367,
+		3438453279.0 - lc._encryptOffset
+	},
+	{
+		368,
+		3444396062.0 - lc._encryptOffset
+	},
+	{
+		369,
+		3448102503.0 - lc._encryptOffset
+	},
+	{
+		370,
+		3452101979.0 - lc._encryptOffset
+	},
+	{
+		371,
+		3458727017.0 - lc._encryptOffset
+	},
+	{
+		372,
+		3464110603.0 - lc._encryptOffset
+	},
+	{
+		373,
+		3468320448.0 - lc._encryptOffset
+	},
+	{
+		374,
+		3472897011.0 - lc._encryptOffset
+	},
+	{
+		375,
+		3479255893.0 - lc._encryptOffset
+	},
+	{
+		376,
+		3484884940.0 - lc._encryptOffset
+	},
+	{
+		377,
+		3491383302.0 - lc._encryptOffset
+	},
+	{
+		378,
+		3496711038.0 - lc._encryptOffset
+	},
+	{
+		379,
+		3503550808.0 - lc._encryptOffset
+	},
+	{
+		380,
+		3508970938.0 - lc._encryptOffset
+	},
+	{
+		381,
+		3514401872.0 - lc._encryptOffset
+	},
+	{
+		382,
+		3520459978.0 - lc._encryptOffset
+	},
+	{
+		383,
+		3525582248.0 - lc._encryptOffset
+	},
+	{
+		384,
+		3531598013.0 - lc._encryptOffset
+	},
+	{
+		385,
+		3538301787.0 - lc._encryptOffset
+	},
+	{
+		386,
+		3543731946.0 - lc._encryptOffset
+	},
+	{
+		387,
+		3547447461.0 - lc._encryptOffset
+	},
+	{
+		388,
+		3552974189.0 - lc._encryptOffset
+	},
+	{
+		389,
+		3557193059.0 - lc._encryptOffset
+	},
+	{
+		390,
+		3561556519.0 - lc._encryptOffset
+	},
+	{
+		391,
+		3565366599.0 - lc._encryptOffset
+	},
+	{
+		392,
+		3569612791.0 - lc._encryptOffset
+	},
+	{
+		393,
+		3576197124.0 - lc._encryptOffset
+	},
+	{
+		394,
+		3580429860.0 - lc._encryptOffset
+	},
+	{
+		395,
+		3584336282.0 - lc._encryptOffset
+	},
+	{
+		396,
+		3588439506.0 - lc._encryptOffset
+	},
+	{
+		397,
+		3593434336.0 - lc._encryptOffset
+	},
+	{
+		398,
+		3598874245.0 - lc._encryptOffset
+	},
+	{
+		399,
+		3605667348.0 - lc._encryptOffset
+	},
+	{
+		400,
+		3611212725.0 - lc._encryptOffset
+	},
+	{
+		401,
+		3617742033.0 - lc._encryptOffset
+	},
+	{
+		402,
+		3623556629.0 - lc._encryptOffset
+	},
+	{
+		403,
+		3629674291.0 - lc._encryptOffset
+	},
+	{
+		404,
+		3635984600.0 - lc._encryptOffset
+	},
+	{
+		405,
+		3640375367.0 - lc._encryptOffset
+	},
+	{
+		406,
+		3645788116.0 - lc._encryptOffset
+	},
+	{
+		407,
+		3650646188.0 - lc._encryptOffset
+	},
+	{
+		408,
+		3654604938.0 - lc._encryptOffset
+	},
+	{
+		409,
+		3660701618.0 - lc._encryptOffset
+	},
+	{
+		410,
+		3666657201.0 - lc._encryptOffset
+	},
+	{
+		411,
+		3671468404.0 - lc._encryptOffset
+	},
+	{
+		412,
+		3675473362.0 - lc._encryptOffset
+	},
+	{
+		413,
+		3681931634.0 - lc._encryptOffset
+	},
+	{
+		414,
+		3686578593.0 - lc._encryptOffset
+	},
+	{
+		415,
+		3691840030.0 - lc._encryptOffset
+	},
+	{
+		416,
+		3697617996.0 - lc._encryptOffset
+	},
+	{
+		417,
+		3702352567.0 - lc._encryptOffset
+	},
+	{
+		418,
+		3706067480.0 - lc._encryptOffset
+	},
+	{
+		419,
+		3712655192.0 - lc._encryptOffset
+	},
+	{
+		420,
+		3717599636.0 - lc._encryptOffset
+	},
+	{
+		421,
+		3724286109.0 - lc._encryptOffset
+	},
+	{
+		422,
+		3728457841.0 - lc._encryptOffset
+	},
+	{
+		423,
+		3734291696.0 - lc._encryptOffset
+	},
+	{
+		424,
+		3740806595.0 - lc._encryptOffset
+	},
+	{
+		425,
+		3747439694.0 - lc._encryptOffset
+	},
+	{
+		426,
+		3751235843.0 - lc._encryptOffset
+	},
+	{
+		427,
+		3755783984.0 - lc._encryptOffset
+	},
+	{
+		428,
+		3760723977.0 - lc._encryptOffset
+	},
+	{
+		429,
+		3767559338.0 - lc._encryptOffset
+	},
+	{
+		430,
+		3772807168.0 - lc._encryptOffset
+	},
+	{
+		431,
+		3779478114.0 - lc._encryptOffset
+	},
+	{
+		432,
+		3783888459.0 - lc._encryptOffset
+	},
+	{
+		433,
+		3790280033.0 - lc._encryptOffset
+	},
+	{
+		434,
+		3796796069.0 - lc._encryptOffset
+	},
+	{
+		435,
+		3803576553.0 - lc._encryptOffset
+	},
+	{
+		436,
+		3807663192.0 - lc._encryptOffset
+	},
+	{
+		437,
+		3811851599.0 - lc._encryptOffset
+	},
+	{
+		438,
+		3817751361.0 - lc._encryptOffset
+	},
+	{
+		439,
+		3822355712.0 - lc._encryptOffset
+	},
+	{
+		440,
+		3827593629.0 - lc._encryptOffset
+	},
+	{
+		441,
+		3834117481.0 - lc._encryptOffset
+	},
+	{
+		442,
+		3837838550.0 - lc._encryptOffset
+	},
+	{
+		443,
+		3842499727.0 - lc._encryptOffset
+	},
+	{
+		444,
+		3848034710.0 - lc._encryptOffset
+	},
+	{
+		445,
+		3852279504.0 - lc._encryptOffset
+	},
+	{
+		446,
+		3856022202.0 - lc._encryptOffset
+	},
+	{
+		447,
+		3860564514.0 - lc._encryptOffset
+	},
+	{
+		448,
+		3867384985.0 - lc._encryptOffset
+	},
+	{
+		449,
+		3872802015.0 - lc._encryptOffset
+	},
+	{
+		450,
+		3878818572.0 - lc._encryptOffset
+	},
+	{
+		451,
+		3884996474.0 - lc._encryptOffset
+	},
+	{
+		452,
+		3889157060.0 - lc._encryptOffset
+	},
+	{
+		453,
+		3894346266.0 - lc._encryptOffset
+	},
+	{
+		454,
+		3900826318.0 - lc._encryptOffset
+	},
+	{
+		455,
+		3906858387.0 - lc._encryptOffset
+	},
+	{
+		456,
+		3910880130.0 - lc._encryptOffset
+	},
+	{
+		457,
+		3915774121.0 - lc._encryptOffset
+	},
+	{
+		458,
+		3919647314.0 - lc._encryptOffset
+	},
+	{
+		459,
+		3926484859.0 - lc._encryptOffset
+	},
+	{
+		460,
+		3930782603.0 - lc._encryptOffset
+	},
+	{
+		461,
+		3936147832.0 - lc._encryptOffset
+	},
+	{
+		462,
+		3942714261.0 - lc._encryptOffset
+	},
+	{
+		463,
+		3949261876.0 - lc._encryptOffset
+	},
+	{
+		464,
+		3955586822.0 - lc._encryptOffset
+	},
+	{
+		465,
+		3960280606.0 - lc._encryptOffset
+	},
+	{
+		466,
+		3964685136.0 - lc._encryptOffset
+	},
+	{
+		467,
+		3971135069.0 - lc._encryptOffset
+	},
+	{
+		468,
+		3976359598.0 - lc._encryptOffset
+	},
+	{
+		469,
+		3982451727.0 - lc._encryptOffset
+	},
+	{
+		470,
+		3987295371.0 - lc._encryptOffset
+	},
+	{
+		471,
+		3993249559.0 - lc._encryptOffset
+	},
+	{
+		472,
+		3998388399.0 - lc._encryptOffset
+	},
+	{
+		473,
+		4003728000.0 - lc._encryptOffset
+	},
+	{
+		474,
+		4007917219.0 - lc._encryptOffset
+	},
+	{
+		475,
+		4014698120.0 - lc._encryptOffset
+	},
+	{
+		476,
+		4019934186.0 - lc._encryptOffset
+	},
+	{
+		477,
+		4024278056.0 - lc._encryptOffset
+	},
+	{
+		478,
+		4029255246.0 - lc._encryptOffset
+	},
+	{
+		479,
+		4035951119.0 - lc._encryptOffset
+	},
+	{
+		480,
+		4040503497.0 - lc._encryptOffset
+	},
+	{
+		481,
+		4044820928.0 - lc._encryptOffset
+	},
+	{
+		482,
+		4049379377.0 - lc._encryptOffset
+	},
+	{
+		483,
+		4056195165.0 - lc._encryptOffset
+	},
+	{
+		484,
+		4061537199.0 - lc._encryptOffset
+	},
+	{
+		485,
+		4066302097.0 - lc._encryptOffset
+	},
+	{
+		486,
+		4070075313.0 - lc._encryptOffset
+	},
+	{
+		487,
+		4075553880.0 - lc._encryptOffset
+	},
+	{
+		488,
+		4081110451.0 - lc._encryptOffset
+	},
+	{
+		489,
+		4084909698.0 - lc._encryptOffset
+	},
+	{
+		490,
+		4090700852.0 - lc._encryptOffset
+	},
+	{
+		491,
+		4095561866.0 - lc._encryptOffset
+	},
+	{
+		492,
+		4100172029.0 - lc._encryptOffset
+	},
+	{
+		493,
+		4106247706.0 - lc._encryptOffset
+	},
+	{
+		494,
+		4112640086.0 - lc._encryptOffset
+	},
+	{
+		495,
+		4119175051.0 - lc._encryptOffset
+	},
+	{
+		496,
+		4123449212.0 - lc._encryptOffset
+	},
+	{
+		497,
+		4127327882.0 - lc._encryptOffset
+	},
+	{
+		498,
+		4131232445.0 - lc._encryptOffset
+	},
+	{
+		499,
+		4136930745.0 - lc._encryptOffset
+	},
+	{
+		500,
+		4142696623.0 - lc._encryptOffset
+	},
+	{
+		501,
+		4147236579.0 - lc._encryptOffset
+	},
+	{
+		502,
+		4151978572.0 - lc._encryptOffset
+	},
+	{
+		503,
+		4156444785.0 - lc._encryptOffset
+	},
+	{
+		504,
+		4160552073.0 - lc._encryptOffset
+	},
+	{
+		505,
+		4167040619.0 - lc._encryptOffset
+	},
+	{
+		506,
+		4170911262.0 - lc._encryptOffset
+	},
+	{
+		507,
+		4175950031.0 - lc._encryptOffset
+	},
+	{
+		508,
+		4180237831.0 - lc._encryptOffset
+	},
+	{
+		509,
+		4184415127.0 - lc._encryptOffset
+	},
+	{
+		510,
+		4189762129.0 - lc._encryptOffset
+	},
+	{
+		511,
+		4196583999.0 - lc._encryptOffset
+	},
+	{
+		512,
+		4203209336.0 - lc._encryptOffset
+	},
+	{
+		513,
+		4209676203.0 - lc._encryptOffset
+	},
+	{
+		514,
+		4214877558.0 - lc._encryptOffset
+	},
+	{
+		515,
+		4219843406.0 - lc._encryptOffset
+	},
+	{
+		516,
+		4224903365.0 - lc._encryptOffset
+	},
+	{
+		517,
+		4230025723.0 - lc._encryptOffset
+	},
+	{
+		518,
+		4234984762.0 - lc._encryptOffset
+	},
+	{
+		519,
+		4239507795.0 - lc._encryptOffset
+	},
+	{
+		520,
+		4244434813.0 - lc._encryptOffset
+	},
+	{
+		521,
+		4250043154.0 - lc._encryptOffset
+	},
+	{
+		522,
+		4254586536.0 - lc._encryptOffset
+	},
+	{
+		523,
+		4259710116.0 - lc._encryptOffset
+	},
+	{
+		524,
+		4265124646.0 - lc._encryptOffset
+	},
+	{
+		525,
+		4270046246.0 - lc._encryptOffset
+	},
+	{
+		526,
+		4274054098.0 - lc._encryptOffset
+	},
+	{
+		527,
+		4280040369.0 - lc._encryptOffset
+	},
+	{
+		528,
+		4284586451.0 - lc._encryptOffset
+	},
+	{
+		529,
+		4288654502.0 - lc._encryptOffset
+	},
+	{
+		530,
+		4292664281.0 - lc._encryptOffset
+	},
+	{
+		531,
+		4299038181.0 - lc._encryptOffset
+	},
+	{
+		532,
+		4305245133.0 - lc._encryptOffset
+	},
+	{
+		533,
+		4310426770.0 - lc._encryptOffset
+	},
+	{
+		534,
+		4315464621.0 - lc._encryptOffset
+	},
+	{
+		535,
+		4320577048.0 - lc._encryptOffset
+	},
+	{
+		536,
+		4324884375.0 - lc._encryptOffset
+	},
+	{
+		537,
+		4330211006.0 - lc._encryptOffset
+	},
+	{
+		538,
+		4336119201.0 - lc._encryptOffset
+	},
+	{
+		539,
+		4341554954.0 - lc._encryptOffset
+	},
+	{
+		540,
+		4346921442.0 - lc._encryptOffset
+	},
+	{
+		541,
+		4353459463.0 - lc._encryptOffset
+	},
+	{
+		542,
+		4358120048.0 - lc._encryptOffset
+	},
+	{
+		543,
+		4364748691.0 - lc._encryptOffset
+	},
+	{
+		544,
+		4371418037.0 - lc._encryptOffset
+	},
+	{
+		545,
+		4377224938.0 - lc._encryptOffset
+	},
+	{
+		546,
+		4381559023.0 - lc._encryptOffset
+	},
+	{
+		547,
+		4386951320.0 - lc._encryptOffset
+	},
+	{
+		548,
+		4392011424.0 - lc._encryptOffset
+	},
+	{
+		549,
+		4397926896.0 - lc._encryptOffset
+	},
+	{
+		550,
+		4402699201.0 - lc._encryptOffset
+	},
+	{
+		551,
+		4406993315.0 - lc._encryptOffset
+	},
+	{
+		552,
+		4411979031.0 - lc._encryptOffset
+	},
+	{
+		553,
+		4418416497.0 - lc._encryptOffset
+	},
+	{
+		554,
+		4423154594.0 - lc._encryptOffset
+	},
+	{
+		555,
+		4430004617.0 - lc._encryptOffset
+	},
+	{
+		556,
+		4436204246.0 - lc._encryptOffset
+	},
+	{
+		557,
+		4440268932.0 - lc._encryptOffset
+	},
+	{
+		558,
+		4445753894.0 - lc._encryptOffset
+	},
+	{
+		559,
+		4450921035.0 - lc._encryptOffset
+	},
+	{
+		560,
+		4457133433.0 - lc._encryptOffset
+	},
+	{
+		561,
+		4462770654.0 - lc._encryptOffset
+	},
+	{
+		562,
+		4469306616.0 - lc._encryptOffset
+	},
+	{
+		563,
+		4475682049.0 - lc._encryptOffset
+	},
+	{
+		564,
+		4482393778.0 - lc._encryptOffset
+	},
+	{
+		565,
+		4488281247.0 - lc._encryptOffset
+	},
+	{
+		566,
+		4493363266.0 - lc._encryptOffset
+	},
+	{
+		567,
+		4499718468.0 - lc._encryptOffset
+	},
+	{
+		568,
+		4504532525.0 - lc._encryptOffset
+	},
+	{
+		569,
+		4511048588.0 - lc._encryptOffset
+	},
+	{
+		570,
+		4516317879.0 - lc._encryptOffset
+	},
+	{
+		571,
+		4520989950.0 - lc._encryptOffset
+	},
+	{
+		572,
+		4525354003.0 - lc._encryptOffset
+	},
+	{
+		573,
+		4530026217.0 - lc._encryptOffset
+	},
+	{
+		574,
+		4535268520.0 - lc._encryptOffset
+	},
+	{
+		575,
+		4539423785.0 - lc._encryptOffset
+	},
+	{
+		576,
+		4545010444.0 - lc._encryptOffset
+	},
+	{
+		577,
+		4551369571.0 - lc._encryptOffset
+	},
+	{
+		578,
+		4557301816.0 - lc._encryptOffset
+	},
+	{
+		579,
+		4561143624.0 - lc._encryptOffset
+	},
+	{
+		580,
+		4565184800.0 - lc._encryptOffset
+	},
+	{
+		581,
+		4571895662.0 - lc._encryptOffset
+	},
+	{
+		582,
+		4577891772.0 - lc._encryptOffset
+	},
+	{
+		583,
+		4581636563.0 - lc._encryptOffset
+	},
+	{
+		584,
+		4588255797.0 - lc._encryptOffset
+	},
+	{
+		585,
+		4592154832.0 - lc._encryptOffset
+	},
+	{
+		586,
+		4598014286.0 - lc._encryptOffset
+	},
+	{
+		587,
+		4603059022.0 - lc._encryptOffset
+	},
+	{
+		588,
+		4607250030.0 - lc._encryptOffset
+	},
+	{
+		589,
+		4613247495.0 - lc._encryptOffset
+	},
+	{
+		590,
+		4619340018.0 - lc._encryptOffset
+	},
+	{
+		591,
+		4623698985.0 - lc._encryptOffset
+	},
+	{
+		592,
+		4629440130.0 - lc._encryptOffset
+	},
+	{
+		593,
+		4633768653.0 - lc._encryptOffset
+	},
+	{
+		594,
+		4637869170.0 - lc._encryptOffset
+	},
+	{
+		595,
+		4642601709.0 - lc._encryptOffset
+	},
+	{
+		596,
+		4649452555.0 - lc._encryptOffset
+	},
+	{
+		597,
+		4655859190.0 - lc._encryptOffset
+	},
+	{
+		598,
+		4662602834.0 - lc._encryptOffset
+	},
+	{
+		599,
+		4666868910.0 - lc._encryptOffset
+	},
+	{
+		600,
+		4673240580.0 - lc._encryptOffset
+	},
+	{
+		601,
+		4679067922.0 - lc._encryptOffset
+	},
+	{
+		602,
+		4683413076.0 - lc._encryptOffset
+	},
+	{
+		603,
+		4687557958.0 - lc._encryptOffset
+	},
+	{
+		604,
+		4693538706.0 - lc._encryptOffset
+	},
+	{
+		605,
+		4698159851.0 - lc._encryptOffset
+	},
+	{
+		606,
+		4703382734.0 - lc._encryptOffset
+	},
+	{
+		607,
+		4708679418.0 - lc._encryptOffset
+	},
+	{
+		608,
+		4714549799.0 - lc._encryptOffset
+	},
+	{
+		609,
+		4719356861.0 - lc._encryptOffset
+	},
+	{
+		610,
+		4723871507.0 - lc._encryptOffset
+	},
+	{
+		611,
+		4728379205.0 - lc._encryptOffset
+	},
+	{
+		612,
+		4732607751.0 - lc._encryptOffset
+	},
+	{
+		613,
+		4739310072.0 - lc._encryptOffset
+	},
+	{
+		614,
+		4745449930.0 - lc._encryptOffset
+	},
+	{
+		615,
+		4749425577.0 - lc._encryptOffset
+	},
+	{
+		616,
+		4755514231.0 - lc._encryptOffset
+	},
+	{
+		617,
+		4762098373.0 - lc._encryptOffset
+	},
+	{
+		618,
+		4767770786.0 - lc._encryptOffset
+	},
+	{
+		619,
+		4773374450.0 - lc._encryptOffset
+	},
+	{
+		620,
+		4779900285.0 - lc._encryptOffset
+	},
+	{
+		621,
+		4784312393.0 - lc._encryptOffset
+	},
+	{
+		622,
+		4789391722.0 - lc._encryptOffset
+	},
+	{
+		623,
+		4793578641.0 - lc._encryptOffset
+	},
+	{
+		624,
+		4800134458.0 - lc._encryptOffset
+	},
+	{
+		625,
+		4803898939.0 - lc._encryptOffset
+	},
+	{
+		626,
+		4807859520.0 - lc._encryptOffset
+	},
+	{
+		627,
+		4813560888.0 - lc._encryptOffset
+	},
+	{
+		628,
+		4818273550.0 - lc._encryptOffset
+	},
+	{
+		629,
+		4823228292.0 - lc._encryptOffset
+	},
+	{
+		630,
+		4830018574.0 - lc._encryptOffset
+	},
+	{
+		631,
+		4835389457.0 - lc._encryptOffset
+	},
+	{
+		632,
+		4840879828.0 - lc._encryptOffset
+	},
+	{
+		633,
+		4844669925.0 - lc._encryptOffset
+	},
+	{
+		634,
+		4851431285.0 - lc._encryptOffset
+	},
+	{
+		635,
+		4858164978.0 - lc._encryptOffset
+	},
+	{
+		636,
+		4862112938.0 - lc._encryptOffset
+	},
+	{
+		637,
+		4866272424.0 - lc._encryptOffset
+	},
+	{
+		638,
+		4870355034.0 - lc._encryptOffset
+	},
+	{
+		639,
+		4876723522.0 - lc._encryptOffset
+	},
+	{
+		640,
+		4881710226.0 - lc._encryptOffset
+	},
+	{
+		641,
+		4887865955.0 - lc._encryptOffset
+	},
+	{
+		642,
+		4894640820.0 - lc._encryptOffset
+	},
+	{
+		643,
+		4898624341.0 - lc._encryptOffset
+	},
+	{
+		644,
+		4903772579.0 - lc._encryptOffset
+	},
+	{
+		645,
+		4908853932.0 - lc._encryptOffset
+	},
+	{
+		646,
+		4915441315.0 - lc._encryptOffset
+	},
+	{
+		647,
+		4919923077.0 - lc._encryptOffset
+	},
+	{
+		648,
+		4925179477.0 - lc._encryptOffset
+	},
+	{
+		649,
+		4931093955.0 - lc._encryptOffset
+	},
+	{
+		650,
+		4935173222.0 - lc._encryptOffset
+	},
+	{
+		651,
+		4941798260.0 - lc._encryptOffset
+	},
+	{
+		652,
+		4945526918.0 - lc._encryptOffset
+	},
+	{
+		653,
+		4950568175.0 - lc._encryptOffset
+	},
+	{
+		654,
+		4955701572.0 - lc._encryptOffset
+	},
+	{
+		655,
+		4960742619.0 - lc._encryptOffset
+	},
+	{
+		656,
+		4966412905.0 - lc._encryptOffset
+	},
+	{
+		657,
+		4971969079.0 - lc._encryptOffset
+	},
+	{
+		658,
+		4978645543.0 - lc._encryptOffset
+	},
+	{
+		659,
+		4983663516.0 - lc._encryptOffset
+	},
+	{
+		660,
+		4988878150.0 - lc._encryptOffset
+	},
+	{
+		661,
+		4995283433.0 - lc._encryptOffset
+	},
+	{
+		662,
+		4999265106.0 - lc._encryptOffset
+	},
+	{
+		663,
+		5004971540.0 - lc._encryptOffset
+	},
+	{
+		664,
+		5010925844.0 - lc._encryptOffset
+	},
+	{
+		665,
+		5016136861.0 - lc._encryptOffset
+	},
+	{
+		666,
+		5022042557.0 - lc._encryptOffset
+	},
+	{
+		667,
+		5026685046.0 - lc._encryptOffset
+	},
+	{
+		668,
+		5033504550.0 - lc._encryptOffset
+	},
+	{
+		669,
+		5038401528.0 - lc._encryptOffset
+	},
+	{
+		670,
+		5043237825.0 - lc._encryptOffset
+	},
+	{
+		671,
+		5047126544.0 - lc._encryptOffset
+	},
+	{
+		672,
+		5051981873.0 - lc._encryptOffset
+	},
+	{
+		673,
+		5055959030.0 - lc._encryptOffset
+	},
+	{
+		674,
+		5062670533.0 - lc._encryptOffset
+	},
+	{
+		675,
+		5067722577.0 - lc._encryptOffset
+	},
+	{
+		676,
+		5072547638.0 - lc._encryptOffset
+	},
+	{
+		677,
+		5079138622.0 - lc._encryptOffset
+	},
+	{
+		678,
+		5083091651.0 - lc._encryptOffset
+	},
+	{
+		679,
+		5089946297.0 - lc._encryptOffset
+	},
+	{
+		680,
+		5094020677.0 - lc._encryptOffset
+	},
+	{
+		681,
+		5100599747.0 - lc._encryptOffset
+	},
+	{
+		682,
+		5106262501.0 - lc._encryptOffset
+	},
+	{
+		683,
+		5110365862.0 - lc._encryptOffset
+	},
+	{
+		684,
+		5116543344.0 - lc._encryptOffset
+	},
+	{
+		685,
+		5121098975.0 - lc._encryptOffset
+	},
+	{
+		686,
+		5126016507.0 - lc._encryptOffset
+	},
+	{
+		687,
+		5131279332.0 - lc._encryptOffset
+	},
+	{
+		688,
+		5137495379.0 - lc._encryptOffset
+	},
+	{
+		689,
+		5143738235.0 - lc._encryptOffset
+	},
+	{
+		690,
+		5149240700.0 - lc._encryptOffset
+	},
+	{
+		691,
+		5153307565.0 - lc._encryptOffset
+	},
+	{
+		692,
+		5157582519.0 - lc._encryptOffset
+	},
+	{
+		693,
+		5163470088.0 - lc._encryptOffset
+	},
+	{
+		694,
+		5167873228.0 - lc._encryptOffset
+	},
+	{
+		695,
+		5174109447.0 - lc._encryptOffset
+	},
+	{
+		696,
+		5180414820.0 - lc._encryptOffset
+	},
+	{
+		697,
+		5184363354.0 - lc._encryptOffset
+	},
+	{
+		698,
+		5190666942.0 - lc._encryptOffset
+	},
+	{
+		699,
+		5195379238.0 - lc._encryptOffset
+	},
+	{
+		700,
+		5199373273.0 - lc._encryptOffset
+	},
+	{
+		701,
+		5203601765.0 - lc._encryptOffset
+	},
+	{
+		702,
+		5207968712.0 - lc._encryptOffset
+	},
+	{
+		703,
+		5212029373.0 - lc._encryptOffset
+	},
+	{
+		704,
+		5218599368.0 - lc._encryptOffset
+	},
+	{
+		705,
+		5225059278.0 - lc._encryptOffset
+	},
+	{
+		706,
+		5231513617.0 - lc._encryptOffset
+	},
+	{
+		707,
+		5237505430.0 - lc._encryptOffset
+	},
+	{
+		708,
+		5242554393.0 - lc._encryptOffset
+	},
+	{
+		709,
+		5248308553.0 - lc._encryptOffset
+	},
+	{
+		710,
+		5252053445.0 - lc._encryptOffset
+	},
+	{
+		711,
+		5256373534.0 - lc._encryptOffset
+	},
+	{
+		712,
+		5262304499.0 - lc._encryptOffset
+	},
+	{
+		713,
+		5266728594.0 - lc._encryptOffset
+	},
+	{
+		714,
+		5271081834.0 - lc._encryptOffset
+	},
+	{
+		715,
+		5276900392.0 - lc._encryptOffset
+	},
+	{
+		716,
+		5282396629.0 - lc._encryptOffset
+	},
+	{
+		717,
+		5286274036.0 - lc._encryptOffset
+	},
+	{
+		718,
+		5290958557.0 - lc._encryptOffset
+	},
+	{
+		719,
+		5295543214.0 - lc._encryptOffset
+	},
+	{
+		720,
+		5299765924.0 - lc._encryptOffset
+	}
+}
+local mapKeyIndex = {
+	k15521771 = 2,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k15521771 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -8549
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -8549
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

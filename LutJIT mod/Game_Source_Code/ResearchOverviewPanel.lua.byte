@@ -1,0 +1,74 @@
+local M = class("ResearchOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	txtDmg = Types.TMP_Text,
+	txtCrit = Types.TMP_Text,
+	txtCritDmg = Types.TMP_Text,
+	txtChargeBulletDmgAdd = Types.TMP_Text,
+	txtChargeBulletCritAdd = Types.TMP_Text,
+	txtSmallBulletDmgAdd = Types.TMP_Text,
+	txtGuardDmg = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init()
+	self._curLevel = P._playerArmory:getWeaponLevel(1) - 1
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local dmg, crit, critDmg, chargeBulletDmgAdd, chargeBulletCritAdd, smallBulletDmgAdd = P._playerArmory:getGatlinUpgradeProps()
+	local entryNum = 0
+
+	for i = 1, self._curLevel do
+		local conf = D._gatlinUpgradeConfig[i]
+
+		if conf._rouge then
+			entryNum = entryNum + 1
+			local cell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+			cell:SetActive(true)
+
+			local text = cell.transform:GetChild(0):GetChild(0):GetComponent("TMP_Text")
+
+			if D._battleRougeCardConfig[conf._rouge] then
+				text:SetLocalize(conf._descSid, conf._rouge, -D._battleRougeCardConfig[conf._rouge]._nameSid)
+			else
+				text:SetLocalize(conf._descSid)
+			end
+
+			text.gameObject:GetComponent("TMP_Text_LinkHandler"):SetLinkClick(function (linkId)
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, tonumber(linkId))
+			end)
+		end
+	end
+
+	if entryNum == 0 then
+		local cell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+		cell:SetActive(true)
+
+		local text = cell.transform:GetChild(0):GetChild(0):GetComponent("TMP_Text")
+
+		text:SetLocalize(SID.TIP_NO_RESEARCH_ENTRY)
+	end
+
+	self._txtDmg.text = dmg .. "%"
+	self._txtCrit.text = crit .. "%"
+	self._txtCritDmg.text = critDmg .. "%"
+	self._txtChargeBulletDmgAdd.text = chargeBulletDmgAdd .. "%"
+	self._txtChargeBulletCritAdd.text = chargeBulletCritAdd .. "%"
+	self._txtSmallBulletDmgAdd.text = smallBulletDmgAdd .. "%"
+	self._txtGuardDmg.text = P._playerArmory:calcGatlinDmg()
+end
+
+return M

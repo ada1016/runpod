@@ -1,0 +1,1157 @@
+local M = class("BattleView", BLB)
+_G.BattleView = M
+local TablePool = TablePool
+local DOTween = DOTween
+M.args = {
+	tfEnv = Types.Transform,
+	goArk = Types.GameObject,
+	tfCustomBG = Types.Transform,
+	tfEdgeDown = Types.Transform,
+	tfEdgeTop = Types.Transform,
+	tfEdgeRight = Types.Transform,
+	tfEdgeLeft = Types.Transform,
+	tfEdgeLeft1 = Types.Transform,
+	tfEdgeRight1 = Types.Transform,
+	tfEdgeDome = Types.Transform,
+	tfWall = Types.Transform,
+	tfWallLeft = Types.Transform,
+	tfWallRight = Types.Transform,
+	tfWallTop = Types.Transform,
+	tfRangeShow = Types.Transform,
+	refHologramSpriteRenderer = Types.SpriteRenderer,
+	refDissolveSpriteRenderer = Types.SpriteRenderer,
+	refDissolveSpriteRenderer2 = Types.SpriteRenderer,
+	refDissolveSpriteRendererArk = Types.SpriteRenderer,
+	tfUnitContainer = Types.Transform,
+	tfBulletContainer = Types.Transform,
+	tfHUDContainer = Types.Transform
+}
+local requireLua = requireLua
+local math = math
+local BATTLE_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/%s.prefab"
+local WEAPON_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/Weapon/%s.prefab"
+local PLAYER_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/Player/%s.prefab"
+local RANGER_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/ranger/%s.prefab"
+local BULLET_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/bullet/%s.prefab"
+local ENEMY_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/enemy/%s.prefab"
+local VFX_PREFAB_PATH_HOLDER = "Assets/LCVfx/Prefabs/Battle/%s.prefab"
+local WEBGL_VFX_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/webgl/%s.prefab"
+local DMG_CAPACITY = 64
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._qualityFlag = lc.getIntKeyValue(BattleDefine.EffectParam[2].key, 1) == 1 and true or false
+
+	if not self._qualityFlag then
+		lc.setResolution(lc._battleScreenRate * 0.8)
+	end
+
+	if lc._isWebGL then
+		local defaultHighFlag = lc._isWebGLPC and 1 or 0
+		self._highFrameFlag = lc.getIntKeyValue(BattleDefine.EffectParam[7].key, defaultHighFlag) == 1 and true or false
+	else
+		self._highFrameFlag = true
+	end
+
+	self._sharedHologramMat = self._refHologramSpriteRenderer.sharedMaterial
+	self._sharedDissolveMat = self._refDissolveSpriteRenderer.sharedMaterial
+	self._sharedDissolveMat2 = self._refDissolveSpriteRenderer2.sharedMaterial
+	self._sharedDissolveMatArk = self._refDissolveSpriteRendererArk.sharedMaterial
+	self._mainBattleSession = nil
+	self._mainSessionView = nil
+	self._battleObjFactory = requireLua("GameObjectFactory").create()
+	self._vfxRecycleTimers = table.new(128, 0)
+	_G.BattleManager = requireLua("BattleManager").create()
+	local aspectRatio = Screen.width / Screen.height
+
+	if BattleManager:isMissionPVP() then
+		aspectRatio = aspectRatio * 2
+	elseif aspectRatio > 0.5625 then
+		aspectRatio = 0.5625
+
+		self._tfWall:SetActive(true)
+	else
+		self._tfWall:SetActive(false)
+	end
+
+	self._aspectRatio = aspectRatio
+
+	if BattleManager:isMissionPVP() then
+		self._mainBattleSession = self:createOneBattleSession(1)
+		self._secondBattleSession = self:createOneBattleSession(2)
+	else
+		self._mainBattleSession = self:createOneBattleSession()
+		self._mainBattleSession._highFrameFlag = self._highFrameFlag
+	end
+
+	self._lockEliteFlag = lc.getIntKeyValue(BattleDefine.EffectParam[5].key, 1) == 1 and true or false
+	self._mainBattleSession._lockEliteFlag = self._lockEliteFlag
+	self._showLockEliteFlag = lc.getIntKeyValue(BattleDefine.EffectParam[6].key, 0) == 1 and true or false
+	self._dmgTextCountLevel = lc.getIntKeyValue("dmg_text_count", 3)
+
+	self:setDmgTextCountPercentIndex(self._dmgTextCountLevel)
+	self:addEvents()
+end
+
+function M:createOneBattleSession(index)
+	local battleSession = BattleManager:createBattleSession()
+	local sessionView = self:createBattleSessionView(index)
+
+	battleSession:setSessionView(sessionView)
+	sessionView:initOrthographicSize(self._aspectRatio, index)
+	battleSession:zoomField(1)
+
+	return battleSession
+end
+
+function M:createBattleSessionView(index)
+	local sessionViewGO = LuaUnity.createGameObject("Assets/Battle/Prefabs/BattleSession.prefab")
+	local sessionView = LuaHelper.GetLuaBehaviour(sessionViewGO)
+
+	sessionView:init(self, index)
+
+	if index == nil or index == 1 then
+		self._mainSessionView = sessionView
+	elseif index == 2 then
+		self._sessionViews = {
+			self._mainSessionView,
+			sessionView
+		}
+		self._secondSessionView = sessionView
+		local rotate = 180
+
+		sessionView._tfCamera:SetLocalRotation(0, 0, rotate)
+	end
+
+	return sessionView
+end
+
+function M:getSessionView(index)
+	if index == nil or index == 1 then
+		return self._mainSessionView
+	else
+		return self._sessionViews[index]
+	end
+end
+
+local DMG_TEXT_COUNT_PERCENT = {
+	10,
+	2,
+	1
+}
+
+function M:setDmgTextCountPercentIndex(index)
+	self._dmgTextCountLevel = index
+	self._mainSessionView._dmgTextShowPercnet = DMG_TEXT_COUNT_PERCENT[index]
+
+	if self._secondSessionView then
+		self._mainSessionView._dmgTextShowPercnet = DMG_TEXT_COUNT_PERCENT[1]
+		self._secondSessionView._dmgTextShowPercnet = DMG_TEXT_COUNT_PERCENT[1]
+	end
+end
+
+function M:addEvents()
+	self:on("battle.quit", function (msType)
+		if msType ~= self._msType then
+			return
+		end
+
+		if self._mainBattleSession:isSettled() then
+			return
+		end
+
+		BattleManager:forceSettleBattle(D.BattleResult.Lose)
+
+		if self._msType == D.MissionType.ArkRebuild or self._msType == D.MissionType.SparkScout then
+			self._mainBattleSession:settleBattle(D.BattleResult.Lose)
+			V.showMessageBox({
+				_type = 1,
+				_content = SID.TIP_EVENT_END,
+				_confirmCallback = function ()
+					V.openBattleSettlePanel(BattleManager:getMissionId(), BattleManager:getMissionType(), D.BattleResult.Lose, self._mainBattleSession:getBattleStats())
+				end
+			})
+		else
+			V.openBattleSettlePanel(BattleManager:getMissionId(), BattleManager:getMissionType(), D.BattleResult.Lose, self._mainBattleSession:getBattleStats())
+		end
+	end)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	self._battleObjFactory:clean()
+
+	self._battleObjFactory = nil
+
+	BattleManager:destroySession()
+
+	_G.BattleManager = nil
+	_G.BattleView = nil
+
+	lc.setResolution(lc._uiScreenRate)
+end
+
+function M:Start()
+	AudioService:SetBattleSoundPaused(false)
+	self:startUpdater()
+	self:initBattle()
+	self:updateEdge()
+end
+
+function M:initBattle()
+	BattleManager:initBattle()
+
+	self._msType = BattleManager:getMissionType()
+
+	self._mainSessionView:initSessionView()
+	self._mainSessionView:bloodEvent()
+
+	if BattleManager:isMissionPVP() then
+		self._secondSessionView:initSessionView()
+		self._secondSessionView:bloodEvent()
+		self._mainSessionView:zoomField(2)
+		self._secondSessionView:zoomField(2)
+	end
+
+	self._battleVfxOverrides = {}
+
+	if self._msType == D.MissionType.ArkRebuild then
+		self._goArk:SetActive(true)
+
+		for i = 2, 5 do
+			self._mainSessionView._tfWeaponContainers[i]:Find("shadow"):SetActive(false)
+
+			local spr = self._mainSessionView._tfWeaponContainers[i]:Find("empty"):GetComponent("SpriteRenderer")
+			spr.sprite = LuaUnity.getTPSprite("battleWeapon/weapon_empty_ark")
+		end
+	else
+		local gatlinSkinId = self._mainBattleSession:getEquipedSkin(1) or 1
+
+		if gatlinSkinId ~= 1 and gatlinSkinId ~= D.DEFAULT_GATLIN_SKIN then
+			local baseHit = string.format("Bullet_%d_hit", gatlinSkinId)
+			self._battleVfxOverrides[1] = {
+				bullet = string.format("Bullet_%d", gatlinSkinId),
+				hit = baseHit
+			}
+			self._battleVfxOverrides[101] = {
+				bullet = string.format("Bullet_101_%d", gatlinSkinId),
+				hit = baseHit
+			}
+			self._battleVfxOverrides[104] = {
+				bullet = string.format("Bullet_104_%d", gatlinSkinId),
+				hit = baseHit
+			}
+		end
+	end
+
+	if not BattleManager:isMissionPVP() then
+		local skinId = self._mainBattleSession:getEquipedSkin(0) or 1
+
+		if self._msType == D.MissionType.ArkRebuild then
+			skinId = 120000
+		end
+
+		self._enabledGhost = skinId ~= 120000
+		self._skeletonGhost = self._mainBattleSession._battleActor._view._skeletonGhost
+
+		if self._msType == D.MissionType.ArkRebuild then
+			local go = LuaUnity.createGameObject("Assets/Battle/Prefabs/ArkRebuildBattleShip.prefab", self._tfCustomBG)
+
+			lc.setLocalPosition(go, 0, 0, 0)
+			go:GetComponent("Animator"):SetBool("isOpen", true)
+
+			self._goArkRebuildBattleShip = go
+			local tf = self._mainSessionView._tfBloodBar.transform
+			local x, y, z = lc.getPosition(tf)
+
+			lc.setLocalPosition(tf, x, y + 0.3, z)
+		end
+	end
+end
+
+function M:Update()
+	local dt = Time.deltaTime
+
+	self:updateStepRemove(dt)
+	BattleManager:Update(dt)
+	self._mainSessionView:Update()
+
+	if self._secondSessionView then
+		self._secondSessionView:Update()
+	end
+
+	if BattlePanel then
+		BattlePanel:Update()
+	end
+end
+
+function M:updateDebugInfo()
+	local descInfo = {}
+	local session1 = self._mainBattleSession
+	descInfo[#descInfo + 1] = "Seed: " .. session1._seed
+	descInfo[#descInfo + 1] = "Step: " .. session1._step
+	descInfo[#descInfo + 1] = "Enemy: " .. #session1._battleEnemys
+	descInfo[#descInfo + 1] = "Bullet: " .. #session1._battleBullets
+	self._mainSessionView._tmpDebugInfo.text = table.concat(descInfo, "\n")
+
+	if self._secondSessionView and self._secondBattleSession then
+		local descInfo = {}
+		local session2 = self._secondBattleSession
+		descInfo[#descInfo + 1] = "Seed: " .. session2._seed
+		descInfo[#descInfo + 1] = "Step: " .. session2._step
+		descInfo[#descInfo + 1] = "Enemy: " .. #session2._battleEnemys
+		descInfo[#descInfo + 1] = "Bullet: " .. #session2._battleBullets
+		self._secondSessionView._tmpDebugInfo.text = table.concat(descInfo, "\n")
+	end
+end
+
+function M:updateStepRemove(dt)
+	local removedCount = 0
+	local cnt = #self._vfxRecycleTimers
+
+	for i = 1, cnt do
+		local p = self._vfxRecycleTimers[i]
+		local time = p[1] - dt
+		self._vfxRecycleTimers[i][1] = time
+
+		if time <= 0 then
+			local o = p[2]
+
+			TablePool.release2(p)
+			o:SetActive(false)
+			self._battleObjFactory:putObj(o)
+
+			removedCount = removedCount + 1
+			self._vfxRecycleTimers[i] = nil
+		end
+	end
+
+	if removedCount == cnt then
+		return
+	end
+
+	table.removeNilValuesOutOrder(self._vfxRecycleTimers, cnt)
+end
+
+function M:createDmgRange(bullet, parent, isBullet)
+	local o = parent:Find("Bullet_Range_Show")
+
+	if o == nil then
+		o = LuaUnity.createGameObject("Assets/Battle/Prefabs/bullet/Bullet_Range_Show.prefab", parent)
+		o.name = "Bullet_Range_Show"
+	end
+
+	local radius = bullet._radius
+	local size = bullet._size
+	local circle = o:GetChild(0)
+	local square = o:GetChild(1)
+	local triangle = o:GetChild(2)
+	local square2 = o:GetChild(3)
+
+	circle:SetActive(false)
+	square:SetActive(false)
+	triangle:SetActive(false)
+	square2:SetActive(false)
+
+	local tt = isBullet and bullet._scale or 1
+
+	if bullet._detectType == 1 then
+		circle:SetActive(true)
+		circle:SetLocalScale(radius * 2 / tt, radius * 2 / tt, 1)
+	elseif bullet._detectType == 3 or bullet._detectType == 4 then
+		square:SetActive(true)
+
+		if bullet._scaleType == 2 then
+			square:SetLocalScale(size[1] / tt, size[2], 1)
+		elseif bullet._scaleType == 3 then
+			square:SetLocalScale(size[1], size[2] / tt, 1)
+		else
+			square:SetLocalScale(size[1] / tt, size[2] / tt, 1)
+		end
+	elseif bullet._detectType == 2 then
+		square2:SetActive(true)
+		square2:SetLocalScale(size[1] / tt, size[2] / tt, 1)
+	elseif bullet._detectType == 6 then
+		square2:SetActive(true)
+		square2:SetLocalScale(size[1] / tt, size[2] / tt, 1)
+	elseif bullet._detectType == 5 then
+		triangle:SetActive(true)
+		triangle:SetLocalScale(size[2] / tt, size[1] / tt, 1)
+	end
+end
+
+function M:bulletHitEvent(bullet)
+	if not bullet._sessionView._effectFlag then
+		return
+	end
+
+	local x, y = nil
+	x = bullet._position.x
+	y = bullet._position.y
+
+	if bullet._doubleCheckFlag then
+		x = bullet._lastPosition.x
+		y = bullet._lastPosition.y
+	end
+
+	local hitPrefab, duration = bullet:hitPrefab()
+
+	if hitPrefab then
+		local obj = self:createAndPlayVFX(hitPrefab, duration)
+
+		if obj then
+			obj:SetPosition(x, y, 0)
+			bullet._sessionView:setWorldLayer(obj)
+		end
+	end
+
+	if bullet._hitEnemyStep == nil then
+		bullet._hitEnemyStep = true
+		local hitPrefab, duration = bullet:hitEnemyPrefab()
+
+		if hitPrefab then
+			local obj = self:createAndPlayVFX(hitPrefab, duration)
+
+			if obj then
+				obj:SetPosition(x, y, 0)
+				bullet._sessionView:setWorldLayer(obj)
+			end
+		end
+	end
+end
+
+function M:bulletExplodeEvent(bullet)
+	if not bullet._sessionView._effectFlag then
+		return
+	end
+
+	local hitPrefab, duration = bullet:hitPrefab()
+
+	if hitPrefab then
+		local obj = self:createAndPlayVFX(hitPrefab, duration)
+
+		if obj then
+			obj:SetPosition(bullet._position.x, bullet._position.y, 0)
+			bullet._sessionView:setWorldLayer(obj)
+
+			if bullet._angle then
+				obj:SetLocalRotation(0, 0, bullet._angle - 90)
+			end
+
+			if bullet._scale then
+				if bullet._battleSkill._bulletScript == 110 then
+					if bullet._battleSkill._cid == 20201 then
+						obj:GetChild(0):SetLocalScale(1, bullet._scale, 1)
+					elseif bullet._battleSkill._cid == 21002 then
+						obj:GetChild(0):SetLocalScale(1, bullet._scale, 1)
+					else
+						obj:GetChild(1):SetLocalScale(1, bullet._scale, 1)
+						obj:GetChild(2):SetPosition(bullet._endPosX, bullet._endPosY, 0)
+					end
+				elseif bullet._cid == 501 then
+					obj:SetLocalScale(self._mainBattleSession:fieldZoomScale(), bullet._scale, 1)
+				elseif bullet._scaleType == 2 then
+					obj:SetLocalScale(bullet._scale, 1, 1)
+				elseif bullet._scaleType == 3 then
+					obj:SetLocalScale(1, bullet._scale, 1)
+				else
+					obj:SetLocalScale(bullet._scale, bullet._scale, bullet._scale)
+				end
+			end
+		end
+	end
+end
+
+function M:enemyStrickenEvent(bullet, enemy)
+	if not bullet._sessionView._effectFlag then
+		return
+	end
+
+	local strickenPrefab, duration = bullet:strickenPrefab()
+
+	if strickenPrefab then
+		local obj = self:createAndPlayVFX(strickenPrefab, duration)
+
+		if obj then
+			obj:SetPosition(enemy._position.x, enemy._position.y, 0)
+			bullet._sessionView:setWorldLayer(obj)
+
+			if bullet._cid == 20500 then
+				obj:SetLocalRotation(0, 0, math.random(0, 180))
+			end
+		end
+	end
+end
+
+function M:rebornEvent()
+end
+
+function M:disableCamera()
+	self._mainSessionView:disableCamera()
+
+	if self._secondSessionView then
+		self._secondSessionView:disableCamera()
+	end
+end
+
+function M:enableCamera()
+	self._mainSessionView:enableCamera()
+
+	if self._secondSessionView then
+		self._secondSessionView:enableCamera()
+	end
+end
+
+function M:createAndPlayVFX(prefabName, duration)
+	local holder = VFX_PREFAB_PATH_HOLDER
+	local initialSize = nil
+	local useWebGL = false
+
+	if lc._useWebGLVFX then
+		local cfg = D._battleVFXWebgl[prefabName]
+
+		if cfg then
+			duration = (cfg._spriteCount + 1) / 24
+			holder = WEBGL_VFX_PREFAB_PATH_HOLDER
+			initialSize = cfg._maxCount
+			useWebGL = true
+		end
+	end
+
+	local obj, new = self._battleObjFactory:getObj(holder, prefabName, self._tfBulletContainer, initialSize)
+
+	if obj then
+		if useWebGL then
+			if D._battleVFXWebgl[prefabName]._needRotation then
+				obj:SetLocalRotation(0, 0, math.random(0, 180))
+			else
+				obj:SetLocalRotation(0, 0, 0)
+			end
+		end
+
+		obj:SetActive(true)
+
+		local t = TablePool.fetch2()
+		t[1] = duration
+		t[2] = obj
+		self._vfxRecycleTimers[#self._vfxRecycleTimers + 1] = t
+	end
+
+	return obj
+end
+
+function M:addVFX(prefabName, parent, duration)
+	parent = parent or self._tfBulletContainer
+	local obj, new = nil
+
+	if lc._useWebGLVFX then
+		local cfg = D._battleVFXWebgl[prefabName]
+
+		if cfg then
+			duration = duration and (cfg._spriteCount + 1) / 24
+			obj, new = self._battleObjFactory:getObj(WEBGL_VFX_PREFAB_PATH_HOLDER, prefabName, parent)
+		end
+	end
+
+	if obj == nil then
+		obj, new = self._battleObjFactory:getObj(VFX_PREFAB_PATH_HOLDER, prefabName, parent)
+	end
+
+	if not new then
+		obj:SetParent(parent)
+		obj:SetActive(true)
+	end
+
+	obj:SetLocalPosition(0, 0, 0)
+
+	if lc._useWebGLVFX then
+		obj:SetLocalRotation(0, 0, 0)
+	end
+
+	if duration then
+		local t = TablePool.fetch2()
+		t[1] = duration
+		t[2] = obj
+		self._vfxRecycleTimers[#self._vfxRecycleTimers + 1] = t
+	end
+
+	return obj
+end
+
+function M:removeVFX(obj)
+	if obj then
+		obj:SetParent(self._tfUnitContainer)
+		obj:SetActive(false)
+		self._battleObjFactory:putObj(obj)
+	end
+end
+
+function M:delayRemoveVFX(obj, duration)
+	local t = TablePool.fetch2()
+	t[1] = duration
+	t[2] = obj
+	self._vfxRecycleTimers[#self._vfxRecycleTimers + 1] = t
+end
+
+function M:createWeapon(prefabName, parent)
+	return LuaUnity.createGameObject(string.format(WEAPON_PREFAB_PATH_HOLDER, prefabName), parent)
+end
+
+function M:createActor(prefabName, parent)
+	return LuaUnity.createGameObjectWithPeerVar(string.format(PLAYER_PREFAB_PATH_HOLDER, prefabName), parent)
+end
+
+function M:createRanger(prefabName, parent)
+	return LuaUnity.createGameObject(string.format(RANGER_PREFAB_PATH_HOLDER, prefabName), parent)
+end
+
+function M:createEnemy(prefabName)
+	local obj = self._battleObjFactory:getObj(ENEMY_PREFAB_PATH_HOLDER, prefabName, self._tfUnitContainer)
+
+	obj:SetActive(true)
+
+	return obj
+end
+
+function M:createBullet(prefabName)
+	local obj = nil
+
+	if lc._useWebGLVFX then
+		local cfg = D._battleVFXWebgl[prefabName]
+
+		if cfg then
+			obj = self._battleObjFactory:getObj(WEBGL_VFX_PREFAB_PATH_HOLDER, prefabName, self._tfBulletContainer)
+		end
+	end
+
+	if obj == nil then
+		obj = self._battleObjFactory:getObj(BULLET_PREFAB_PATH_HOLDER, prefabName, self._tfBulletContainer)
+	end
+
+	obj:SetActive(true)
+
+	return obj
+end
+
+function M:pvpBeganRoundBefore()
+	self._mainSessionView:pvpBeganRoundBefore()
+	self._secondSessionView:pvpBeganRoundBefore()
+end
+
+function M:pvpBeganRound()
+	self._mainSessionView:pvpBeganRound()
+	self._secondSessionView:pvpBeganRound()
+end
+
+function M:cleanOnPvpEndRound()
+	self._battleObjFactory:clean()
+	self._mainSessionView:cleanOnPvpEndRound()
+	self._secondSessionView:cleanOnPvpEndRound()
+	LuaUnity.removeAllChildren(self._tfUnitContainer)
+	LuaUnity.removeAllChildren(self._tfHUDContainer)
+	LuaUnity.removeAllChildren(self._tfBulletContainer)
+	table.clear(self._vfxRecycleTimers)
+end
+
+function M:showDomeHit(enemy, x, y, scale, offsetY)
+	if not enemy._sessionView._effectFlag then
+		return
+	end
+
+	local prefab = enemy._hitPrefab
+	offsetY = offsetY or 0
+	scale = scale or 1
+	local x2 = 0
+	local y2 = BattleDefine.DOME_CENTER
+
+	opt.vec3_1:SetXYZ(x2 - x, y2 - y - offsetY, 0):SetNormalize()
+
+	local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+
+	if prefab then
+		local vfx = enemy._sessionView:createAndPlayVFX(prefab, 0.5)
+
+		if vfx then
+			vfx:SetPosition(x, y, 0)
+			vfx:SetLocalScale(scale)
+			vfx:SetLocalRotation(0, 0, angle)
+		end
+	end
+
+	local vfx2 = nil
+
+	if self._domeSkinId then
+		vfx2 = enemy._sessionView:createAndPlayVFX(string.format("Enemy_general_dome_%d", self._domeSkinId), 0.4)
+	else
+		vfx2 = enemy._sessionView:createAndPlayVFX("Enemy_general_dome", 0.4)
+	end
+
+	if vfx2 then
+		vfx2:SetPosition(x, y - offsetY, 0)
+		vfx2:SetLocalRotation(0, 0, angle)
+		vfx2:SetLocalScale(scale)
+	end
+
+	if enemy._hitAudio then
+		Client.playBattleSound(enemy._hitAudio)
+	else
+		Client.playBattleSound("se_Enemy_general_bullet_hit")
+	end
+end
+
+function M:recycleUnit(obj)
+	obj:SetActive(false)
+	self._battleObjFactory:putObj(obj)
+end
+
+function M:random_inside_circle(r1, r2)
+	if self._randomIndex == nil then
+		self._randomIndex = 0
+	end
+
+	local angle = math.random(90 * self._randomIndex, 90 * (self._randomIndex + 1))
+	local r = math.random(r1 * 100, r2 * 100) / 100
+	local rad = math.rad(angle)
+	local x = math.cos(rad) * r
+	local y = math.sin(rad) * r
+	self._randomIndex = self._randomIndex + 1
+
+	if self._randomIndex == 4 then
+		self._randomIndex = 0
+	end
+
+	return x, y
+end
+
+function M:getOrCreateDmgArg(sessionView)
+	local dmgArgsPool = sessionView._dmgArgsPool
+	local arg = dmgArgsPool[#dmgArgsPool]
+
+	if arg == nil then
+		arg = {
+			text = 0,
+			crit_lv = 1,
+			y = 0,
+			is_crit = false,
+			x = 0,
+			is_status = false,
+			sessionView = sessionView
+		}
+	else
+		arg.is_crit = false
+		arg.is_status = false
+		arg.is_player = false
+		arg.crit_lv = 1
+		arg.sessionView = sessionView
+		dmgArgsPool[#dmgArgsPool] = nil
+	end
+
+	return arg
+end
+
+function M:showStatusText(enemy, textSid)
+	if self._mainBattleSession._stop then
+		return
+	end
+
+	local sessionView = enemy._sessionView
+
+	if DMG_CAPACITY <= #sessionView._dmgShowWaitList then
+		return
+	end
+
+	local t = self:getOrCreateDmgArg(enemy._sessionView)
+	sessionView._dmgShowWaitList[#sessionView._dmgShowWaitList + 1] = t
+	local x, y = enemy:hitPosition()
+	t.x = x
+	t.y = y
+	t.text = textSid
+	t.is_crit = false
+	t.is_status = true
+	t.crit_lv = 1
+end
+
+function M:showDamageText(enemy, damage, isCrit, damageSkill, critLevel)
+	if self._mainBattleSession._stop then
+		return
+	end
+
+	local sessionView = enemy._sessionView
+
+	if DMG_CAPACITY <= #sessionView._dmgShowWaitList then
+		return
+	end
+
+	if damageSkill and (damageSkill._id == 1 or damageSkill._id == 101) then
+		local salvoNum = damageSkill:getProp(BattlePropEnum.Salvo, 0)
+		local penetrateNum = damageSkill:getProp(BattlePropEnum.PenetrateNum, 0)
+		local breakIndex = 10
+		local waveIndex = self._mainBattleSession._battleEnemyGenerator._enemyWaveIndex
+		breakIndex = self._msType == D.MissionType.Dome and 5 or 10
+
+		if waveIndex > breakIndex then
+			if salvoNum >= 2 or penetrateNum >= 2 then
+				if damageSkill._fireBulletCount % 5 ~= 0 then
+					return
+				end
+			elseif (salvoNum >= 1 or penetrateNum >= 1) and damageSkill._fireBulletCount % 3 ~= 0 then
+				return
+			end
+		end
+	end
+
+	local t = self:getOrCreateDmgArg(sessionView)
+	sessionView._dmgShowWaitList[#sessionView._dmgShowWaitList + 1] = t
+	local x, y = enemy:hitPosition()
+	t.x = x
+	t.y = y
+	t.text = damage
+	t.is_crit = isCrit
+	t.crit_lv = critLevel
+	t.is_status = false
+	t.sessionView = sessionView
+end
+
+function M:showDamageTextOnPlayer(damage, isStatus, battleSession)
+	if battleSession._stop then
+		return
+	end
+
+	if battleSession._index == 2 then
+		-- Nothing
+	end
+
+	local sessionView = battleSession._sessionView
+	local x = sessionView._tmpBloodPovitX
+	local y = sessionView._tmpBloodPovitY
+	local t = self._playerDmgArgs
+
+	if t == nil then
+		t = self:getOrCreateDmgArg(sessionView)
+		self._playerDmgArgs = t
+	end
+
+	t.x = x
+	t.y = y
+	t.text = damage
+	t.is_crit = false
+	t.is_status = isStatus or false
+	t.is_player = true
+	t.r1 = 0.5
+	t.r2 = 0.5
+	t.sessionView = sessionView
+
+	self:createDamageText(t)
+end
+
+function M:createDamageText(dmgArgs)
+	local obj, new = self._battleObjFactory:getObj(BATTLE_PREFAB_PATH_HOLDER, "DamageText", self._tfHUDContainer)
+
+	dmgArgs.sessionView:setWorldLayer(obj)
+
+	if new then
+		LuaUnity.setPeer(obj)
+
+		local tf = obj.transform
+		local tf2 = tf:GetChild(0)
+		obj.peer._tf = tf
+		obj.peer._textTf = tf2
+		obj.peer._text = tf2:GetComponent("TMP_Text")
+	end
+
+	local r1 = dmgArgs.r1
+	local r2 = dmgArgs.r2
+	local isPlayer = dmgArgs.is_player
+	local damage = dmgArgs.text
+	local isText = dmgArgs.is_status
+	local isCrit = dmgArgs.is_crit
+
+	if isPlayer then
+		local ox, oy = self:random_inside_circle((r1 or 0.8) * 0.5 + 0.2, (r2 or 1.5) * 0.5 + 0.2)
+
+		obj:SetPosition(dmgArgs.x + ox, dmgArgs.y + oy, 0)
+	else
+		local ox, oy = self:random_inside_circle((r1 or 0.8) * 0.5, (r2 or 1.5) * 0.5)
+
+		obj:SetPosition(dmgArgs.x + ox, dmgArgs.y + oy, 0)
+	end
+
+	if obj._tween == nil then
+		obj._textTf:SetLocalScale(0)
+
+		local seq = DOTween.Sequence()
+
+		seq:Append(obj._textTf:DOScale(1.5, 0.1):SetEase(V.EASE_OUT_SINE))
+		seq:Append(obj._textTf:DOScale(1, 0.1):SetEase(V.EASE_OUT_SINE))
+		seq:AppendInterval(0.2)
+		seq:Append(obj._textTf:DOLocalMoveY(0.5, 0.15):SetEase(V.EASE_OUT_SINE))
+		seq:AppendCallback(function ()
+			obj._textTf:SetLocalScale(0)
+
+			if self._battleObjFactory then
+				self._battleObjFactory:putObj(obj)
+			end
+		end)
+		seq:SetAutoKill(false):SetLink(obj)
+
+		obj._tween = seq
+	else
+		obj._tween:Restart()
+	end
+
+	if isPlayer then
+		if isText then
+			obj._text:SetLocalize(damage)
+
+			obj._text.color = Color.static(231, 233, 255)
+			obj._text.fontSize = 5
+		elseif damage > 0 then
+			obj._text.text = "+" .. string.formatNumber(math.floor(damage))
+			obj._text.color = Color.static(30, 254, 152)
+			obj._text.fontSize = 5
+		else
+			obj._text.text = string.formatNumber(math.ceil(damage))
+			obj._text.color = Color.static(231, 233, 255)
+			obj._text.fontSize = 5
+		end
+	elseif isText then
+		obj._text:SetLocalize(damage)
+
+		obj._text.color = Color.static(247, 92, 77)
+		obj._text.fontSize = 4
+	elseif damage > 0 then
+		obj._text.text = "+" .. string.formatNumber(math.floor(damage))
+		obj._text.color = Color.static(255, 155, 255)
+		obj._text.fontSize = 4
+	elseif dmgArgs.crit_lv == 2 then
+		obj._text.text = string.formatNumber(math.ceil(damage))
+		obj._text.color = Color.static(237, 145, 43)
+		obj._text.fontSize = 6
+	elseif isCrit then
+		obj._text.text = string.formatNumber(math.ceil(damage))
+		obj._text.fontSize = 6
+		obj._text.color = Color.static(247, 92, 77)
+	else
+		obj._text.text = string.formatNumber(math.ceil(damage))
+		obj._text.color = Color.static(219, 161, 155)
+		obj._text.fontSize = 4
+	end
+
+	return obj
+end
+
+function M:updateEdge(scale)
+	scale = scale or 1
+
+	self._tfWallLeft:SetLocalPosition(self._mainBattleSession._screenEdgeX1, 10, 0)
+	self._tfWallRight:SetLocalPosition(self._mainBattleSession._screenEdgeX2, 10, 0)
+
+	if C._appConfig.isReview then
+		self._tfWallLeft:SetLocalPosition(-20, 10, 0)
+		self._tfWallRight:SetLocalPosition(20, 10, 0)
+		self._tfWallTop:SetLocalPosition(0, 100, 0)
+	end
+end
+
+function M:onPointerDown(pointerEventData)
+	self._mainBattleSession:addOperation(BattleDefine.OpType.down)
+end
+
+local Rect_Weapon = {
+	{
+		w = 1,
+		h = 1.5,
+		x = -3.9,
+		y = 0
+	},
+	{
+		w = 1,
+		h = 1.5,
+		x = 3.9,
+		y = 0
+	},
+	{
+		w = 1,
+		h = 1.5,
+		x = -2.7,
+		y = 0
+	},
+	{
+		w = 1,
+		h = 1.5,
+		x = 2.7,
+		y = 0
+	}
+}
+
+function M:showWeaponRange(position)
+	local wx, wy = lc.convertToWorldPoint(position.x, position.y, 0)
+	local slotWeapons = self._mainBattleSession._slotWeapons
+
+	for i = 1, 4 do
+		local weapon = slotWeapons[i + 1]
+		local rect = Rect_Weapon[i]
+
+		if weapon and wx >= rect.x - rect.w / 2 and wx <= rect.x + rect.w / 2 and rect.y <= wy and wy <= rect.y + rect.h then
+			local atkRange = weapon._atkRange * 2
+
+			self._tfRangeShow:SetLocalScale(atkRange, atkRange, atkRange)
+			self._tfRangeShow:SetActive(true)
+
+			break
+		end
+	end
+end
+
+function M:onPointerUp(pointerEventData)
+	if self._mainBattleSession._battleActor == nil then
+		return
+	end
+
+	self._mainBattleSession:addOperation(BattleDefine.OpType.up)
+
+	if self._dragStarted then
+		self._dragStarted = false
+
+		if self._enabledGhost then
+			self._skeletonGhost.enabled = false
+		end
+
+		return
+	end
+
+	self:showWeaponRange(pointerEventData.position)
+end
+
+function M:onStartDrag(pointerEventData)
+	if self._mainBattleSession._battleActor == nil then
+		return
+	end
+
+	local actorStage = self._mainBattleSession._battleActor._stage
+
+	if actorStage and (actorStage == 2 or actorStage == 3) then
+		return
+	end
+
+	local position = pointerEventData.position
+	local wx, wy = lc.convertToWorldPoint(position.x, position.y, 0)
+	self._dragStarted = true
+
+	if self._enabledGhost then
+		self._skeletonGhost.enabled = true
+	end
+
+	self._dragDownTime = self._mainBattleSession._elapsedTime
+	local posAtor = self._mainBattleSession._battleActor._position
+	self._dragStartWX = wx
+	self._actorStartWX = posAtor.x
+	self._dragStartWY = wy
+	self._actorStartWY = posAtor.y
+end
+
+function M:onDragging(pointerEventData)
+	if not self._dragStarted then
+		return
+	end
+
+	if self._mainBattleSession._battleActor == nil then
+		return
+	end
+
+	local position = pointerEventData.position
+	local wx, wy = lc.convertToWorldPoint(position.x, position.y, 0)
+	local x = math.limit(self._actorStartWX + wx - self._dragStartWX, self._mainBattleSession._screenEdgeX1, self._mainBattleSession._screenEdgeX2)
+	x = math.round(x * 1000)
+
+	if self._mainBattleSession._battleActor._targetX ~= x then
+		self._mainBattleSession:addOperation(BattleDefine.OpType.move, x)
+	end
+
+	local y = math.limit(self._actorStartWY + wy - self._dragStartWY, BattleDefine.DOME_POSY, self._mainBattleSession._screenEdgeY2 - 1)
+	y = math.round(y * 1000)
+
+	if self._mainBattleSession._battleActor._targetY ~= y then
+		self._mainBattleSession:addOperation(BattleDefine.OpType.move_y, y)
+	end
+end
+
+function M:onStopDrag(pointerEventData)
+end
+
+function M:readySelectRouge(type, cardNum, selectNum)
+	BattleManager:stopTime()
+
+	if type == D.RougeType.Level then
+		if self._mainBattleSession._msId == 10001 and not P._playerGuide:isGroupFinished(2) then
+			Trace.traceDesign("GuideStep:%s", 1050 + self._mainBattleSession._lv() - 2)
+		end
+
+		UIManager.openPanel(PrefabDefine.BattleUpgradePanel, cardNum, selectNum)
+	elseif type == D.RougeType.Elite then
+		if self._mainBattleSession._msId == 10001 and not P._playerGuide:isGroupFinished(2) then
+			Trace.traceDesign("GuideStep:%s", 1070)
+		end
+
+		UIManager.openPanel(PrefabDefine.BattleDeathDrawPanel)
+	elseif type == D.RougeType.Reborn then
+		UIManager.openPanel(PrefabDefine.BattleRebornUpgradePanel)
+	elseif type == D.RougeType.Dome then
+		UIManager.openPanel(PrefabDefine.BattleUpgradePanel, cardNum, selectNum)
+	elseif type == D.RougeType.Level_Chip then
+		UIManager.openPanel(PrefabDefine.BattleUpgradePanel, cardNum, selectNum)
+	elseif type == D.RougeType.Dome_Cards then
+		UIManager.openPanel(PrefabDefine.DomeCardsPopPanel)
+	end
+end
+
+local ShakeParams1 = {
+	1.2,
+	8,
+	0,
+	0.5,
+	0,
+	0.1,
+	0,
+	0,
+	0,
+	0
+}
+
+function M:shakeCamera(battleSession, params)
+	if Client._shakeCameraOn == 0 then
+		return
+	end
+
+	params = params or ShakeParams1
+	battleSession._sessionView._cameraShaker.enabled = true
+	local posInfluence = opt.vec3_1:SetXYZ(params[5], params[6], params[7])
+	local rotInfluence = opt.vec3_2:SetXYZ(params[8], params[9], params[10])
+
+	battleSession._sessionView._cameraShaker:ShakeOnce(params[1], params[2], params[3], params[4], posInfluence, rotInfluence)
+end
+
+function M:reStart()
+	self._mainBattleSession._stop = true
+
+	BattleManager:leaveBattle()
+
+	if self._mainBattleSession._msType == D.MissionType.ArkRebuild then
+		UIManager.openPanel(PrefabDefine.CrossScreenPanelArkRebuild, "ark_rebuild_restart", "ark_rebuild_restart")
+	elseif self._mainBattleSession._msType == D.MissionType.Common or self._mainBattleSession._msType == D.MissionType.Elite then
+		UIManager.openPanel(PrefabDefine.CrossScreenPanel, "main_mission_restart", "main_mission_restart")
+	end
+end
+
+function M:OnSwitchSceneCompleted()
+	BattleManager:startBattle()
+
+	if BattleManager:isMissionPVP() then
+		UIManager.openPanel(PrefabDefine.SparkScoutVSPanel)
+	else
+		BattleManager:pauseBattle(false)
+	end
+end
+
+return M

@@ -1,0 +1,1056 @@
+local M = class("GMPanel", requireLua("BasePanel"))
+M.args = {
+	txtTips = Types.TMP_Text,
+	txtInput = Types.TMP_InputField,
+	btnClose = Types.Button,
+	btnOpenListener = Types.Button,
+	btnSkipGuide = Types.Button,
+	btnSkipIap = Types.Button,
+	btnOpenAd = Types.Button,
+	btnSave = Types.Button,
+	btnLoad = Types.Button,
+	btnReset = Types.Button,
+	btnLinkGoogle = Types.Button,
+	btnLogout = Types.Button,
+	btnUnlinkGoogle = Types.Button,
+	btnUnlinkApple = Types.Button,
+	btnAddMail = Types.Button,
+	btnAddNotify = Types.Button,
+	btnLanguage = Types.Button,
+	btnOpenDistort = Types.Button,
+	btnBattleLayout = Types.Button,
+	btnSkinPanel = Types.Button,
+	btnShareText = Types.Button,
+	btnShareScreenshot = Types.Button,
+	btnSVIP = Types.Button,
+	btnVIP = Types.Button,
+	btnAddItem = Types.Button,
+	btnAddCoin = Types.Button,
+	btnAddDiamond = Types.Button,
+	btnUnlockCard = Types.Button,
+	btnMission = Types.Button,
+	btnRankStarInc = Types.Button,
+	btnRankUp = Types.Button,
+	btnAddGem = Types.Button,
+	btnAddEquip = Types.Button,
+	btnAddShard = Types.Button,
+	btnAddSkin = Types.Button,
+	btnUnlockSkin = Types.Button,
+	btnAddRanger = Types.Button,
+	btnAddRangerEquip = Types.Button,
+	btnAddRangerSPEquip = Types.Button,
+	btnAddSparkGem = Types.Button,
+	btnAddInvitePoint = Types.Button,
+	btnCompleteDig = Types.Button,
+	btnSetLevel = Types.Button,
+	btnCompleteTask = Types.Button,
+	btnAddTimeOffset = Types.Button,
+	btnAddTimeOffsetDay = Types.Button,
+	btnResetTimeOffset = Types.Button,
+	btnAddOfflineTime = Types.Button,
+	btnAddIncubateTime = Types.Button,
+	btnAddDomeBpExp = Types.Button,
+	btnAddSkinBpExp = Types.Button,
+	btnAddKeyBpExp = Types.Button,
+	btnFixDice = Types.Button,
+	btnSetDomeGrade = Types.Button,
+	btnWin = Types.Button,
+	btnLose = Types.Button,
+	btnJumpWave = Types.Button,
+	btnTestMissionDrop = Types.Button,
+	btnTestRogueDrop = Types.Button,
+	btnLoadBattleEnv = Types.Button,
+	btnDecode = Types.Button,
+	btnOpenScore = Types.Button,
+	btnAddModule = Types.Button,
+	btnDeleteModule = Types.Button,
+	btnSetArkRebuildMission = Types.Button,
+	btnAddArkCards = Types.Button,
+	btnSocketOpen = Types.Button,
+	btnSocketClose = Types.Button,
+	btnSocketSend = Types.Button,
+	btnSocketState = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init()
+end
+
+function M:Start()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._socketStateTimer)
+
+	self._socketStateTimer = nil
+	P._playerAsset._transformedAssets = {}
+
+	M.super.closePanel(self)
+end
+
+local function incTaskValue(self, taskType, defaultIncNum)
+	defaultIncNum = defaultIncNum or 100
+
+	if not P._playerPreludeSeason:isEnded() then
+		P._playerPreludeSeason:updateValueByType(taskType, true, tonumber(self._txtInput.text) or defaultIncNum)
+	else
+		P._playerMission:updateValueByType(taskType, true, tonumber(self._txtInput.text) or defaultIncNum)
+	end
+
+	P._playerEvent:updateMissionValue(taskType, tonumber(self._txtInput.text) or defaultIncNum)
+end
+
+function M:addClicks()
+	self:setClick(self._btnLinkGoogle, function ()
+		if lc._isMobile then
+			FirebaseManager:LinkGoogle()
+		end
+	end)
+	self:setClick(self._btnLogout, function ()
+		if lc._isMobile then
+			V._savediOSAuthType = FirebaseManager.FIREBASE_AUTH_TYPE_APPLE
+
+			FirebaseManager:Logout()
+		end
+	end)
+	self:setClick(self._btnUnlinkGoogle, function ()
+		if lc._isMobile then
+			FirebaseManager:Unlink("google.com")
+		end
+	end)
+	self:setClick(self._btnUnlinkApple, function ()
+		if lc._isMobile then
+			FirebaseManager:Unlink("apple.com")
+		end
+	end)
+	self:setClick(self._btnAddMail, function ()
+		local cid = tonumber(self._txtInput.text)
+
+		if cid then
+			P._playerMail:addMail(cid)
+		end
+	end)
+	self:setClick(self._btnAddNotify, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		if #sp == 1 then
+			local val = tonumber(sp[1]) or 10
+			local notifyId = LcNotifycationConsole.Instance:SendNotificationS("Title", "通知测试内容通知测试内容通知测试内容", Client.getCurTime() + val)
+
+			V.showToast(string.format("%d s后发送通知", val))
+		elseif #sp == 2 then
+			local val1 = tonumber(sp[1])
+			local val2 = tonumber(sp[2])
+			local cfg = D._notificationConfig[val1]
+
+			if not cfg then
+				return
+			end
+
+			local titleSid = cfg._titleSid
+			local contentSid = cfg._descSid
+			local titleStr = titleSid and LcLocalization.getTextStr(titleSid) or ""
+			local contentStr = contentSid and LcLocalization.getTextStr(contentSid) or ""
+			local notifyId = LcNotifycationConsole.Instance:SendNotificationS(titleStr, contentStr, Client.getCurTime() + val2)
+
+			V.showToast(string.format("%d s后发送通知， 标题为%s", val2, 1))
+		else
+			LcNotifycationConsole.Instance:CancelAllNotifications()
+			V.showToast("取消所有通知")
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnSkinPanel, function ()
+		self:closePanel()
+		UIManager.openPanel(PrefabDefine.SpinePreviewPanel)
+	end)
+	self:setClick(self._btnBattleLayout, function ()
+		self:closePanel()
+		UIManager.openPanel(PrefabDefine.BattleInLayoutPanel)
+	end)
+	self:setClick(self._btnOpenListener, function ()
+		FirebaseManager:StartListenStore(C._firebaseId)
+		GameObject.Find("LuaHotReloadServer"):GetComponent("LuaHotReloadServer"):createListener()
+	end)
+	self:setClick(self._btnSkipIap, function ()
+		Client._config.jumpIap = true
+	end)
+	self:setClick(self._btnSkipGuide, function ()
+		Client._config.disableGuide = true
+
+		table.clear(P._playerGuide._waitGuideTriggers)
+
+		for i = 1, #D._guideTriggerConfig do
+			P._playerGuide:finishGroup(D._guideTriggerConfig[i]._group)
+		end
+	end)
+	self:setClick(self._btnOpenAd, function ()
+		Client._config.lookAdVideo = true
+	end)
+	self:setClick(self._btnSave, function ()
+	end)
+	self:setClick(self._btnLoad, function ()
+	end)
+	self:setClick(self._btnReset, function ()
+		if lc._isCN then
+			C.resetAccountProgress()
+		else
+			lc.setIntKeyValue("reset_flag", 1)
+		end
+	end)
+	self:setClick(self._btnShareText, function ()
+		if not SocialShareManager then
+			return
+		end
+
+		local share = SocialShareManager.Instance
+
+		share:Clear()
+
+		share.title = "this is share title"
+		share.content = tonumber(self._txtInput.text) or "this is content of share"
+
+		function share.resultCallback(ret)
+			if ret then
+				-- Nothing
+			end
+		end
+
+		share.shareTarget = "com.discord"
+
+		share:ShareText()
+	end)
+	self:setClick(self._btnShareScreenshot, function ()
+		if not SocialShareManager then
+			return
+		end
+
+		local share = SocialShareManager.Instance
+
+		share:Clear()
+
+		share.title = "this is share title"
+		share.content = tonumber(self._txtInput.text) or "this is content of share"
+
+		function share.resultCallback(ret)
+			if ret then
+				-- Nothing
+			end
+		end
+
+		share.imgName = "discordShareScreenshot.png"
+		share.shareTarget = "com.discord"
+
+		share:ShareScreenshot()
+	end)
+	self:setClick(self._btnAddItem, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		if D._itemConfig[tonumber(sp[1])] then
+			P._playerAsset:increaseAssetNum(tonumber(sp[1]), sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+		else
+			if sp[1] == "0" then
+				for id, conf in pairs(D._itemConfig) do
+					if conf._type ~= 3 then
+						P._playerAsset:increaseAssetNum(id, 9999, D.LogWay.gm)
+					end
+				end
+			end
+
+			V.showToast("找不到道具" .. sp[1])
+		end
+
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddCoin, function ()
+		P._playerAsset:increaseAssetNum(10001, tonumber(self._txtInput.text) or 10000, D.LogWay.gm)
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddDiamond, function ()
+		P._playerAsset:increaseAssetNum(D.ResType.diamond, tonumber(self._txtInput.text) or 10000, D.LogWay.gm)
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnUnlockCard, function ()
+		P._playerCard:unlockCard(tonumber(self._txtInput.text) or 24001)
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddGem, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		local cid = tonumber(sp[1])
+
+		if cid then
+			P._playerAsset:increaseAssetNum(cid, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+		else
+			if string.find(sp[1], "-") then
+				local sp2 = string.split(sp[1], "-")
+
+				for i = 1, #sp2 do
+					P._playerRole:changeGemNum(tonumber(sp2[i]), sp[2] and tonumber(sp[2]) or 1, true)
+				end
+			else
+				for q, gems in pairs(D._qualityGemConfig) do
+					for k, v in pairs(gems) do
+						P._playerRole:changeGemNum(v._id, sp[2] and tonumber(sp[2]) or 1, true)
+					end
+				end
+			end
+
+			SimpleEvent.emit("gems.dirty")
+			RedDotManager.update("city.role.chip")
+		end
+	end)
+	self:setClick(self._btnAddSparkGem, function ()
+		local text = self._txtInput.text
+		local cid = tonumber(text)
+
+		if cid then
+			P._playerActivitySparkScout:addChip(cid)
+		else
+			if string.find(text, "-") then
+				local sp = string.split(text, "-")
+
+				for i = 1, #sp do
+					P._playerActivitySparkScout:addChip(tonumber(sp[i]))
+				end
+			else
+				local pools = P._playerActivitySparkScout:calcChipPools()
+
+				for _, pool in pairs(pools) do
+					for _, v in ipairs(pool) do
+						P._playerActivitySparkScout:addChip(v._id)
+					end
+				end
+			end
+
+			SimpleEvent.emit("gems.dirty")
+			RedDotManager.update("city.role.chip")
+		end
+	end)
+	self:setClick(self._btnAddEquip, function ()
+		local cid = tonumber(self._txtInput.text)
+
+		if cid then
+			P._playerAsset:increaseAssetNum(cid, 1, D.LogWay.gm)
+		else
+			for k, v in pairs(D._equipConfig) do
+				P._playerAsset:increaseAssetNum(k, 1, D.LogWay.gm)
+			end
+		end
+
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddShard, function ()
+		local cid = tonumber(self._txtInput.text)
+
+		if cid then
+			P._playerAsset:increaseAssetNum(cid, 1000, D.LogWay.gm)
+			RedDotManager.update("city.role.chip")
+		else
+			for _, conf in pairs(D._itemConfig) do
+				if conf._type == D.ItemType.ChipSystemShard or conf._type == D.ItemType.WeaponShard then
+					P._playerAsset:increaseAssetNum(conf._id, 1000, D.LogWay.gm)
+				end
+			end
+		end
+
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddSkin, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		local cid = tonumber(sp[1])
+
+		if cid then
+			P._playerAsset:increaseAssetNum(cid, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+		else
+			for k, v in pairs(D._skinConfigs[D.SkinType.Gatlin]) do
+				if not v._hidden and D._itemConfig[k] then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Role]) do
+				if not v._hidden and D._itemConfig[k] then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Weapon]) do
+				if not v._hidden and D._itemConfig[k] then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Dome]) do
+				if not v._hidden and D._itemConfig[k] then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				end
+			end
+		end
+
+		if UIManager.getPanel(PrefabDefine.RoleSystemPanel.id) then
+			UIManager.closePanel(PrefabDefine.RoleSystemPanel)
+		end
+
+		if UIManager.getPanel(PrefabDefine.WeaponSystemPanel.id) then
+			UIManager.closePanel(PrefabDefine.WeaponSystemPanel)
+		end
+
+		RedDotManager.update("city.role")
+		RedDotManager.update("city.weapon")
+	end)
+	self:setClick(self._btnUnlockSkin, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		local cid = tonumber(sp[1])
+
+		if cid then
+			if P._playerSkin:getSkinLevel(cid) == 0 then
+				P._playerAsset:increaseAssetNum(cid, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				P._playerSkin:tryUpgradeSkin(cid)
+			end
+		else
+			for k, v in pairs(D._skinConfigs[D.SkinType.Gatlin]) do
+				if not v._hidden and D._itemConfig[k] and P._playerSkin:getSkinLevel(k) == 0 then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+					P._playerSkin:tryUpgradeSkin(k)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Role]) do
+				if not v._hidden and D._itemConfig[k] and P._playerSkin:getSkinLevel(k) == 0 then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+					P._playerSkin:tryUpgradeSkin(k)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Weapon]) do
+				if not v._hidden and D._itemConfig[k] and P._playerSkin:getSkinLevel(k) == 0 then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+					P._playerSkin:tryUpgradeSkin(k)
+				end
+			end
+
+			for k, v in pairs(D._skinConfigs[D.SkinType.Dome]) do
+				if not v._hidden and D._itemConfig[k] and P._playerSkin:getSkinLevel(k) == 0 then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+					P._playerSkin:tryUpgradeSkin(k)
+				end
+			end
+		end
+
+		if UIManager.getPanel(PrefabDefine.RoleSystemPanel.id) then
+			UIManager.closePanel(PrefabDefine.RoleSystemPanel)
+		end
+
+		if UIManager.getPanel(PrefabDefine.WeaponSystemPanel.id) then
+			UIManager.closePanel(PrefabDefine.WeaponSystemPanel)
+		end
+
+		RedDotManager.update("city.role")
+		RedDotManager.update("city.weapon")
+	end)
+	self:setClick(self._btnAddRanger, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		local cid = tonumber(sp[1])
+
+		if cid then
+			P._playerAsset:increaseAssetNum(cid, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+		else
+			for k, v in pairs(D._rangerConfig) do
+				if not v._hidden and D._itemConfig[k] then
+					P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+				end
+			end
+		end
+
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddRangerEquip, function ()
+		local text = self._txtInput.text
+		local sp = nil
+
+		if string.find(text, "，") then
+			sp = string.split(text, "，")
+		elseif string.find(text, " ") then
+			sp = string.split(text, " ")
+		else
+			sp = string.split(text, ",")
+		end
+
+		local cid = tonumber(sp[1])
+
+		if cid then
+			if D._rangerEquipSkillConfig[cid] then
+				local skillCfg = D._rangerEquipSkillConfig[cid]
+				local quality = skillCfg._quality
+				local level = skillCfg._level
+				cid = 40000 + quality * 100 + level
+				local bucket = quality * 100 + level
+				local skill1 = DropHelper.dropFromGroupWithCustomWeight(D._rangerEquipSkillConfigDropList[bucket], function (e)
+					return e._weight1 > 0
+				end, "_weight1")._id
+				local equip = {
+					cid = cid,
+					skill1 = skill1,
+					skill2 = skillCfg._id
+				}
+
+				P._playerRanger:insertRangerEquip(equip)
+			elseif D._rangerEquipConfig[cid] then
+				P._playerAsset:increaseAssetNum(cid, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+			end
+		else
+			for k, v in pairs(D._rangerEquipConfig) do
+				P._playerAsset:increaseAssetNum(k, sp[2] and tonumber(sp[2]) or 1, D.LogWay.gm)
+			end
+		end
+
+		RedDotManager.update("city")
+	end)
+	self:setClick(self._btnAddRangerSPEquip, function ()
+		for _, v in pairs(D._rangerEquipSkillConfig) do
+			if v._propId >= 10000 then
+				local skillCfg = v
+				local quality = skillCfg._quality
+				local level = skillCfg._level
+				local cid = 40000 + quality * 100 + level
+				local bucket = quality * 100 + level
+				local skill1 = DropHelper.dropFromGroupWithCustomWeight(D._rangerEquipSkillConfigDropList[bucket], function (e)
+					return e._weight1 > 0
+				end, "_weight1")._id
+				local equip = {
+					cid = cid,
+					skill1 = skill1,
+					skill2 = skillCfg._id
+				}
+
+				P._playerRanger:insertRangerEquip(equip)
+			end
+		end
+	end)
+	self:setClick(self._btnSetLevel, function ()
+		local level = tonumber(self._txtInput.text)
+		level = Mathf.Clamp(level, 1, 99)
+
+		if level then
+			if P:getLevel() < level then
+				for i = P:getLevel(), level - 1 do
+					P._playerProfile:upLevel()
+				end
+
+				P._playerProfile:dealLevelDirty()
+				UIManager.getMainPanel():tryTriggerCustomGuide()
+			else
+				P._playerProfile:setLevel(level)
+			end
+		end
+
+		UIManager.getMainPanel()._pages[3]:updateOfflineBtn()
+		self:closePanel()
+		RedDotManager.update("city.role")
+		RedDotManager.update("city.weapon")
+	end)
+	self:setClick(self._btnSVIP, function ()
+		if P._playerRight:isSVIP() then
+			P._playerRight:clearRightCard(D.RightCardType.SVIP)
+		else
+			P._playerRight:openRightCardForever(D.RightCardType.SVIP)
+		end
+
+		self._txtTips.text = P._playerRight:isSVIP() and "开通永久SVIP" or "清除SVIP"
+	end)
+	self:setClick(self._btnVIP, function ()
+		if P._playerRight:isVIP() then
+			P._playerRight:clearRightCard(D.RightCardType.VIP)
+		else
+			P._playerRight:openRightCardForever(D.RightCardType.VIP)
+		end
+
+		self._txtTips.text = P._playerRight:isVIP() and "开通永久VIP" or "清除VIP"
+	end)
+	self:setClick(self._btnAddOfflineTime, function ()
+		local num = tonumber(self._txtInput.text)
+		num = num or 3600
+		local ct = P._playerOffline:getRecordOfflineTime()
+
+		if ct == -1 then
+			P._playerOffline:recordNewOfflineTime(C.getCurTime() - num)
+		else
+			P._playerOffline:recordNewOfflineTime(ct - num)
+		end
+
+		SimpleEvent.emit("offline.time.change")
+	end)
+	self:setClick(self._btnAddIncubateTime, function ()
+		local num = tonumber(self._txtInput.text)
+		num = num or 3600
+
+		P._playerRanger:tryReduceIncubateTimeByGM(num)
+		self:closePanel()
+	end)
+	self:setClick(self._btnCompleteTask, function ()
+		local tid = tonumber(self._txtInput.text)
+
+		if tid then
+			TaskHelper:completeTask(tid)
+		else
+			for k, v in pairs(D._taskConfig) do
+				if TaskHelper:getTaskModule(k) then
+					TaskHelper:completeTask(k)
+				end
+			end
+		end
+	end)
+	self:setClick(self._btnAddDomeBpExp, function ()
+		local num = tonumber(self._txtInput.text)
+
+		P._playerDomeBP:addExp(num)
+	end)
+	self:setClick(self._btnAddSkinBpExp, function ()
+		local num = tonumber(self._txtInput.text)
+
+		P._playerBPSkin:addExp(num)
+	end)
+	self:setClick(self._btnAddKeyBpExp, function ()
+		local num = tonumber(self._txtInput.text)
+
+		P._playerBPNew:addExp(num)
+	end)
+	self:setClick(self._btnFixDice, function ()
+		if self._txtInput.text == nil then
+			C._config.fixDiceNum = nil
+
+			return
+		end
+
+		local num = tonumber(self._txtInput.text)
+
+		if num < 2 or num > 12 then
+			C._config.fixDiceNum = nil
+		end
+
+		C._config.fixDiceNum = num
+	end)
+	self:setClick(self._btnResetTimeOffset, function ()
+		local stamp = lc.getIntKeyValue("debug.time.timestampoffset", 0)
+
+		lc.setIntKeyValue("debug.time.timestampoffset", 0)
+
+		if stamp > 0 then
+			self._txtTips.text = "时间回退，需要重新创建新的账号（开启不存档，则无需新号）"
+		else
+			self._txtTips.text = "重置时间偏移"
+		end
+	end)
+	self:setClick(self._btnAddTimeOffset, function ()
+		local timeStampOffset = lc.getIntKeyValue("debug.time.timestampoffset", 0)
+
+		if self._txtInput.text:len() > 0 then
+			local val = tonumber(self._txtInput.text)
+
+			if val then
+				timeStampOffset = timeStampOffset + val
+
+				lc.setIntKeyValue("debug.time.timestampoffset", timeStampOffset)
+			else
+				local ok, ret = pcall(function ()
+					local rets = string.split(self._txtInput.text, "*")
+					local add = tonumber(rets[1]) * tonumber(rets[2])
+					timeStampOffset = timeStampOffset + add
+
+					lc.setIntKeyValue("debug.time.timestampoffset", timeStampOffset)
+				end)
+
+				if not ok then
+					self._txtTips.text = "输入内容非纯数字"
+
+					error(ret)
+				end
+
+				return
+			end
+		else
+			timeStampOffset = timeStampOffset + 3600
+
+			lc.setIntKeyValue("debug.time.timestampoffset", timeStampOffset)
+		end
+
+		self._txtTips.text = "当前时间加速" .. V.formatTimeS2DHMS(timeStampOffset)
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnAddTimeOffsetDay, function ()
+		local timeStampOffset = lc.getIntKeyValue("debug.time.timestampoffset", 0)
+
+		if self._txtInput.text:len() > 0 then
+			local val = tonumber(self._txtInput.text)
+
+			if val then
+				timeStampOffset = timeStampOffset + val * 86400
+
+				lc.setIntKeyValue("debug.time.timestampoffset", timeStampOffset)
+			else
+				self._txtTips.text = "输入内容非纯数字"
+
+				return
+			end
+		else
+			timeStampOffset = timeStampOffset + 86400
+
+			lc.setIntKeyValue("debug.time.timestampoffset", timeStampOffset)
+		end
+
+		self._txtTips.text = "当前时间加速" .. V.formatTimeS2DHMS(timeStampOffset)
+
+		lc.delayFunc(0.1, function ()
+			self:closePanel()
+		end, self.gameObject)
+	end)
+	self:setClick(self._btnMission, function ()
+		if self._txtInput.text:len() > 0 then
+			local val = tonumber(self._txtInput.text)
+
+			if val then
+				if val > 10001 and P._playerMission:isMissionExist(val) then
+					P._playerMission._currentMission = val
+					P._playerMission._meta.missionId = val
+					P._playerMission._eliteMissionId = val - 1
+					P._playerMission._meta.eliteMissionId = val - 1
+
+					P._playerMission:resetFirstUnPerfectMissionId(D.MissionType.Common, true)
+					P._playerMission:resetFirstUnPerfectMissionId(D.MissionType.Elite, true)
+					P._playerMission:resetFirstUnClaimPerfectReward(D.MissionType.Common, true)
+					P._playerMission:resetFirstUnClaimPerfectReward(D.MissionType.Elite, true)
+
+					self._txtTips.text = "修改完成"
+
+					return
+				end
+			else
+				self._txtTips.text = "输入不正确"
+			end
+
+			return
+		end
+	end)
+	self:setClick(self._btnLanguage, function ()
+		Client.switchLanguage()
+		lc.setTimer(function ()
+			LuaHelper.RestartApp()
+		end, 1)
+	end)
+	self:setClick(self._btnOpenDistort, function ()
+		if BattleManager then
+			local open = not BattleManager._mainSession._sessionView:canUseCameraTexture()
+
+			BattleManager._mainSession._sessionView:changeOpenCameraTexture(open)
+			V.showToast(open and "开启" or "关闭")
+		end
+	end)
+	self:setClick(self._btnJumpWave, function ()
+		if self._txtInput.text:len() > 0 then
+			local val = tonumber(self._txtInput.text)
+
+			if val then
+				BattleManager._mainSession._battleEnemyGenerator:jumpWave(val)
+				self:closePanel()
+			else
+				self._txtTips.text = "输入不正确"
+			end
+
+			return
+		end
+	end)
+	self:setClick(self._btnWin, function ()
+		if P._playerGuide:isWaitingTrigger() then
+			V.showToast("Place Jump Guide")
+
+			return
+		end
+
+		if BattleManager then
+			local battleSession = BattleManager:getSession()
+
+			if UIManager.getPanel(PrefabDefine.BattleSettingPanel.id) then
+				UIManager.closePanel(PrefabDefine.BattleSettingPanel)
+			end
+
+			if battleSession._msType == D.MissionType.CrisisZone then
+				for i = battleSession._totalKillNum + 1, D.CRISIS_ZONE_MAX_ENEMY_COUNT do
+					P._playerCrisisZone:tryDropReward(i)
+				end
+
+				battleSession._totalKillNum = D.CRISIS_ZONE_MAX_ENEMY_COUNT
+			end
+
+			if battleSession._msType == D.MissionType.Dome then
+				function battleSession._lv()
+					return 22
+				end
+			end
+
+			if BattleManager:isMissionPVP() then
+				BattleManager:getSession(2)._blood = -1
+
+				BattleManager:getSession(2):checkBloodLessZero()
+			else
+				battleSession:settleBattle(D.BattleResult.Win)
+			end
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnLose, function ()
+		if P._playerGuide:isWaitingTrigger() then
+			V.showToast("Place Jump Guide")
+
+			return
+		end
+
+		if BattleManager then
+			local battleSession = BattleManager:getSession()
+
+			if UIManager.getPanel(PrefabDefine.BattleSettingPanel.id) then
+				UIManager.closePanel(PrefabDefine.BattleSettingPanel)
+			end
+
+			if battleSession._msType == D.MissionType.Dome then
+				function battleSession._lv()
+					return 5
+				end
+			end
+
+			if BattleManager:isMissionPVP() then
+				BattleManager:getSession(1)._blood = -1
+
+				BattleManager:getSession(1):checkBloodLessZero()
+			else
+				battleSession:settleBattle(D.BattleResult.Lose)
+			end
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnTestMissionDrop, function ()
+		local val = tonumber(self._txtInput.text) or 10001
+		local dataFile = string.format("%s/mission.csv", Application.persistentDataPath)
+		local file = io.open(dataFile, "w")
+		local numMap = {}
+
+		for i = 1, 10000 do
+			local id, num = P._playerMission:dropMissionChip(D.MissionType.Common, val, {})
+			numMap[id * 10 + num] = (numMap[id * 10 + num] or 0) + 1
+		end
+
+		for k, v in pairs(numMap) do
+			file:write(string.format("%d,%d\n", k, v))
+		end
+
+		file:close()
+	end)
+	self:setClick(self._btnLoadBattleEnv, function ()
+		local ret, param = P._playerArmory:tryUpgradeDome()
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+
+			return
+		end
+
+		self._txtTips.text = "当前等级" .. P._playerArmory:getWeaponLevel(100)
+	end)
+	self:setClick(self._btnTestRogueDrop, function ()
+		local val = tonumber(self._txtInput.text) or 1000
+		local pool = requireLua("BattleRougePool").create()
+		local filePath = pool:simulateRouge(val)
+		self._txtTips.text = filePath
+	end)
+	self:setClick(self._btnDecode, function ()
+		local val = self._txtInput.text
+		local splits = P._playerGlobalDefense:parseShareCode(val)
+		local id = splits[1]
+		local name = splits[2]
+		local avatar = splits[3]
+		local timestamp = splits[4]
+		local msg = splits[5]
+		self._txtTips.text = id
+
+		UniClipboard.SetText(id)
+		V.showToast(SID.CONT_COPY_SUCCEED)
+	end)
+	self:setClick(self._btnOpenScore, function ()
+		self:closePanel()
+		UIManager.openPanel(PrefabDefine.ScorePanel)
+	end)
+	self:setClick(self._btnAddModule, function ()
+		local val = self._txtInput.text
+
+		if val and #val > 0 then
+			local s = string.split(val, ",")
+
+			for i = 1, #s do
+				P._playerActivityArkRebuild:addModule(tonumber(s[i]))
+			end
+
+			V.showToast("添加成功")
+		else
+			for i = 1, #D._arkRebuildModuleConfig do
+				P._playerActivityArkRebuild:addModule(i)
+			end
+		end
+	end)
+	self:setClick(self._btnDeleteModule, function ()
+		local val = self._txtInput.text
+
+		if val then
+			local s = string.split(val, ",")
+
+			for i = 1, #s do
+				P._playerActivityArkRebuild:getModules()[tonumber(s[i])] = nil
+			end
+
+			V.showToast("删除成功")
+		else
+			for i = 1, #D._arkRebuildModuleConfig do
+				P._playerActivityArkRebuild:getModules()[i] = nil
+			end
+		end
+	end)
+	self:setClick(self._btnSetArkRebuildMission, function ()
+		local val = self._txtInput.text
+
+		if val and #val > 0 then
+			val = 40000 + val % 10000
+
+			P._playerActivityArkRebuild:changeMission(val)
+		end
+	end)
+	self:setClick(self._btnAddArkCards, function ()
+		for id, rougeConf in pairs(D._battleRougeCardConfig) do
+			if not table.contains(P._playerActivityArkRebuild._data.weaponBanList, rougeConf._belongWeapon) and id ~= 107 then
+				P._playerActivityArkRebuild:addCard(id, 1)
+			end
+		end
+	end)
+	self:setClick(self._btnSetDomeGrade, function ()
+		local val = self._txtInput.text
+
+		if val and #val > 0 then
+			P._playerDome._grade = tonumber(val)
+			P._playerDome._meta.grade = tonumber(val)
+
+			SimpleEvent.emit("grade.dirty")
+			self:closePanel()
+		end
+	end)
+	self:setClick(self._btnAddInvitePoint, function ()
+		local val = self._txtInput.text
+
+		P._playerActivityAnniversary:addGMInvitePoint(tonumber(val))
+	end)
+	self:setClick(self._btnCompleteDig, function ()
+		local val = self._txtInput.text
+
+		if val and #val > 0 then
+			local targetVal = tonumber(val)
+
+			P._playerActivityAnniversary._moduleTreasureHunting:jumpMission(targetVal)
+		else
+			if not P._playerAsset:isAssetEnough(D.ResType.treasure_hunting_shovel, 1) then
+				V.showResultCode(ResultCode.RESOURCE_NOT_ENOUGH)
+				self:closePanel()
+
+				return
+			end
+
+			P._playerActivityAnniversary._moduleTreasureHunting:fastCompleteMission()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnSocketOpen, function ()
+		Network._gameSocket:connect()
+	end)
+	self:setClick(self._btnSocketClose, function ()
+		Network._gameSocket:disconnect()
+	end)
+	self:setClick(self._btnSocketSend, function ()
+		Request.sendHeartBeatReq()
+	end)
+	self:setClick(self._btnSocketState, function ()
+		if self._socketStateTimer == nil then
+			self._socketStateTimer = lc.setInterval(function ()
+				local s = {
+					"连接中",
+					"已连接",
+					"关闭中",
+					"已关闭"
+				}
+				self._btnSocketState.transform:GetChild(0):GetComponent("TextMeshProUGUI").text = s[Network._gameSocket._cSocket:GetSocketState() + 1]
+			end, 0.1)
+		end
+	end)
+end
+
+return M

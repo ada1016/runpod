@@ -1,0 +1,162 @@
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local requireLua = requireLua
+local opt = opt
+local Vector3 = Vector3
+local BattleMathLib = BattleMathLib
+local M = class("BattleBattery_SlowfieldDroneGroup")
+local DRONE_OFFSET_Y = 1
+
+function M:ctor(weapon, battleSession)
+	self._weapon = weapon
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._dronePos1 = Vector3.retain(0, 0, 0)
+	self._dronePos2 = Vector3.retain(0, 0, 0)
+	self._targetPos1 = Vector3.retain(0, 0, 0)
+	self._targetPos2 = Vector3.retain(0, 0, 0)
+	self._stage = 0
+	self._flyNeedTime = D._battleGlobalConfig._battery_slowfielddrone_fly_time
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView_SlowfieldDroneGroup").new(battleSession)
+
+		self._view:init(weapon, self)
+	end
+end
+
+function M:droneFly(dronePos, targetPos)
+	dronePos.x = BattleMathLib.ease_out_sine(self._flyTime, self._weapon._position.x, targetPos.x, self._flyNeedTime)
+	dronePos.y = BattleMathLib.ease_out_sine(self._flyTime, self._weapon._position.y + DRONE_OFFSET_Y, targetPos.y, self._flyNeedTime)
+end
+
+function M:step(dt)
+	if self._stage == 1 then
+		self._flyTime = self._flyTime + dt
+
+		self:droneFly(self._dronePos1, self._targetPos1)
+		self:droneFly(self._dronePos2, self._targetPos2)
+
+		self._angle1 = BattleMathLib.ease_linear(self._flyTime, self._angle1, 0, self._flyNeedTime)
+		self._angle2 = BattleMathLib.ease_linear(self._flyTime, self._angle2, -180, self._flyNeedTime)
+
+		if self._view then
+			self._view:rotateEvent()
+		end
+
+		if self._flyNeedTime <= self._flyTime then
+			self._stage = 2
+			self._readyTime = 0.3
+
+			if self._view then
+				self._view:aniEvent(self._readyTime)
+			end
+		end
+
+		if self._view then
+			self._view:posEvent()
+		end
+	elseif self._stage == 2 then
+		self._readyTime = self._readyTime - dt
+
+		if self._readyTime <= 0 then
+			self._stage = 3
+		end
+	elseif self._stage == 3 then
+		self._stage = 4
+		local bullet = self._weapon._mainSkill:createBullet()
+
+		bullet:setPos(0, self._targetPos1.y, 0)
+
+		if self._weapon._effect551 then
+			self._weapon._effect551 = self._weapon._effect551 - 1
+
+			if self._weapon._effect551 == 0 then
+				self._weapon._effect551 = nil
+			end
+
+			local p = self._weapon:getEffect(551)
+			p = p + self._weapon._mainSkill:getProp(BattlePropEnum.DmgRangeAddPer, 0) + 100
+
+			bullet:setScale(p / 100)
+
+			if bullet._view then
+				bullet._view._obj:SetLocalScale(bullet._scale, bullet._scale, 1)
+			end
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			Client.playBattleSound("se_Bullet_5")
+		end
+
+		bullet:tryTriggerWhenEffectt()
+		self._weapon:onCastSkill(bullet, self._groupIndex)
+	end
+end
+
+function M:castSkill(groupIndex, group1, group2)
+	self._stage = 1
+	self._flyTime = 0
+	self._readyTime = 0.3
+	self._groupIndex = groupIndex
+
+	self._dronePos1:SetXYZ(self._weapon._position.x, self._weapon._position.y + DRONE_OFFSET_Y, 0)
+
+	self._targetPos1.x = self._battleSession._screenEdgeX1
+
+	if groupIndex == 1 then
+		local y1, y2 = nil
+
+		if group2 then
+			y1 = D._battleGlobalConfig._battery_slowfielddrone_range + 2
+		else
+			y1 = D._battleGlobalConfig._battery_slowfielddrone_range
+		end
+
+		y2 = self._weapon._atkRange
+		local enemy = self._battleRandomLib:randomOne(self._battleSession:getEnemysInBetweenY(y1, y2))
+
+		if enemy == nil then
+			self._targetPos1.y = self._battleRandomLib:randomMN(y1, y2)
+		else
+			self._targetPos1.y = enemy._position.y
+		end
+
+		self._targetPos1.y = math.max(self._targetPos1.y - D._battleGlobalConfig._battery_slowfielddrone_range_fix, 3.5)
+	elseif groupIndex == 3 then
+		local y1 = 3.5
+		local y2 = self._battleSession._battleFieldEdgeY2
+		local enemy = self._battleRandomLib:randomOne(self._battleSession:getEnemysInBetweenY(y1, y2))
+
+		if enemy == nil then
+			self._targetPos1.y = self._battleRandomLib:randomMN(y1, y2)
+		else
+			self._targetPos1.y = enemy._position.y
+		end
+
+		self._targetPos1.y = math.max(self._targetPos1.y, 3.5)
+	else
+		self._targetPos1.y = 3.5
+	end
+
+	local dir = opt.vec3_1:SetXYZ(self._dronePos1.x - self._targetPos1.x, self._dronePos1.y - self._targetPos1.y):SetNormalize()
+	self._angle1 = math.deg(math.atan2(dir.y, dir.x))
+
+	self._dronePos2:SetXYZ(self._weapon._position.x, self._weapon._position.y + DRONE_OFFSET_Y, 0)
+
+	self._targetPos2.x = self._battleSession._screenEdgeX2
+	self._targetPos2.y = self._targetPos1.y
+	local dir = opt.vec3_1:SetXYZ(self._dronePos2.x - self._targetPos2.x, self._dronePos2.y - self._targetPos2.y):SetNormalize()
+	self._angle2 = math.deg(math.atan2(dir.y, dir.x))
+
+	if self._view then
+		self._view:rotateEvent()
+		self._view:channelingBeginEvent()
+		self._view:posEvent()
+	end
+end
+
+return M

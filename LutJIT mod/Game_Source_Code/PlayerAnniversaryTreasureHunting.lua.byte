@@ -1,0 +1,551 @@
+local M = class("PlayerAnniversaryTreasureHunting")
+
+function M:init(meta)
+	self._meta = meta
+	self._activityType = D.ActivityType.Anniversary
+	self._data = self._meta
+	local defaultMsId = 1
+	self._data.msId = ConfusedNumber.create(self._data.msId or 1, "treasure_hunting_msId")
+	self._data.claimIdx = ConfusedNumber.create(self._data.claimIdx or 0, "treasure_hunting_claimIdx")
+	self._data.shopBuyCount = self._data.shopBuyCount or {}
+	local cfgs = self:readMsCfg()
+	self._maxMsNum = #cfgs
+	self._bigRewardIdxes = {}
+
+	for i = 1, #cfgs do
+		if cfgs[i]._isBig == 1 then
+			self._bigRewardIdxes[#self._bigRewardIdxes + 1] = i
+		end
+	end
+
+	self:dealSubModuleInit()
+
+	if self._data.mapData then
+		self._mapEntity = requireLua("TreasureHuntingMap").create()
+
+		if self:isMissionCleared() then
+			if self:isMissionRewardClaimed() then
+				self:tryNextMission()
+			else
+				self:tryClaimMissionRewards()
+			end
+		end
+
+		self._mapEntity:loadFromMapData(self._data.mapData)
+	else
+		self:createNewMap(self:getMissionId())
+	end
+end
+
+function M:findBigRewardIdx(idx)
+	for i = 1, #self._bigRewardIdxes do
+		local bigIdx = self._bigRewardIdxes[i]
+
+		if idx <= bigIdx then
+			return bigIdx
+		end
+	end
+end
+
+function M:dailyReset()
+	if not self._data then
+		return
+	end
+
+	P._playerExchange:resetExchangesByExchangeGroup(self:readPackExchangeGroup())
+end
+
+function M:haveShopDot()
+	return self._bpModule:haveUnclaimRewards()
+end
+
+function M:haveDot()
+	local cond1 = self:haveShopDot()
+
+	if cond1 then
+		return cond1
+	end
+
+	if self._maxMsNum == self:getMissionId() and self:isMissionCleared() then
+		return false
+	end
+
+	if P._playerAsset:isAssetEnough(D.ResType.treasure_hunting_shovel, 1) then
+		return true
+	end
+
+	return false
+end
+
+function M:dealSubModuleInit()
+	if not self._bpModule then
+		self._bpModule = requireLua("PlayerBattlePassAnniversaryTreasureHunting").create()
+	end
+
+	self._bpModule:init(lc.assignTable(self._data, "bp"))
+
+	if not self._bpModule:isStatusOpen() then
+		self._bpModule:tryNextPeriod(true, P._playerActivityAnniversary:readActivityStartTime(), P._playerActivityAnniversary:readActivityEndTime())
+	end
+
+	self._bpModule:start()
+end
+
+function M:dealInstanceExpire()
+	self._bpModule:cacheLastPeriodRewards()
+end
+
+function M:getAllUnclaimedRewards()
+	local rewards = {}
+	local claimed, rewards1 = self._bpModule:lastPeriodRewardsClaimed()
+
+	if not claimed then
+		D.foldRewards(rewards, rewards1)
+		self._bpModule:setLastPeriodRewardsClaimed()
+	end
+
+	local ret2, rewards2 = self:tryClaimMissionRewards(true)
+
+	if ret2 == ResultCode.OK then
+		D.foldRewards(rewards, rewards2)
+	end
+
+	return rewards
+end
+
+function M:getMissionId()
+	return self._data.msId()
+end
+
+function M:checkClaimMissionReward(msId)
+	local curMsId = self:getMissionId()
+	msId = msId or curMsId
+
+	if curMsId < msId then
+		return ResultCode.LOCKED
+	end
+
+	if msId < curMsId then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	if curMsId == msId then
+		if not self:isMissionCleared() then
+			return ResultCode.NOT_MEET_CONDITION
+		end
+
+		if self:isMissionRewardClaimed() then
+			return ResultCode.REWARD_CLAIMED
+		end
+	end
+
+	return ResultCode.OK
+end
+
+function M:getAllTreasures()
+	return self._data.mapData.treasures
+end
+
+function M:isTreasureFound(idx)
+	return self._data.mapData.treasures[idx].found
+end
+
+function M:tryClaimMissionRewards(expireCache)
+	local result = self:checkClaimMissionReward()
+
+	if result ~= ResultCode.OK then
+		return result
+	end
+
+	self._data.mapData.claimed = true
+	local msId = self:getMissionId()
+	local cid, num = self:readMsReward(msId)
+
+	if expireCache then
+		return ResultCode.OK, {
+			{
+				cid,
+				num
+			}
+		}
+	end
+
+	local rewards = P._playerAsset:increaseAssetNum(cid, num, D.LogWay.anniversary_treasure_hunting_mission_clear)
+
+	Trace.traceDesign("Annvy_Hunting_Rewards:%d", msId)
+	self:tryNextMission()
+	P:saveGameData()
+
+	return ResultCode.OK, rewards
+end
+
+function M:checkDigMap(x, y)
+	if self:isMissionCleared() then
+		return ResultCode.THIS_TIME_NUM_MAX
+	end
+
+	local state = self._mapEntity:getDisplayState(x, y)
+
+	if state == TreasureHuntingMap.DisplayState.DUG then
+		return ResultCode.REWARD_CLAIMED
+	elseif state == TreasureHuntingMap.DisplayState.BLOCK then
+		return ResultCode.LOCKED
+	end
+
+	if not P._playerAsset:isAssetEnough(D.ResType.treasure_hunting_shovel, 1) then
+		return ResultCode.RESOURCE_NOT_ENOUGH, 1
+	end
+
+	return ResultCode.OK
+end
+
+function M:fastCompleteMission()
+	local breakAll = false
+	local digCount = 0
+
+	for x = 1, self._mapEntity.width do
+		for y = 1, self._mapEntity.height do
+			for i = 1, 2 do
+				local ret = self:tryDigMap(x, y)
+
+				if ret == D.ResType.treasure_hunting_shovel then
+					breakAll = true
+
+					break
+				elseif ret == ResultCode.OK then
+					digCount = digCount + 1
+				end
+			end
+		end
+
+		if breakAll then
+			break
+		end
+	end
+
+	if digCount then
+		SimpleEvent.emit("anniversary.dig.fastComplete")
+	end
+end
+
+function M:jumpMission(targetMission)
+	if targetMission <= 0 or self._maxMsNum < targetMission then
+		return
+	end
+
+	self._data.msId:reset2Value(targetMission)
+	self:createNewMap(targetMission)
+	SimpleEvent.emit("anniversary.dig.jumpMission")
+end
+
+function M:tryDigMap(x, y)
+	local ret1 = self:checkDigMap(x, y)
+
+	if ret1 ~= ResultCode.OK then
+		return ret1
+	end
+
+	local alreadyCleared = self:isMissionCleared()
+
+	P._playerAsset:decreaseAssetNum(D.ResType.treasure_hunting_shovel, 1, D.LogWay.anniversary_treasure_hunting_dig)
+
+	self._cache_treasure_found_num = 0
+	local results = self:dealDigMap(x, y)
+	results.isFirstDig = true
+
+	if not alreadyCleared and self:isMissionCleared() then
+		self._data.mapData.finished = true
+		results.finished = true
+	end
+
+	if self._cache_treasure_found_num > 0 then
+		self._bpModule:addExp(self._cache_treasure_found_num)
+		SimpleEvent.emit("anniversary.dig.found")
+	end
+
+	P:saveGameData()
+
+	return ResultCode.OK, results
+end
+
+function M:dealDigMap(x, y, isBombSub)
+	local results = {
+		x = x,
+		y = y
+	}
+	local treasures = self._mapEntity:dig(x, y)
+	results.treasures = treasures
+
+	if treasures and #treasures > 0 then
+		self._cache_treasure_found_num = self._cache_treasure_found_num + #treasures
+	end
+
+	if self._mapEntity:isTreasureHit(x, y) or self._mapEntity:canDig(x, y) then
+		results.bonusType = 0
+	else
+		results.bonusType = 0
+		local trigger, bonusType = self:canTriggerBonus()
+
+		if isBombSub and trigger and bonusType == 2 then
+			results.bonusType = 0
+			trigger = false
+		end
+
+		if trigger then
+			if bonusType == 1 then
+				local drops = DropHelper.readDropsById(self:readItemBonusDropId())
+				local resultDrop, idx = DropHelper.dropFromGroup(drops, nil, true)
+				local itemId = resultDrop._itemId
+				local num = resultDrop._minNum
+				results.bonusType = 1
+				results.items = {
+					itemId,
+					num
+				}
+
+				P._playerAsset:increaseAssetNum(itemId, num, D.LogWay.anniversary_treasure_hunting_get_item)
+			elseif bonusType == 2 then
+				local bombResults = self:tryBombMap(x, y)
+
+				if bombResults and #bombResults > 0 then
+					results.bonusType = 2
+					results.bombResults = bombResults
+				else
+					results.bonusType = 0
+				end
+			end
+		end
+	end
+
+	if self._mapEntity:canDig(x, y) then
+		results.dug = false
+	else
+		results.dug = true
+	end
+
+	return results
+end
+
+function M:tryBombMap(x, y)
+	local neighbors = {
+		{
+			x + 1,
+			y
+		},
+		{
+			x - 1,
+			y
+		},
+		{
+			x,
+			y + 1
+		},
+		{
+			x,
+			y - 1
+		}
+	}
+	local allResults = {}
+
+	for _, coord in ipairs(neighbors) do
+		if self._mapEntity:canDig(coord[1], coord[2]) then
+			local results = self:dealDigMap(coord[1], coord[2], true)
+			results.isBombSubResult = true
+			results.px = x
+			results.py = y
+			allResults[#allResults + 1] = results
+		end
+	end
+
+	return allResults
+end
+
+function M:canTriggerBonus()
+	local p1, p2, p3 = self:readBonusProp()
+	local ret1 = math.random(1, p1)
+
+	if ret1 <= p2 then
+		return true, 1
+	elseif ret1 <= p2 + p3 then
+		return true, 2
+	end
+
+	return false
+end
+
+function M:isMissionCleared()
+	if not self._data or not self._data.mapData then
+		return false
+	end
+
+	if self._data.mapData.finished then
+		return true
+	end
+
+	for i, treasure in pairs(self._data.mapData.treasures) do
+		if not treasure.found then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:isMissionRewardClaimed()
+	return self._data.mapData.claimed
+end
+
+function M:isMaxMission()
+	return self._maxMsNum <= self._data.msId()
+end
+
+function M:tryNextMission()
+	if self:isMaxMission() then
+		return
+	end
+
+	self._data.msId = self._data.msId + 1
+	local msId = self:getMissionId()
+	local mapId = self:readMsCfgById(msId)._mapId
+
+	self._mapEntity:loadFromMapId(mapId)
+
+	self._data.mapData = self._mapEntity:getMapData()
+end
+
+function M:hasSettleRewards()
+	if data.expireClaimed then
+		return
+	end
+
+	return true
+end
+
+function M:tryClaimSettleRewards()
+	local items = {}
+
+	if not self._data.expired then
+		return
+	end
+
+	if not self._data.expireSettled then
+		return
+	end
+
+	if self._data.expireClaimed then
+		return
+	end
+
+	self._data.expireClaimed = true
+	self._tmpSettleRankData = nil
+
+	return items
+end
+
+function M:isSettleClaimed()
+	return self._data.expireClaimed
+end
+
+function M:getLeftBuyNum(iapId)
+	local limit = self:getMaxBuyNum(iapId)
+
+	if limit == -1 then
+		return 999
+	end
+
+	return limit - self:getBuyCount(iapId)
+end
+
+function M:getMaxBuyNum(iapId)
+	return P._playerStore:readBuyLimit(iapId)
+end
+
+function M:getBuyCount(iapId)
+	if not self._data.shopBuyCount then
+		self._data.shopBuyCount = {}
+	end
+
+	return self._data.shopBuyCount[iapId] or 0
+end
+
+function M:recordBuyCount(iapId)
+	self._data.shopBuyCount[iapId] = self:getBuyCount(iapId) + 1
+end
+
+function M:getMapEntity()
+	return self._mapEntity
+end
+
+function M:createNewMap(msId)
+	self._mapEntity = requireLua("TreasureHuntingMap").create()
+	local mapId = self:readMsCfgById(msId or self:getMissionId())._mapId
+
+	self._mapEntity:loadFromMapId(mapId or 1)
+
+	self._data.mapData = self._mapEntity:getMapData()
+end
+
+function M:clearMapEntityData()
+	self._data.mapData.digState = {}
+end
+
+function M:readTotalMilestone()
+	return #self:readMsCfg()
+end
+
+function M:getShowMission()
+	local max = self:readTotalMilestone()
+	local min = 20
+
+	return lc.numberClamp(self:getMissionId() + 10, min, max)
+end
+
+function M:readMsReward(msId)
+	local cfg = self:readMsCfgById(msId)
+
+	return cfg._cid, cfg._num
+end
+
+function M:readItemBonusDropId()
+	local cfg = self:readCfg()
+
+	return cfg._itemBonusDropId
+end
+
+function M:readBonusProp()
+	local cfg = self:readCfg()
+
+	return cfg._bonusProp[1], cfg._bonusProp[2], cfg._bonusProp[3]
+end
+
+function M:readCfg()
+	return D._activityAnniversaryConfig[1]
+end
+
+function M:readMsCfgById(msId)
+	local cfg = self:readMsCfg(msId)
+
+	return cfg[msId]
+end
+
+function M:readMsCfg()
+	return D._anniversaryTreasureHuntingMissionConfig
+end
+
+function M:readExchangeGroup()
+	return self:readCfg()._digExchangeGroup
+end
+
+function M:readPackExchangeGroup()
+	return self:readCfg()._digPackExchangeGroup
+end
+
+function M:readPackIapIds()
+	return self:readCfg()._digPackIapIds
+end
+
+function M:readExchangeId()
+	return self:readCfg()._digItemExchangeId
+end
+
+return M

@@ -1,0 +1,119 @@
+local LOCK_COLORS1 = {
+	"C5A2FF",
+	"E2BB76",
+	"D46F7C",
+	"61E6FF"
+}
+local LOCK_COLORS2 = {
+	"D5BDFF",
+	"ECD6A3",
+	"E5A5AE",
+	"FF648D"
+}
+local M = class("GatlinSkinWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/GatlinSkinWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._lockGradient = go._imgLock:GetComponent("UIGradient")
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._lockGradient = go._imgLock:GetComponent("UIGradient")
+
+	return go
+end
+
+function M:init(cid, star)
+	local isMine = star == nil
+	self._cid = cid
+	local playerSkin = P._playerSkin
+	local cfg = playerSkin:getCfg(cid, D.SkinType.Gatlin)
+	local quality = cfg._quality
+	star = star or playerSkin:getSkinLevel(cid)
+
+	self._goLock:SetActive(star == 0)
+	self._goUse:SetActive(cid == P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN))
+
+	self._lockGradient.m_color1 = Color.str2Static(LOCK_COLORS1[quality - D.Quality.Blue])
+	self._lockGradient.m_color2 = Color.str2Static(LOCK_COLORS2[quality - D.Quality.Blue])
+	self._lockGradient.enabled = false
+	self._lockGradient.enabled = true
+
+	if cid == 110024 then
+		local aa = 1
+	end
+
+	local canCfgUpgrade = playerSkin:canCfgUpgradeSkin(self._cid)
+
+	self._goStarArea:SetActive(canCfgUpgrade)
+	self:setQualityStar(quality, star)
+	self:setGrade(cfg._stage, quality)
+
+	if isMine then
+		self:updateDot()
+	end
+end
+
+function M:setQualityStar(quality, star)
+	if star == 0 and not P._playerSkin:canUpgradeSkin(self._cid) then
+		self._goLock:SetActive(true)
+	else
+		self._goLock:SetActive(false)
+	end
+
+	LuaUnity.setTPSprite(self._imgIcon, "item/item_" .. self._cid, true, true)
+	LuaUnity.setTPSprite(self._imgFrame, "item/frame-frame_0" .. quality)
+	LuaUnity.setTPSprite(self._imgFrameOut, "item/frame-frame_0" .. quality .. "_out")
+	V.setSkinQualityStar(self._goStarContainer, quality, star)
+end
+
+function M:setGrade(grade, quality)
+	if grade == -1 then
+		self._goGrade:SetActive(true)
+		self._txtGrade:SetLocalize(SID.TITLE_LIMITED)
+
+		if V.loadSkinQualityGradient then
+			V.loadSkinQualityGradient(self._txtGrade, quality)
+		end
+	elseif grade <= 1 then
+		self._goGrade:SetActive(false)
+	else
+		self._goGrade:SetActive(true)
+		self._txtGrade:SetLocalize(SID.STR_GRADE_X, grade - 1)
+
+		if V.loadSkinQualityGradient then
+			V.loadSkinQualityGradient(self._txtGrade, quality)
+		end
+	end
+end
+
+function M:setChoose(choose)
+	self._imgChoose:SetActive(choose)
+end
+
+function M:setUse(use)
+	self._goUse:SetActive(use)
+end
+
+function M:updateDot()
+	local playerSkin = P._playerSkin
+	local star = playerSkin:getSkinLevel(self._cid)
+
+	self._imgDot:SetActive(playerSkin:canUpgradeSkin(self._cid) or star > 0 and playerSkin:isNewSkin(self._cid))
+end
+
+function M:hideDot()
+	self._imgDot.transform:SetVisible(false)
+end
+
+return M

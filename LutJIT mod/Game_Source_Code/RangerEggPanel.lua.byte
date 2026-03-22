@@ -1,0 +1,102 @@
+local M = class("RangerEggPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	tmpDesc = Types.TMP_Text,
+	tfEggParent = Types.Transform,
+	imgQuality = Types.Image,
+	tmpRewardTitle1 = Types.TMP_Text,
+	tmpRewardTitle2 = Types.TMP_Text,
+	tmpRewardTitle3 = Types.TMP_Text,
+	goItem1 = Types.GameObject,
+	goItem2 = Types.GameObject,
+	goItem3 = Types.GameObject,
+	tmpProp1 = Types.TMP_Text,
+	tmpProp2 = Types.TMP_Text,
+	tmpProp3 = Types.TMP_Text,
+	tmpRewards = Types.TMP_Text,
+	btnIssue = Types.Button
+}
+SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goItems = {
+		self._goItem1,
+		self._goItem2,
+		self._goItem3
+	}
+
+	for i = 1, #self._goItems do
+		SimpleItemWidget.noCreate(self._goItems[i])
+		self:setClick(self._goItems[i]._btnClick, function ()
+			self._goItems[i]:rewardclickCallback()
+		end)
+	end
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnIssue, function ()
+		UIManager.openPanel(PrefabDefine.RangerEggDropInfoPanel, self._quality, true)
+	end)
+	self:setClickWithoutAction(self._btnClose, function ()
+		self:closePanel()
+	end)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:init(slotIdx)
+	self._module = P._playerRanger
+	local eggData = self._module:getEggData(slotIdx)
+	self._quality = eggData and eggData.eggQuality or 2
+	local cfg = self._module:getRangerEggCfg(self._quality)
+
+	self._tmpTitle:SetLocalize(cfg._nameSid)
+	self._tmpDesc:SetLocalize(cfg._descSid)
+	V.setQualityImgText(self._imgQuality, self._quality)
+	V.createRangerEgg(self._quality, self._tfEggParent)
+	self:updateUI()
+end
+
+function M:updateUI()
+	local props = self._module:readEggDropProp(self._quality)
+	local showRewardCids, showRewardNums = self._module:readEggShowRewards(self._quality)
+
+	for i = 1, 3 do
+		local prop = props[i] or 0
+		local goItem = self["_goItem" .. i]
+		local tmp = self["_tmpProp" .. i]
+		local tmpTitle = self["_tmpRewardTitle" .. i]
+
+		goItem:SetActive(prop > 0)
+		tmp.gameObject:SetActive(prop > 0)
+		tmpTitle.gameObject:SetActive(prop > 0)
+
+		if prop > 0 then
+			local cid = showRewardCids[i]
+			local num = showRewardNums[i]
+
+			goItem:init(cid, num)
+
+			tmp.text = string.format("%.2f%%", prop)
+
+			tmpTitle:SetLocalize(SID.STR_REWARD_X, i)
+		end
+	end
+end
+
+return M

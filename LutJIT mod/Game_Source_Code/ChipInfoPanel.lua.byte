@@ -1,0 +1,100 @@
+local M = class("ChipInfoPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnBg = Types.Button,
+	imgChip = Types.Image,
+	imgChipBg = Types.Image,
+	imgChipFrame = Types.Image,
+	imgChipLock = Types.Image,
+	imgQuality = Types.Image,
+	txtName = Types.TMP_Text,
+	txtQuality = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	txtNum = Types.TMP_Text,
+	tfEffectWeapon = Types.Transform,
+	btnChipLock = Types.Button
+}
+local triangleColor = V.QUALITY_BG
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnChipLock, function ()
+		if P._playerRole:isGemLocked(self._cid) then
+			P._playerRole:unlockGem(self._cid)
+			SimpleEvent.emit("gem.locked", false, self._cid)
+			LuaUnity.setTPSprite(self._imgChipLock, "general/g_icon_lock02_big")
+		else
+			P._playerRole:lockGem(self._cid)
+			SimpleEvent.emit("gem.locked", true, self._cid)
+			LuaUnity.setTPSprite(self._imgChipLock, "general/g_icon_lock_big")
+		end
+	end)
+end
+
+function M:init(cid, num, flagNew)
+	self._cid = cid
+	self._num = num or 1
+	self._part = D._gemConfig[cid]._part
+	self._quality = D._gemConfig[cid]._quality
+	self._effect = D._gemConfig[cid]._effect
+
+	if flagNew then
+		P._playerRole:flagNewGem(cid)
+	end
+
+	self._btnChipLock:SetActive(flagNew)
+	self:updateUI()
+end
+
+function M:updateUI()
+	local conf = D._gemConfig[self._cid]
+	local effectConf = D._gemEffectConfig[conf._effect]
+
+	if P._inSparkScout and effectConf._weaponId ~= 0 then
+		self._txtName:SetLocalize(SID.STR_NAME_CHIP, -D._weaponConfig[effectConf._weaponId]._skillNameSid, -SID["STR_QUALITY_" .. conf._quality])
+	else
+		self._txtName:SetLocalize(SID.STR_NAME_CHIP, -SID["STR_QUALITY_" .. conf._quality], -SID["STR_PART_" .. conf._part])
+	end
+
+	self._txtQuality:SetLocalize(SID["STR_QUALITY_" .. self._quality])
+
+	self._txtQuality.color = Color.str2Static(V.QUALITY_BG_TXT[self._quality])
+
+	self._txtNum:SetLocalize(SID.ITEM_INFO_NUM_X, self._num)
+	V.loadChipDescription(self._txtDesc, effectConf, conf._param, conf._params)
+	V.setQualityImgText(self._imgQuality, conf._quality)
+	LuaUnity.setTPSprite(self._imgChip, D.toSprite(self._cid), true)
+	LuaUnity.setTPSprite(self._imgChipBg, string.format("item/frame-frame_%02d", conf._quality))
+	LuaUnity.setTPSprite(self._imgChipFrame, string.format("item/frame-frame_%02d_out", conf._quality))
+	LuaUnity.setTPSprite(self._imgChipLock, P._playerRole:isGemLocked(self._cid) and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+
+	local effectWeapons = D.calcEffectWeapons(effectConf)
+
+	if effectWeapons then
+		self._tfEffectWeapon.parent:SetActive(true)
+
+		for i = 1, 4 do
+			if effectWeapons[i] then
+				self._tfEffectWeapon:GetChild(i):SetActive(true)
+
+				if effectWeapons[i] ~= 100 then
+					LuaUnity.setTPSprite(self._tfEffectWeapon:GetChild(i):GetChild(1):GetComponent("Image"), "weapon/small_weapon_" .. effectWeapons[i], true, true)
+				else
+					LuaUnity.setTPSprite(self._tfEffectWeapon:GetChild(i):GetChild(1):GetComponent("Image"), "weapon/small_weapon_140000", true, true)
+				end
+			else
+				self._tfEffectWeapon:GetChild(i):SetActive(false)
+			end
+		end
+	else
+		self._tfEffectWeapon.parent:SetActive(false)
+	end
+end
+
+return M

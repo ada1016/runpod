@@ -1,0 +1,267 @@
+local M = class("PlayerMonthlyCheckin")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+
+	if self:isUnlock() then
+		self:initModule()
+	else
+		self:tryUnlockSystem()
+	end
+end
+
+function M:tryUnlockSystem()
+	if self:isUnlock() then
+		return false
+	end
+
+	if not D.isSystemUnlocked(D.SystemType.MonthlyCheckin) then
+		return false
+	end
+
+	self._meta.unlock = true
+
+	self:initModule()
+end
+
+function M:isUnlock()
+	return self._meta.unlock
+end
+
+function M:initModule()
+	self._meta.startTimestamp = self._meta.startTimestamp or C.getCurTime()
+	self._meta.checkinDay = self._meta.checkinDay or 0
+	self._meta.checkinTimestamp = self._meta.checkinTimestamp or 0
+	self._meta.claimIdx = self._meta.claimIdx or 0
+	self._meta.cumulativeClaim = self._meta.cumulativeClaim or {}
+	local cfgs = self:readCfgs()
+	self._maxRewardIdx = #cfgs
+	self._cumulativeList = {}
+
+	for i, v in pairs(cfgs) do
+		if v._cids2 then
+			self._cumulativeList[#self._cumulativeList + 1] = i
+		end
+	end
+
+	table.sort(self._cumulativeList)
+end
+
+function M:dailyReset()
+	self:tryNextCycle()
+end
+
+function M:tryNextCycle()
+	if not self:isUnlock() then
+		return
+	end
+
+	if self:isTodayCheckedIn() then
+		return
+	end
+
+	if self:getCheckinDay() < self._maxRewardIdx then
+		return
+	end
+
+	self._meta.startTimestamp = C.getCurTime()
+	self._meta.checkinDay = 0
+	self._meta.checkinTimestamp = 0
+	self._meta.claimIdx = 0
+	self._meta.cumulativeClaim = {}
+
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.MonthlyCustom1, true)
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.MonthlyCustom2, true)
+	self:initModule()
+end
+
+function M:haveDot()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self:isTodayCheckedIn() then
+		return true
+	end
+
+	return not self:isAllCumulativeClaimed()
+end
+
+function M:tryCheckin()
+	local ct = C.getCurTime()
+	local ts = self:getCheckinTimestamp()
+
+	if ts > 0 then
+		local checkDayZero = C.getZeroTimestamp(ts, 1)
+
+		if ct < checkDayZero then
+			return false
+		end
+	end
+
+	if self:isTodayCheckedIn() then
+		return false
+	end
+
+	local checkinDay = self:getCheckinDay()
+
+	if self._maxRewardIdx < checkinDay then
+		return false
+	end
+
+	local rewards = self:claimDailyRewards(checkinDay + 1)
+	self._meta.checkinTimestamp = ct
+	self._meta.checkinDay = self._meta.checkinDay + 1
+
+	Trace.traceDesign("Login_DayReward:%d", self._meta.checkinDay)
+
+	return true, rewards
+end
+
+function M:getCumulativeList()
+	return self._cumulativeList
+end
+
+function M:getCheckinDay()
+	return self._meta.checkinDay
+end
+
+function M:isTodayCheckedIn()
+	return self._meta.checkinTimestamp > 0 and C.getTodayZeroTimestamp(1) <= C.getZeroTimestamp(self:getCheckinTimestamp(), 1)
+end
+
+function M:getDayIdx()
+	return C.getZeroTimestamp(self:getCheckinTimestamp(), 1)
+end
+
+function M:haveBeenCheckedIn(day)
+	return day <= self._meta.checkinDay
+end
+
+function M:getTodayCheckinIdx()
+	if self:isTodayCheckedIn() then
+		return self._meta.checkinDay
+	end
+
+	return self._meta.checkinDay + 1
+end
+
+function M:getCheckinTimestamp()
+	return self._meta.checkinTimestamp
+end
+
+function M:isClaimed(claimIdx)
+	return claimIdx <= self._meta.claimIdx
+end
+
+function M:isAllCumulativeClaimed()
+	for i, day in pairs(self._cumulativeList) do
+		if self:canClaimCumulativeRewards(day) and not self:isCumulativeClaimed(day) then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:isCumulativeClaimed(day)
+	local idx, v = table.findArray(self._meta.cumulativeClaim, day)
+
+	return idx ~= nil
+end
+
+function M:claimDailyRewards(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids1
+	local nums = cfg._nums1
+	local rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.monthly_checkin_daily)
+
+	return rewards
+end
+
+function M:canClaimCumulativeRewards(day)
+	if not self:isUnlock() then
+		return false
+	end
+
+	if self:getCheckinDay() < day then
+		return false
+	end
+
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids2
+	local nums = cfg._nums2
+
+	if not cfg._cids2 then
+		return false
+	end
+
+	return true
+end
+
+function M:tryClaimCumulativeRewards(day)
+	if not self:canClaimCumulativeRewards(day) then
+		return false
+	end
+
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids2
+	local nums = cfg._nums2
+
+	if not cids then
+		return false
+	end
+
+	local len = lc.lenTable(cids)
+
+	for i = 1, len do
+		local cid = cids[i]
+
+		if D.isCustomSelectItem(cid) then
+			local idx = P._playerAsset:getItemCustomSelectIdx(cid) or 1
+			local chooseCid, chooseNum = nil
+			idx, chooseCid, chooseNum = P._playerAsset:getCustomItemCidNumByIdx(cid, idx)
+
+			Trace.traceDesign("Login_Select:%d:%d", cid, chooseCid)
+		end
+	end
+
+	local rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.monthly_checkin_cumulative)
+	self._meta.cumulativeClaim[#self._meta.cumulativeClaim + 1] = day
+	local idx = table.findArray(self._cumulativeList, day)
+
+	if idx then
+		Trace.traceDesign("Login_Mulitreward:%d", day)
+	end
+
+	return true, rewards
+end
+
+function M:readDailyReward(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids1
+	local nums = cfg._nums1
+
+	return cids[1], nums[1]
+end
+
+function M:readCumulativeReward(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids2
+	local nums = cfg._nums2
+
+	return cids[1], nums[1]
+end
+
+function M:readCfgByIdx(day)
+	return D._monthlyCheckinConfig[day]
+end
+
+function M:readCfgs()
+	return D._monthlyCheckinConfig
+end
+
+return M

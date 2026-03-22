@@ -1,0 +1,384 @@
+local M = class("PlayerAnniversaryDraw")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.chosePackageId = self._meta.chosePackageId or nil
+	self._meta.historyDrawNumByQuality = self._meta.historyDrawNumByQuality or {}
+	self._meta.packageDrawNum = self._meta.packageDrawNum or 0
+	self._meta.packageDrawResult = self._meta.packageDrawResult or {}
+	self._meta.packageClickDrawOrder = self._meta.packageClickDrawOrder or {}
+	self._meta.resetNum = self._meta.resetNum or 0
+	self._meta.cleared = self._meta.cleared or nil
+
+	self:tryResetDrawData()
+
+	self._costResCid = D.ResType.anniversary_lottery_core
+	local cfgs = self:readPackCfgs()
+	self._packageNum = 0
+	self._showPackageIds = {}
+
+	for k, v in pairs(cfgs) do
+		self._packageNum = self._packageNum + 1
+		self._showPackageIds[#self._showPackageIds + 1] = k
+	end
+
+	table.sort(self._showPackageIds)
+end
+
+function M:initModule(aid)
+end
+
+function M:dailyReset()
+	P._playerExchange:resetExchangesByExchangeGroup(self:readPackExchangeGroup())
+end
+
+function M:haveDot()
+	local pId = self:getCurChosePackageId()
+	local cond0 = pId == nil
+
+	if cond0 then
+		return true
+	end
+
+	local cond1 = self:checkLottery()
+
+	if cond1 == ResultCode.OK then
+		return true
+	end
+
+	local cond2 = self:haveShopDot()
+
+	return cond0 and cond1 or cond2
+end
+
+function M:haveShopDot()
+	return false
+end
+
+function M:getDrops(packageId)
+	local curDrawNum = self:getCurDrawNum()
+	local nextDrawIdx = curDrawNum + 1
+	local weights = {}
+	local drops = DropHelper.readDropsById(self:readDropId(packageId))
+	local curBigDropWeight = self:readBigDropWeights(packageId)[nextDrawIdx]
+	weights[1] = self:isRewardIdxClaimed(1) and 0 or curBigDropWeight
+	local separateWeight = 0
+	local separate2Count = 0
+	local totalLeftWeight = 0
+
+	for i = 2, 10 do
+		weights[i] = curBigDropWeight
+
+		if self:isRewardIdxClaimed(i) then
+			separateWeight = separateWeight + drops[i]._weight
+		else
+			totalLeftWeight = totalLeftWeight + drops[i]._weight
+			separate2Count = separate2Count + 1
+		end
+	end
+
+	if separate2Count == 0 then
+		separateWeight = 0
+	end
+
+	for i = 2, 10 do
+		weights[i] = curBigDropWeight
+
+		if self:isRewardIdxClaimed(i) then
+			weights[i] = 0
+		else
+			weights[i] = drops[i]._weight + math.floor(separateWeight * drops[i]._weight / totalLeftWeight)
+		end
+	end
+
+	return drops, weights
+end
+
+function M:tryLottery(cardIdx)
+	local result, param = self:checkLottery(cardIdx)
+
+	if result ~= ResultCode.OK then
+		return result, param
+	end
+
+	local packageId = self:getCurChosePackageId()
+	local curDrawNum = self:getCurDrawNum()
+	local nextDrawIdx = curDrawNum + 1
+	local costCid, costNum = self:readDrawCost(packageId, nextDrawIdx)
+
+	P._playerAsset:decreaseAssetNum(costCid, costNum, D.LogWay.anniversary_draw_package)
+
+	local rewards = nil
+	local drops, realWeights = self:getDrops(packageId)
+	local rewardIdx = DropHelper.randomIndexByWeights(realWeights)
+	local getCid, getNum = self:getRewardByIdx(rewardIdx)
+	local bigCid, bigNum = self:getRewardByIdx(1)
+	local quality = D.toQuality(bigCid)
+	self._meta.historyDrawNumByQuality[quality] = (self._meta.historyDrawNumByQuality[quality] or 0) + 1
+
+	Trace.traceDesign("Annvy_Draw:%d:%d", quality - D.Quality.Purple, lc.numberClamp(self._meta.historyDrawNumByQuality[quality] or 0, 0, 100))
+
+	local isBigReward = false
+	self._meta.packageClickDrawOrder[#self._meta.packageClickDrawOrder + 1] = cardIdx
+
+	if rewardIdx == 1 then
+		isBigReward = true
+
+		self:setIdxClaimed(cardIdx, rewardIdx)
+
+		rewards = P._playerAsset:increaseAssetNum(getCid, getNum, D.LogWay.anniversary_draw_package)
+		local tempBigRewards = {
+			rewards[1][1],
+			rewards[1][2]
+		}
+		local freeRewards = {}
+
+		P._playerActivity:tryUploadDrawData(self:getUploadActivityId(), nextDrawIdx, tempBigRewards[1], tempBigRewards[2], true)
+
+		for newCardIdx = 1, 10 do
+			if not self:isCardIdxClaimed(newCardIdx) then
+				local drops2, realWeights2 = self:getDrops(packageId)
+				local rewardIdx2 = DropHelper.randomIndexByWeights(realWeights2)
+
+				self:setIdxClaimed(newCardIdx, rewardIdx2)
+
+				local freeGetCid, freeGetNum = self:getRewardByIdx(rewardIdx2)
+
+				D.foldCidsAndNums2Rewards(freeRewards, freeGetCid, freeGetNum)
+			end
+		end
+
+		freeRewards = P._playerAsset:increaseAssetNumsByList(freeRewards, D.LogWay.anniversary_draw_package_big_free)
+
+		D.foldRewards(rewards, freeRewards)
+		Trace.traceDesign("Annvy_Draw_Jackpot:%d", lc.numberClamp(nextDrawIdx, 1, 10))
+		Trace.traceDesign("Annvy_Draw_Drop:%d", getCid)
+	else
+		self:setIdxClaimed(cardIdx, rewardIdx)
+
+		rewards = P._playerAsset:increaseAssetNum(getCid, getNum, D.LogWay.anniversary_draw_package)
+	end
+
+	self._meta.packageDrawNum = self._meta.packageDrawNum + 1
+
+	if isBigReward then
+		self._meta.cleared = true
+	end
+
+	P:saveGameData()
+	SimpleEvent.emit("anniversary.draw.claim")
+
+	return ResultCode.OK, rewards
+end
+
+function M:getRewardByIdx(rewardIdx)
+	local pid = self:getCurChosePackageId()
+	local drops, realWeights = self:getDrops(pid)
+
+	if rewardIdx <= 3 then
+		local cids = self:readSkinRewardIds(pid)
+
+		return cids[rewardIdx], drops[rewardIdx]._minNum
+	end
+
+	local getCid = drops[rewardIdx]._itemId
+	local getNum = drops[rewardIdx]._minNum
+
+	return getCid, getNum
+end
+
+function M:tryResetDrawData()
+	if self._meta.cleared then
+		self:resetDrawData()
+	end
+end
+
+function M:isRewardsCleared()
+	return self._meta.cleared
+end
+
+function M:resetDrawData()
+	self._meta.cleared = nil
+	self._meta.packageId = nil
+	self._meta.packageDrawNum = 0
+	self._meta.packageDrawResult = {}
+	self._meta.packageClickDrawOrder = {}
+end
+
+function M:checkLottery(cardIdx)
+	local packageId = self:getCurChosePackageId()
+
+	if not packageId then
+		return ResultCode.LOCKED
+	end
+
+	local curDrawNum = self:getCurDrawNum()
+
+	if curDrawNum >= 10 then
+		return ResultCode.DRAW_NUM_MAX
+	end
+
+	if cardIdx and self:isCardIdxClaimed(cardIdx) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local nextDrawIdx = curDrawNum + 1
+	local costCid, costNum = self:readDrawCost(packageId, nextDrawIdx)
+
+	if not P._playerAsset:isAssetEnough(costCid, costNum) then
+		return ResultCode.RESOURCE_NOT_ENOUGH, math.abs(costNum - P._playerAsset:getAssetNum(costCid))
+	end
+
+	return ResultCode.OK
+end
+
+function M:getCardShowRes(cardIdx)
+	if not self:isCardIdxClaimed(cardIdx) then
+		return nil
+	end
+
+	local resultIdx = self._meta.packageDrawResult[cardIdx]
+	local cid, num = self:getRewardByIdx(resultIdx)
+
+	return cid, num, resultIdx
+end
+
+function M:isCardIdxClaimed(cardIdx)
+	if not self._meta.packageDrawResult then
+		return false
+	end
+
+	return self._meta.packageDrawResult[cardIdx] ~= nil
+end
+
+function M:isRewardIdxClaimed(rewardIdx)
+	for i, v in pairs(self._meta.packageDrawResult) do
+		if v == rewardIdx then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:setIdxClaimed(cardIdx, resIdx)
+	self._meta.packageDrawResult[cardIdx] = resIdx
+end
+
+function M:getCurChosePackageId()
+	return self._meta.packageId
+end
+
+function M:tryChangeCurChosePackageId(packageId)
+	if self._meta.packageId then
+		if self._meta.packageId == packageId then
+			return ResultCode.REPEAT_ACTION
+		end
+
+		if not packageId and self:getCurDrawNum() > 0 then
+			return ResultCode.NOT_MEET_CONDITION
+		end
+	end
+
+	self._meta.packageId = packageId
+
+	P:saveGameData()
+
+	return ResultCode.OK
+end
+
+function M:tryResetPackageId()
+	if self:getLeftResetNum() <= 0 then
+		return
+	end
+
+	if not self._meta.packageId then
+		return
+	end
+
+	self._meta.resetNum = self._meta.resetNum + 1
+	self._meta.packageId = nil
+
+	self:resetDrawData()
+	P:saveGameData()
+end
+
+function M:getLeftResetNum()
+	return self:readResetNum() - self._meta.resetNum
+end
+
+function M:getCurDrawNum()
+	return self._meta.packageDrawNum or 0
+end
+
+function M:getShowPackages()
+	return self._showPackageIds
+end
+
+function M:readDrawCost(packageId, drawNum)
+	drawNum = drawNum or 1
+	local cfg = self:readPackageCfg(packageId)
+
+	return cfg._costCid, cfg._costNum[drawNum]
+end
+
+function M:readSkinRewardIds(packageId)
+	local cfg = self:readPackageCfg(packageId)
+
+	return cfg._package
+end
+
+function M:readDropId(packageId)
+	local cfg = self:readPackageCfg(packageId)
+
+	return cfg._dropId
+end
+
+function M:readFilter(packageId)
+	local cfg = self:readPackageCfg(packageId)
+
+	return cfg._filter
+end
+
+function M:readBigDropWeights(packageId)
+	local cfg = self:readPackageCfg(packageId)
+
+	return cfg._bigDropWeights
+end
+
+function M:readResetNum()
+	return self:readCfg()._lotteryResetNum
+end
+
+function M:readExchangeId()
+	return self:readCfg()._lotteryItemExchangeId
+end
+
+function M:readCfg()
+	return D._activityAnniversaryConfig[1]
+end
+
+function M:readPackageCfg(packageId)
+	return D._anniversaryDrawPackageCfg[packageId]
+end
+
+function M:readPackCfgs()
+	return D._anniversaryDrawPackageCfg
+end
+
+function M:getUploadActivityId()
+	return "anniversary_lottery_1"
+end
+
+function M:readPackExchangeGroup()
+	return D._activityAnniversaryConfig[1]._lotteryPackExchangeGroup
+end
+
+function M:readPackIapIds()
+	return D._activityAnniversaryConfig[1]._lotteryPackIapIds
+end
+
+return M

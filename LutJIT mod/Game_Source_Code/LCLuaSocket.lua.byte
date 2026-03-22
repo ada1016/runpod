@@ -1,0 +1,277 @@
+local M = class("LCLuaSocket")
+local MsgHandler = requireLua("MsgHandler")
+local bit = bit
+local string = string
+local pb = pb
+local SocketState = {
+	open = 1,
+	connecting = 0,
+	closed = 3,
+	closing = 2
+}
+
+local function unpackInt(data, index)
+	local b = string.byte(data, index)
+
+	if b >= 128 then
+		b = 255 - b + 1
+	end
+
+	local p = bit.lshift(b % 16, 3)
+	local len, v = string.unpack(string.sub(data, p + 1, p + 5), ">i")
+
+	return v
+end
+
+local function startAuthentication(self, data)
+	self._isAuthenticating = true
+	local reqMsg = {
+		type = "PB_TYPE_AUTHENTICATION",
+		req = data
+	}
+
+	self:directlySendMsg(reqMsg)
+end
+
+local function processRecvBuf(self, recvBuf)
+	if self._sStep == nil then
+		local respMsg = pb.decode("r6.RespMsg", recvBuf)
+		local data = respMsg.resp
+		self._sSerial = unpackInt(data, 1)
+		self._sStep = unpackInt(data, 2)
+		self._cSerial = unpackInt(data, 3)
+		self._cStep = unpackInt(data, 4)
+
+		startAuthentication(self, data)
+	else
+		self._sSerial = bit.band(self._sSerial + self._sStep, 4294967295.0)
+		local data = string.decrypt(recvBuf, self._sSerial)
+		local dataLen = #data
+		local n, receviedCrc16 = string.unpack(string.sub(data, dataLen - 1), ">H")
+		data = string.sub(data, 1, dataLen - 2)
+		local crc16 = string.crc16(data)
+
+		if crc16 ~= receviedCrc16 then
+			return
+		end
+
+		local respMsg = pb.decode("r6.RespMsg", data)
+
+		return respMsg
+	end
+end
+
+local function processReqMsg(self, msg)
+	if self._cSerial == nil then
+		return
+	end
+
+	local data = pb.encode("r6.ReqMsg", msg)
+	local crc16 = string.crc16(data)
+	data = data .. string.pack(">H", crc16)
+	self._cSerial = bit.band(self._cSerial + self._cStep, 4294967295.0)
+	data = string.encrypt(data, self._cSerial)
+
+	return data
+end
+
+local function tick(self)
+	if self._sendingMessage ~= nil and self._startSendingTime ~= 0 then
+		self._accumulatedSendingTime = self._accumulatedSendingTime + 0.1
+
+		if self._timeoutSeconds < self._accumulatedSendingTime then
+			self._startSendingTime = 0
+
+			self._cSocket:Close()
+		end
+	end
+end
+
+local function startSendMessage(self, message)
+	self._sendingMessage = message
+	self._startSendingTime = os.clock()
+	self._accumulatedSendingTime = 0
+
+	self._cSocket:Send(processReqMsg(self, message))
+end
+
+local function trySendMessage(self, message)
+	local state = self._cSocket:GetSocketState()
+
+	if state == SocketState.open and self._isLogined and self._sendingMessage == nil then
+		startSendMessage(self, message)
+	else
+		self._messageQueue[#self._messageQueue + 1] = message
+
+		if state ~= SocketState.connecting and state ~= SocketState.open then
+			self:connect()
+		end
+	end
+end
+
+local function processMessageQueue(self)
+	local state = self._cSocket:GetSocketState()
+
+	if state == SocketState.open then
+		if self._sendingMessage ~= nil then
+			startSendMessage(self, self._sendingMessage)
+		elseif #self._messageQueue > 0 then
+			local message = self._messageQueue[1]
+
+			table.remove(self._messageQueue, 1)
+			startSendMessage(self, message)
+		end
+	else
+		self:connect()
+	end
+end
+
+local function hasMessageToSend(self)
+	return self._sendingMessage ~= nil or #self._messageQueue > 0
+end
+
+function M:ctor(id, host, timeoutSeconds)
+	self._id = id
+	self._cSocket = LCSocket.Create(id, host)
+	self._timeoutSeconds = timeoutSeconds
+	self._handledDt = -1
+	self._messageQueue = {}
+	self._sendingMessage = nil
+	self._startSendingTime = 0
+	self._accumulatedSendingTime = 0
+	self._tickTimer = lc.setInterval(function ()
+		tick(self)
+	end, 0.1, true)
+end
+
+function M:destroy()
+	lc.stopTimer(self._tickTimer)
+
+	self._tickTimer = nil
+
+	self._cSocket:ForceClose()
+end
+
+function M:sendMsg(reqMsg)
+	trySendMessage(self, reqMsg)
+end
+
+function M:directlySendMsg(reqMsg)
+	self._cSocket:Send(processReqMsg(self, reqMsg))
+end
+
+function M:finishSendMessage(dt)
+	if self._sendingMessage ~= nil and self._sendingMessage.dt == dt then
+		self._sendingMessage = nil
+	end
+end
+
+function M:isHandled(dt)
+	if dt <= self._handledDt then
+		return true
+	end
+
+	self._handledDt = dt
+end
+
+function M:connect()
+	self._isLogined = false
+	self._sSerial = nil
+	self._sStep = nil
+	self._cSerial = nil
+	self._cStep = nil
+
+	self._cSocket:Open()
+end
+
+function M:disconnect()
+	self._cSocket:Close()
+end
+
+function M:stopAutoReconnect()
+	self._stopAutoReconnect = true
+end
+
+function M:tryRecoverAfterError()
+	self._stopAutoReconnect = false
+
+	self:connect()
+end
+
+function M:isStopAutoReconnect()
+	return self._stopAutoReconnect
+end
+
+function M:finishAuthentication()
+	self._isAuthenticating = false
+end
+
+function M:onOpened()
+end
+
+function M:onError(state)
+	local condA = self._isAuthenticating == true
+	local condB = not hasMessageToSend(self)
+	local condC = self._stopAutoReconnect == true
+
+	self:finishAuthentication()
+
+	if condA then
+		self:tryRecoverAfterError()
+
+		return
+	end
+
+	if condB or condC then
+		return
+	end
+
+	if self._sendingMessage ~= nil and self._sendingMessage.drop_after_fail == 1 then
+		self._sendingMessage = nil
+	end
+
+	for i = #self._messageQueue, 1, -1 do
+		if self._messageQueue[i].drop_after_fail == 1 then
+			table.remove(self._messageQueue, i)
+		end
+	end
+
+	SimpleEvent.emit("network.error", self._id, state)
+end
+
+function M:OnMessage(buffer)
+	local respMsg = processRecvBuf(self, buffer)
+
+	if respMsg then
+		local msgType = respMsg.type
+
+		if (msgType == "PB_TYPE_USER_LOGIN" or msgType == "PB_TYPE_USER_RELOGIN") and respMsg.status == "PB_STATUS_OK" then
+			self._isLogined = true
+		end
+
+		local needProcess = false
+		local dt = respMsg.dt
+
+		if dt ~= 0 then
+			self:finishSendMessage(dt)
+
+			if self._sendingMessage == nil then
+				needProcess = true
+			end
+		elseif msgType == "PB_TYPE_USER_RELOGIN" then
+			needProcess = true
+		end
+
+		MsgHandler.process(self._id, respMsg)
+
+		if dt ~= 0 and self._sendingMessage ~= nil then
+			needProcess = false
+		end
+
+		if needProcess and hasMessageToSend(self) and not self._stopAutoReconnect then
+			processMessageQueue(self)
+		end
+	end
+end
+
+return M

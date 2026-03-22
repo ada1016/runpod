@@ -1,0 +1,34 @@
+local M = class("AdBtn")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/element/AdBtn.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(enemyId)
+	self._enemyId = enemyId
+
+	self:updateUI()
+end
+
+function M:updateUI()
+end
+
+function M:clickCallback()
+end
+
+return M

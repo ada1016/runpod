@@ -1,0 +1,120 @@
+local M = class("MonopolyMilestoneWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MonopolyMilestoneWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+	self._module = P._playerActivityMonopoly
+end
+
+function M:updateUI(data)
+	self._data = data
+
+	self:updateRewards()
+end
+
+function M:updateRewards()
+	local step = self._data._level
+	local cids = self._data._cids
+	local nums = self._data._nums
+	local needExp = self._module:getMilestoneNeedExp(step)
+	local currentIdx = self._module:getMilestoneClaimIdx()
+	local currentExp = self._module:getExpNum()
+
+	if self._module:isCircleStep(step) then
+		local maxStep = self._module:getMilestoneMaxStep()
+		step = math.max(currentIdx + 1, maxStep)
+		local maxClaimIdx = self._module:getMilestoneRewardMaxStep()
+
+		if maxClaimIdx <= currentIdx then
+			step = maxClaimIdx
+		end
+
+		needExp = self._module:getMilestoneNeedExp(step)
+
+		self._goInfinite:SetActive(true)
+		lc.setSizeDelta(self.transform, 760, 300)
+
+		local exp = self._module:readMilestoneExp(maxStep)
+
+		self._txtDesc:SetLocalize(SID.ACTIVITY_CYCLE_REWARDS_REQUIRE, exp)
+	else
+		self._goInfinite:SetActive(false)
+		lc.setSizeDelta(self.transform, 760, 235)
+		self._txtDesc:SetLocalize(SID.REACH_X_POINT, needExp)
+	end
+
+	local claimed = self._module:isStepClaimed(step)
+	local canClaim = self._module:isStepComplete(step) and not claimed
+
+	if canClaim then
+		self._imgBar.fillAmount = 1
+	else
+		self._imgBar.fillAmount = currentExp / needExp
+	end
+
+	self._txtProgress.text = string.format("%d/%d", currentExp, needExp)
+
+	V.loadRewardsWidget(self._panel, self._tfRewardsParent, D.formatRewards(cids, nums), claimed, false)
+	self:setFinished(canClaim)
+	self:setClaimed(claimed)
+end
+
+function M:setClaimClick(panel, callback)
+	panel:setClick(self._btnClaim, function ()
+		local claimStep = self._data._level
+
+		if self._module:isCircleStep(claimStep) then
+			claimStep = nil
+		end
+
+		local resultCode, param = self._module:tryClaimStepRewards(claimStep)
+
+		if resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode, param)
+		else
+			V.showRewardClaimPanel(param)
+
+			if callback then
+				callback()
+			end
+		end
+	end)
+end
+
+function M:setFinished(finished)
+	if not finished then
+		self._btnClaim.enabled = false
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+
+		self._txtClaim:SetLocalize(SID.STR_NOT_COMPLETE)
+		self._imgDot:SetActive(false)
+	else
+		self._btnClaim.enabled = true
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+
+		self._imgDot:SetActive(true)
+		self._txtClaim:SetLocalize(SID.STR_CLAIM)
+	end
+end
+
+function M:setClaimed(claimed)
+	self._goUnclaimed:SetActive(not claimed)
+	self._goClaimed:SetActive(claimed)
+end
+
+function M:setDot(dot)
+	self._goRedDot:SetActive(dot)
+end
+
+return M

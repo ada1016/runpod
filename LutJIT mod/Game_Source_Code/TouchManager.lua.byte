@@ -1,0 +1,119 @@
+local math = math
+local table = table
+local lc = lc
+local UnityEngine = UnityEngine
+local Physics = UnityEngine.Physics
+local EventSystems = UnityEngine.EventSystems
+local LeanTouch = Lean.Touch.LeanTouch
+local M = {}
+
+declare("TouchManager", M)
+
+local isBlock = nil
+
+function M.init()
+	M.fingerCount = 0
+	M.isSwiping = false
+	M.isEnabled = true
+	LeanTouch.OnFingerDown = M.handleFingerDown
+	LeanTouch.OnFingerUp = M.handleFingerUp
+	LeanTouch.OnGesture = M.handleGesture
+end
+
+function M.handleFingerDown(finger)
+	if not M.isEnabled then
+		return
+	end
+
+	local fingerCount = M.fingerCount + 1
+	M.fingerCount = fingerCount
+
+	if fingerCount > 1 then
+		isBlock = true
+	else
+		isBlock = M.isHitUI()
+	end
+
+	if M.onFingerDown then
+		M.onFingerDown(finger)
+	end
+end
+
+function M.handleFingerUp(finger)
+	local fingerCount = M.fingerCount
+
+	if fingerCount <= 0 then
+		return
+	end
+
+	fingerCount = fingerCount - 1
+	M.fingerCount = fingerCount
+
+	if fingerCount == 0 then
+		if not isBlock and M.isEnabled and M.onFingerUp then
+			M.onFingerUp(finger)
+		end
+
+		isBlock = false
+		M.isSwiping = false
+	end
+end
+
+function M.handleGesture(fingers)
+	if not M.isEnabled then
+		return
+	end
+
+	local fingerCount = M.fingerCount
+
+	if fingerCount > 0 and not M.isSwiping then
+		local delta = fingers[0].SwipeScreenDelta
+
+		if LeanTouch.CurrentSwipeThreshold < math.abs(delta.x) or LeanTouch.CurrentSwipeThreshold < math.abs(delta.y) then
+			M.isSwiping = true
+		end
+	end
+
+	if not M.isSwiping then
+		return
+	end
+
+	if M.onGesture then
+		M.onGesture(fingers)
+	end
+end
+
+function M.forEachHit(finger, callback, ...)
+	local ray = finger:GetRay()
+	local hits = Physics.RaycastAll(ray, ...)
+
+	if M.onHits then
+		hits = M.onHits(hits)
+	end
+
+	for i = 0, hits.Length - 1 do
+		local hit = hits[i]
+		local obj = hit.collider.gameObject
+
+		if callback(hit, obj) then
+			break
+		end
+	end
+end
+
+function M.isHitUI()
+	local x, y, z = lc.getMousePosition()
+	local eventDataCurrentPosition = EventSystems.PointerEventData.New(EventSystems.EventSystem.current)
+	eventDataCurrentPosition.position = Vector2.static(x, y)
+	local results = System.Collections.Generic.List_UnityEngine_EventSystems_RaycastResult()
+
+	EventSystems.EventSystem.current:RaycastAll(eventDataCurrentPosition, results)
+
+	return results.Count > 0
+end
+
+function M.setIsEnabled(isEnabled)
+	M.isEnabled = isEnabled
+end
+
+return M

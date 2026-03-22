@@ -1,0 +1,137 @@
+local LOCK_COLORS1 = {
+	"C5A2FF",
+	"E2BB76",
+	"D46F7C",
+	"61E6FF"
+}
+local LOCK_COLORS2 = {
+	"D5BDFF",
+	"ECD6A3",
+	"E5A5AE",
+	"FF648D"
+}
+local M = class("RangerItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RangerItemWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._lockGradient = go._imgLock:GetComponent("UIGradient")
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._lockGradient = go._imgLock:GetComponent("UIGradient")
+
+	return go
+end
+
+function M:init(cid, star)
+	self._cid = cid
+	local playerRanger = P._playerRanger
+	local cfg = playerRanger:getCfg(cid)
+	local quality = cfg._quality
+	local dmgType = cfg._dmgType
+
+	if star then
+		self._goLock:SetActive(false)
+		self._goUse:SetActive(false)
+		self._goFragmentArea:SetActive(false)
+	else
+		star = playerRanger:getRangerLevel(cid)
+
+		self._goLock:SetActive(star == 0)
+		self._goUse:SetActive(P._playerRanger:getDockIndex(cid) ~= nil)
+
+		self._lockGradient.m_color1 = Color.str2Static(LOCK_COLORS1[quality - D.Quality.Blue])
+		self._lockGradient.m_color2 = Color.str2Static(LOCK_COLORS2[quality - D.Quality.Blue])
+		self._lockGradient.enabled = false
+		self._lockGradient.enabled = true
+		local fragId = D.toFragment(cid)
+
+		LuaUnity.setTPSprite(self._imgFragment, "item/item_" .. fragId, true)
+
+		if star == 0 then
+			if not P._playerRanger:canUpgradeRanger(cid) then
+				self._txtNum.text = string.format("%d/%d", P._playerAsset:getAssetNum(fragId), cfg._costPieceNum[1])
+				self._sliFragmentBar.fillAmount = P._playerAsset:getAssetNum(fragId) / cfg._costPieceNum[1]
+			else
+				self._sliFragmentBar.fillAmount = 1
+
+				self._txtNum:SetLocalize(SID.STR_CAN_UNLOCK)
+			end
+
+			self._goFragmentArea:SetActive(true)
+			self._goStarArea:SetActive(false)
+		else
+			if star < D.MAX_RANGER_STAR then
+				self._txtNum.text = string.format("%d/%d", P._playerAsset:getAssetNum(fragId), cfg._costPieceNum[star + 1])
+				self._sliFragmentBar.fillAmount = P._playerAsset:getAssetNum(fragId) / cfg._costPieceNum[star + 1]
+			end
+
+			self._goFragmentArea:SetActive(star < D.MAX_RANGER_STAR)
+			self._goStarArea:SetActive(true)
+		end
+
+		self:updateDot()
+	end
+
+	self._star = star
+
+	self._goStarArea:SetActive(cfg._index ~= 0)
+	LuaUnity.setTPSprite(self._imgDmgType, "general/g_element_" .. dmgType)
+	self:setQualityStar(quality, star)
+end
+
+function M:setQualityStar(quality, star)
+	if star == 0 and not P._playerRanger:canUpgradeRanger(self._cid) then
+		self._goLock:SetActive(true)
+	else
+		self._goLock:SetActive(false)
+	end
+
+	LuaUnity.setTPSprite(self._imgIcon, "item/item_" .. self._cid, true)
+	LuaUnity.setTPSprite(self._imgFrame, "item/frame-frame_0" .. quality)
+	LuaUnity.setTPSprite(self._imgFrameOut, "item/frame-frame_0" .. quality .. "_out")
+	V.setRangerQualityStar(self._goStarContainer, quality, star)
+end
+
+function M:updateFragmentNum()
+	if self._star < D.MAX_RANGER_STAR then
+		local cfg = P._playerRanger:getCfg(self._cid)
+		local fragId = D.toFragment(self._cid)
+		self._txtNum.text = string.format("%d/%d", P._playerAsset:getAssetNum(fragId), cfg._costPieceNum[self._star + 1])
+		self._sliFragmentBar.fillAmount = P._playerAsset:getAssetNum(fragId) / cfg._costPieceNum[self._star + 1]
+
+		if self._star == 0 and P._playerRanger:canUpgradeRanger(self._cid) then
+			self._sliFragmentBar.fillAmount = 1
+
+			self._txtNum:SetLocalize(SID.STR_CAN_UNLOCK)
+		end
+
+		self:updateDot()
+	end
+end
+
+function M:setChoose(choose)
+	self._imgChoose:SetActive(choose)
+end
+
+function M:setUse(use)
+	self._goUse:SetActive(use)
+end
+
+function M:updateDot()
+	local canEquip = P._playerRanger:getDockIndex(self._cid) ~= nil and P._playerRanger:hasRangerEquipDot(self._cid)
+
+	self._imgDot:SetActive(P._playerRanger:canUpgradeRanger(self._cid) or canEquip)
+end
+
+return M

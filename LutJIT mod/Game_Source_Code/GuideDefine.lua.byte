@@ -1,0 +1,8 @@
+local M = D
+M.GuideCause = {
+	first_enter_game = 1
+}
+M.GuideAction = {
+	click_ui = 1001,
+	dialog = 2001
+}

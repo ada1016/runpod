@@ -1,0 +1,92 @@
+local M = class("BattleBullet_TrajectorySegment")
+local SUPER = M.super
+local HAS_VIEW = true
+
+function M:ctor(trajectory)
+	self._trajectory = trajectory
+	self._width = 1
+	self._beganPosition = Vector2.retain(0, 0)
+	self._endPosition = Vector2.retain(0, 0)
+	self._dir = {
+		trajectory._dir[1],
+		trajectory._dir[2]
+	}
+	self._speed = 2
+	self._liveTime = 2
+	self._stepBegan = true
+	self._stepEnd = false
+
+	if HAS_VIEW then
+		local obj = self._sessionView:createBullet("BattleBullet_TrajectorySegment")
+		self._objBegan = obj:GetChild(0)
+		self._objEnd = obj:GetChild(1)
+	end
+end
+
+function M:init(x, y)
+	self._beganPosition.x = x
+	self._beganPosition.y = y
+	self._endPosition.x = x
+	self._endPosition.y = y
+
+	if HAS_VIEW then
+		self._objBegan:SetPosition(x, y, 0)
+		self._objEnd:SetPosition(x, y, 0)
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stepBegan then
+		self._beganPosition.x = self._beganPosition.x + self._speed * dt * self._dir[1]
+		self._beganPosition.y = self._beganPosition.y + self._speed * dt * self._dir[2]
+
+		if HAS_VIEW then
+			self._objBegan:SetPosition(self._beganPosition.x, self._beganPosition.y, 0)
+		end
+
+		if self._beganPosition.x < self._battleSession._screenEdgeX1 then
+			self._stepBegan = false
+		elseif self._battleSession._screenEdgeX2 < self._beganPosition.x then
+			self._stepBegan = false
+		elseif self._battleSession._screenEdgeY2 < self._beganPosition.y then
+			self._stepBegan = false
+		elseif self._beganPosition.y < self._battleSession._screenEdgeY1 and self._dir[2] < 0 then
+			self._stepBegan = false
+		end
+	end
+
+	if self._stepEnd then
+		self._endPosition.x = self._endPosition.x + self._speed * dt * self._dir[1]
+		self._endPosition.y = self._endPosition.y + self._speed * dt * self._dir[2]
+
+		if HAS_VIEW then
+			self._objEnd:SetPosition(self._endPosition.x, self._endPosition.y, 0)
+		end
+
+		if self._endPosition.x < self._battleSession._screenEdgeX1 then
+			self._isToBeDestroyed = true
+		elseif self._battleSession._screenEdgeX2 < self._endPosition.x then
+			self._isToBeDestroyed = true
+		elseif self._battleSession._screenEdgeY2 < self._endPosition.y then
+			self._isToBeDestroyed = true
+		elseif self._endPosition.y < self._battleSession._screenEdgeY1 and self._dir[2] < 0 then
+			self._isToBeDestroyed = true
+		end
+
+		if self._isToBeDestroyed then
+			self._trajectory:oneSegmentDestroyed(self)
+		end
+	else
+		self._liveTime = self._liveTime - dt
+
+		if self._liveTime <= 0 then
+			self._stepEnd = true
+		end
+	end
+end
+
+return M

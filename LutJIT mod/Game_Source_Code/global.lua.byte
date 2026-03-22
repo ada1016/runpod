@@ -1,0 +1,678 @@
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local SID = SID
+local M = {
+	860 - lc._encryptOffset,
+	360 - lc._encryptOffset,
+	{
+		c = 2,
+		[-1] = 460 - lc._encryptOffset,
+		[-2] = -139 - lc._encryptOffset
+	},
+	-90 - lc._encryptOffset,
+	60 - lc._encryptOffset,
+	-120 - lc._encryptOffset,
+	{
+		c = 2,
+		[-1] = 9862 - lc._encryptOffset,
+		[-2] = -40 - lc._encryptOffset
+	},
+	{
+		c = 2,
+		[-1] = 9861 - lc._encryptOffset,
+		[-2] = 160 - lc._encryptOffset
+	},
+	860 - lc._encryptOffset,
+	_ark_rebuild_skip_min_mission = 40180,
+	_init_coin = 3200,
+	_union_leader_limit = 1,
+	_rogue_upgrade_star_num = 4,
+	_crisis_zone_bonus_appear_rate = 1,
+	_crisis_elite_boss_drop_rate = 50,
+	_speed_damage_value = 1,
+	_jump_upgrade_mission = 10005,
+	_player_energy_ad_cd_time = 120,
+	_dome_buy_limit = 5,
+	_common_mission_total_waves = 20,
+	_union_new_join_cd = 0,
+	_stamina_producer_cache_max = 28,
+	_bp_new_period_day = 14,
+	_dome_daily_chance = 3,
+	_activity_exchange_remain_time = 72,
+	_crisis_zone_pass_wave = 80,
+	_chip_level_atk_limit = 60,
+	_bp_ranger_period_day = 21,
+	_stage_rank_limit = 1500,
+	_bp1_period_day = 21,
+	_player_energy_ad_sweep_num = 5,
+	_dome_begin_date = 20240802,
+	_ranger_egg_diamond_cost = 250,
+	_union_viceleader_limit = 2,
+	_initial_atk = 70,
+	_offline_max_time = 8,
+	_union_apply_cd = 0,
+	_levelfund_rebate_percent = 1600,
+	_crisis_zone_total_wave = 100,
+	_crisis_zone_skip_cd = 15,
+	_crisis_zone_circle_chance = 2,
+	_crisis_zone_buy_limit = 5,
+	_battle_daily_diamond_reborn_num = 3,
+	_fast_sweep_energy_num_limit = 70,
+	_spark_scout_duel_begin_time = 120,
+	_player_return_trigger_day = 14,
+	_battle_diamond_reborn_cost = 100,
+	_diamond_use_confirm_num = 0,
+	_recruitment_daily_limit = 1,
+	_battle_daily_ad_reborn_num = 3,
+	_activity_preview_time = 48,
+	_crisis_elite_normal_drop_rate = 10,
+	_bp_dome_diamond_cost = 980,
+	_bp_skin_period_day = 25,
+	_removead_end_time = 1741651200,
+	_bp_ranger_daily_exp = 5,
+	_union_player_limit = 30,
+	_crisis_zone_reward_select_num = 4,
+	_recruitment_expire_minutes = 1440,
+	_offline_show_cd = 60,
+	_dome_rank_limit = 500,
+	_equip_refine_up_rate = 50,
+	_player_default_energy = 30,
+	_big_diamond_need_pay = 1000,
+	_common_mission_enemy_exp = 1,
+	_player_return_duration_day = 10,
+	_crisis_zone_skip_num = 5,
+	_player_return_limit = 3,
+	_union_elder_limit = 999,
+	_offline_max_add_of_ark_and_spark = 6,
+	_mission_ad_double_limit = 3,
+	_stamina_producer_expire_time = 7.5,
+	_ranger_egg_drawanim_jump_num = 10,
+	_ark_rebuild_extra_hp_disable_mission = 40200,
+	_crisis_zone_rank_limit = 400,
+	_bp_dome_period_day = 14,
+	_player_energy_sweep_num = 3,
+	_crisis_zone_bonus_drop_rate = 100,
+	_init_items = {
+		11003,
+		75
+	},
+	_common_mission_create_time = {
+		2,
+		3,
+		2,
+		2,
+		3,
+		5,
+		7,
+		8,
+		10,
+		9,
+		10,
+		10,
+		10,
+		8,
+		10,
+		11,
+		11,
+		15,
+		15,
+		15
+	},
+	_common_mission_create_interval = {
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8
+	},
+	_mission_cost_energy = {
+		5,
+		5
+	},
+	_fast_sweep_num_list = {
+		1,
+		5,
+		10
+	},
+	_dome_mission_create_time = {
+		4,
+		5,
+		6,
+		7,
+		8,
+		9,
+		10,
+		11,
+		12,
+		13
+	},
+	_dome_mission_create_interval = {
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6,
+		8,
+		6,
+		6
+	},
+	_common_mission_waves_hp = {
+		0,
+		9,
+		18,
+		27,
+		36,
+		45,
+		54,
+		63,
+		72,
+		81,
+		90,
+		99,
+		108,
+		117,
+		126,
+		135,
+		144,
+		153,
+		162,
+		171
+	},
+	_common_mission_waves_atk = {
+		0,
+		0,
+		0,
+		0,
+		0,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50
+	},
+	_elite_mission_waves_hp = {
+		0,
+		12,
+		25,
+		37,
+		50,
+		63,
+		75,
+		88,
+		100,
+		113,
+		126,
+		138,
+		151,
+		163,
+		176,
+		189,
+		201,
+		214,
+		226,
+		239
+	},
+	_elite_mission_waves_atk = {
+		0,
+		0,
+		0,
+		0,
+		0,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50,
+		50
+	},
+	_global_defense_mission_waves_hp = {
+		-50,
+		-40,
+		-30,
+		-20,
+		-10,
+		0,
+		13,
+		31,
+		54,
+		81,
+		112,
+		148,
+		189,
+		234,
+		283,
+		337,
+		396,
+		459,
+		526,
+		598
+	},
+	_global_defense_mission_waves_atk = {
+		0,
+		0,
+		0,
+		0,
+		0,
+		10,
+		20,
+		30,
+		40,
+		50,
+		60,
+		70,
+		80,
+		90,
+		100,
+		100,
+		100,
+		100,
+		100,
+		100
+	},
+	_global_defense_mission_create_interval = {
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0
+	},
+	_draw_box_cost_diamonds = {
+		50,
+		250
+	},
+	_rightcard_svip_params = {
+		20,
+		30,
+		50
+	},
+	_rightcard_vip_params = {
+		20,
+		0,
+		25
+	},
+	_inital_avatars = {
+		15001,
+		15002,
+		15003
+	},
+	_first_mission_chip_drop = {
+		3130001
+	},
+	_inital_equips = {
+		31100,
+		31200,
+		31300,
+		31400,
+		31500,
+		31600
+	},
+	_chip_wash_cost = {
+		6,
+		12,
+		20
+	},
+	_dome_tech_upgrade_cost = {
+		25,
+		100,
+		200,
+		350,
+		500,
+		750,
+		1000,
+		1500,
+		2000
+	},
+	_dome_tech_upgrade_hp_percent = {
+		1,
+		2,
+		3,
+		4,
+		5,
+		6,
+		7,
+		8,
+		9,
+		10
+	},
+	_stamina_producer_daily_send_time = {
+		6,
+		12,
+		18,
+		24
+	},
+	_stamina_producer_daily_send_num = {
+		15,
+		15,
+		15,
+		15
+	},
+	_recruitment_reward = {
+		10001,
+		300
+	},
+	_recruitment_ticket_cost = {
+		1,
+		1,
+		1,
+		1,
+		1,
+		2,
+		2,
+		3,
+		4,
+		5
+	},
+	_recruitment_ticket_buy_limit = {
+		3,
+		3,
+		3,
+		3,
+		3,
+		6,
+		6,
+		9,
+		12,
+		15
+	},
+	_equip_extra_prop_num = {
+		0,
+		0,
+		1,
+		2,
+		2
+	},
+	_lottery_diamond_F10 = {
+		2,
+		2,
+		20,
+		2,
+		2,
+		2,
+		22,
+		2,
+		2,
+		20
+	},
+	_account_link_tips_pop = {
+		10010,
+		1
+	},
+	_activity_monopoly_rates = {
+		1,
+		2,
+		3,
+		5,
+		10
+	},
+	_activity_monopoly_rates_cond = {
+		0,
+		10,
+		15,
+		25,
+		50
+	},
+	_crisis_zone_lucky_weapon_weight = {
+		3,
+		3,
+		0.3,
+		0.3
+	},
+	_crisis_zone_lucky_weapon_list = {
+		{
+			1,
+			2
+		},
+		{
+			3,
+			11
+		},
+		{
+			6,
+			4
+		},
+		{
+			12,
+			7
+		},
+		{
+			9,
+			8
+		},
+		{
+			10,
+			5
+		}
+	},
+	_crisis_zone_unlucky_weapon_list = {
+		{
+			10,
+			5
+		},
+		{
+			1,
+			2
+		},
+		{
+			3,
+			11
+		},
+		{
+			6,
+			4
+		},
+		{
+			12,
+			7
+		},
+		{
+			9,
+			8
+		}
+	},
+	_crisis_zone_create_time = {
+		10
+	},
+	_crisis_zone_level_exp = {
+		2,
+		2,
+		3,
+		3,
+		4,
+		4,
+		5,
+		5,
+		5,
+		6,
+		6,
+		7,
+		7,
+		8,
+		8
+	},
+	_crisis_zone_drop_range = {
+		10,
+		20
+	},
+	_crisis_zone_buy_diamond_cost = {
+		200,
+		400,
+		600,
+		800,
+		1000
+	},
+	_crisis_zone_enemy_factor = {
+		75,
+		50,
+		80
+	},
+	_crisis_zone_elite_enemy_factor = {
+		125,
+		150,
+		100
+	},
+	_spark_scout_mission_waves_hp = {
+		0,
+		100,
+		200,
+		300,
+		400
+	},
+	_spark_scout_mission_waves_atk = {
+		0,
+		10,
+		20,
+		30,
+		40
+	},
+	_spark_scout_mission_create_interval = {
+		2,
+		2,
+		2,
+		2,
+		2
+	},
+	_spark_scout_mission_create_time = {
+		6,
+		6,
+		4,
+		4,
+		2
+	},
+	_spark_scout_mission_hp_trigger_bound = {
+		80,
+		40
+	},
+	_union_filter_type = {
+		0,
+		1
+	},
+	_union_filter_level = {
+		0,
+		100
+	},
+	_union_filter_atk = {
+		0,
+		10000
+	},
+	_more_reward_jump = {
+		10001,
+		200
+	}
+}
+local mapKeyIndex = {
+	_union_create_cost = 9,
+	_rank_like_reward = 8,
+	_dome_buy_diamond_cost = 4,
+	_bind_reward = 7,
+	_unlock_chip_group_diamond = 2,
+	_equip_refine_lock_cost = 6,
+	_change_name_cost = 5,
+	_player_energy_recover_speed = 3,
+	_unlock_chip_slot_diamond = 1
+}
+local mapKeyDimension = {
+	_union_create_cost = 0,
+	_rank_like_reward = 1,
+	_dome_buy_diamond_cost = 0,
+	_bind_reward = 1,
+	_unlock_chip_group_diamond = 0,
+	_equip_refine_lock_cost = 0,
+	_change_name_cost = 0,
+	_player_energy_recover_speed = 1,
+	_unlock_chip_slot_diamond = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		local val = rawget(table, -key)
+
+		if val then
+			return table[-key] + lc._encryptOffset + 140
+		end
+	end
+}
+local mt = {
+	__index = function (table, key)
+		if mapKeyIndex[key] == nil then
+			return nil
+		end
+
+		local v = table[mapKeyIndex[key]]
+		local d = mapKeyDimension[key]
+
+		if d == 0 then
+			return v + lc._encryptOffset + 140
+		elseif d == 1 and getmetatable(v) == nil then
+			setmetatable(v, arrayMt)
+		end
+
+		return v
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+setmetatable(M, mt)
+
+return M

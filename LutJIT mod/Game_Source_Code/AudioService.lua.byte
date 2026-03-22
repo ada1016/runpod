@@ -1,0 +1,164 @@
+AudioService = declare("AudioService", {})
+local SoundBus = {
+	{
+		"bus:/Sound",
+		0.5
+	},
+	{
+		"bus:/SoundSE",
+		0.5
+	}
+}
+local MusicBus = {
+	{
+		"bus:/Music",
+		0.5
+	}
+}
+local isInitialized = true
+
+function AudioService:Init()
+	self:InitSndVolume()
+	self:InitMusVolume()
+end
+
+function AudioService:InitSndVolume()
+	for i = 1, #SoundBus do
+		AUDIO:SetVolumeByBus(SoundBus[i][1], SoundBus[i][2])
+	end
+end
+
+function AudioService:InitMusVolume()
+	for i = 1, #MusicBus do
+		AUDIO:SetVolumeByBus(MusicBus[i][1], MusicBus[i][2])
+	end
+end
+
+function AudioService:SetSEBusMute(isMute)
+	AUDIO:SetMuteByBus(SoundBus[2][1], isMute)
+end
+
+function AudioService:SetSoundMute(isMute)
+	for i = 1, #SoundBus do
+		AUDIO:SetMuteByBus(SoundBus[i][1], isMute)
+	end
+end
+
+function AudioService:SetMusicMute(isMute)
+	for i = 1, #MusicBus do
+		AUDIO:SetMuteByBus(MusicBus[i][1], isMute)
+	end
+end
+
+function AudioService:SetSndVolume(v)
+	for i = 1, #SoundBus do
+		AUDIO:SetVolumeByBus(SoundBus[i][1], v)
+	end
+end
+
+function AudioService:SetMusVolume(v)
+	for i = 1, #MusicBus do
+		AUDIO:SetVolumeByBus(MusicBus[i][1], v)
+	end
+end
+
+function AudioService:StopAllSound()
+	for i = 1, #SoundBus do
+		AUDIO:StopByBus(SoundBus[i][1])
+	end
+end
+
+function AudioService:StopAllBattleSound()
+	AUDIO:StopByBus(SoundBus[2][1])
+end
+
+function AudioService:SetBattleSoundPaused(pause)
+	AUDIO:SetPausedByBus(SoundBus[2][1], pause)
+end
+
+local function _GetSoundEvent(soundId)
+	if AUDIO.isByFmod then
+		local sound = D._audioConfig[soundId]
+
+		if sound == nil then
+			return
+		end
+
+		return sound._path
+	else
+		return soundId
+	end
+end
+
+local function _GetSoundVolume(soundId)
+	local sound = D._audioConfig[soundId]
+
+	if sound == nil then
+		return
+	end
+
+	return sound._volume or 1
+end
+
+function AudioService:PlaySound(soundId)
+	if not isInitialized then
+		return
+	end
+
+	local sid = _GetSoundEvent(soundId)
+
+	if sid then
+		AUDIO:PlaySound(sid)
+	end
+end
+
+function AudioService:StopPlay(soundId)
+	local sid = _GetSoundEvent(soundId)
+
+	if sid ~= nil then
+		AUDIO:StopSoundImmediate(sid)
+	end
+end
+
+function AudioService:StopFadeOut(soundId)
+	local sid = _GetSoundEvent(soundId)
+
+	if sid then
+		AUDIO:StopSoundFadeOut(sid)
+	end
+end
+
+function AudioService:PlayBGM(bgmID)
+	if self._bgmID == bgmID then
+		return
+	end
+
+	self:StopBGM()
+
+	self._bgmID = bgmID
+
+	if not isInitialized then
+		return
+	end
+
+	local sid = _GetSoundEvent(bgmID)
+
+	if sid then
+		AUDIO:PlayBGM(sid)
+	end
+end
+
+function AudioService:StopBGM()
+	local bgmId = self._bgmID
+	self._bgmID = nil
+
+	if not isInitialized then
+		return
+	end
+
+	local sid = _GetSoundEvent(bgmId)
+
+	if sid then
+		AUDIO:StopBGM(sid)
+	end
+end

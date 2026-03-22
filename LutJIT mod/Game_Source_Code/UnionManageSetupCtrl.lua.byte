@@ -1,0 +1,212 @@
+local M = class("UnionManageSetupCtrl")
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+local LangChooseArea = requireLua("LangChooseArea")
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+	local union = P._playerUnion._union
+	NetPack.UnionSetupReqPack.name = union.name
+	NetPack.UnionSetupReqPack.desc = union.desc
+	NetPack.UnionSetupReqPack.avatar_base = union.avatar_base
+	NetPack.UnionSetupReqPack.avatar_badge = union.avatar_badge
+	NetPack.UnionSetupReqPack.need_apply = union.need_apply
+	NetPack.UnionSetupReqPack.require_level = union.require_level
+	NetPack.UnionSetupReqPack.require_atk = union.require_atk
+	NetPack.UnionSetupReqPack.language = union.language
+
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+	LangChooseArea.noCreate(self._goLanguageChoose)
+	self._goLanguageChoose:init(panel, function (langId)
+		NetPack.UnionSetupReqPack.language = langId
+
+		self:updateLanguage()
+	end)
+	self._inputName.onEndEdit:AddListener(function (pt)
+		NetPack.UnionSetupReqPack.name = pt
+	end)
+	self._inputDesc.onEndEdit:AddListener(function (pt)
+		NetPack.UnionSetupReqPack.desc = pt
+	end)
+	self._tmpInputLevel.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 1
+
+		self:doChangeLevel(pt)
+	end)
+	self._tmpInputAtk.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 0
+
+		self:doChangeAtk(pt)
+	end)
+	panel:setClick(self._btnLanguage, function ()
+		self._goLanguageChoose:doAction(NetPack.UnionSetupReqPack.language)
+	end)
+	panel:setClick(self._btnEditFlag, function ()
+		local lb = UIManager.openPanel(PrefabDefine.UnionFlagEditPanel, NetPack.UnionSetupReqPack)
+
+		function lb._confirmCallback()
+			self:updateFlag()
+		end
+	end)
+	panel:setClick(self._btnStateClose, function ()
+		NetPack.UnionSetupReqPack.need_apply = false
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(true)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(false)
+	end)
+	panel:setClick(self._btnStateOpen, function ()
+		NetPack.UnionSetupReqPack.need_apply = true
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(false)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(true)
+	end)
+	panel:setClick(self._btnConfirm, function ()
+		local pack = NetPack.UnionSetupReqPack
+
+		if pack.name:len() == 0 then
+			V.showToast(SID.UNION_CREATE_TIPS1)
+
+			return
+		end
+
+		if D.UnionNameMaxLength < string.utfstrlen(pack.name) then
+			return
+		end
+
+		if D.UnionDescMaxLength < string.utfstrlen(pack.desc) then
+			V.showToast(SID.UNION_CREATE_TIPS2)
+
+			return
+		end
+
+		P._playerUnion:tryEditUnionInfoReq()
+	end)
+	panel:setClick(self._btnMiusLevel, function ()
+		self:doChangeLevelStep(-10)
+	end)
+	panel:setClick(self._btnAddLevel, function ()
+		self:doChangeLevelStep(10)
+	end)
+	panel:setClick(self._btnMiusAtk, function ()
+		self:doChangeAtkStep(-1000)
+	end)
+	panel:setClick(self._btnAddAtk, function ()
+		self:doChangeAtkStep(1000)
+	end)
+
+	self._inputName.placeholder.text = LcLocalization.getTextStr(SID.TAP_TO_ENTER)
+	self._inputDesc.placeholder.text = LcLocalization.getTextStr(SID.TAP_TO_ENTER)
+	self._inputName.text = union.name
+	self._inputDesc.text = union.desc
+
+	self._inputName.onEndEdit:AddListener(function (pt)
+		NetPack.UnionSetupReqPack.name = pt
+	end)
+	self._inputName.onValueChanged:AddListener(function (pt)
+		local is_valid, weighted_length = string.checkInputLength(pt, D.UnionNameMaxLength)
+
+		if not is_valid then
+			local truncated = string.truncateToMaxLength(pt, D.UnionNameMaxLength)
+			self._inputName.text = truncated
+		end
+
+		self._tmpNameCount.text = string.format("%d/%d", math.min(D.UnionNameMaxLength, weighted_length), D.UnionNameMaxLength)
+	end)
+	self._inputDesc.onEndEdit:AddListener(function (pt)
+		NetPack.UnionSetupReqPack.desc = pt
+	end)
+	self._inputDesc.onValueChanged:AddListener(function (pt)
+		local is_valid, weighted_length = string.checkInputLength(pt, D.UnionDescMaxLength)
+
+		if not is_valid then
+			local truncated = string.truncateToMaxLength(pt, D.UnionDescMaxLength)
+			self._inputDesc.text = truncated
+		end
+
+		self._tmpDescCount.text = string.format("%d/%d", math.min(D.UnionDescMaxLength, weighted_length), D.UnionDescMaxLength)
+	end)
+
+	local weighted_length = string.getWeightedLength(NetPack.UnionSetupReqPack.name, D.UnionNameMaxLength)
+	self._tmpNameCount.text = string.format("%d/%d", weighted_length, D.UnionNameMaxLength)
+	local weighted_length = string.getWeightedLength(NetPack.UnionSetupReqPack.desc, D.UnionDescMaxLength)
+	self._tmpDescCount.text = string.format("%d/%d", weighted_length, D.UnionDescMaxLength)
+
+	if union.need_apply then
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(false)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(true)
+	else
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(true)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(false)
+	end
+
+	self._tmpInputAtk.text = union.require_atk
+	self._tmpInputLevel.text = union.require_level
+
+	self:updateFlag()
+	self:updateLanguage()
+end
+
+function M:updateLanguage()
+	local langId = NetPack.UnionSetupReqPack.language
+
+	if langId == 1 then
+		self._textLanguage.text = LcLocalization.getTextStr(SID.ALL_LANGUAGE_STR)
+	else
+		self._textLanguage.text = D.UnionLanguages[langId]
+	end
+end
+
+function M:updateFlag()
+	local pack = NetPack.UnionSetupReqPack
+
+	self._goFlagWidget:init(pack.avatar_base, pack.avatar_badge)
+end
+
+function M:doChangeLevel(pt)
+	NetPack.UnionSetupReqPack.require_level = math.max(pt, 0)
+	self._tmpInputLevel.text = NetPack.UnionSetupReqPack.require_level
+end
+
+function M:doChangeAtk(pt)
+	NetPack.UnionSetupReqPack.require_atk = math.max(pt, 0)
+	self._tmpInputAtk.text = NetPack.UnionSetupReqPack.require_atk
+end
+
+function M:doChangeLevelStep(dt)
+	local require_level = NetPack.UnionSetupReqPack.require_level + dt
+
+	if require_level > 100 then
+		require_level = 0
+	elseif require_level < 0 then
+		require_level = 100
+	end
+
+	self:doChangeLevel(require_level)
+end
+
+function M:doChangeAtkStep(dt)
+	local require_atk = NetPack.UnionSetupReqPack.require_atk + dt
+
+	if require_atk > 10000 then
+		require_atk = 0
+	elseif require_atk < 0 then
+		require_atk = 10000
+	end
+
+	self:doChangeAtk(require_atk)
+end
+
+return M

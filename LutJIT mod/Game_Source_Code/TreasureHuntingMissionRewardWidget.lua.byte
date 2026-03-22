@@ -1,0 +1,65 @@
+local M = class("TreasureHuntingMissionRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TreasureHuntingMissionRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:init(module)
+	self._module = module
+end
+
+function M:updateUI(value)
+	self._value = value
+	local cid, num = self._module:readMsReward(value)
+
+	self._goItem:init(cid, num)
+
+	local currentValue = self._module:getMissionId()
+	local resultCode = self._module:checkClaimMissionReward(value)
+	local locked = resultCode == ResultCode.LOCKED
+	local isClaimed = resultCode == ResultCode.REWARD_CLAIMED
+
+	self._goItem:setClaimed(isClaimed)
+
+	local showFullPgs = value < currentValue - 1 or self._module:checkClaimMissionReward(value + 1) == ResultCode.REWARD_CLAIMED
+	self._imgPgs.fillAmount = showFullPgs and 1 or 0
+	self._txtLv.text = value
+end
+
+function M:updateItemStatus()
+	if not self._value then
+		return
+	end
+
+	local value = self._value
+	local resultCode = self._module:checkClaimMissionReward(value)
+	local locked = resultCode == ResultCode.LOCKED
+	local isClaimed = resultCode == ResultCode.REWARD_CLAIMED
+
+	self._goItem:setClaimed(isClaimed)
+	self._goItem:setInvalid(locked)
+end
+
+function M:setRewardsClick(panel)
+	panel:setClickWithoutAction(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+end
+
+return M

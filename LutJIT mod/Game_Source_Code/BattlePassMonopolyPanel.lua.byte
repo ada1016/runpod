@@ -1,0 +1,42 @@
+local M = class("BattlePassMonopolyPanel", requireLua("BaseBattlePassPanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	textTitle = Types.TMP_Text,
+	imgExpProgress = Types.SlicedFilledImage,
+	textExpProgress = Types.TMP_Text,
+	textLevel = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goLastReward = Types.GameObject,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	btnBuyStep3 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goStep3Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	goLock3 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text,
+	textBuyStep3 = Types.TMP_Text,
+	goTopMask = Types.GameObject,
+	goBottomMask = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initOnce()
+	self._module = P._playerBPMonopoly
+	self._bpCfg = {
+		widgetCellProgress = true,
+		widgetName = "BPRewardWidget_Monopoly",
+		e_levelChange = self._module._key_levelEvent,
+		e_expire = self._module._key_expireEvent,
+		reddot = self._module._key_redDot,
+		missRewardTitleId = SID.TITLE_PREV_BP_REWARDS,
+		title = SID.TITLE_MONOPOLY_EVENT_BP
+	}
+end
+
+return M

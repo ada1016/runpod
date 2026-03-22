@@ -1,0 +1,270 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		4855 - lc._encryptOffset,
+		3,
+		25,
+		1,
+		0,
+		-1,
+		14,
+		3,
+		dup._460,
+		{
+			0,
+			13104,
+			13105
+		},
+		102,
+		"Bp_new_1",
+		"bpnew"
+	},
+	{
+		2,
+		4855 - lc._encryptOffset,
+		3,
+		13,
+		0,
+		1,
+		-1,
+		14,
+		3,
+		dup._461,
+		{
+			0,
+			980,
+			13103
+		},
+		104,
+		"Bp_Dome",
+		"bpdome"
+	},
+	{
+		3,
+		4755 - lc._encryptOffset,
+		0,
+		0,
+		0,
+		0,
+		-1,
+		0,
+		3,
+		dup._461,
+		{
+			0,
+			980,
+			16001
+		},
+		nil,
+		"Bp_arkrebuild",
+		"bparkrebuild"
+	},
+	{
+		4,
+		4855 - lc._encryptOffset,
+		3,
+		26,
+		0,
+		0,
+		-1,
+		25,
+		3,
+		dup._460,
+		{
+			0,
+			13106,
+			13107
+		},
+		103,
+		"Bp_skin_1",
+		"bpskin"
+	},
+	{
+		5,
+		4755 - lc._encryptOffset,
+		0,
+		0,
+		0,
+		0,
+		-1,
+		0,
+		2,
+		dup._462,
+		{
+			0,
+			17001
+		},
+		nil,
+		"Bp_Monopoly",
+		"bpmonopoly"
+	},
+	{
+		6,
+		4855 - lc._encryptOffset,
+		3,
+		31,
+		0,
+		0,
+		-1,
+		21,
+		3,
+		dup._460,
+		{
+			0,
+			13108,
+			13109
+		},
+		105,
+		"Bp_ranger_1",
+		"bpranger"
+	},
+	{
+		7,
+		4755 - lc._encryptOffset,
+		0,
+		0,
+		0,
+		0,
+		-1,
+		0,
+		3,
+		dup._461,
+		{
+			0,
+			980,
+			18001
+		},
+		nil,
+		"Bp_sparkScout",
+		"bpsparkscout"
+	},
+	{
+		8,
+		4755 - lc._encryptOffset,
+		0,
+		0,
+		0,
+		0,
+		-1,
+		0,
+		2,
+		dup._462,
+		{
+			0,
+			19001
+		},
+		nil,
+		"Bp_TreasureHunting",
+		"bptreasurehunting"
+	},
+	{
+		9,
+		4755 - lc._encryptOffset,
+		0,
+		19,
+		0,
+		1,
+		1,
+		999,
+		2,
+		dup._462,
+		{
+			0,
+			14001
+		},
+		nil,
+		nil,
+		"bplevelfund"
+	}
+}
+local mapKeyIndex = {
+	k1561804 = 6,
+	k13382366 = 3,
+	k4220919 = 7,
+	k1486323 = 8,
+	k12936354 = 10,
+	k4179212 = 4,
+	k8102031 = 11,
+	k13072328 = 5,
+	k5943817 = 13,
+	k10869482 = 12,
+	k3998287 = 2,
+	k1644150 = 1,
+	k1977500 = 9,
+	k11901109 = 14
+}
+local mapKeyDimension = {
+	k3998287 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -4755
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -4755
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

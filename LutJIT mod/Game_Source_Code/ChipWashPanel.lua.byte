@@ -1,0 +1,127 @@
+local M = class("ChipWashPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+local PROMPT_KEY = "chip_refine_tip_daily"
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goItem = Types.GameObject,
+	txtContent = Types.TMP_Text,
+	txtNow = Types.TMP_Text,
+	btnWash = Types.Button,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	goVfx = Types.GameObject,
+	animWash = Types.Animation,
+	btnRare = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goItem)
+end
+
+function M:addClicks()
+	self:setClick(self._btnWash, function ()
+		if not self._assetEnough then
+			V.showResultCode(self._costCid, self._costNum)
+		else
+			if lc.isNetworkNotReachable() then
+				V.showToast(SID.NETWORK_NOTREACHABLE)
+
+				return
+			end
+
+			if D._gemConfig[self._cid]._quality >= 5 then
+				Client.checkNetworkAsync(function ()
+					self:doWash()
+				end)
+			else
+				self:doWash()
+			end
+		end
+	end)
+	self:setClick(self._btnRare, function ()
+		UIManager.openPanel(PrefabDefine.ChipRareOverviewPanel, D._gemConfig[self._cid]._part, D._gemConfig[self._cid]._quality)
+	end)
+end
+
+function M:doWash()
+	local quality = D._gemConfig[self._cid]._quality
+
+	if C.getCurTime() < lc.getIntKeyValue(PROMPT_KEY, 0) or D._gemConfig[self._cid - quality * 100000 + 400000] ~= nil then
+		self:dealWash()
+	else
+		UIManager.openPanel(PrefabDefine.PromptsPanel, {
+			_delayCloseTime = 2,
+			_type = 2,
+			_showClose = true,
+			_promptKey = PROMPT_KEY,
+			_title = SID.TITLE_TIP,
+			_content = SID.TIP_CHIP_REFINE_CONFIRM,
+			_txtConfirm = SID.STR_CONFIRM,
+			_fcCancel = SID.STR_CANCEL,
+			_confirmCallback = function ()
+				self:dealWash()
+			end
+		})
+	end
+end
+
+function M:init(cid)
+	self._cid = cid
+
+	self._goItem:init(cid, 1)
+	self._goItem:setNum(false)
+	self._goVfx:SetActive(false)
+	self:setClick(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+
+	local conf = D._gemConfig[cid]
+
+	V.loadChipDescription(self._txtContent, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+
+	local quality = D._gemConfig[cid]._quality
+	local cost = D._globalConfig._chip_wash_cost[quality - D.Quality.Purple]
+	local num = P._playerAsset:getAssetNum(D.ResType.chip_wash_mat)
+	self._assetEnough = cost <= num
+	self._costCid = D.ResType.chip_wash_mat
+	self._costNum = cost
+
+	V.loadItemCost(self._imgCost, self._txtCost, D.ResType.chip_wash_mat, cost, self)
+end
+
+function M:dealWash()
+	self._washed = true
+	local ret = P._playerRole:tryWashGem(self._cid)
+	local oldCid = self._cid
+
+	self:init(ret)
+	self._goVfx:SetActive(false)
+	self._goVfx:SetActive(true)
+
+	local conf = D._gemConfig[oldCid]
+
+	V.loadChipDescription(self._txtContent, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+
+	local conf = D._gemConfig[self._cid]
+
+	V.loadChipDescription(self._txtNow, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+	self._animWash:Stop()
+	self._animWash:Play()
+	Client.playSound("ui_Refine_1")
+end
+
+function M:closePanel()
+	if self._washed then
+		P._playerRole:removeFlagNewGem(self._cid)
+	end
+
+	M.super.closePanel(self)
+end
+
+return M

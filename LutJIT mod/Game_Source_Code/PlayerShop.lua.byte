@@ -1,0 +1,151 @@
+local M = class("PlayerShop")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._drawBoxNums = lc.assignTable(meta, "drawBoxNums")
+	self._drawBoxNums[D.BoxType.Purple] = self._drawBoxNums[D.BoxType.Purple] or 0
+	self._drawBoxNums[D.BoxType.Gold] = self._drawBoxNums[D.BoxType.Gold] or 0
+	self._dailyAdDrawBoxNum = lc.assignTable(meta, "dailyAdDrawBoxNum")
+	self._dailyAdDrawBoxNum[D.BoxType.Purple] = self._dailyAdDrawBoxNum[D.BoxType.Purple] or 1
+	self._dailyAdDrawBoxNum[D.BoxType.Gold] = self._dailyAdDrawBoxNum[D.BoxType.Gold] or 1
+	self._lottery_diamond_F10 = meta.lottery_diamond_F10
+end
+
+function M:dailyReset()
+	self._dailyAdDrawBoxNum[D.BoxType.Purple] = 1
+	self._dailyAdDrawBoxNum[D.BoxType.Gold] = 1
+end
+
+function M:checkDrawBox(boxType, num, useDiamond)
+	num = num or 1
+	local costCid = boxType == D.BoxType.Purple and D.ResType.key_purple or D.ResType.key_gold
+	local costNum = num
+
+	if not useDiamond then
+		local isEnough = P._playerAsset:isAssetEnough(costCid, num)
+
+		if not isEnough then
+			return costCid, num
+		end
+	else
+		costCid = D.ResType.diamond
+		costNum = num * D._globalConfig._draw_box_cost_diamonds[boxType]
+
+		if not P._playerAsset:isAssetEnough(D.ResType.diamond, costNum) then
+			return costCid, costNum
+		end
+	end
+
+	return ResultCode.OK
+end
+
+function M:drawBox(boxType, num, isAd)
+	num = num or 1
+	local logway = boxType == D.BoxType.Purple and D.LogWay.lottery_normal or D.LogWay.lottery_high
+
+	if num == 1 then
+		logway = boxType == D.BoxType.Purple and D.LogWay.lottery_normal or D.LogWay.lottery_high
+	else
+		logway = boxType == D.BoxType.Purple and D.LogWay.lottery_normal_10 or D.LogWay.lottery_high_10
+	end
+
+	if isAd then
+		self:recordAdDraw(boxType)
+	else
+		local costCid = boxType == D.BoxType.Purple and D.ResType.key_purple or D.ResType.key_gold
+		local costNum = num
+		local isEnough = P._playerAsset:isAssetEnough(costCid, num)
+
+		if not isEnough then
+			local costDiamond = num * D._globalConfig._draw_box_cost_diamonds[boxType]
+			costCid = D.ResType.diamond
+			costNum = costDiamond
+		end
+
+		P._playerAsset:decreaseAssetNum(costCid, costNum, logway)
+	end
+
+	local result = {}
+	local fixDropIds = nil
+
+	if num == 10 and boxType == D.BoxType.Gold and not self._lottery_diamond_F10 then
+		self._lottery_diamond_F10 = true
+		self._meta.lottery_diamond_F10 = true
+		fixDropIds = D._globalConfig._lottery_diamond_F10
+	end
+
+	for i = 1, num do
+		local dropId = fixDropIds and fixDropIds[i] or self:getDrawDropId(boxType)
+		local itemId = DropHelper.getByDropId(dropId)
+		result[#result + 1] = {
+			itemId,
+			1
+		}
+
+		self:recordDrawBox(boxType)
+		P._playerAsset:increaseAssetNum(itemId, 1, logway, true)
+	end
+
+	if boxType == D.BoxType.Purple then
+		TaskHelper:increaseTaskValue(D.TaskType.OPEN_BOX_LOW, num)
+	elseif boxType == D.BoxType.Gold then
+		TaskHelper:increaseTaskValue(D.TaskType.OPEN_BOX_ADVANCE, num)
+	end
+
+	SimpleEvent.emit("drawbox.update")
+	P:saveGameData(boxType == D.BoxType.Gold)
+
+	return result
+end
+
+function M:getDrawDropId(boxType)
+	if D._lotteryConfig[boxType]._fixCounts then
+		local index = table.findArray(D._lotteryConfig[boxType]._fixCounts, self:getDrawBoxNum(boxType) + 1)
+
+		if index then
+			return D._lotteryConfig[boxType]._fixDrops[index]
+		end
+	end
+
+	if (self:getDrawBoxNum(boxType) + 1) % D._lotteryConfig[boxType]._loopCount == 0 then
+		return D._lotteryConfig[boxType]._loopDrop
+	else
+		return D._lotteryConfig[boxType]._drop
+	end
+end
+
+function M:getDrawShowDropId(boxType)
+	if boxType == D.BoxType.Purple then
+		return 1
+	else
+		return 2
+	end
+end
+
+function M:recordAdDraw(boxType)
+	self._dailyAdDrawBoxNum[boxType] = self:getAdDrawLeftNum(boxType) - 1
+end
+
+function M:getAdDrawLeftNum(boxType)
+	return self._dailyAdDrawBoxNum[boxType]
+end
+
+function M:recordDrawBox(boxType)
+	self._drawBoxNums[boxType] = self:getDrawBoxNum(boxType) + 1
+end
+
+function M:getDrawBoxNum(boxType)
+	return self._drawBoxNums[boxType]
+end
+
+function M:getLeftMustDrawNum(boxType)
+	local count = D._lotteryConfig[boxType]._loopCount
+	local num = self:getDrawBoxNum(boxType) % count
+
+	return num == 0 and count or count - num
+end
+
+return M

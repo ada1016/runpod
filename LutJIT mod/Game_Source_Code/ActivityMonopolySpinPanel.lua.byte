@@ -1,0 +1,146 @@
+local M = class("ActivityMonopolySpinPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	tfSpinBody = Types.Transform,
+	tfRewards = Types.Transform,
+	atorArrow = Types.Animator,
+	tfArrow = Types.Transform,
+	goStart = Types.GameObject,
+	goSpining = Types.GameObject,
+	btnStart = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnStart, function ()
+		self:handleStartBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:closePanel()
+	self._tfSpinBody:DOKill()
+
+	if self._seq then
+		self._seq:Kill()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:init(dropId, callback)
+	dropId = dropId or 221
+	self._btnMask.enabled = false
+
+	self._goSpining:SetActive(false)
+	self._goStart:SetActive(true)
+
+	self._callback = callback
+
+	lc.setLocalRotation(self._tfSpinBody, 0, 0, 0)
+	self:initRewards(dropId)
+end
+
+function M:initRewards(dropId)
+	local drops = DropHelper.readDropsById(dropId)
+
+	for i = 1, 6 do
+		local tf = self._tfRewards:GetChild(i - 1)
+		local imgIcon = tf:GetChild(0):GetComponent("Image")
+		local btn = tf:GetChild(0):GetComponent("Button")
+		local txtNum = tf:GetChild(1):GetComponent("TMP_Text")
+		local drop = drops[i]
+		local cid = drop._itemId
+		local num = drop._minNum
+
+		LuaUnity.setTPSprite(imgIcon, "item/item_" .. cid, true, true)
+
+		txtNum.text = "x" .. num
+
+		self:setClick(btn, function ()
+			V.showItemInfoPanel(cid, num)
+		end)
+	end
+end
+
+function M:handleStartBtn()
+	self._goStart:SetActive(false)
+	self._goSpining:SetActive(true)
+
+	local rewards, idx = P._playerActivityMonopoly:tryClaimCachedRewards()
+	self._resutlIdx = idx
+	self._resultRewards = rewards
+
+	self:startTurn()
+end
+
+function M:startTurn()
+	if self._isRotating then
+		return
+	end
+
+	C.playSound("ui_Monopoly_spin_1")
+
+	local rewardCount = 6
+	local baseCircle = 1440
+	local targetIdx = self._resutlIdx
+	self._targetIdx = targetIdx
+	self._isRotating = true
+	local anglePerSlot = 360 / rewardCount
+	local stopAngle = (rewardCount - targetIdx + 1) * anglePerSlot
+	local overshoot = 10
+	local rebound = -10
+	local finalAngle = baseCircle + stopAngle + overshoot
+
+	self._atorArrow:SetBool("spin", true)
+
+	local seq = DOTween.Sequence()
+	local rotateTime = 2.2
+	local reboundTime = 0.15
+
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, -finalAngle), rotateTime, V.RotateMode_LocalAxisAdd):SetEase(V.EASE_OUT_CUBIC))
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, overshoot + 5), reboundTime, V.RotateMode_LocalAxisAdd):SetEase(V.EASE_IN_OUT_SINE))
+	seq:Append(self._tfSpinBody:DOLocalRotate(Vector3.static(0, 0, -5), reboundTime / 2, V.RotateMode_LocalAxisAdd):SetEase(V.EASE_IN_OUT_SINE))
+	seq:InsertCallback(1.5, function ()
+		self._atorArrow:SetBool("spin", false)
+	end)
+	seq:AppendInterval(1)
+	seq:OnComplete(function ()
+		self._isRotating = false
+		self._btnMask.enabled = true
+
+		if self._resultRewards then
+			V.showRewardClaimPanel(self._resultRewards, nil, function ()
+				self:closePanel()
+
+				if self._callback then
+					self._callback()
+				end
+			end)
+		else
+			self:closePanel()
+
+			if self._callback then
+				self._callback()
+			end
+		end
+
+		self:dealSpinTarget(targetIdx)
+
+		self._seq = nil
+	end)
+
+	self._seq = seq
+end
+
+function M:dealSpinTarget(targetIdx)
+end
+
+return M

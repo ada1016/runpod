@@ -1,0 +1,409 @@
+local EggSlotStatus = {
+	CanIncubate = 2,
+	Incubating = 3,
+	Birth = 10,
+	WaitIncubate = 1,
+	Lock = -1,
+	Empty = 0
+}
+local M = class("RangerFoundryEggWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RangerFoundryEggWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(slotIdx, panel)
+	self._slotIdx = slotIdx
+	self._module = P._playerRanger
+	self._parentPanel = panel
+
+	self:initStatus()
+end
+
+function M:getStatus()
+	local data = self._module:getEggData(self._slotIdx)
+
+	if not data then
+		return EggSlotStatus.Empty
+	end
+
+	if data.incubateStartTime == 0 then
+		if self._module:checkCanIncubate(self._slotIdx) == ResultCode.OK then
+			return EggSlotStatus.CanIncubate
+		else
+			return EggSlotStatus.WaitIncubate
+		end
+	end
+
+	if C.getCurTime() < data.incubateRealEndTime then
+		return EggSlotStatus.Incubating
+	else
+		return EggSlotStatus.Birth
+	end
+
+	return EggSlotStatus.Empty
+end
+
+function M:getCurrentStatus()
+	return self._status
+end
+
+function M:initStatus()
+	self:updateUI()
+end
+
+function M:updateUIBySlotStatus(force)
+	if not force and self:getStatus() == self:getCurrentStatus() then
+		return
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._status = self:getStatus()
+	local isLock = false
+	local isEmpty = self._status == EggSlotStatus.Empty
+	local canIncubate = self._status == EggSlotStatus.CanIncubate
+	local waitIncubate = self._status == EggSlotStatus.WaitIncubate
+	local incubating = self._status == EggSlotStatus.Incubating
+	local canBirth = self._status == EggSlotStatus.Birth
+
+	self._goLock:SetActive(isLock)
+	self._goSlot:SetActive(not isLock)
+	self._goEmpty:SetActive(isEmpty)
+	self._goEgg:SetActive(EggSlotStatus.Empty < self._status)
+
+	local eggData = P._playerRanger:getEggData(self._slotIdx)
+
+	if eggData then
+		self:updateShowEgg(eggData.eggQuality)
+
+		self._eggQuality = eggData.eggQuality
+	else
+		self._eggQuality = nil
+
+		self:updateShowEgg()
+	end
+
+	self._goHatchTime:SetActive(canIncubate or waitIncubate)
+	self._goHatching:SetActive(incubating)
+	self._goHatchEnd:SetActive(canBirth)
+	self._btnDelete:SetActive(canIncubate or waitIncubate or incubating)
+	self._btnStart:SetActive(canIncubate)
+
+	local showAdReduce = incubating and self._module:canAdReduceIncubate(self._slotIdx)
+
+	if showAdReduce then
+		local leftSeconds = self._module:getLeftIncubateSeconds(self._slotIdx)
+
+		if leftSeconds <= self._module:readEggAdReduceHour(self._eggQuality) * 3600 then
+			V.loadAdButton2(self._btnAd.gameObject, {
+				showAd = true,
+				txt = SID.CHEST_SKIP
+			})
+		else
+			V.loadAdButton2(self._btnAd.gameObject, {
+				showAd = true,
+				txt = string.gsub(LcLocalization.getTextStr(SID.BTN_REDUCE_TIME), "{0}", self._module:readEggAdReduceHour(self._eggQuality))
+			})
+		end
+
+		local seeAdNum = self._module:getEggAdNum(self._slotIdx)
+		local maxAdNum = self._module:readEggAdReduceMaxNum(self._eggQuality)
+
+		self._tmpAdTip:SetLocalizeS(SID.STR_REMAIN_TIMES, string.format("%d/%d", maxAdNum - seeAdNum, maxAdNum))
+
+		if P._playerRight:isAdRemoved() then
+			self._tmpAdTip.color = Color.str2Static(V.COMMON_COLOR.btn_ad_remove_text)
+		else
+			self._tmpAdTip.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		end
+	end
+
+	self._btnAd:SetActive(showAdReduce)
+	self._btnDiamondJump:SetActive(incubating)
+	self._btnClaim:SetActive(canBirth)
+
+	if isLock then
+		-- Nothing
+	elseif isEmpty then
+		-- Nothing
+	elseif canIncubate or waitIncubate then
+		self._currentShowEgg:GetComponent("Animator"):ResetTrigger("birth")
+		self._currentShowEgg:GetComponent("Animator"):SetTrigger("idle")
+		self._tmpNeedHour:SetLocalize(SID.PERIOD_HOUR, self._module:readEggIncubateHour(eggData.eggQuality))
+	elseif incubating then
+		self._tmpDiamondTip:SetLocalize(SID.CHEST_SKIP)
+		self._currentShowEgg:GetComponent("Animator"):ResetTrigger("birth")
+		self._currentShowEgg:GetComponent("Animator"):SetTrigger("idle")
+		self:updateLeftTime()
+
+		self._adRefreshed = false
+	elseif canBirth then
+		self._currentShowEgg:GetComponent("Animator"):ResetTrigger("idle")
+		self._currentShowEgg:GetComponent("Animator"):SetTrigger("birth")
+	end
+end
+
+function M:updateLeftTime(ct)
+	if self._status ~= EggSlotStatus.Incubating then
+		return
+	end
+
+	local eggData = self._module:getEggData(self._slotIdx)
+
+	if not eggData then
+		return
+	end
+
+	local needSeconds = self._module:readEggIncubateHour(eggData.eggQuality) * 3600
+	local leftTime = eggData.incubateRealEndTime - (ct or C.getCurTime())
+	local seconds = self._module:readEggAdReduceHour(eggData.eggQuality) * 3600
+
+	if leftTime <= seconds and not self._adRefreshed then
+		self._adRefreshed = true
+
+		self:updateUI()
+	end
+
+	self._tmpLeftTime.text = V.formatTimeS2HMS(leftTime)
+	self._pgs.fillAmount = 1 - leftTime / needSeconds
+
+	self:tryUpdateJumpNeedDiamonds()
+end
+
+function M:setBtnClicks(panel)
+	panel:setClick(self._btnEggSlot, function ()
+		if not self._eggQuality then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.RangerEggPanel, self._slotIdx)
+	end)
+	panel:setClick(self._btnStart, function ()
+		local ret, param = self._module:tryStartIncubateBySlot(self._slotIdx)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		end
+	end)
+	panel:setClick(self._btnDelete, function ()
+		local ret, param = self._module:checkCancelIncubate(self._slotIdx)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+
+			return
+		end
+
+		local function dealFunc()
+			local ret, param = self._module:tryCancelIncubate(self._slotIdx)
+
+			if ret == ResultCode.OK then
+				self:updateUIBySlotStatus()
+			else
+				V.showResultCode(ret, param)
+
+				return
+			end
+		end
+
+		local promptKey = "ranger_egg_cancel"
+		local promptSidkey = SID.TIP_RANGER_EGG_CANCEL
+		local promptP1 = string.format("<color=#%s>%s</color>", V.QUALITY_TXT[self._eggQuality], LcLocalization.getTextStr(SID["STR_QUALITY_" .. self._eggQuality]))
+
+		if self._status == EggSlotStatus.Incubating then
+			promptKey = nil
+			promptSidkey = SID.TIP_RANGER_EGG_CANCEL_INCUBATING
+		elseif D.Quality.Purple <= self._eggQuality then
+			promptKey = nil
+		end
+
+		local show = V.tryShowConfirm(promptKey, dealFunc, promptSidkey, promptP1)
+
+		if show then
+			return
+		end
+
+		dealFunc()
+	end)
+	panel:setClick(self._btnClaim, function ()
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		Client.checkNetworkAsync(function ()
+			local ret, paramOrRewards = self._module:tryBirthEgg(self._slotIdx)
+
+			if ret ~= ResultCode.OK then
+				V.showResultCode(ret, paramOrRewards)
+
+				return
+			end
+
+			self:updateUIBySlotStatus()
+
+			local newRangerId = nil
+
+			for i = 1, lc.lenTable(paramOrRewards) do
+				local id = paramOrRewards[i][1]
+
+				if id > 150000 and id < 151000 then
+					newRangerId = id
+
+					break
+				end
+			end
+
+			if newRangerId then
+				UIManager.openPanel(PrefabDefine.RangerUpgradePanel, newRangerId, function ()
+					V.showRewardClaimPanel(paramOrRewards)
+				end, true)
+			else
+				V.showRewardClaimPanel(paramOrRewards)
+			end
+		end)
+	end)
+	panel:setClick(self._btnAd, function ()
+		local canAdReduce = self._module:canAdReduceIncubate(self._slotIdx)
+
+		if not canAdReduce then
+			return
+		end
+
+		local data = self._module:getEggData(self._slotIdx)
+		local adType = D.AdType["Ranger_Reduce_" .. data.eggQuality]
+
+		P._playerAd:tryStartRewardAd(adType, function ()
+			local ret, param = self._module:tryReduceIncubateTimeByAd(self._slotIdx)
+
+			if ret ~= ResultCode.OK then
+				V.showResultCode(ret, param)
+
+				return
+			end
+
+			self:updateUIBySlotStatus(true)
+		end)
+	end)
+	panel:setClick(self._btnDiamondJump, function ()
+		local cost = self._module:getJumpBirthCost(self._slotIdx)
+		local costDiamond = 0
+		local r1 = P._playerAsset:getAssetNum(D.ResType.ranger_egg_speed_up)
+
+		if r1 < cost then
+			costDiamond = cost - r1
+		end
+
+		if not P._playerAsset:isAssetEnough(D.ResType.diamond, costDiamond) then
+			V.showResultCode(D.ResType.diamond, costDiamond)
+
+			return
+		end
+
+		local function dealFunc()
+			local ret, param = self._module:tryJumpIncubateTime(self._slotIdx)
+
+			if ret == ResultCode.OK then
+				self:updateUIBySlotStatus()
+			else
+				V.showResultCode(ret, param)
+			end
+		end
+
+		if costDiamond > 0 then
+			local ret = V.tryShowConfirm("ranger_egg_jump", dealFunc, SID.RANGER_INCUBATE_JUMP, "<sprite name=\"item_small_10002\">" .. costDiamond)
+
+			if ret then
+				return
+			end
+		end
+
+		dealFunc()
+	end)
+end
+
+function M:updateShowEgg(eggType)
+	if eggType == self._currentShowEggType then
+		return
+	end
+
+	if self._currentShowEggType then
+		GameObject.Destroy(self._currentShowEgg)
+	end
+
+	self._currentShowEggType = eggType
+
+	if eggType then
+		self._currentShowEgg = V.createRangerEgg(eggType, self._tfEggParent)
+
+		if V._showEggVfx then
+			self._currentShowEgg.transform:GetChild(0):SetActive(true)
+		end
+	end
+end
+
+function M:tryUpdateJumpNeedDiamonds()
+	if self._status ~= EggSlotStatus.Incubating then
+		return
+	end
+
+	local newCost = self._module:getJumpBirthCost(self._slotIdx)
+	local costType = 1
+	local r1 = P._playerAsset:getAssetNum(D.ResType.ranger_egg_speed_up)
+	local showCost1 = newCost
+	local showCost2 = newCost
+
+	if newCost <= r1 then
+		costType = 1
+		showCost1 = newCost
+		showCost2 = 0
+	elseif r1 >= 0 then
+		costType = 2
+		showCost1 = r1
+		showCost2 = newCost - r1
+	else
+		costType = 3
+		showCost1 = 0
+		showCost2 = newCost
+	end
+
+	if self._showCost1 == showCost1 and self._showCost2 == showCost2 and self._costType == costType then
+		return
+	end
+
+	if newCost <= r1 then
+		self._costType = 1
+		self._showCost1 = newCost
+		self._showCost2 = 0
+		self._tmpCostDiamond.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_10048"), self._showCost1)
+	elseif r1 > 0 then
+		self._costType = 2
+		self._showCost1 = r1
+		self._showCost2 = newCost - r1
+		self._tmpCostDiamond.text = string.format("%s%d+%s%d", D.getTMPSpriteRichText("item_small_10048"), self._showCost1, D.getTMPSpriteRichText("item_small_10002"), self._showCost2)
+	else
+		self._costType = 3
+		self._showCost1 = 0
+		self._showCost2 = newCost
+		self._tmpCostDiamond.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_10002"), self._showCost2)
+	end
+end
+
+return M

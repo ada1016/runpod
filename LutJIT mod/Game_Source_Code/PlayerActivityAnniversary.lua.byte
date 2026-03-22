@@ -1,0 +1,903 @@
+local M = class("PlayerActivityAnniversary", requireLua("PlayerActivityInstanceBase"))
+
+function M:initInstance()
+	self._activityType = D.ActivityType.Anniversary
+	self._persistentUid = D.ActivityPersistUID[self._activityType]
+
+	self:dealInstanceInit()
+	self:dealSubModuleInit()
+end
+
+function M:unlockInstanceData()
+	self:dealInstanceInit()
+end
+
+function M:dealInstanceInit()
+	if not self:isUnlock() then
+		return
+	end
+end
+
+function M:instanceDailyReset()
+	if not self._data then
+		return
+	end
+
+	local isInTimeRange = P._playerActivity:isInTimeRange(self._data.id, C.getCurTime())
+
+	if not isInTimeRange then
+		return
+	end
+
+	if self._moduleTreasureHunting then
+		self._moduleTreasureHunting:dailyReset()
+	end
+
+	if self._moduleLottery then
+		self._moduleLottery:dailyReset()
+	end
+end
+
+function M:haveDot()
+	if not self._data then
+		return false
+	end
+
+	if self:isExpired() then
+		return self:hasSettleRewards()
+	end
+
+	return self:haveTaskDot() or self:haveChargeDot() or self:haveCheckinDot() or self:haveDrawDot() or self:haveInviteDot() or self:haveDigDot()
+end
+
+function M:openCheck()
+	if lc._isCN then
+		return false
+	end
+
+	return not self._data or self._data.expireClaimed
+end
+
+function M:showSystemEntry()
+	return P:getCreateDay() > 7
+end
+
+function M:createCycleData(activityData)
+	return {
+		feedbackRewardClaimed = false,
+		invitePoint = 0,
+		taskRewardClaimIdx = 0,
+		invitePointEventRecordIdx = 0,
+		beInvitePoint = 0,
+		taskMsEventRecordIdx = 0,
+		id = activityData.id,
+		subType = activityData.subType,
+		feedbackCalculateTs = activityData.startTime,
+		shopBuyCount = {},
+		finishedInviteTasks = {}
+	}
+end
+
+function M:dealInstanceOpen(activityData)
+	self:dealSubModuleInit(true)
+
+	local newInstanceData = self:getCurrentData()
+end
+
+function M:dealSubModuleInit(isOpenInit)
+	if not self:isUnlock() then
+		return
+	end
+
+	self._data = self:getCurrentData()
+
+	if not self._data then
+		return
+	end
+
+	self._subType = self._data.subType
+	self._data.feedbackRewardClaimed = self._data.feedbackRewardClaimed or false
+	self._data.taskMsEventRecordIdx = self._data.taskMsEventRecordIdx or 0
+	self._data.taskRewardClaimIdx = self._data.taskRewardClaimIdx or 0
+	self._data.shopBuyCount = self._data.shopBuyCount or {}
+	self._data.beInvitePoint = ConfusedNumber.create(self._data.beInvitePoint or 0, "anniversary_beInvitePoint")
+	self._data.invitePoint = ConfusedNumber.create(self._data.invitePoint or 0, "anniversary_invitePoint")
+	self._data.invitePointEventRecordIdx = self._data.invitePointEventRecordIdx or 0
+	self._data.finishedInviteTasks = self._data.finishedInviteTasks or {}
+	self._moduleCheckin = requireLua("PlayerAnniversaryCheckin").create()
+
+	self._moduleCheckin:init(lc.assignTable(self._data, "checkin"))
+	self._moduleCheckin:initModule(self._data.id)
+
+	self._data.treasureHunting = self._data.treasureHunting or {}
+	self._moduleTreasureHunting = requireLua("PlayerAnniversaryTreasureHunting").create()
+
+	self._moduleTreasureHunting:init(lc.assignTable(self._data, "treasureHunting"))
+
+	self._moduleRecharge = requireLua("PlayerAnniversaryRecharge").create()
+
+	self._moduleRecharge:init(lc.assignTable(self._data, "recharge"))
+
+	self._moduleLottery = requireLua("PlayerAnniversaryLottery").create()
+
+	self._moduleLottery:init(lc.assignTable(self._data, "lottery"))
+
+	if isOpenInit then
+		P._playerTask:clearTaskData(D.TaskClass.Anniversary)
+		P._playerTask:initAnniversaryTask()
+		P._playerAsset:resetAssetNum(D.ResType.treasure_hunting_shovel, 0)
+		P._playerAsset:resetAssetNum(D.ResType.anniversary_exchange_key, 0)
+		P._playerAsset:resetAssetNum(D.ResType.anniversary_lottery_core, 0)
+
+		if not self._moduleRecharge:isExtraDiamondRefreshed() then
+			if P._playerStore:boughtDiamondBefore() then
+				self._moduleRecharge:tryRefreshExtraDiamond(true)
+			else
+				self._moduleRecharge:tryRefreshExtraDiamond()
+			end
+		end
+	elseif not self:isExpired() then
+		P._playerTask:initAnniversaryTask()
+	end
+end
+
+function M:dealInstanceExpire()
+	local newInstanceData = self:getCurrentData()
+
+	self._moduleTreasureHunting:dealInstanceExpire()
+end
+
+function M:trySettle()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._data then
+		return false
+	end
+
+	if not self._data.expired then
+		local isInTimeRange = P._playerActivity:isInTimeRange(self._data.id, C.getCurTime())
+
+		if isInTimeRange then
+			return false
+		else
+			self._data.expired = true
+
+			self:dealInstanceExpire()
+		end
+	end
+
+	if self._data.expireClaimed then
+		return true
+	end
+
+	if self._data.expireSettled then
+		return false
+	end
+
+	self._data.expireSettled = true
+
+	self:cacheAllExpiredRewards()
+
+	if not self._data.expiredRewards then
+		self._data.expireClaimed = true
+	end
+
+	return true
+end
+
+function M:decodeThrowValue(value)
+	return (value - value % 10) / 10, value % 10
+end
+
+function M:encodeThrowValue(value1, value2)
+	return value1 * 10 + value2
+end
+
+function M:haveDigDot()
+	return self:isDigMeetLevel() and self:isDigOpen() and self._moduleTreasureHunting:haveDot()
+end
+
+function M:haveTaskDot()
+	return self:haveUnclaimedTaskRewards() or P._playerTask:haveRewards(D.TaskClass.Anniversary)
+end
+
+function M:haveDrawDot()
+	return self:isLotteryOpen() and self._moduleLottery:haveDot()
+end
+
+function M:haveCheckinDot()
+	return self._moduleCheckin:haveDot()
+end
+
+function M:haveChargeDot()
+	return self._moduleRecharge:haveUnclaimedRewards()
+end
+
+function M:haveInviteDot()
+	return self:haveUnclaimInviteReward() or self:haveBindCodeDot()
+end
+
+function M:getFeedbackDay()
+	local day = P:getCreateDay(self._data.feedbackCalculateTs)
+
+	return day > 0 and day or 0
+end
+
+function M:calculateFeedbackRewards()
+	local totalDay = self:getFeedbackDay()
+	local minDay = self:readFeedbackMinDay()
+	local maxDay = self:readFeedbackMaxDay()
+	local cids, nums = self:readFeedbackRewards()
+	local rewards = D.formatRewards(cids, nums, lc.numberClamp(totalDay, minDay, maxDay))
+
+	return rewards
+end
+
+function M:tryClaimFeedbackRewards()
+	if not self:haveFeedbackRewards() then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isFeedbackRewardClaimed() then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local rewards = self:calculateFeedbackRewards()
+	local resultRewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.anniversary_feedback_rewards)
+	self._data.feedbackRewardClaimed = true
+
+	P:saveGameData()
+	SimpleEvent.emit("anniversary.feedback.claim")
+
+	return ResultCode.OK, resultRewards
+end
+
+function M:isFeedbackRewardClaimed()
+	return self._data.feedbackRewardClaimed
+end
+
+function M:haveFeedbackRewards()
+	local totalDay = self:getFeedbackDay()
+
+	return totalDay > 0
+end
+
+function M:haveUnclaimedFeedbackRewards()
+	if not self:getCurrentData() then
+		return false
+	end
+
+	return not self:isFeedbackRewardClaimed() and self:haveFeedbackRewards()
+end
+
+function M:needPopBindInvite()
+	return not self._data.popBindInviteCode
+end
+
+function M:removePopBindInvite()
+	self._data.popBindInviteCode = true
+end
+
+function M:getInvitePoint()
+	return self._data.invitePoint() or 0
+end
+
+function M:getBeInvitePoint()
+	return self._data.beInvitePoint() or 0
+end
+
+function M:addGMInvitePoint(point)
+	self._data.gmInvitePoint = (self._data.gmInvitePoint or 0) + point
+end
+
+function M:getGMInvitePoint()
+	return self._data.gmInvitePoint or 0
+end
+
+function M:setInvitePoint(point)
+	self._data.invitePoint:reset2Value(point)
+	self:tryRecordInviteDesignEvent()
+end
+
+function M:getInviteCode()
+	return self._data.inviteCode
+end
+
+function M:setInviteCode(code)
+	self._data.inviteCode = code
+
+	P:saveGameData(true)
+end
+
+function M:genRandomInviteCode()
+	local code = "##"
+
+	for i = 1, 8 do
+		local char = string.char(math.random(65, 90))
+		code = code .. char
+	end
+
+	return code
+end
+
+function M:getBeInviteCode()
+	return self._data.beInviteCode
+end
+
+function M:setBeInviteCode(code)
+	self._data.beInviteCode = code
+
+	self._data.invitePoint:reset2Value(self:readBindInviteCodePoint())
+	self._data.beInvitePoint:reset2Value(0)
+
+	if P._playerActivity:isAnniversaryOpening() and P._playerMission:getMissionIdByType(D.MissionType.Common) > 10000 + D._anniversaryNewbieTaskConfig[D.AnniversaryNewbieTaskType.PassMission]._param then
+		P._playerActivityAnniversary:finishNewbieTask(D.AnniversaryNewbieTaskType.PassMission)
+	end
+
+	if P._playerActivity:isAnniversaryOpening() and D._anniversaryNewbieTaskConfig[D.AnniversaryNewbieTaskType.ReachLevel]._param <= P:getLevel() then
+		P._playerActivityAnniversary:finishNewbieTask(D.AnniversaryNewbieTaskType.ReachLevel)
+	end
+
+	P:saveGameData(true)
+end
+
+function M:finishNewbieTask(taskId)
+	if self._data.beInviteCode then
+		if not self._data.finishedInviteTasks then
+			self._data.finishedInviteTasks = {}
+		end
+
+		if not table.contains(self._data.finishedInviteTasks, taskId) then
+			local taskConf = D._anniversaryNewbieTaskConfig[taskId]
+
+			if taskConf then
+				local point = taskConf._point
+				self._data.beInvitePoint = self._data.beInvitePoint + point
+
+				Trace.traceDesign("Annvy_Newbie_Task:%d", taskId)
+			end
+
+			P._playerRanker:uploadActivityRankData(D.RankType.InviteRank, self._data.beInviteCode, self._data.beInvitePoint)
+			table.insert(self._data.finishedInviteTasks, taskId)
+		end
+	end
+end
+
+function M:getNewbieCurClaimedRewardIndex()
+	return self._data.claimedRewardIndex or 0
+end
+
+function M:getAllUnclaimedAllInviteReward()
+	local maxClaimIdx = #D._anniversaryNewbieRewardConfig
+
+	return self:claimInviteReward(maxClaimIdx, true)
+end
+
+function M:claimInviteReward(index, isExpire)
+	if index <= self:getNewbieCurClaimedRewardIndex() then
+		return
+	end
+
+	local rewards = {}
+	local curPoint = self:getInvitePoint()
+	local claimNum = 0
+	local curClaimIdx = self:getNewbieCurClaimedRewardIndex() + 1
+
+	for i = curClaimIdx, index do
+		local conf = D._anniversaryNewbieRewardConfig[i]
+
+		if conf._exp <= curPoint then
+			claimNum = claimNum + 1
+
+			D.foldCidsAndNums2Rewards(rewards, conf._cid, conf._num)
+		else
+			break
+		end
+	end
+
+	if claimNum > 0 and not isExpire then
+		rewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.anniversary_newbie_rewards)
+		self._data.claimedRewardIndex = index
+
+		P:saveGameData(true)
+	end
+
+	return rewards
+end
+
+function M:haveBindCodeDot()
+	return self._beInviteCode == nil and P._playerMission:getMissionId() <= self:readActivityBindLevelLimit() and lc.getIntKeyValue("bind_invite_code_dot", 0) == 0
+end
+
+function M:haveUnclaimInviteReward()
+	local curPoint = self:getInvitePoint()
+	local i = self:getNewbieCurClaimedRewardIndex() + 1
+
+	if D._anniversaryNewbieRewardConfig[i] and D._anniversaryNewbieRewardConfig[i]._exp <= curPoint then
+		return true
+	else
+		return false
+	end
+end
+
+function M:getTaskRewardClaimIdx()
+	return self._data.taskRewardClaimIdx or 0
+end
+
+function M:haveUnclaimedTaskRewards()
+	local curIdx = self:getTaskRewardClaimIdx()
+	local conds = self:readTaskRewardsCond()
+	local len = lc.lenTable(conds)
+
+	if curIdx < len then
+		local cond = conds[curIdx + 1]
+
+		if P._playerAsset:isAssetEnough(D.ResType.anniversary_task_exp, cond) then
+			return true
+		else
+			return false
+		end
+	end
+
+	return false
+end
+
+function M:getAllUnclaimedTaskRewards()
+	return P._playerTask:getAllUnClaimedAnniversaryTaskReward()
+end
+
+function M:getAllUnclaimedTaskReward()
+	local conds = self:readTaskRewardsCond()
+	local len = lc.lenTable(conds)
+	local rewards = {}
+	local cids, nums = self:readTaskRewards()
+	local curIdx = self:getTaskRewardClaimIdx()
+
+	for idx = curIdx + 1, len do
+		if self:checkClaimTaskRewardCond(idx) then
+			local cid = cids[idx]
+			local num = nums[idx]
+
+			D.foldRewards(rewards, {
+				{
+					cid,
+					num
+				}
+			})
+		end
+	end
+
+	return rewards
+end
+
+function M:checkClaimTaskReward(idx)
+	local curIdx = self:getTaskRewardClaimIdx()
+
+	if idx <= curIdx then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local conds = self:readTaskRewardsCond()
+	local len = lc.lenTable(conds)
+
+	if len < idx then
+		return ResultCode.LOCKED
+	end
+
+	local cond = conds[idx]
+
+	if not P._playerAsset:isAssetEnough(D.ResType.anniversary_task_exp, cond) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	return ResultCode.OK
+end
+
+function M:checkClaimTaskRewardCond(idx)
+	local conds = self:readTaskRewardsCond()
+	local cond = conds[idx]
+
+	return P._playerAsset:isAssetEnough(D.ResType.anniversary_task_exp, cond)
+end
+
+function M:tryClaimTaskReward(idx)
+	local curIdx = self:getTaskRewardClaimIdx()
+
+	if idx <= curIdx then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local conds = self:readTaskRewardsCond()
+	local len = lc.lenTable(conds)
+
+	if len < idx then
+		return ResultCode.LOCKED
+	end
+
+	local cond = conds[idx]
+
+	if not P._playerAsset:isAssetEnough(D.ResType.anniversary_task_exp, cond) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local cids, nums = self:readTaskRewards()
+	local rewards = {}
+
+	for i = curIdx + 1, idx do
+		if i > 0 then
+			local cid = cids[i]
+			local num = nums[i]
+
+			D.foldRewards(rewards, {
+				{
+					cid,
+					num
+				}
+			})
+		end
+	end
+
+	local resultRewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.anniversary_task_milestone)
+	self._data.taskRewardClaimIdx = idx
+
+	P:saveGameData(true)
+
+	return ResultCode.OK, resultRewards
+end
+
+function M:hasSettleRewards()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self:getCurrentData().expiredRewards ~= nil
+end
+
+function M:cacheAllExpiredRewards()
+	local rewards1 = self._moduleRecharge:getAllUnClaimedRewards()
+	local curNum = P._playerAsset:getAssetNum(D.ResType.anniversary_charge_score)
+
+	if curNum > 0 then
+		P._playerAsset:decreaseAssetNum(D.ResType.anniversary_charge_score, curNum, D.LogWay.anniversary_expire)
+	end
+
+	local rewards2 = self._moduleCheckin:getAllUnClaimedRewards()
+	local ate_idx = table.findArray(rewards2, function (v)
+		return v[1] == D.ResType.anniversary_star_box
+	end)
+
+	if ate_idx then
+		local convertNum = self:readExpireConvert(D.ResType.anniversary_star_box, rewards2[ate_idx][2])
+
+		table.remove(rewards2, ate_idx)
+		D.foldRewards(rewards2, {
+			{
+				D.ResType.diamond,
+				convertNum
+			}
+		})
+	end
+
+	local rewards3 = self:getAllUnclaimedTaskRewards()
+	local rewards4 = self._moduleTreasureHunting:getAllUnclaimedRewards()
+	local rewards5 = self:getAllUnclaimedAllInviteReward()
+	local ate_idx = table.findArray(rewards3, function (v)
+		return v[1] == D.ResType.anniversary_task_exp
+	end)
+
+	if ate_idx then
+		P._playerAsset:increaseAssetNum(rewards3[ate_idx][1], rewards3[ate_idx][2], D.LogWay.anniversary_expire)
+		table.remove(rewards3, ate_idx)
+	end
+
+	local rewards99 = self:getAllUnclaimedTaskReward()
+	local rewards = {}
+
+	D.foldRewards(rewards, rewards1)
+	D.foldRewards(rewards, rewards2)
+	D.foldRewards(rewards, rewards3)
+	D.foldRewards(rewards, rewards4)
+	D.foldRewards(rewards, rewards5)
+	D.foldRewards(rewards, rewards99)
+
+	local num1 = self:convert2Diamond(rewards, D.ResType.treasure_hunting_shovel)
+	local num2 = self:convert2Diamond(rewards, D.ResType.anniversary_exchange_key)
+	local num3 = self:convert2Diamond(rewards, D.ResType.anniversary_lottery_core)
+	local convertNum = num1 + num2 + num3
+
+	if convertNum > 0 then
+		local idx = table.findArray(rewards, function (v)
+			return v[1] == D.ResType.diamond
+		end)
+
+		if idx then
+			rewards[idx][2] = rewards[idx][2] + num1 + num2 + num3
+		else
+			rewards[#rewards + 1] = {
+				D.ResType.diamond,
+				num1 + num2 + num3
+			}
+		end
+	end
+
+	if #rewards > 0 then
+		self._data.expiredRewards = rewards
+	else
+		return false
+	end
+end
+
+function M:convert2Diamond(rewards, cid)
+	local idx = table.findArray(rewards, function (v)
+		return v[1] == cid
+	end)
+	local canConvertNum = P._playerAsset:getAssetNum(cid)
+
+	P._playerAsset:decreaseAssetNum(cid, canConvertNum, D.LogWay.anniversary_expire)
+
+	if idx then
+		canConvertNum = canConvertNum + rewards[idx][2]
+
+		table.remove(rewards, idx)
+	end
+
+	local convertedNum = 0
+
+	if canConvertNum > 0 then
+		convertedNum = self:readExpireConvert(cid, canConvertNum)
+	end
+
+	return convertedNum
+end
+
+function M:tryClaimSettleRewards()
+	if not self._data.expired then
+		return
+	end
+
+	if not self._data.expireSettled then
+		return
+	end
+
+	if self._data.expireClaimed then
+		return
+	end
+
+	self._data.expireClaimed = true
+	local rewards = P._playerAsset:increaseAssetNumsByList(self._data.expiredRewards, D.LogWay.anniversary_expire)
+	self._tmpSettleRankData = nil
+
+	P:saveGameData(true)
+
+	return rewards
+end
+
+function M:isSettleClaimed()
+	return self._data.expireClaimed
+end
+
+function M:getLeftBuyNum(iapId)
+	local limit = self:getMaxBuyNum(iapId)
+
+	if limit == -1 then
+		return 999
+	end
+
+	return limit - self:getBuyCount(iapId)
+end
+
+function M:getMaxBuyNum(iapId)
+	return P._playerStore:readBuyLimit(iapId)
+end
+
+function M:getBuyCount(iapId)
+	if not self._data.shopBuyCount then
+		self._data.shopBuyCount = {}
+	end
+
+	return self._data.shopBuyCount[iapId] or 0
+end
+
+function M:recordBuyCount(iapId)
+	self._data.shopBuyCount[iapId] = self:getBuyCount(iapId) + 1
+end
+
+function M:isDigMeetLevel()
+	local unlockLevel = self:readDigOpenLevel()
+
+	return unlockLevel <= P:getLevel()
+end
+
+function M:isDigOpen()
+	local startTime = self:readActivityStartTime()
+	local dt = C.getCurTime() - startTime
+	local dayIdx = math.ceil(dt / D.DAY_SECONDS)
+	local openDayIdx = self:readDigOpenDay()
+
+	return openDayIdx < dayIdx, openDayIdx * D.DAY_SECONDS - dt
+end
+
+function M:isLotteryOpen()
+	local startTime = self:readActivityStartTime()
+	local dt = C.getCurTime() - startTime
+	local dayIdx = math.ceil(dt / D.DAY_SECONDS)
+	local openDayIdx = self:readLotteryOpenDay()
+
+	return openDayIdx < dayIdx, openDayIdx * D.DAY_SECONDS - dt
+end
+
+function M:recordDesignEvent(newIdx)
+	self._data.taskMsEventRecordIdx = newIdx
+end
+
+function M:getRecordedDesignEventIdx()
+	return self._data.taskMsEventRecordIdx
+end
+
+function M:tryRecordDesignEvent()
+	local idx = self:getRecordedDesignEventIdx()
+	local conds = self:readTaskRewardsCond()
+	local len = lc.lenTable(conds)
+
+	for i = idx + 1, len do
+		if self:checkClaimTaskRewardCond(i) then
+			self:recordDesignEvent(i)
+			Trace.traceDesign("Annvy_Task_Rewards:%d", i)
+		else
+			break
+		end
+	end
+end
+
+function M:recordInviteDesignEvent(newIdx)
+	self._data.invitePointEventRecordIdx = newIdx
+end
+
+function M:getRecordedInviteDesignEventIdx()
+	return self._data.invitePointEventRecordIdx
+end
+
+function M:tryRecordInviteDesignEvent()
+	local idx = self:getRecordedInviteDesignEventIdx()
+	local curPoint = self:getInvitePoint()
+	local designIdx = idx + 1
+	local maxIdx = #D._anniversaryNewbieRewardConfig
+
+	for i = designIdx, maxIdx do
+		local conf = D._anniversaryNewbieRewardConfig[i]
+
+		if conf._exp <= curPoint then
+			self._data.invitePointEventRecordIdx = i
+
+			Trace.traceDesign("Annvy_Newbie_Milestone:%d", i)
+		else
+			break
+		end
+	end
+end
+
+function M:readPreviewDay()
+	return D._activityAnniversaryConfig[1]._previewDay
+end
+
+function M:readCfg(subType)
+	return D._activityAnniversaryConfig[subType or 1]
+end
+
+function M:readNameSid(subType)
+	return D._activityAnniversaryConfig[subType]._nameSid
+end
+
+function M:readFeedbackRewards()
+	local cfg = self:readCfg()
+
+	return cfg._feedbackRewardCids, cfg._feedbackRewardNums
+end
+
+function M:readDigOpenDay()
+	local cfg = self:readCfg()
+
+	return cfg._digOpen
+end
+
+function M:readDigOpenLevel()
+	return self:readCfg()._digOpenLevel
+end
+
+function M:readLotteryOpenDay()
+	local cfg = self:readCfg()
+
+	return cfg._lotteryOpen
+end
+
+function M:readFeedbackMinDay()
+	local cfg = self:readCfg()
+
+	return cfg._minFeedbackDay
+end
+
+function M:readFeedbackMaxDay()
+	local cfg = self:readCfg()
+
+	return cfg._maxFeedbackDay
+end
+
+function M:readBindInviteCodePoint()
+	local cfg = self:readCfg()
+
+	return cfg._bindPoint
+end
+
+function M:readExpireConvert(cid, num)
+	local cfgs = self:readCfg()._expireConvert
+
+	if cid == D.ResType.treasure_hunting_shovel then
+		return cfgs[1] * num
+	elseif cid == D.ResType.anniversary_exchange_key then
+		return cfgs[2] * num
+	elseif cid == D.ResType.anniversary_lottery_core then
+		return cfgs[3] * num
+	elseif cid == D.ResType.anniversary_star_box then
+		return cfgs[4] * num
+	end
+
+	return 0
+end
+
+function M:readActivityBindLevelLimit()
+	return self:readCfg()._bindLevelLimit
+end
+
+function M:readInviteMissionLimit()
+	return self:readCfg()._inviteMission
+end
+
+function M:readInviteBindMission()
+	return self:readCfg()._bindMission
+end
+
+function M:readBeInviteMissionLimit()
+	return self:readCfg()._beInviteMission
+end
+
+function M:readTaskRewards()
+	return self:readCfg()._taskRewardCids, self:readCfg()._taskRewardNums
+end
+
+function M:readTaskRewardsCond()
+	return self:readCfg()._taskRewardRequirePoints
+end
+
+function M:readActivityStartTime()
+	local activityTimeData = P._playerActivity:getAnniversaryData()
+
+	if not activityTimeData then
+		return 0
+	end
+
+	return activityTimeData.startTime
+end
+
+function M:readActivityEndTime()
+	local activityTimeData = P._playerActivity:getAnniversaryData()
+
+	if not activityTimeData then
+		return 0
+	end
+
+	return activityTimeData.endTime
+end
+
+return M

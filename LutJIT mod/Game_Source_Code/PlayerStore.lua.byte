@@ -1,0 +1,511 @@
+local M = class("PlayerStore")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._records = lc.assignTable(meta, "records")
+	self._buyCountRecordsAutoReset = lc.assignTable(meta, "recordsAutoReset")
+	self._meta.payMoney = self._meta.payMoney or 0
+	self._meta.payCount = self._meta.payCount or 0
+	self._meta.firstExtraTriggerIap = self._meta.firstExtraTriggerIap or {}
+	self._meta.diamondRefreshCanPop = self._meta.diamondRefreshCanPop or nil
+	self._meta.payMoneyByShop = self._meta.payMoneyByShop or {}
+	self._meta.payMoneyByShop[1] = self._meta.payMoneyByShop[1] or self._meta.payMoney
+	self._meta.payCountByShop = self._meta.payCountByShop or {}
+	self._meta.payCountByShop[1] = self._meta.payCountByShop[1] or self._meta.payCount
+end
+
+function M:start()
+end
+
+function M:popStashedPurchase()
+	local stashedPurchase = C._remoteFixOnce and C._remoteFixOnce.stashedPurchase
+
+	if stashedPurchase == nil then
+		return
+	end
+
+	for i, iapId in pairs(stashedPurchase) do
+		if lc._isCN then
+			iapId = self:findIapIdByProductName(iapId)
+		end
+
+		local iapCfg = D._iapConfig[iapId]
+
+		if iapCfg then
+			if lc._isCN then
+				C.addConsumeTxn(i, iapCfg._productName)
+			end
+
+			local payMoney = iapCfg._USD
+			local isFirst = self:recordPurchase(iapId, payMoney)
+
+			self:obtainAssets(iapCfg, isFirst)
+			Trace.AF_traceEvent("e_stashed_purchase", {
+				{
+					_key = "iapId",
+					_value = iapId
+				}
+			})
+		end
+	end
+end
+
+function M:getPayMoney()
+	return self._meta.payMoney
+end
+
+function M:getPayCount()
+	return self._meta.payCount
+end
+
+function M:getPayMoneyByShop(shopType)
+	return self._meta.payMoneyByShop[shopType] or 0
+end
+
+function M:getPayCountByShop(shopType)
+	return self._meta.payCountByShop[shopType] or 0
+end
+
+function M:tryPurchase(iapId, iapCallback, purchaseChannel)
+	self._purchaseChannel = purchaseChannel
+	self._iapCallback = iapCallback
+	local config = D._iapConfig[iapId]
+	local productName = config._productName
+
+	if Client._config.jumpIap then
+		self:onPurchaseSucceed(productName, {})
+
+		return
+	end
+
+	Trace.AF_traceIAP(productName, "start")
+
+	if lc._isWebGL then
+		if C.isInReview() then
+			V.showToast(SID.PURCHASE_NOT_AVAILABLE)
+
+			return
+		end
+
+		local payData = {
+			zoneId = "1",
+			productName = productName,
+			productDesc = LcLocalization.getTextStr(config._nameSid),
+			aid = C._firebaseId,
+			uid = C._userId,
+			notifyUrl = C._notifyPayUrl,
+			buyQuantity = (C.isReleasePreview() or C.isDev()) and 1 or config._USD
+		}
+
+		if lc._isWebGLAndroid or lc._isWebGLPC then
+			payData.payType = 1
+			payData.initUrl = AppConst.iapUrl .. "/common/init"
+			payData.currencyType = "CNY"
+			payData.mode = "game"
+			payData.offerId = "1450440974"
+			payData.env = (C.isReleasePreview() or C.isDev()) and 1 or 0
+			payData.platform = "android"
+		else
+			payData.payType = 2
+			payData.initUrl = AppConst.iapUrl .. "/weixin/init"
+			payData.platform = "ios"
+			payData.sendMessageImg = "http://d.zs-e.com/pub/dianjichongzhi.jpg"
+			payData.sendMessagePath = ""
+			payData.sendMessageTitle = LcLocalization.getTextStr(SID.TITLE_CONTACT_US)
+		end
+
+		ChannelManager:Pay(json.encode(payData))
+	else
+		IAP:InitiatePurchase(productName)
+	end
+end
+
+function M:findIapIdByProductName(productName)
+	for k, config in pairs(D._iapConfig) do
+		if config._productName == productName then
+			return k
+		end
+	end
+end
+
+function M:onPurchaseFailed(productName, error)
+	SimpleEvent.emit("iap.purchase.fail", error)
+	SimpleEvent.emit("iap.waiting")
+end
+
+function M:onPurchaseSucceed(productName, customMsg)
+	local iapId = self:findIapIdByProductName(productName)
+	local iapCfg = D._iapConfig[iapId]
+	local payMoney = iapCfg._USD
+	customMsg = customMsg or {}
+	local discountPrice = customMsg[2] or 0
+	local orderId = customMsg[3] or "---"
+	local isFirst = self:recordPurchase(iapId, payMoney)
+
+	if not Client._config.jumpIap then
+		Trace.traceIapPurchased(iapId, payMoney)
+		Trace.AF_tracePurchase(payMoney, productName, orderId)
+		Trace.AF_traceIAP(productName, "success")
+	end
+
+	local rewards = self:obtainAssets(iapCfg, isFirst)
+
+	if self._iapCallback then
+		self._iapCallback(iapId, rewards)
+
+		self._iapCallback = nil
+	end
+
+	self:doAfterPurchaseSucceed(iapId)
+	SimpleEvent.emit("iap.waiting")
+	SimpleEvent.emit("iap.purchase.success", iapId)
+end
+
+function M:doAfterPurchaseSucceed(iapId)
+	P:tryUnlockSystem()
+	P._playerGift:triggerGiftsByPurchase()
+	P:saveGameData(true)
+end
+
+function M:recordPurchase(iapId, payMoney)
+	local shopType = D._iapConfig[iapId]._shop or 1
+	self._meta.payMoney = (self._meta.payMoney or 0) + payMoney
+	self._meta.payCount = (self._meta.payCount or 0) + 1
+	self._meta.payMoneyByShop[shopType] = (self._meta.payMoneyByShop[shopType] or 0) + payMoney
+	self._meta.payCountByShop[shopType] = (self._meta.payCountByShop[shopType] or 0) + 1
+
+	if shopType == 2 then
+		local data = P._playerActivity:getArkRebuildData()
+
+		if data and data.id then
+			P._playerRecord:recordActivityPurchase(data.id, payMoney)
+		end
+	end
+
+	local isFirst = false
+
+	if self._records[iapId] == nil or self._records[iapId] == 0 then
+		isFirst = true
+		self._records[iapId] = 1
+	else
+		self._records[iapId] = self._records[iapId] + 1
+	end
+
+	if self:canTriggerFirstExtra(iapId) then
+		isFirst = true
+		self._meta.firstExtraTriggerIap[iapId] = self._meta.firstExtraTriggerIap[iapId] - 1
+
+		if not self:canTriggerFirstExtra(iapId) then
+			self._meta.firstExtraTriggerIap[iapId] = nil
+		end
+	end
+
+	self._buyCountRecordsAutoReset[iapId] = (self._buyCountRecordsAutoReset[iapId] or 0) + 1
+
+	TaskHelper:updateTaskValue(D.TaskType.PAY_COUNT, self._meta.payCount)
+
+	if P._playerActivity:isAnniversaryOpening() then
+		P._playerActivityAnniversary:finishNewbieTask(D.AnniversaryNewbieTaskType.Charge)
+	end
+
+	if self._meta.payMoney >= 10000 then
+		local mail = {
+			mailCode = "SUPER_CHARGE",
+			sendTime = C.getCurTime(),
+			template = D.MailId.SuperCharge
+		}
+
+		P._playerMail:receiveMail(mail)
+	end
+
+	return isFirst
+end
+
+function M:getLeftBuyCount(iapId)
+	local buyCount = self._buyCountRecordsAutoReset[iapId] or 0
+	local buyLimit = self:readBuyLimit(iapId)
+
+	if buyLimit == -1 then
+		return 999
+	end
+
+	return math.max(buyLimit - buyCount, 0)
+end
+
+function M:resetBuyCount(iapId)
+	self._buyCountRecordsAutoReset[iapId] = nil
+end
+
+function M:readObtainAssets(iapId)
+	return D._iapConfig[iapId]._cids, D._iapConfig[iapId]._nums
+end
+
+function M:readFirstObtainAssets(iapId)
+	return D._iapConfig[iapId]._firstCids, D._iapConfig[iapId]._firstNums
+end
+
+function M:readAfterObtainAssets(iapId)
+	return D._iapConfig[iapId]._afterCids, D._iapConfig[iapId]._afterNums
+end
+
+function M:getPurchaseCount(iapId)
+	return self._records[iapId] or 0
+end
+
+function M:getFirstPurchaseExtra(iapId)
+	if self:getPurchaseCount(iapId) == 0 or self:canTriggerFirstExtra(iapId) then
+		return true
+	end
+
+	return false
+end
+
+function M:canTriggerFirstExtra(iapId)
+	return self._meta.firstExtraTriggerIap[iapId] and self._meta.firstExtraTriggerIap[iapId] > 0
+end
+
+function M:canTriggerDiamondRefreshPop()
+	return self._meta.diamondRefreshCanPop and self._meta.diamondRefreshCanPop == true
+end
+
+function M:setDiamondRefreshPop()
+	self._meta.diamondRefreshCanPop = true
+end
+
+function M:clearDiamondRefreshPop()
+	self._meta.diamondRefreshCanPop = nil
+end
+
+function M:addFirstExtra(iapId)
+	self._meta.firstExtraTriggerIap[iapId] = (self._meta.firstExtraTriggerIap[iapId] or 0) + 1
+end
+
+function M:obtainAssets(iapCfg, isFirst)
+	local cids = iapCfg._cids
+	local nums = iapCfg._nums
+	local iapId = iapCfg._id
+	local rewards = nil
+
+	if iapCfg._buyGet == 1 then
+		if cids ~= nil then
+			rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.iap)
+		end
+
+		if isFirst then
+			local cids1, nums1 = self:readFirstObtainAssets(iapId)
+
+			if cids1 ~= nil then
+				local extraRewards = P._playerAsset:increaseAssetNums(cids1, nums1, D.LogWay.iap_first)
+
+				D.foldRewards(rewards, extraRewards)
+			end
+		else
+			local cids1, nums1 = self:readAfterObtainAssets(iapId)
+
+			if cids1 ~= nil then
+				local extraRewards = P._playerAsset:increaseAssetNums(cids1, nums1, D.LogWay.iap_after)
+
+				D.foldRewards(rewards, extraRewards)
+			end
+		end
+	end
+
+	rewards = rewards or {}
+	local logEvent = D._iapConfig[iapId]._event
+	local shopType = iapCfg._shop
+
+	if shopType == D.ShopType.Anniversary then
+		if P._playerActivityAnniversary:getCurrentData() then
+			if iapId == D.IapType.TreasureHunting_BP and P._playerActivityAnniversary._moduleTreasureHunting then
+				P._playerActivityAnniversary._moduleTreasureHunting._bpModule:unlockStep(2, logEvent)
+			end
+
+			P._playerActivityAnniversary:recordBuyCount(iapId)
+		end
+	elseif shopType == D.ShopType.SparkScout then
+		if iapId == D.IapType.SparkScout_BP then
+			P._playerBPSparkScout:unlockStep(3, logEvent)
+		elseif D.isSparkScoutGiftIap(iapId) and P._playerActivitySparkScout:getCurrentData() then
+			P._playerActivitySparkScout:recordBuyCount(iapId)
+		end
+	elseif shopType == D.ShopType.ArkRebuild then
+		if iapId == D.IapType.ArkRebuild_BP then
+			P._playerBPArkRebuild:unlockStep(3, logEvent)
+		elseif D.isArkRebuildGiftIap(iapId) and P._playerActivityArkRebuild:getCurrentData() then
+			P._playerActivityArkRebuild:recordBuyCount(iapId)
+
+			if iapId == D.IapType.ArkRebuild_Skip_Mission then
+				rewards = P._playerActivityArkRebuild:skipMission()
+			end
+		end
+	elseif shopType == D.ShopType.Monopoly then
+		if not P._playerActivityMonopoly:getCurrentData() then
+			return
+		end
+
+		if not P._playerActivity:isMonopolyOpening() then
+			return
+		end
+
+		if iapId == D.IapType.Monopoly_BP then
+			P._playerBPMonopoly:unlockStep(2, logEvent)
+		elseif D.isMonopolyGiftIap(iapId) then
+			P._playerActivityMonopoly:recordBuyCount(iapId)
+		end
+	elseif D.isRightCardIap(iapId) then
+		local isForever = false
+		local rightCardType = D.RightCardType.VIP
+
+		if D.isSVIPIap(iapId) then
+			rightCardType = D.RightCardType.SVIP
+			isForever = iapId ~= D.IapType.SVIP11
+
+			if isForever then
+				P._playerRecord:recordBattleSpeedUp(true)
+			end
+		elseif D.isVIPIap(iapId) then
+			rightCardType = D.RightCardType.VIP
+			isForever = iapId ~= D.IapType.VIP11
+		end
+
+		P._playerRight:dealBuyRightCard(rightCardType, iapId, isForever)
+	elseif D.isSVIPNOADIap(iapId) then
+		local isForever = iapId ~= D.IapType.SVIP_NOAD11
+		local rightCardType = D.RightCardType.SVIP
+
+		P._playerRight:dealBuyRightCard(rightCardType, iapId, isForever)
+	elseif iapId == D.IapType.NOAD then
+		-- Nothing
+	elseif D.isGiftIap(iapId) then
+		local giftId = P._playerGift:getGiftIdByIapId(iapId)
+
+		if giftId and not P._playerGift:isBought(giftId) then
+			P._playerGift:recordBuy(giftId)
+
+			if D._giftConfig[giftId]._buyGet == 1 then
+				local claimed, claimRewards = P._playerGift:tryClaimRewards(giftId)
+
+				if claimed then
+					D.foldRewards(rewards, claimRewards)
+				end
+			end
+		end
+	elseif iapId == D.IapType.BP_Step2 then
+		-- Nothing
+	elseif iapId == D.IapType.BP_Step3 then
+		-- Nothing
+	elseif iapId == D.IapType.Dome_BP_Step3 then
+		P._playerDomeBP:unlockStep(3, logEvent)
+	elseif iapId == D.IapType.BPNew_Step2 then
+		P._playerBPNew:unlockStep(2, logEvent)
+	elseif iapId == D.IapType.BPNew_Step3 then
+		P._playerBPNew:unlockStep(3, logEvent)
+	elseif iapId == D.IapType.BPSkin_Step2 then
+		P._playerBPSkin:unlockStep(2, logEvent)
+	elseif iapId == D.IapType.BPSkin_Step3 then
+		P._playerBPSkin:unlockStep(3, logEvent)
+	elseif iapId == D.IapType.BPRanger_Step2 then
+		P._playerBPRanger:unlockStep(2, logEvent)
+	elseif iapId == D.IapType.BPRanger_Step3 then
+		P._playerBPRanger:unlockStep(3, logEvent)
+	elseif iapId == D.IapType.LevelFund then
+		P._playerLevelFund:unlockStep(2, logEvent)
+	end
+
+	if P._playerActivity:isAnniversaryOpening() then
+		local score = self:readRechargePoint(iapId)
+
+		if score > 0 then
+			local addScore = P._playerAsset:increaseAssetNum(D.ResType.anniversary_charge_score, score, D.LogWay.iap_anniversary)
+
+			if P:getCreateDay() > 7 then
+				D.foldRewards(rewards, addScore)
+			end
+		end
+	end
+
+	return rewards
+end
+
+function M:isPurchased(iapId)
+	return self._records[iapId] ~= nil
+end
+
+function M:getPurchasedCount(iapId)
+	return self._records[iapId]
+end
+
+function M:boughtDiamondBefore()
+	for i = D.IapType.Diamond1, D.IapType.Diamond7 do
+		if self:getPurchaseCount(i) > 0 then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:getSumPriceByList(iapList)
+	local sum = 0
+
+	for i = 1, #iapList do
+		local iapId = iapList[i]
+		sum = sum + self:getIapPrice(iapId) * self:getPurchaseCount(iapId)
+	end
+
+	return sum
+end
+
+function M:getIapPrice(iapId)
+	return D._iapConfig[iapId]._USD
+end
+
+function M:getDisplayPrice(iapId)
+	local config = D._iapConfig[iapId]
+
+	if lc._isCN then
+		return "￥" .. config._USD
+	end
+
+	local productName = config._productName
+	local metaData = IAP and IAP:GetProductMetaData(productName) or nil
+
+	if metaData then
+		if lc._isMobile then
+			return metaData.localizedPriceString
+		else
+			return "$" .. config._USD - 0.01
+		end
+	else
+		if Client._config.jumpIap then
+			return "$" .. config._USD - 0.01
+		end
+
+		return "--"
+	end
+end
+
+function M:getAssetCount(iapId)
+	return D._iapConfig[iapId]._count[1]
+end
+
+function M:readBuyLimit(iapId)
+	return D._iapConfig[iapId]._buyLimit
+end
+
+function M:readDiscount(iapId)
+	return D._iapConfig[iapId]._discount
+end
+
+function M:readRechargePoint(iapId)
+	return D._iapConfig[iapId]._rechargeScore or 0
+end
+
+function M:getPurchaseChannel()
+	return self._purchaseChannel or D.PurchaseChannel.Shop
+end
+
+return M

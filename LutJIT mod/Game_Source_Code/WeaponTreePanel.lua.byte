@@ -1,0 +1,206 @@
+local M = class("WeaponTreePanel", requireLua("BasePanel"))
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+M.args = {
+	btnMask = Types.Button,
+	txtName = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	goContent3 = Types.GameObject,
+	goCard = Types.GameObject,
+	goPreCard1 = Types.GameObject,
+	goPreCard2 = Types.GameObject,
+	goPreCardContent2 = Types.GameObject,
+	tfLevel1 = Types.Transform,
+	tfLevel2 = Types.Transform,
+	tfLevel3 = Types.Transform,
+	tfS12 = Types.Transform,
+	tfImgS12 = Types.Transform,
+	goCardContent21 = Types.GameObject,
+	tfContent2Bg = Types.Transform,
+	goCard3 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tfLevels = {
+		self._tfLevel1,
+		self._tfLevel2,
+		self._tfLevel3
+	}
+end
+
+function M:addClicks()
+end
+
+function M:init(id, ignoreUnlock, showChainOwn)
+	self._id = id
+	self._ignoreUnlock = ignoreUnlock
+
+	if not ignoreUnlock and BattleManager and BattleManager:getSession()._msType == D.MissionType.ArkRebuild then
+		self._ignoreUnlock = true
+	end
+
+	self._showChainOwn = showChainOwn
+
+	self:updateUI(self._id)
+end
+
+function M:updateUI(id)
+	local conf = D._battleRougeCardConfig[id]
+	local sid = SID.CARD_TYPE_TITLE_1
+
+	if conf._weaponTreeType ~= nil then
+		sid = SID.CARD_TYPE_TITLE_2
+	elseif conf._type == 1 then
+		sid = SID.CARD_TYPE_TITLE_1
+	elseif conf._type == 2 then
+		sid = SID.CARD_TYPE_TITLE_4
+	elseif conf._type == 3 then
+		sid = SID.CARD_TYPE_TITLE_3
+	end
+
+	self._txtName:SetLocalize(sid)
+
+	if conf._unlockWeaponCards then
+		self._goCard = RogueCardInfoWidget.noCreate(self._goCard)
+		self._goPreCard1 = WeaponCardWidget.noCreate(self._goPreCard1)
+		self._goPreCard2 = WeaponCardWidget.noCreate(self._goPreCard2)
+
+		self._goContent1:SetActive(true)
+		self._goContent2:SetActive(false)
+		self._goContent3:SetActive(false)
+		self._goCard:updateUI(self._id)
+
+		local level = P._playerArmory:getWeaponLevel(D._battleRougeCardConfig[self._id]._belongWeapon)
+		local unlockLv = D._rougeUnlock[self._id] or 0
+
+		if not self._ignoreUnlock and level < unlockLv then
+			self._goCard:showLock(unlockLv)
+		end
+
+		if conf._type ~= 2 then
+			self._goCard:showStage(conf._stage)
+		end
+
+		local weaponCards = conf._unlockWeaponCards
+
+		self._goPreCard1:updateUI(weaponCards[1], (weaponCards[2] - 1) * D._globalConfig._rogue_upgrade_star_num + weaponCards[3])
+		self._goPreCard2:updateUI(weaponCards[4], (weaponCards[5] - 1) * D._globalConfig._rogue_upgrade_star_num + weaponCards[6])
+		self._goPreCard1:hideStarArea()
+		self._goPreCard2:hideStarArea()
+	else
+		self._goContent1:SetActive(false)
+
+		local root = id
+		local conf = D._battleRougeCardConfig[root]
+
+		while conf._prevRougeCards do
+			root = conf._prevRougeCards[1]
+			conf = D._battleRougeCardConfig[root]
+		end
+
+		local treeDatas = {
+			{
+				root
+			},
+			D._rougePrevUnlockCards[root]
+		}
+
+		if treeDatas[2] and #treeDatas[2] > 0 then
+			treeDatas[3] = {}
+
+			for i = 1, #treeDatas do
+				local next = D._rougePrevUnlockCards[treeDatas[2][i]]
+
+				if next then
+					if treeDatas[3][i - 1] ~= next[1] then
+						treeDatas[3][i] = next[1]
+					end
+				elseif treeDatas[2][i] then
+					treeDatas[3][i] = 0
+				end
+			end
+		end
+
+		for i = 1, #treeDatas do
+			local hasValue = false
+
+			for j = 1, #treeDatas[i] do
+				if treeDatas[i][j] > 0 then
+					hasValue = true
+				end
+			end
+
+			if not hasValue then
+				treeDatas[i] = nil
+
+				break
+			end
+		end
+
+		if treeDatas[2] then
+			self._goContent2:SetActive(true)
+			self._goContent3:SetActive(false)
+
+			for i = 1, 3 do
+				if treeDatas[i] and #treeDatas[i] > 0 then
+					local maxChildCount = self._tfLevels[i].childCount
+
+					for j = 1, maxChildCount do
+						local goCard = self._tfLevels[i]:GetChild(j - 1).gameObject
+
+						if treeDatas[i][j] then
+							local cardId = treeDatas[i][j]
+
+							goCard:SetActive(true)
+
+							if cardId == 0 then
+								goCard:SetVisible(false)
+							else
+								RogueCardInfoWidget.noCreate(goCard)
+								goCard:updateUI(cardId)
+								goCard:showFocus(cardId == id)
+
+								local level = P._playerArmory:getWeaponLevel(D._battleRougeCardConfig[cardId]._belongWeapon)
+								local unlockLv = D._rougeUnlock[cardId] or 0
+
+								if not self._ignoreUnlock and level < unlockLv then
+									goCard:showLock(unlockLv)
+								end
+
+								if self._showChainOwn and P._playerActivityArkRebuild:getCardNum(cardId) == 0 then
+									goCard:showNotOwn()
+								end
+
+								if i == 2 and #treeDatas[2] == 1 or i == 3 and #treeDatas[2] == #treeDatas[3] then
+									goCard:Find("TriAngle"):SetActive(true)
+								elseif i == 3 and #treeDatas[2] > #treeDatas[3] then
+									goCard:Find("LeftLine"):SetActive(true)
+									goCard:Find("RightLine"):SetActive(true)
+								end
+							end
+						else
+							goCard:SetActive(false)
+						end
+					end
+				else
+					self._tfLevels[i]:SetActive(false)
+				end
+			end
+		else
+			self._goContent2:SetActive(false)
+			self._goContent3:SetActive(true)
+			RogueCardInfoWidget.noCreate(self._goCard3)
+			self._goCard3:updateUI(self._id)
+		end
+
+		self._tfS12:SetActive(treeDatas[2] and #treeDatas[2] > 1)
+		self._tfImgS12:SetActive(treeDatas[2] and #treeDatas[2] > 1)
+	end
+end
+
+return M

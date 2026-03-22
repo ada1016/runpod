@@ -1,0 +1,157 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		9150 - lc._encryptOffset,
+		50009050 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		2,
+		9250 - lc._encryptOffset,
+		100009050 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		3,
+		9450 - lc._encryptOffset,
+		300009050 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		4,
+		9650 - lc._encryptOffset,
+		800009050 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		5,
+		9950 - lc._encryptOffset,
+		1600009050 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		6,
+		10250 - lc._encryptOffset,
+		2500009050.0 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		7,
+		10450 - lc._encryptOffset,
+		3000009050.0 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		8,
+		10750 - lc._encryptOffset,
+		3400009050.0 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		9,
+		11050 - lc._encryptOffset,
+		3800009050.0 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	},
+	{
+		10,
+		11550 - lc._encryptOffset,
+		4000009050.0 - lc._encryptOffset,
+		dup._456,
+		dup._457
+	}
+}
+local mapKeyIndex = {
+	k8867284 = 3,
+	k1823915 = 4,
+	k13675265 = 5,
+	k8867283 = 2,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k1823915 = 1,
+	k8867284 = 0,
+	k13675265 = 1,
+	k8867283 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -9050
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -9050
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

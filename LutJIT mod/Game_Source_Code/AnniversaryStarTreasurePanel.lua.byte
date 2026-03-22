@@ -1,0 +1,87 @@
+local M = class("AnniversaryStarTreasurePanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	tmpTotalStar = Types.TMP_Text,
+	tmpSelfStar = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContent = Types.Transform
+}
+local RewardWidget = requireLua("AnniversaryStarTreasureWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		direction = 1,
+		bottomPadding = 0,
+		cellMargin = 20,
+		cellHeight = 140,
+		cellInitCount = 6
+	})
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:closePanel(enterBattle)
+	if self._closeCallback then
+		self._closeCallback()
+
+		self._closeCallback = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:init(closeCallback)
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_CHECKIN_TREASURE)
+
+	self._module = P._playerActivityAnniversary._moduleCheckin
+
+	self._tmpTotalStar:FormatComma(self._module:getTotalGlobalStars())
+	self._tmpSelfStar:FormatComma(self._module:getTotalCostStars())
+
+	self._closeCallback = closeCallback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData()
+	self._scrollViewEx:moveToItemByIndex(self._module:getFirstTreasureIdx())
+end
+
+function M:onCellNum()
+	return self._module:readMaxStarReward()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RewardWidget.create(self._tfContent)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self, function ()
+			self._scrollViewEx:reloadData()
+		end)
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+return M

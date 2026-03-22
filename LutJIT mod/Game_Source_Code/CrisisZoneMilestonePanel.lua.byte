@@ -1,0 +1,221 @@
+local M = class("CrisisZoneMilestonePanel", requireLua("BasePanel"))
+local Types = Types
+local TaskWidget = requireLua("TaskWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	txtSubTitle = Types.TMP_Text,
+	btnTabMilestone = Types.Button,
+	btnTabDropRate = Types.Button,
+	txtTabMilestone = Types.TMP_Text,
+	txtTabDropRate = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	tfScrollContainer2 = Types.Transform,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	goPrevDot = Types.GameObject,
+	goNextDot = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTabMilestone,
+		self._btnTabDropRate
+	}
+	self._imgTabs = {
+		self._btnTabMilestone:GetComponent("Image"),
+		self._btnTabDropRate:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTabMilestone,
+		self._txtTabDropRate
+	}
+	self._goTabContents = {
+		self._goContent1,
+		self._goContent2
+	}
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		topPadding = 10,
+		bottomPadding = 20,
+		cellMargin = 0,
+		cellHeight = 235,
+		cellInitCount = 8
+	})
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+
+	self:setClick(self._btnLeft, function ()
+		self:changeDifficulty(self._difficulty - 1)
+	end)
+	self:setClick(self._btnRight, function ()
+		self:changeDifficulty(self._difficulty + 1)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(difficulty)
+	self._difficulty = difficulty
+
+	self._txtSubTitle:SetLocalize(SID.STR_DIFFICULTY_X, difficulty)
+
+	self._displayTaskIds = {}
+
+	self:reloadData()
+
+	local drop = D._missionCrisisConfig[P._playerCrisisZone:getMissionIdByDifficulty(difficulty)]._randomRewardDrops[1]
+
+	V.loadDropInfo(self, self._tfScrollContainer2, drop)
+	self._btnLeft.gameObject:SetActive(difficulty > 1)
+
+	self._maxDiff = math.min(P._playerCrisisZone:getMaxDifficulty(), P._playerCrisisZone:getCurDifficulty() + 1)
+
+	self._btnRight.gameObject:SetActive(difficulty < self._maxDiff)
+	self:updateDot()
+end
+
+function M:updateUI()
+	if self._tab == 1 then
+		self:reloadData()
+	end
+end
+
+function M:reloadData(resetZero)
+	table.clear(self._displayTaskIds)
+
+	for i = 1, self:onCellNum() do
+		local taskId = 120000 + self._difficulty * 100 + i
+
+		if not TaskHelper:isClaimed(taskId) then
+			self._displayTaskIds[#self._displayTaskIds + 1] = taskId
+		end
+	end
+
+	for i = 1, self:onCellNum() do
+		local taskId = 120000 + self._difficulty * 100 + i
+
+		if TaskHelper:isClaimed(taskId) then
+			self._displayTaskIds[#self._displayTaskIds + 1] = taskId
+		end
+	end
+
+	self._scrollViewEx1:reloadData(resetZero)
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		LuaUnity.setTPSprite(self._imgTabs[1], tab == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		LuaUnity.setTPSprite(self._imgTabs[2], tab == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+		self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+		self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+		self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+
+		self._goTabContents[self._tab]:SetActive(false)
+		self._goTabContents[tab]:SetActive(true)
+
+		self._tab = tab
+
+		self:updateUI()
+	end
+end
+
+function M:changeDifficulty(difficulty)
+	if self._difficulty ~= difficulty then
+		self._difficulty = difficulty
+
+		self._txtSubTitle:SetLocalize(SID.STR_DIFFICULTY_X, difficulty)
+
+		local drop = D._missionCrisisConfig[P._playerCrisisZone:getMissionIdByDifficulty(difficulty)]._randomRewardDrops[1]
+
+		V.loadDropInfo(self, self._tfScrollContainer2, drop)
+		self:reloadData(true)
+		self._btnLeft.gameObject:SetActive(difficulty > 1)
+		self._btnRight.gameObject:SetActive(difficulty < self._maxDiff)
+		self:updateDot()
+	end
+end
+
+function M:onCellNum()
+	return 10
+end
+
+function M:onRecycleCell(goCell, index)
+	goCell:initAnimStatus()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = TaskWidget.create(self._tfScrollContainer1)
+
+		self:setClick(goCell._btnClaim, function ()
+			local rewards = P._playerTask:claimTaskReward(goCell._taskId, D.LogWay.crisis_zone_task)
+
+			Trace.traceDesign("Critical_Reach:%d:%d", self._difficulty, goCell._taskId % 100)
+			V.showRewardClaimPanel(rewards)
+			self:updateUI()
+			RedDotManager.update("city.challenge")
+		end)
+		self:setClick(goCell._goItem._btnClick, function ()
+			goCell._goItem:rewardclickCallback()
+		end)
+	end
+
+	if self._playShowAnim then
+		goCell:initAnimStatus()
+	else
+		goCell:setCellShow(true)
+	end
+
+	goCell:init(self._displayTaskIds[index])
+
+	return goCell
+end
+
+function M:updateDot()
+	self._goPrevDot:SetActive(false)
+
+	for i = 1, self._difficulty - 1 do
+		local curDiffIds = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.CrisisZone, i)
+
+		for i = 1, #curDiffIds do
+			local id = curDiffIds[i][1]
+
+			if TaskHelper:isFinished(id) and not TaskHelper:isClaimed(id) then
+				self._goPrevDot:SetActive(true)
+			end
+		end
+	end
+
+	self._goNextDot:SetActive(false)
+
+	for i = self._difficulty + 1, D.CRISIS_ZONE_MAX_DIFFICULTY do
+		local curDiffIds = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.CrisisZone, i)
+
+		for i = 1, #curDiffIds do
+			local id = curDiffIds[i][1]
+
+			if TaskHelper:isFinished(id) and not TaskHelper:isClaimed(id) then
+				self._goNextDot:SetActive(true)
+			end
+		end
+	end
+end
+
+return M

@@ -1,0 +1,408 @@
+local M = class("PlayerTask")
+
+function M:init(meta)
+	self._meta = meta
+	self._taskData = lc.assignTable(meta, "taskData")
+	self._meta.sevenDayTaskIdx = meta.sevenDayTaskIdx or 0
+
+	if self._taskData[D.TaskClass.SevenDay] and not self._taskData[D.TaskClass.Daily] then
+		self._taskData[D.TaskClass.Daily] = self._taskData[D.TaskClass.SevenDay]
+		self._taskData[D.TaskClass.SevenDay] = nil
+	end
+
+	if P:useSevenDayTaskV2() then
+		D.TaskClass.SevenDay = D.TaskClass.SevenDay2
+	end
+end
+
+function M:start()
+	self:initMainTask()
+	self:initDailyTask()
+	self:initSevenDayTask()
+	self:initCrisisZoneTask()
+end
+
+function M:initMainTask()
+	self._taskData[D.TaskClass.Newbie] = self._taskData[D.TaskClass.Newbie] or {}
+	self._mainTask = self._taskData[D.TaskClass.Newbie]
+
+	TaskHelper:loadTaskData(D.TaskClass.Newbie, self._mainTask)
+	self:refreshMainTask()
+end
+
+function M:refreshMainTask()
+	if #self._mainTask.curTasks < 1 then
+		self._mainTask.curTasks[1] = self:getNextMainTask()
+	end
+end
+
+function M:clearDisplayTask(clazz)
+	table.clear(self:getDisplayTasks(clazz))
+end
+
+function M:clearTaskData(clazz)
+	if not self._taskData[clazz] then
+		return
+	end
+
+	self._taskData[clazz] = nil
+end
+
+function M:getNextMainTask()
+	local mainTaskOrder = TaskHelper:getTasksOrderByClass(D.TaskClass.Newbie)
+
+	for i = 1, #mainTaskOrder do
+		local taskId = mainTaskOrder[i][1]
+
+		if not table.findArray(self._mainTask.finishedTasks, taskId) and not table.findArray(self._mainTask.curTasks, taskId) then
+			table.insert(self._mainTask.curTasks, taskId)
+
+			if TaskHelper:getTaskIsSign(taskId) == 1 then
+				TaskHelper:resetTask(taskId)
+			end
+
+			Trace.traceDesign("TaskNewbie_Reach:%d", taskId)
+
+			return taskId
+		end
+	end
+
+	return nil
+end
+
+function M:initDailyTask()
+	self._taskData[D.TaskClass.Daily] = self._taskData[D.TaskClass.Daily] or {}
+	self._dailyTask = self._taskData[D.TaskClass.Daily]
+
+	TaskHelper:loadTaskData(D.TaskClass.Daily, self._dailyTask)
+	self:refreshDailyTask()
+end
+
+function M:refreshDailyTask()
+	local order = TaskHelper:getTasksOrderByClass(D.TaskClass.Daily)
+
+	table.clear(self._dailyTask.curTasks)
+
+	for i = 1, #order do
+		local id = order[i][1]
+
+		if D._taskConfig[id]._chapter == 1 then
+			self._dailyTask.curTasks[i] = id
+		elseif D._taskConfig[id]._chapter == 2 and D.isSystemUnlocked(D.SystemType.DomeMission) then
+			self._dailyTask.curTasks[i] = id
+		end
+	end
+end
+
+function M:initSevenDayTask()
+	self._taskData[D.TaskClass.SevenDay] = self._taskData[D.TaskClass.SevenDay] or {}
+	self._sevenDayTask = self._taskData[D.TaskClass.SevenDay]
+
+	TaskHelper:loadTaskData(D.TaskClass.SevenDay, self._sevenDayTask)
+	self:refreshSevenDayTask()
+end
+
+function M:refreshSevenDayTask()
+	local createDay = Mathf.Clamp(P._playerSevenDay:getSystemCreateDay(), 1, 7)
+
+	for day = self._meta.sevenDayTaskIdx + 1, createDay do
+		local ids = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.SevenDay, day)
+		local curTasks = self._sevenDayTask.curTasks
+
+		for i = 1, #ids do
+			curTasks[#curTasks + 1] = ids[i][1]
+		end
+	end
+
+	if self._meta.sevenDayTaskIdx == 0 then
+		Trace.traceDesign("SevenDayTask:%d", 21001)
+		P._playerSevenDay:recordDesignEvent(21001)
+	end
+
+	self._meta.sevenDayTaskIdx = createDay
+end
+
+function M:getAllUnClaimedSevenDayTaskReward()
+	local total = {}
+	local createDay = Mathf.Clamp(P._playerSevenDay:getSystemCreateDay(), 1, 7)
+
+	for day = 1, createDay do
+		local ids = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.SevenDay, day)
+
+		for k, taskIds in pairs(ids) do
+			if TaskHelper:canClaim(taskIds[1]) then
+				local rewards = self:claimTaskReward(taskIds[1], D.LogWay.seven_day)
+
+				D.foldRewards(total, rewards)
+			end
+		end
+	end
+
+	return total
+end
+
+function M:initCrisisZoneTask()
+	self._taskData[D.TaskClass.CrisisZone] = self._taskData[D.TaskClass.CrisisZone] or {}
+	self._crisisZoneTask = self._taskData[D.TaskClass.CrisisZone]
+
+	TaskHelper:loadTaskData(D.TaskClass.CrisisZone, self._crisisZoneTask)
+	self:refreshCrisisZoneTask()
+end
+
+function M:refreshCrisisZoneTask()
+	table.clear(self._crisisZoneTask.curTasks)
+
+	for i = 1, D.CRISIS_ZONE_MAX_DIFFICULTY do
+		local ids = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.CrisisZone, i)
+
+		for i = 1, #ids do
+			local id = ids[i][1]
+			self._crisisZoneTask.curTasks[#self._crisisZoneTask.curTasks + 1] = id
+		end
+	end
+end
+
+function M:removeTaskIdInCurTask(taskClass, taskId)
+	local curTasks = self:getDisplayTasks(taskClass)
+	local idx = table.findArray(curTasks, function (a)
+		return a == taskId
+	end)
+
+	table.remove(curTasks, idx)
+end
+
+function M:initMonopolyTask()
+	self._taskData[D.TaskClass.Monopoly] = self._taskData[D.TaskClass.Monopoly] or {}
+	self._monoPolyTasks = self._taskData[D.TaskClass.Monopoly]
+
+	TaskHelper:loadTaskData(D.TaskClass.Monopoly, self._monoPolyTasks)
+
+	if not P._willDailyReset and TaskHelper:getTaskValue(111001) == 0 then
+		TaskHelper:setTaskValue(111001, 1)
+	end
+
+	self:refreshMonopolyTask()
+end
+
+function M:refreshMonopolyTask()
+	self:refreshClassTaskWithOrder(D.TaskClass.Monopoly)
+end
+
+function M:initAnniversaryTask()
+	local taskClass = D.TaskClass.Anniversary
+
+	self:initTaskClass(taskClass)
+end
+
+function M:getAllUnClaimedAnniversaryTaskReward()
+	local total = {}
+	local taskClass = D.TaskClass.Anniversary
+	local typeMaps = TaskHelper:getTasksTypeMapByClass(taskClass)
+
+	for taskType, taskIds in pairs(typeMaps) do
+		for k, taskId in ipairs(taskIds) do
+			if TaskHelper:canClaim(taskId) then
+				local cids = TaskHelper:getTaskRewardCids(taskId)
+				local nums = TaskHelper:getTaskRewardNums(taskId)
+				local rewards = D.formatRewards(cids, nums)
+
+				D.foldRewards(total, rewards)
+			end
+		end
+	end
+
+	return total
+end
+
+function M:initPlayerReturnTask()
+	local taskClass = D.TaskClass.PlayerReturn
+
+	self:initTaskClassNoRefresh(taskClass)
+	self:refreshPlayerReturnTask()
+end
+
+function M:refreshPlayerReturnTask()
+	if not P._playerReturn:isOpening() then
+		return
+	end
+
+	local taskClass = D.TaskClass.PlayerReturn
+	local createDay = Mathf.Clamp(P._playerReturn:getSystemCreateDay(), 1, 7)
+
+	for day = P._playerReturn:getTaskDayIdx() + 1, createDay do
+		local ids = TaskHelper:getTasksChapterOrderByClass(taskClass, day)
+		local curTasks = self:getDisplayTasks(taskClass)
+
+		for i = 1, #ids do
+			curTasks[#curTasks + 1] = ids[i][1]
+		end
+
+		P._playerReturn:setTaskDayIdx(day)
+	end
+end
+
+function M:getAllUnClaimedPlayerReturnReward()
+	local taskClass = D.TaskClass.PlayerReturn
+	local total = {}
+	local createDay = Mathf.Clamp(P._playerReturn:getDayFromStartTime(), 1, 7)
+
+	for day = 1, createDay do
+		local ids = TaskHelper:getTasksChapterOrderByClass(taskClass, day)
+
+		for k, taskIds in pairs(ids) do
+			if TaskHelper:canClaim(taskIds[1]) then
+				local rewards = self:claimTaskReward(taskIds[1], D.LogWay.player_return_expire)
+
+				D.foldRewards(total, rewards)
+			end
+		end
+	end
+
+	return total
+end
+
+function M:initTaskClass(taskClass)
+	self:initTaskClassNoRefresh(taskClass)
+	self:refreshClassTaskWithOrder(taskClass)
+end
+
+function M:initTaskClassNoRefresh(taskClass)
+	self._taskData[taskClass] = self._taskData[taskClass] or {}
+
+	TaskHelper:loadTaskData(taskClass, self._taskData[taskClass])
+
+	if not P._willDailyReset and not P._isFirst and TaskHelper:getTaskValueByType(taskClass, D.TaskType.LOGIN_DAY) == 0 then
+		TaskHelper:setTaskValueByType(taskClass, D.TaskType.LOGIN_DAY, 0, 1)
+	end
+end
+
+function M:refreshClassTaskWithOrder(taskClass)
+	if not self:haveTask(taskClass) then
+		return
+	end
+
+	local order = TaskHelper:getTasksOrderByClass(taskClass)
+	local curTasks = self:getDisplayTasks(taskClass)
+
+	table.clear(curTasks)
+
+	for i = 1, #order do
+		for j = 1, #order[i] do
+			local taskId = order[i][j]
+			curTasks[i] = taskId
+
+			if not TaskHelper:isClaimed(taskId) then
+				break
+			end
+		end
+	end
+end
+
+function M:refreshOrderTask(taskId)
+	local taskClass = TaskHelper:getTaskGroup(taskId)
+	local order = TaskHelper:getTaskOrder(taskId)
+	local curTasks = self:getDisplayTasks(taskClass)
+	local ordersList = TaskHelper:getTasksOrderByClass(taskClass)
+	local orders = ordersList[order]
+	local currentTask = curTasks[order]
+	local idx = table.findArray(orders, currentTask)
+
+	if idx >= #orders then
+		idx = #orders
+	else
+		local tId = orders[idx]
+
+		if TaskHelper:isClaimed(tId) then
+			idx = idx + 1
+		end
+	end
+
+	local taskId = orders[idx]
+	curTasks[order] = taskId
+end
+
+function M:haveTask(taskClass)
+	return self._taskData[taskClass] and true, self._taskData[taskClass] or false
+end
+
+function M:getDisplayTasks(taskClass)
+	return self._taskData[taskClass].curTasks
+end
+
+function M:claimTaskReward(taskId, logWay)
+	local group = TaskHelper:getTaskGroup(taskId)
+	local rewardIds, rewardNums = TaskHelper:claimTaskReward(taskId)
+	local rewards = P._playerAsset:increaseAssetNums(rewardIds, rewardNums, logWay)
+
+	if group == D.TaskClass.Daily then
+		P._playerBPNew:addExp(1)
+	elseif group == D.TaskClass.Newbie then
+		self:clearDisplayTask(group)
+		self:refreshMainTask()
+		Trace.traceDesign("TaskNewbie_Complete:%d", taskId)
+	elseif group == D.TaskClass.SevenDay then
+		self:removeTaskIdInCurTask(group, taskId)
+	elseif group == D.TaskClass.PlayerReturn then
+		self:removeTaskIdInCurTask(group, taskId)
+	elseif group == D.TaskClass.Monopoly then
+		Trace.traceDesign("TaskMonopoly_Claim:%d", taskId)
+	elseif group == D.TaskClass.CrisisZone then
+		-- Nothing
+	elseif group == D.TaskClass.Anniversary then
+		-- Nothing
+	end
+
+	if taskId == 10112 then
+		P._playerRecord:setEliteRedDot(true)
+	end
+
+	if group == D.TaskClass.Monopoly then
+		self:refreshOrderTask(taskId)
+	elseif group == D.TaskClass.Anniversary then
+		self:refreshOrderTask(taskId)
+	end
+
+	if lc._isCN then
+		P:saveGameData(true)
+	end
+
+	return rewards
+end
+
+function M:haveRewards(taskClass)
+	local tasks = self:getDisplayTasks(taskClass)
+
+	for i, taskId in ipairs(tasks) do
+		if TaskHelper:canClaim(taskId) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:haveAdRewards(taskClass)
+	local canClaim = false
+	local tasks = self:getDisplayTasks(taskClass)
+
+	for i, taskId in ipairs(tasks) do
+		if TaskHelper:canClaim(taskId) then
+			canClaim = true
+
+			if not TaskHelper:isAdClaim(taskId) then
+				return false
+			end
+		end
+	end
+
+	return canClaim
+end
+
+function M:dailyReset()
+	TaskHelper:resetTaskData(D.TaskClass.Daily)
+	self:refreshSevenDayTask()
+	self:refreshPlayerReturnTask()
+	self:refreshDailyTask()
+end
+
+return M

@@ -1,0 +1,80 @@
+local M = class("LuaTableJson")
+
+declare("LuaTableJson", M)
+
+local type = type
+local tostring = tostring
+local loadstring = loadstring
+local setmetatable = setmetatable
+
+function M.encodeToCJson(obj)
+	local lua = ""
+	local t = type(obj)
+
+	if t == "number" then
+		return tostring(obj)
+	elseif t == "boolean" then
+		return tostring(obj)
+	elseif t == "string" then
+		return string.format("%q", obj)
+	elseif t == "table" then
+		if obj.__cname then
+			if obj.__type == "number" then
+				return tostring(obj())
+			end
+		else
+			local lua = "{"
+			local count = 0
+
+			for k, v in pairs(obj) do
+				if count > 0 then
+					lua = lua .. ","
+				end
+
+				if type(k) == "number" then
+					lua = lua .. "\"" .. M.encodeToCJson(k) .. "\":" .. M.encodeToCJson(v)
+				else
+					lua = lua .. M.encodeToCJson(k) .. ":" .. M.encodeToCJson(v)
+				end
+
+				count = count + 1
+			end
+
+			lua = lua .. "}"
+
+			return lua
+		end
+	elseif t == "nil" then
+		return nil
+	else
+		error("can not encode a " .. t .. " type.")
+	end
+
+	return nil
+end
+
+function M.decodeFromLuaJson(luaJson)
+	local func = loadstring("return " .. luaJson)
+
+	if func == nil then
+		return nil
+	end
+
+	local t = func()
+
+	M.setClassMetatable(t)
+
+	return t
+end
+
+function M.setClassMetatable(table)
+	for k, v in pairs(table) do
+		if type(v) == "table" then
+			if v.__cname ~= nil and _G[v.__cname] ~= nil then
+				setmetatable(v, _G[v.__cname])
+			else
+				M.setClassMetatable(v)
+			end
+		end
+	end
+end

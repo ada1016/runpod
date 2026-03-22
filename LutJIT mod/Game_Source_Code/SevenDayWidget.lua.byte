@@ -1,0 +1,89 @@
+local M = class("SevenDayWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SevenDayWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._cg = go._atorWidget.transform:GetComponent("CanvasGroup")
+
+	return go
+end
+
+function M.noCreate(go)
+	lc.prefabVarPeer(go)
+	setmetatable(go.peer, M)
+
+	go._cg = go._atorWidget.transform:GetComponent("CanvasGroup")
+
+	return go
+end
+
+function M:init(tid)
+	local TaskHelper = TaskHelper
+
+	self:setFinished(TaskHelper:isFinished(tid))
+	self:setClaimed(TaskHelper:isClaimed(tid))
+	V.updateTaskDescProgress(tid, {
+		showBreifDesc = false,
+		red = "E3FEFF",
+		green = "E3FEFF",
+		txtDesc = self._txtDesc,
+		txtProgress = self._txtProgress,
+		imgBar = self._imgBar
+	})
+	LuaUnity.setTPSprite(self._imgIcon, D.toSprite(D.ResType.seven_day_exp), true)
+
+	self._txtExpNum.text = TaskHelper:getTaskRewardNums(tid)[1]
+
+	self._tfMask:SetActive(true)
+end
+
+function M:initAnimStatus()
+	self:setCellShow(false)
+end
+
+function M:setCellShow(show)
+	self._atorWidget:SetInteger("status", show and 2 or 0)
+end
+
+function M:playShowAnim()
+	self._atorWidget:ResetTrigger("showAnim")
+	self._atorWidget:SetTrigger("showAnim")
+	self._atorWidget:SetInteger("status", 1)
+end
+
+function M:setFinished(finished)
+	if not finished then
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+
+		self._txtClaim:SetLocalize(SID.STR_GOTO)
+		self._imgDot:SetActive(false)
+
+		self._imgBar.color = Color.str2Static("5694CE")
+	else
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+
+		self._imgDot:SetActive(true)
+		self._txtClaim:SetLocalize(SID.STR_CLAIM)
+
+		self._imgBar.color = Color.str2Static("5694CE")
+	end
+end
+
+function M:setFillAmount(amount)
+	self._imgBar.fillAmount = amount
+end
+
+function M:setClaimed(claimed)
+	self._btnClaim.enabled = not claimed
+
+	self._goUnclaimed:SetActive(not claimed)
+	self._goClaimed:SetActive(claimed)
+	self._tfMask:SetVisible(claimed)
+end
+
+return M

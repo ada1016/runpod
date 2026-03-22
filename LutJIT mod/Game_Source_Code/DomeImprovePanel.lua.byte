@@ -1,0 +1,163 @@
+local M = class("DomeImprovePanel", requireLua("BasePanel"))
+local Types = Types
+local DomeImproveWidget = requireLua("DomeImproveWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtLevel = Types.TMP_Text,
+	txtHp = Types.TMP_Text,
+	txtHpChange = Types.TMP_Text,
+	txtHpReduce = Types.TMP_Text,
+	txtHpReduceChange = Types.TMP_Text,
+	btnHpTip = Types.Button,
+	goHpReduce = Types.GameObject,
+	tfLevelEffectContent = Types.Transform,
+	imgCostShard = Types.Image,
+	txtUpgradeCostShard = Types.TMP_Text,
+	btnUpgrade = Types.Button,
+	btnBreak = Types.Button,
+	txtHpPercentAdd = Types.TMP_Text,
+	btnTechTip = Types.Button,
+	goMaxArea = Types.GameObject,
+	goUpgradeArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goLevelEffects = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerArmory:tryUpgradeDome()
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+
+			return
+		end
+
+		V.showEnhanceToast(SID.TIP_UPGRADE_SUCCESS)
+		self:updateLevelData()
+	end)
+	self:setClick(self._btnBreak, function ()
+		local ret, param = P._playerArmory:tryUpgradeDome()
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+
+			return
+		end
+
+		V.showEnhanceToast(SID.TIP_BREAK_SUCCESS)
+		self:updateLevelData()
+	end)
+	self:setClick(self._btnTechTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_DOME_TECH_UPGRADE
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnTechTip.gameObject
+		})
+	end)
+	self:setClick(self._btnHpTip, function ()
+		UIManager.openPanel(PrefabDefine.DomeHpPanel)
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateLevelData()
+end
+
+function M:updateLevelData()
+	local level = P._playerArmory:getDomeLevel()
+
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+
+	local isMax = D._domeUpgradeConfig[level + 1] == nil
+	local props = P._playerArmory:getDomeProps()
+	self._txtHp.text = props[BattlePropEnum.MaxHp]
+	local percentAdd = P._playerArmory:getTotalDomeTechHpPercentAdd()
+
+	self._txtHpPercentAdd:SetLocalize(SID.TIP_DOME_HP_TOTAL_PERCENT, percentAdd)
+
+	self._txtHpReduce.text = props[BattlePropEnum.HpDmgReduce]
+
+	self._goHpReduce:SetActive(props[BattlePropEnum.HpDmgReduce] > 0)
+
+	local isBreak = false
+
+	if not isMax then
+		local conf = D._domeUpgradeConfig[level + 1]
+		isBreak = conf._breakCost ~= 0
+
+		if not isBreak and conf._hpAdd and not isMax then
+			self._txtHpChange.text = "+" .. conf._hpAdd - props[BattlePropEnum.MaxHp]
+		else
+			self._txtHpChange.text = ""
+		end
+
+		if conf._dmgReduce and props[BattlePropEnum.HpDmgReduce] < conf._dmgReduce then
+			self._txtHpReduceChange.text = "+" .. conf._dmgReduce - props[BattlePropEnum.HpDmgReduce]
+		else
+			self._txtHpReduceChange.text = ""
+		end
+
+		V.loadItemCost(self._imgCostShard, self._txtUpgradeCostShard, isBreak and D.ResType.dome_break_mat or D.ResType.dome_upgrade_mat, isBreak and conf._breakCost or conf._shardNum, self)
+	else
+		self._txtHpChange.text = ""
+		self._txtHpReduceChange.text = ""
+	end
+
+	self._goUpgradeArea:SetActive(not isMax)
+	self._goMaxArea:SetActive(isMax)
+
+	local index = 0
+
+	self._btnUpgrade:SetActive(not isBreak)
+	self._btnUpgrade.dot:SetActive(P._playerArmory:canUpgradeDome())
+	self._btnBreak:SetActive(isBreak)
+	self._btnBreak.dot:SetActive(P._playerArmory:canUpgradeDome())
+
+	for i = 1, #D._domeUpgradeConfig do
+		local conf = D._domeUpgradeConfig[i]
+
+		if conf._tech then
+			index = index + 1
+
+			if not self._goLevelEffects[index] then
+				self._goLevelEffects[index] = DomeImproveWidget.create(self._tfLevelEffectContent)
+			end
+
+			local go = self._goLevelEffects[index]
+
+			go:setLevel(i)
+
+			local param = conf._param[P._playerArmory:getDomeTechLevel(conf._tech)] or conf._param[1]
+
+			go:setDesc(conf._techDescSid, conf._tech == 10004 and param or param .. "%")
+			go:setLock((isBreak and level - 1 or level) < i, P._playerArmory:getDomeTechLevel(conf._tech) >= #conf._param)
+			go:setDot(P._playerArmory:isNewDomeTech(conf._tech))
+			go:setUpgradeArrow(not P._playerArmory:isNewDomeTech(conf._tech) and P._playerArmory:canUpgradeDomeTech(conf._tech))
+			self:setClick(go._btnEnhance, function ()
+				UIManager.openPanel(PrefabDefine.DomeImproveTipPanel, conf, function ()
+					self:updateLevelData()
+				end)
+				go:setDot(P._playerArmory:isNewDomeTech(conf._tech))
+				go:setUpgradeArrow(not P._playerArmory:isNewDomeTech(conf._tech) and P._playerArmory:canUpgradeDomeTech(conf._tech))
+			end)
+		end
+	end
+end
+
+return M

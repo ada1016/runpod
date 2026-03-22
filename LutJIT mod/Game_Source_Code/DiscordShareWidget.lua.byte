@@ -1,0 +1,124 @@
+local M = class("DiscordShareWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+local cacheTime = 2
+
+function M:init()
+	if lc._isCN then
+		LuaUnity.setTPSprite(self._ImgIcon, "general/g_btn_share", true)
+		self._ImgLogoEN:SetActive(false)
+		self._ImgLogoCN:SetActive(true)
+	end
+
+	self:reset()
+end
+
+function M:updateUI(idx)
+end
+
+function M:setBtnsClick(panel)
+	panel:setClick(self._btnShare, function ()
+		self:dealShare()
+	end)
+	panel:setClick(self._btnCancelShare, function ()
+		self:cancelShare()
+	end)
+end
+
+function M:reset()
+	self._imgShareCreateTime = 0
+
+	self._goSharePreview:SetActive(false)
+	self._goShareStamp:SetActive(false)
+end
+
+function M:dealShare()
+	if not SocialShareManager then
+		return
+	end
+
+	if self._imgShareCreateTime == 0 then
+		return
+	end
+
+	local share = SocialShareManager.Instance
+	share.imgName = string.format("GDShare-%d.png", math.floor(Client.getCurTime()))
+	share.savePersistentPath = false
+
+	function share.resultCallback(ret)
+		if ret then
+			-- Nothing
+		end
+	end
+
+	share.shareTarget = "com.discord"
+
+	share:ShareScreenshot()
+end
+
+function M:cancelShare()
+	self._goSharePreview:SetActive(false)
+end
+
+function M:loadScreenshotData()
+	self._txtLevel.text = P:getLevel()
+
+	V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+
+	self._imgExpBar.fillAmount = P._playerProfile:getExpProgress()
+
+	V.loadAvatar(self._AvatarFrame, P._playerProfile:getAvatar(), P._playerProfile:getAvatarFrame())
+end
+
+function M:previewShareDiscord(resultCallback)
+	local ttt = Client.getCurTime() - cacheTime
+
+	if ttt < self._imgShareCreateTime then
+		self._imgShareCreateTime = Client.getCurTime()
+
+		self._goSharePreview:SetActive(true)
+
+		if resultCallback then
+			resultCallback()
+		end
+	else
+		self._goShareStamp:SetActive(true)
+		self:loadScreenshotData()
+		MainGameRoot._safeFit.fitScreen(self._goShareStamp.transform, true)
+
+		local share = SocialShareManager.Instance
+		share.imgRadius = 10
+
+		share:Clear()
+		MainGameRoot:SetClickVfx(false)
+
+		function share.screenshotResultCallback()
+			if resultCallback then
+				resultCallback()
+			end
+
+			self._goShareStamp:SetActive(false)
+			lc.setSizeDelta(self._showTexture.transform, MainGameRoot._safeFit._canvasWidth, MainGameRoot._safeFit._canvasHeight)
+
+			self._showTexture.texture = share.screenshot
+
+			self._goSharePreview:SetActive(true)
+
+			self._imgShareCreateTime = C.getCurTime()
+
+			MainGameRoot:SetClickVfx(true)
+		end
+
+		share:TakeScreenshotNoShare()
+	end
+end
+
+return M

@@ -1,0 +1,95 @@
+local M = class("RemoveAdPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnBuy = Types.Button,
+	goCountdown = Types.GameObject,
+	textLeftTimeCountDown = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnBuy, function ()
+		C.tryPurchase(D.IapType.NOAD, function ()
+			self:closePanel()
+		end, self._channel)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(channel, closeCallback)
+	self._channel = channel
+	self._closeCallback = closeCallback
+
+	self:updateUI()
+	Client.playSound("ui_Open_Gift_1")
+
+	local endTime = P._playerRight:readBuyNoAdEndTime()
+	local dt = endTime - C.getCurTime()
+
+	self._goCountdown:SetActive(endTime > 0 and dt > 0)
+
+	if endTime > 0 and dt > 0 then
+		self:updateCountDown()
+
+		self._secondTimer = lc.setInterval(function ()
+			self:updateCountDown()
+		end, 0.4)
+
+		return
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+
+		self._closeCallback = nil
+	end
+
+	if self._secondTimer then
+		lc.stopTimer(self._secondTimer)
+
+		self._secondTimer = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:updateCountDown()
+	local endTime = P._playerRight:readBuyNoAdEndTime()
+	local dt = endTime - C.getCurTime()
+
+	if endTime > 0 and dt < 0 then
+		self._goCountdown:SetActive(false)
+		V.formatLeftTime(self._textLeftTimeCountDown, 0)
+
+		if self._secondTimer then
+			lc.stopTimer(self._secondTimer)
+
+			self._secondTimer = nil
+		end
+
+		self:closePanel()
+
+		return false
+	end
+
+	V.formatLeftTime(self._textLeftTimeCountDown, dt)
+
+	return true
+end
+
+function M:updateUI()
+end
+
+return M

@@ -1,0 +1,174 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		80,
+		[5] = {
+			600000,
+			400000,
+			200000
+		},
+		[6] = dup._1064
+	},
+	{
+		2,
+		2,
+		80,
+		[5] = {
+			1200000,
+			850000,
+			500000
+		},
+		[6] = dup._1064
+	},
+	{
+		3,
+		3,
+		80,
+		[5] = {
+			1800000,
+			1350000,
+			900000
+		},
+		[6] = dup._1064
+	},
+	{
+		4,
+		4,
+		50,
+		[5] = {
+			2400000,
+			1600000,
+			1200000
+		},
+		[6] = dup._1064
+	},
+	{
+		5,
+		5,
+		50,
+		[5] = {
+			3000000,
+			2250000,
+			1500000
+		},
+		[6] = dup._1064
+	},
+	{
+		6,
+		6,
+		50,
+		[5] = {
+			3600000,
+			3000000,
+			1800000
+		},
+		[6] = dup._1064
+	},
+	{
+		7,
+		7,
+		20,
+		[5] = {
+			4200000,
+			3500000,
+			2100000
+		},
+		[6] = dup._1064
+	},
+	{
+		8,
+		8,
+		nil,
+		80
+	}
+}
+local mapKeyIndex = {
+	k1644150 = 1,
+	k15255765 = 2,
+	k12251518 = 6,
+	k16709767 = 3,
+	k8138071 = 5,
+	k1940730 = 4
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -7939
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_DOME_GRADE_NAMESID_" .. table[2]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -7939
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

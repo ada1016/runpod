@@ -1,0 +1,127 @@
+local M = class("EquipFilterPanel", requireLua("BasePanel"))
+local band = bit.band
+local bxor = bit.bxor
+local bor = bit.bor
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	btnQualityFilterAll = Types.Button,
+	btnGradeFilterAll = Types.Button,
+	goQualityFilterAllChoose = Types.GameObject,
+	goGradeFilterAllChoose = Types.GameObject,
+	goQualityFilterContainer = Types.GameObject,
+	goGradeFilterContainer = Types.GameObject,
+	btnReset = Types.Button,
+	btnConfirm = Types.Button
+}
+local MAX_GRADE_NUM = 6
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	local qualityNum = D.Quality.Orange
+	self._qualityFilters = {}
+	self._gradeFilters = {}
+
+	for i = 1, qualityNum do
+		local goPartFilter = self._goQualityFilterContainer:GetChild(i - 1)
+
+		lc.prefabVarPeer(goPartFilter)
+		goPartFilter._txtPart:SetLocalize(SID["STR_QUALITY_" .. i])
+
+		self._qualityFilters[i] = goPartFilter
+	end
+
+	self._minGrade = math.max(1, P._playerRole:getMaxEquipGrade() - MAX_GRADE_NUM)
+
+	for i = 1, MAX_GRADE_NUM do
+		local goGradeFilter = self._goGradeFilterContainer:GetChild(i - 1)
+
+		goGradeFilter:SetActive(true)
+		lc.prefabVarPeer(goGradeFilter)
+		goGradeFilter._txtPart:SetLocalize(SID.STR_GRADE_X, self._minGrade + i)
+
+		self._gradeFilters[i] = goGradeFilter
+	end
+end
+
+function M:addClicks()
+	local qualityNum = D.Quality.Orange
+
+	for i = 1, qualityNum do
+		local goPartFilter = self._qualityFilters[i]
+
+		self:setClick(goPartFilter._btnClick, function ()
+			self._qualityFilterValue = i
+
+			self:updateUI()
+		end)
+	end
+
+	for i = 1, MAX_GRADE_NUM do
+		local goGradeFilter = self._gradeFilters[i]
+
+		self:setClick(goGradeFilter._btnClick, function ()
+			self._gradeFilterValue = self._minGrade + i
+
+			self:updateUI()
+		end)
+	end
+
+	self:setClick(self._btnQualityFilterAll, function ()
+		self._qualityFilterValue = 999
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnGradeFilterAll, function ()
+		self._gradeFilterValue = 999
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnReset, function ()
+		self._qualityFilterValue = 999
+		self._gradeFilterValue = 999
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnConfirm, function ()
+		self:closePanel()
+		lc.setIntKeyValue(D.EQUIP_QUALITY_FILTER, self._qualityFilterValue)
+		lc.setIntKeyValue(D.EQUIP_GRADE_FILTER, self._gradeFilterValue)
+		self._callback(self._qualityFilterValue, self._gradeFilterValue)
+	end)
+end
+
+function M:init(callback)
+	self._qualityFilterValue = lc.getIntKeyValue(D.EQUIP_QUALITY_FILTER, 999)
+	self._gradeFilterValue = lc.getIntKeyValue(D.EQUIP_GRADE_FILTER, 999)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local isPartAll = self._qualityFilterValue == 999
+	local isWeaponAll = self._gradeFilterValue == 999
+
+	self._goQualityFilterAllChoose:SetActive(isPartAll)
+	self._goGradeFilterAllChoose:SetActive(isWeaponAll)
+
+	local qualityNum = D.Quality.Orange
+
+	for i = 1, qualityNum do
+		local goPartFilter = self._qualityFilters[i]
+
+		goPartFilter._goChoose:SetActive(self._qualityFilterValue ~= 999 and i <= self._qualityFilterValue)
+	end
+
+	for i = 1, MAX_GRADE_NUM do
+		local goGradeFilter = self._gradeFilters[i]
+
+		goGradeFilter._goChoose:SetActive(self._gradeFilterValue ~= 999 and self._gradeFilterValue >= self._minGrade + i)
+	end
+end
+
+return M

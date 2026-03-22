@@ -1,0 +1,127 @@
+local M = class("MissionGiftPanel", requireLua("BasePanel"))
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	textRate = Types.TMP_Text,
+	textLimit = Types.TMP_Text,
+	tfRewards = Types.Transform,
+	btnClaim = Types.Button,
+	imgClaim = Types.Image,
+	imgClaimLight = Types.Image,
+	textClaim = Types.TMP_Text,
+	dotClaim = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+
+	for i = 1, 3 do
+		local tf = self._tfRewards
+		self._goRewards[i] = tf:GetChild(i - 1).gameObject
+
+		ItemWidget.noCreate(self._goRewards[i])
+	end
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+	self:on("purchase.inited", function ()
+		self:updateClaimBtn()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaim, function ()
+		self:dealClaimBtn()
+	end)
+end
+
+function M:init(showGiftId)
+	self._showGiftId = showGiftId or 2005
+
+	P._playerGift:setTriggerPop(self._showGiftId)
+	self._textRate:SetLocalizeS(SID.STR_REBATE_X, P._playerGift:readValue(self._showGiftId) .. "%")
+
+	local unlockType, unlockMs = P._playerGift:readUnlockParams(self._showGiftId)
+	unlockMs = unlockMs - 1
+
+	self._txtTitle:SetLocalize(SID.GIFT_MISSION_X, unlockMs - 10000)
+	Client.playSound("ui_Open_Gift_1")
+	self:clearTimer()
+	self:updateUI()
+end
+
+function M:closePanel(skipQueue)
+	self:clearTimer()
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	self:clearTimer()
+	M.super.OnDestroy(self)
+end
+
+function M:updateUI()
+	local cids, nums = P._playerGift:readRewards(self._showGiftId)
+	local rewards = D.formatRewards(cids, nums)
+
+	V.loadFixRewardsWidget(self, self._goRewards, rewards)
+	self:updateClaimBtn()
+end
+
+function M:clearTimer()
+end
+
+function M:updateClaimBtn()
+	local showGiftId = self._showGiftId
+
+	if P._playerGift:isBought(showGiftId) then
+		self._textClaim:SetLocalize(SID.STR_CLAIM)
+
+		self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+
+		self._textLimit:SetLocalizeS(SID.SHOP_LIFE_LIMIT, "0/1")
+	else
+		self._textClaim.text = P._playerStore:getDisplayPrice(P._playerGift:readIapId(showGiftId))
+
+		self._textLimit:SetLocalizeS(SID.SHOP_LIFE_LIMIT, "1/1")
+
+		if P._playerGift:isTrigger(showGiftId) then
+			if P._playerGift:isExpired(showGiftId) then
+				self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+				self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+			else
+				self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+				self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+			end
+		else
+			self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+			self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		end
+	end
+
+	self._btnClaim.gameObject:SetActive(not P._playerGift:isBought(showGiftId))
+	self._dotClaim:SetActive(false)
+end
+
+function M:dealClaimBtn()
+	local showGiftId = self._showGiftId
+
+	if P._playerGift:isBought(showGiftId) then
+		return
+	end
+
+	C.tryPurchase(P._playerGift:readIapId(showGiftId), function (iapId, rewards)
+		V.showRewardClaimPanel(rewards)
+		self:closePanel()
+	end, D.PurchaseChannel.Main)
+end
+
+return M

@@ -1,0 +1,164 @@
+local M = class("AnniversaryTreasureHuntingShopPage", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnADIssue = Types.Button,
+	goBanner = Types.GameObject,
+	tfWidgets = Types.Transform
+}
+local ActivityShopWidget = requireLua("ActivityShopWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goWidgets = {}
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timerCountdown)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	self:on("iap.purchase.success", function ()
+		self:updateUI()
+	end)
+	self:on("day.cross", function (cid)
+		self:updateUI()
+	end)
+end
+
+function M:init(parentPanel)
+	self._parentPanel = parentPanel
+	self._module = self._parentPanel._module
+	self._exchanceGroup = self._module:readPackExchangeGroup()
+	local exchanges = P._playerExchange:getExchangeIdsByType(self._exchanceGroup)
+	local packs = self._module:readPackIapIds()
+	self._showIds = {}
+
+	for i = 1, #exchanges do
+		table.insert(self._showIds, {
+			#self._showIds + 1,
+			"exchange",
+			exchanges[i]
+		})
+	end
+
+	for i = 1, #packs do
+		table.insert(self._showIds, {
+			#self._showIds + 1,
+			"purchase",
+			packs[i]
+		})
+	end
+
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	lc.stopTimer(self._timerCountdown)
+	self:updateUI()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._timerCountdown)
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateReddots()
+	self:updateAllWidgets()
+end
+
+function M:updateReddots()
+end
+
+function M:updateAllWidgets()
+	local goCounts = self._tfWidgets.childCount
+	local maxNum = math.max(goCounts, #self._showIds)
+
+	for i = 1, maxNum do
+		if i <= #self._showIds then
+			if not self._goWidgets[i] then
+				local go = nil
+
+				if i <= goCounts then
+					go = self._tfWidgets:GetChild(i - 1).gameObject
+
+					ActivityShopWidget.noCreate(go)
+				else
+					go = ActivityShopWidget.create(self._tfWidgets)
+				end
+
+				self._goWidgets[i] = go
+
+				go:init(self)
+			end
+
+			self:updateWidget(i)
+		elseif self._goWidgets[i] then
+			self._goWidgets[i]:SetActive(false)
+		elseif i <= goCounts then
+			local go = self._tfWidgets:GetChild(i - 1).gameObject
+
+			go:SetActive(false)
+		end
+	end
+end
+
+function M:updateWidget(idx, refresh)
+	self._goWidgets[idx]:updateUI(self._showIds[idx])
+end
+
+function M:handleADIssue()
+	local leftNum = self._module:getLeftAdPackNum()
+	local maxNum = self._module:readAdMaxCacheNum()
+
+	if leftNum == maxNum then
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_MAX
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	else
+		local dt = self._module:getAdPackCountdown()
+		local day, hour, minute, second = Client.getTimeEndArgs(dt)
+		local timeSid = SID.PERIOD_DAY
+		local timeParam = 1
+
+		if day > 0 then
+			timeSid = SID.PERIOD_DAY
+			timeParam = day
+		elseif hour > 0 then
+			timeSid = SID.PERIOD_HOUR
+			timeParam = hour
+		elseif minute > 0 then
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = minute
+		else
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = 1
+		end
+
+		local recoverT = self._module:readAdRecoverSeconds()
+		local recoverHour = math.ceil(recoverT / 3600)
+		local str = LcLocalization.getTextStr(timeSid)
+		str = string.gsub(str, "{0}", timeParam)
+
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_TIME,
+			descParam = {
+				str,
+				recoverHour
+			}
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	end
+end
+
+return M

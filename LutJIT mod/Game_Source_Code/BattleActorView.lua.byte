@@ -1,0 +1,310 @@
+local M = class("BattleActorView")
+local OnAnimatorIKEventType = typeof(OnAnimatorIKEvent)
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._battleView = BattleView
+
+	self:initBodySkin()
+
+	self._handIKPosition = Vector3.retain(0, 0, 0)
+	self._handRotateOffset = Quaternion.retain():SetEuler(0, 0, -15)
+	self._handkIkDistanceMin = 0.9
+	self._handkIkDistanceMax = 0.8
+	self._ID_BoolRunning = UnityEngine.Animator.StringToHash("IsRunning")
+	self._ID_BoolAttacking = UnityEngine.Animator.StringToHash("Attacking")
+	self._ID_FloatMoveSpeed = UnityEngine.Animator.StringToHash("MoveSpeed")
+	self._ID_FloatDeltaX = UnityEngine.Animator.StringToHash("DeltaX")
+	self._isRuning = false
+	self._isFiring = false
+	self._flipped = false
+	self._facingRight = true
+
+	self:initGunSkin()
+end
+
+function M:initBodySkin()
+	local playerBodySkinId = self._battleSession:getEquipedSkin(0) or 120000
+	self._obj = self._sessionView:createActor(string.format("Player_%d", playerBodySkinId))
+	self._varRef = self._obj.peer
+	self._goSpine = self._varRef._goSpineParent:GetChild(0).gameObject
+	self._animatorActor = self._goSpine:GetComponent("Animator")
+	self._skinChanger = self._goSpine:GetComponent("SpineChangeSkin")
+	self._skeletonMecanim = self._goSpine:GetComponentInChildren(typeof(Spine.Unity.SkeletonMecanim))
+	self._skeletonGhost = self._goSpine:GetComponent("SkeletonGhost")
+	self._bodySkinId = playerBodySkinId
+end
+
+function M:init(ator)
+	self._ator = ator
+
+	self._varRef._goVfxEnergyBg:SetActive(false)
+	self:updateIKHand()
+	self._varRef._tfIKHandContorlOverride:SetActive(true)
+end
+
+function M:initGunSkin()
+	self._skinChanger:Init()
+
+	local equipedSkin = self._battleSession:getEquipedSkin(1) or 110000
+
+	self:changeGunSkin(equipedSkin)
+end
+
+function M:changeGunVfx(gunId)
+	if self._goFire1 then
+		GameObject.Destroy(self._goFire1)
+		GameObject.Destroy(self._goFire2)
+	end
+
+	local firePath = string.format("Assets/Battle/Prefabs/Player/Player_Gun_Fire_%d.prefab", gunId)
+	self._goFire1 = LuaUnity.createGameObject(firePath, self._varRef._tfLeftHandFollow)
+	local tfFire1 = self._goFire1.transform
+
+	lc.setLocalPosition(tfFire1, 0.286, 0, 0)
+
+	self._goVfxShootShell1 = tfFire1.transform:GetChild(0).gameObject
+	self._goVfxShoot1 = tfFire1.transform:GetChild(1).gameObject
+	self._goVfxShootEnergy1 = tfFire1.transform:GetChild(2).gameObject
+	self._goFire2 = LuaUnity.createGameObject(firePath, self._varRef._tfRightHandFollow)
+	local tfFire2 = self._goFire2.transform
+
+	lc.setLocalPosition(tfFire2, 0.286, 0, 0)
+
+	self._goVfxShootShell2 = tfFire2:GetChild(0).gameObject
+	self._goVfxShoot2 = tfFire2:GetChild(1).gameObject
+	self._goVfxShootEnergy2 = tfFire2:GetChild(2).gameObject
+end
+
+local weaponSlotNames = {
+	"Weapon_L",
+	"Weapon_R"
+}
+
+function M:changeGunSkin(gunId)
+	self._skinChanger.optimize = true
+	local playerGunSkinId = gunId or D.DEFAULT_GATLIN_SKIN
+
+	if playerGunSkinId then
+		local roleSex = P._playerSkin:readRoleSkinSex(self._bodySkinId)
+		local gunSpriteLeft = LuaUnity.getTPSprite(string.format("battleGatlin/%s-Gun_%d_L", roleSex == 1 and "boy" or "girl", playerGunSkinId))
+		local gunSpriteRight = LuaUnity.getTPSprite(string.format("battleGatlin/%s-Gun_%d_R", roleSex == 1 and "boy" or "girl", playerGunSkinId))
+
+		self._skinChanger:ChangeSkinPart("Weapon_L", "Weapon_L", gunSpriteLeft)
+		self._skinChanger:ChangeSkinPart("Weapon_R", "Weapon_R", gunSpriteRight)
+	end
+
+	self:changeRandomBody()
+	self._skinChanger:RefreshEquipSkin()
+	self._skinChanger:Apply()
+	self:changeGunVfx(playerGunSkinId)
+end
+
+function M:changeRandomBody()
+	if self._bodySkinId ~= 120016 then
+		return
+	end
+
+	local bodySprite = LuaUnity.getTPSprite(string.format("battleGatlin/other-TY_Body%d", math.random(1, 3)))
+
+	self._skinChanger:ChangeSkinPart("Body", "Body", bodySprite)
+end
+
+function M:stepEvent(dt)
+	self:posEvent()
+	self:setFlip(not self._ator._facingRight)
+
+	local isPressed = self._ator._battleSession:isPress()
+	local deltaX = self._ator._cachedDeltaMoveX
+	local running = deltaX > 0
+
+	self:setRunning(isPressed and running)
+	self:setMoveSpeedX(1)
+	self:setAttack(self._ator._isFiring)
+	self:updateIKHand()
+end
+
+function M:posEvent()
+	local position = self._ator._position
+
+	self._obj:SetPosition(position.x, position.y, 0)
+
+	if not self._ator._isClone then
+		if self._ator._isSuper then
+			lc.setPosition(self._sessionView._goEnergyBar, position.x, position.y - 1, 0)
+		else
+			lc.setPosition(self._sessionView._goEnergyBar, position.x, position.y - 0.3, 0)
+		end
+	end
+end
+
+function M:rotationEvent()
+	if self._ator._isSuper then
+		self._obj:SetLocalRotation(0, 0, self._ator._angle - 90)
+	end
+end
+
+local SHELL_SOUND = {
+	"se_Bullet_1_shell_1",
+	"se_Bullet_1_shell_2",
+	"se_Bullet_1_shell_3",
+	"se_Bullet_1_shell_4"
+}
+
+function M:shootEvent(isLeft)
+	if isLeft then
+		if self._ator._boostering then
+			V.playChildEffects(self._goVfxShootEnergy1)
+		else
+			V.playChildEffects(self._goVfxShoot1)
+		end
+
+		V.playChildEffects(self._goVfxShootShell1)
+	else
+		if self._ator._boostering then
+			V.playChildEffects(self._goVfxShootEnergy2)
+		else
+			V.playChildEffects(self._goVfxShoot2)
+		end
+
+		V.playChildEffects(self._goVfxShootShell2)
+	end
+
+	if not self._ator._isClone then
+		Client.playBattleSound(SHELL_SOUND[math.random(1, 4)])
+	end
+end
+
+function M:updateIKHand()
+	local dir = self._ator._rotation
+	local rate = math.abs(90 - self._ator._angle) / 90
+	local ikDistance = math.lerp(self._handkIkDistanceMin, self._handkIkDistanceMax, rate)
+	local x, y, z = Quaternion.static():SetEuler(0, 0, self._ator._angle - 10 * (self._ator._facingRight and 1 or -1)):MulVec3XYZ(ikDistance, 0, 0)
+
+	opt.vec3_1:Set(self._ator._bodyCenterPosition):AddXYZ(x, y, z)
+	self._varRef._tfIKHandContorlOverride:SetPosition(opt.vec3_1.x, opt.vec3_1.y, 0)
+end
+
+function M:setMoveSpeedX(speed)
+	self._animatorActor:SetFloat(self._ID_FloatMoveSpeed, speed)
+end
+
+function M:setFlip(flipX)
+	if self._flipped == flipX then
+		return
+	end
+
+	self._flipped = flipX
+
+	self:syncFlip()
+end
+
+function M:syncFlip()
+	self._skeletonMecanim.skeleton.ScaleX = self._flipped and -1 or 1
+end
+
+function M:setAttack(attacking)
+	self._isFiring = attacking
+
+	self._animatorActor:SetBool(self._ID_BoolAttacking, attacking)
+end
+
+function M:setRunning(running)
+	if running == self._isRuning then
+		return
+	end
+
+	self._isRuning = running
+
+	self._animatorActor:SetBool(self._ID_BoolRunning, running)
+end
+
+function M:energyEvent(booster)
+	if booster then
+		self:enterChargeState()
+	else
+		self:exitChargeState()
+	end
+end
+
+function M:enterChargeState()
+	self._varRef._goVfxEnergyBg:SetActive(true)
+end
+
+function M:exitChargeState()
+	self._varRef._goVfxEnergyBg:SetActive(false)
+end
+
+function M:launchEvent()
+end
+
+function M:shotEvent()
+end
+
+function M:addEffectEvent(id)
+	if id == 10000 then
+		self:setAttack(false)
+		self:setRunning(false)
+
+		if self._ator._isClone then
+			self._objSuper = self._battleView:createActor("Player_Super_Clone")
+		else
+			self._objSuper = self._battleView:createActor("Player_Super")
+		end
+
+		self._objSuper:SetPosition(self._ator._targetX, self._ator._targetY, 0)
+		Client.playBattleSound("se_Player_super_1")
+	end
+end
+
+function M:onAtorReadyTrans()
+	local tf = self._obj.transform
+	local seq = DOTween.Sequence()
+
+	seq:AppendInterval(0.1)
+	seq:Append(tf:DOScale(0, 0.26666666666666666))
+	seq:AppendInterval(0.2)
+
+	local vfx = self._sessionView:createAndPlayVFX("Player_super_translight", 1.5)
+	self._transVfx = vfx
+
+	vfx:SetPosition(self._ator._position.x, self._ator._position.y, 0)
+
+	local path = table.new(32, 0)
+	local segmentCount = 32
+
+	for i = 0, segmentCount do
+		local t = i / segmentCount
+		local u = 1 - t
+		local x = u * u * self._ator._position.x + t * t * self._ator._targetX
+		local y = u * u * self._ator._position.y + t * t * self._ator._targetY
+
+		table.insert(path, Vector3.new(x, y))
+	end
+
+	seq:AppendCallback(function ()
+		self._transVfx.transform:DOPath(path, 0.3):SetEase(V.EASE_OUT_SINE)
+	end)
+	seq:AppendInterval(0.2)
+	seq:AppendCallback(function ()
+		local vfx = self._sessionView:createAndPlayVFX("Player_super_finishlight", 0.6)
+
+		vfx:SetPosition(self._ator._targetX, self._ator._targetY, 0)
+	end)
+end
+
+function M:onSuperTransFinished()
+	self._obj:SetActive(false)
+
+	self._obj = self._objSuper
+end
+
+function M:updateMaterialParams()
+	if self._ator._isClone then
+		self._skinChanger:SetMaterial("_HologramBlend", 0.4)
+	end
+end
+
+return M

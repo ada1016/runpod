@@ -1,0 +1,54 @@
+local M = class("UnionMemberApplyWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionMemberApplyWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel, delegate)
+	self._panel = panel
+	self._delegate = delegate
+
+	panel:setClick(self._btnReject, function ()
+		P._playerUnion:tryDealApplyReq(self._data.id, false)
+		delegate:refreshList()
+	end)
+	panel:setClick(self._btnAgree, function ()
+		P._playerUnion:tryDealApplyReq(self._data.id, true)
+		delegate:refreshList()
+	end)
+	panel:setClick(self._btnAvatar, function ()
+		V.viewOtherInfo({
+			firebaseId = self._data.id
+		})
+	end)
+end
+
+function M:update(data)
+	self._data = data
+
+	V.setPlayerName(self._tmpName, data.name, data.name_color, "6BD4B4", data.medal)
+	V.loadAvatar(self._goAvatarWidget, data.avatar, data.avatar_frame)
+
+	self._tmpAtk.text = data.atk
+end
+
+return M

@@ -1,0 +1,307 @@
+local M = class("GatlinSkinPanel", requireLua("BasePanel"))
+local Types = Types
+local COLOR_ANIMS = {
+	"anim_GatlinSkinColorPurple",
+	"anim_GatlinSkinColorOrange",
+	"anim_GatlinSkinColorRed",
+	"anim_GatlinSkinColorRed"
+}
+local GatlinSkinWidget = requireLua("GatlinSkinWidget")
+M.args = {
+	animColors = Types.Animation,
+	rawImgBg = Types.RawImage,
+	btnStat = Types.Button,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	txtName = Types.TMP_Text,
+	goStarArea = Types.GameObject,
+	goStarContainer = Types.GameObject,
+	btnPrev = Types.Button,
+	btnNext = Types.Button,
+	tfGatlinSkinContainer = Types.Transform,
+	imgGatlinMask = Types.Image,
+	goUnlockTip = Types.GameObject,
+	txtDmgName = Types.TMP_Text,
+	txtDmgAdd = Types.TMP_Text,
+	goPropArea = Types.GameObject,
+	goGuardianArea = Types.GameObject,
+	btnUnlock = Types.Button,
+	btnUpgrade = Types.Button,
+	btnEquip = Types.Button,
+	btnRemove = Types.Button,
+	goMaxStar = Types.GameObject,
+	goCostArea = Types.GameObject,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	txtGuardianDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goGatlinObjs = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnUnlock, function ()
+		local ret, param = P._playerSkin:tryUpgradeSkin(self._selectedSkinId)
+
+		if ret == ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.SkinUpgradePanel, self._selectedSkinId)
+			self._selectedGatlinSkinWidget:init(self._selectedSkinId)
+
+			for _, cfg in pairs(D._skinConfigs[D.SkinType.Gatlin]) do
+				if not cfg._hidden and cfg._requireSkin == self._selectedSkinId then
+					local id = cfg._id
+
+					if not self._skinWidgets[id] then
+						local widget = GatlinSkinWidget.create(self._tfScrollContainer)
+						widget._index = -1
+
+						widget:init(id)
+
+						self._skinWidgets[id] = widget
+
+						self:setClick(widget._btnClick, function ()
+							if self._selectedGatlinSkinWidget then
+								self._selectedGatlinSkinWidget:setChoose(false)
+							end
+
+							self._selectedGatlinSkinWidget = widget
+							self._selectedSkinId = id
+
+							widget:setChoose(true)
+							self:updateDisplaySkin()
+						end)
+					else
+						self._skinWidgets[id]:updateDot()
+					end
+
+					break
+				end
+			end
+
+			self:updateOrder()
+			self:updateDisplaySkin()
+			self._btnStat:SetActive(true)
+		else
+			V.showResultCode(ret, param)
+
+			return
+		end
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		UIManager.openPanel(PrefabDefine.SkinRefitPanel, self._selectedSkinId, function ()
+			self._selectedGatlinSkinWidget:init(self._selectedSkinId)
+
+			self._displaySkins = P._playerSkin:getOrderedSkins(D.SkinType.Gatlin)
+
+			self:updateOrder()
+			self:updateDisplaySkin()
+
+			for _, widget in pairs(self._skinWidgets) do
+				widget:updateDot()
+			end
+		end)
+	end)
+	self:setClick(self._btnEquip, function ()
+		if P._playerSkin:getSkinLevel(self._selectedSkinId) > 0 then
+			P._playerSkin:setEquipedSkin(D.WEAPON_GATLIN, self._selectedSkinId)
+
+			if self._equipedSkinId then
+				self._skinWidgets[self._equipedSkinId]:init(self._equipedSkinId)
+			end
+
+			self._equipedSkinId = P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN)
+
+			self._selectedGatlinSkinWidget:init(self._selectedSkinId)
+			self:updateDisplaySkin()
+
+			for _, widget in pairs(self._skinWidgets) do
+				widget:updateDot()
+			end
+		end
+	end)
+	self:setClick(self._btnRemove, function ()
+		P._playerSkin:setEquipedSkin(D.WEAPON_GATLIN, nil)
+
+		self._equipedSkinId = P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN)
+
+		self._selectedGatlinSkinWidget:init(self._selectedSkinId)
+		self:updateDisplaySkin()
+
+		for _, widget in pairs(self._skinWidgets) do
+			widget:updateDot()
+		end
+	end)
+	self:setClick(self._btnPrev, function ()
+		if self._selectedGatlinSkinWidget then
+			self._selectedGatlinSkinWidget:setChoose(false)
+
+			local prev = self._selectedGatlinSkinWidget._index - 1
+
+			if prev == 0 then
+				prev = #self._displaySkins
+			end
+
+			self._selectedSkinId = self._displaySkins[prev]
+			self._selectedGatlinSkinWidget = self._skinWidgets[self._selectedSkinId]
+
+			self._selectedGatlinSkinWidget:setChoose(true)
+			self:updateDisplaySkin()
+		end
+	end)
+	self:setClick(self._btnNext, function ()
+		if self._selectedGatlinSkinWidget then
+			self._selectedGatlinSkinWidget:setChoose(false)
+
+			local next = self._selectedGatlinSkinWidget._index + 1
+
+			if next == #self._displaySkins + 1 then
+				next = 1
+			end
+
+			self._selectedSkinId = self._displaySkins[next]
+			self._selectedGatlinSkinWidget = self._skinWidgets[self._selectedSkinId]
+
+			self._selectedGatlinSkinWidget:setChoose(true)
+			self:updateDisplaySkin()
+		end
+	end)
+	self:setClick(self._btnStat, function ()
+		UIManager.openPanel(PrefabDefine.SkinStatPanel, D.SkinType.Gatlin)
+	end)
+end
+
+function M:init()
+	self._selectedGatlinSkinWidget = nil
+	self._equipedSkinId = P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN)
+	self._selectedSkinId = self._equipedSkinId
+	self._displaySkins = {}
+	self._skinWidgets = {}
+	self._displaySkins = P._playerSkin:getOrderedSkins(D.SkinType.Gatlin)
+	local hasAnySkin = false
+
+	for i = 1, #self._displaySkins do
+		local id = self._displaySkins[i]
+
+		if id ~= D.DEFAULT_GATLIN_SKIN and P._playerSkin:getSkinLevel(id) > 0 then
+			hasAnySkin = true
+		end
+
+		local widget = GatlinSkinWidget.create(self._tfScrollContainer)
+		widget._index = i
+
+		widget:init(id)
+
+		self._skinWidgets[id] = widget
+
+		if id == self._selectedSkinId then
+			self._selectedGatlinSkinWidget = widget
+
+			widget:setChoose(true)
+			widget:setUse(true)
+		end
+
+		if self._selectedSkinId == nil then
+			self._selectedGatlinSkinWidget = widget
+			self._selectedSkinId = id
+
+			widget:setChoose(true)
+		end
+
+		self:setClick(widget._btnClick, function ()
+			if self._selectedGatlinSkinWidget then
+				self._selectedGatlinSkinWidget:setChoose(false)
+			end
+
+			self._selectedGatlinSkinWidget = widget
+			self._selectedSkinId = id
+
+			widget:setChoose(true)
+			self:updateDisplaySkin()
+		end)
+	end
+
+	self._btnStat:SetActive(hasAnySkin)
+	self:updateDisplaySkin()
+end
+
+function M:updateOrder()
+	self._displaySkins = P._playerSkin:getOrderedSkins(D.SkinType.Gatlin)
+
+	for i = 1, #self._displaySkins do
+		local id = self._displaySkins[i]
+		local widget = self._skinWidgets[id]
+		widget._index = i
+
+		widget.transform:SetSiblingIndex(i - 1)
+	end
+end
+
+function M:updateSkinBgArea()
+	local skinStage = P._playerSkin:readSkinStageBg(self._selectedSkinId)
+
+	LuaUnity.setTexture(self._rawImgBg, string.format("img_bg_skin_gatlin_%d", skinStage))
+end
+
+function M:updateDisplaySkin()
+	local playerSkin = P._playerSkin
+	local cfg = playerSkin:getCfg(self._selectedSkinId)
+	local level = playerSkin:getSkinLevel(self._selectedSkinId)
+	local quality = playerSkin:readQuality(self._selectedSkinId, D.SkinType.Gatlin)
+	local canCfgUpgrade = playerSkin:canCfgUpgradeSkin(self._selectedSkinId)
+
+	self._btnUnlock:SetActive(level == 0)
+	self._btnUpgrade:SetActive(level > 0 and level < D.MAX_SKIN_STAR and canCfgUpgrade)
+	self._btnEquip:SetActive(level > 0 and self._equipedSkinId ~= self._selectedSkinId)
+	self._btnRemove:SetActive(false)
+
+	local isGuardian = cfg._index == 0
+
+	self._goMaxStar:SetActive(canCfgUpgrade and level == D.MAX_SKIN_STAR)
+
+	if level == 0 and not isGuardian then
+		self._goCostArea:SetActive(true)
+		V.loadItemCost(self._imgCost, self._txtCost, self._selectedSkinId, 1, self, true)
+		self._btnUnlock.dot:SetActive(playerSkin:canUpgradeSkin(self._selectedSkinId))
+	else
+		self._btnEquip.dot:SetActive(playerSkin:isNewSkin(self._selectedSkinId))
+		self._btnUpgrade.dot:SetActive(playerSkin:canUpgradeSkin(self._selectedSkinId))
+		self._goCostArea:SetActive(false)
+	end
+
+	local isEquiped = self._selectedSkinId == self._equipedSkinId and playerSkin:getSkinLevel(self._selectedSkinId) > 0
+
+	V.setBtnStyle(self._btnRemove, isEquiped and V.BTN_STYLE.green or V.BTN_STYLE.yellow, isEquiped and SID.STR_UNEQUIP or SID.STR_EQUIP)
+	self._txtName:SetLocalize(cfg._nameSid)
+	self._goStarArea:SetActive(canCfgUpgrade)
+
+	if canCfgUpgrade then
+		V.setSkinQualityStar(self._goStarContainer, quality, level)
+	end
+
+	if isGuardian then
+		self._goPropArea:SetActive(false)
+		self._goGuardianArea:SetActive(true)
+		self._txtGuardianDesc:SetLocalize(cfg._descSid)
+	else
+		self._goPropArea:SetActive(true)
+		self._goGuardianArea:SetActive(false)
+		self._txtDmgName:SetLocalize(SID.STR_FINAL_DAMAGE_NAME, -D._weaponConfig[D.WEAPON_GATLIN]._skillNameSid)
+	end
+
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+	end
+
+	self._gatlinObj = V.getGatlinSkinObj(self._tfGatlinSkinContainer, self._selectedSkinId)
+
+	LuaUnity.setTPSprite(self._imgGatlinMask, string.format("cardgun/skin_%d", self._selectedSkinId), true)
+
+	self._txtDmgAdd.text = cfg._damageAdd * math.max(1, level) .. "%"
+
+	self:updateSkinBgArea()
+end
+
+return M

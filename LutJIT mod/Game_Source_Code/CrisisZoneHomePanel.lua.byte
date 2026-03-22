@@ -1,0 +1,776 @@
+local M = class("CrisisZoneHomePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnTip = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtRefreshTime = Types.TMP_Text,
+	txtDiffTitle1 = Types.TMP_Text,
+	txtDiffTitle2 = Types.TMP_Text,
+	btnCenterClick = Types.Button,
+	atorHalo = Types.Animator,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	btnMissionTip = Types.Button,
+	animMsTitle = Types.Animation,
+	animEnemyTitle1 = Types.Animation,
+	animChangeMs = Types.Animation,
+	txtEnemyTitle1 = Types.TMP_Text,
+	txtRecord1 = Types.TMP_Text,
+	txtRecordComplete1 = Types.TMP_Text,
+	tfDotsLeft1 = Types.Transform,
+	tfDotsRight1 = Types.Transform,
+	tfLightsLeft1 = Types.Transform,
+	tfLightsRight1 = Types.Transform,
+	animChangeEnemy1 = Types.Animation,
+	imgCurrentShowEnemy1 = Types.Image,
+	imgLastShowEnemy1 = Types.Image,
+	txtEnemyTitle2 = Types.TMP_Text,
+	txtRecord2 = Types.TMP_Text,
+	txtRecordComplete2 = Types.TMP_Text,
+	tfDotsLeft2 = Types.Transform,
+	tfDotsRight2 = Types.Transform,
+	tfLightsLeft2 = Types.Transform,
+	tfLightsRight2 = Types.Transform,
+	animChangeEnemy2 = Types.Animation,
+	imgCurrentShowEnemy2 = Types.Image,
+	imgLastShowEnemy2 = Types.Image,
+	imgGoodLuckWeapon1 = Types.Image,
+	imgGoodLuckWeapon2 = Types.Image,
+	imgBadLuckWeapon1 = Types.Image,
+	imgBadLuckWeapon2 = Types.Image,
+	goBattleArea = Types.GameObject,
+	btnBattle = Types.Button,
+	txtLimitNum = Types.TMP_Text,
+	btnAddChallengeNum = Types.Button,
+	btnGoodLuckTip = Types.Button,
+	btnBadLuckTip = Types.Button,
+	btnRank = Types.Button,
+	btnMilestone = Types.Button,
+	goLockArea = Types.GameObject,
+	txtLockTip = Types.TMP_Text,
+	btnGoLeft = Types.Button,
+	btnGoRight = Types.Button,
+	goNewMissionUnlocked = Types.GameObject,
+	btnTrain = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	Client.playMusic("music_critical_main")
+
+	self._leftDots1 = {
+		self._tfDotsLeft1:GetChild(0):GetChild(0),
+		self._tfDotsLeft1:GetChild(1):GetChild(0),
+		self._tfDotsLeft1:GetChild(2):GetChild(0)
+	}
+	self._leftDots2 = {
+		self._tfDotsLeft2:GetChild(0):GetChild(0),
+		self._tfDotsLeft2:GetChild(1):GetChild(0),
+		self._tfDotsLeft2:GetChild(2):GetChild(0)
+	}
+	self._rightDots1 = {
+		self._tfDotsRight1:GetChild(0):GetChild(0),
+		self._tfDotsRight1:GetChild(1):GetChild(0),
+		self._tfDotsRight1:GetChild(2):GetChild(0)
+	}
+	self._rightDots2 = {
+		self._tfDotsRight2:GetChild(0):GetChild(0),
+		self._tfDotsRight2:GetChild(1):GetChild(0),
+		self._tfDotsRight2:GetChild(2):GetChild(0)
+	}
+	self._leftDotAnims1 = {
+		self._tfDotsLeft1:GetChild(0):GetComponent("Animation"),
+		self._tfDotsLeft1:GetChild(1):GetComponent("Animation"),
+		self._tfDotsLeft1:GetChild(2):GetComponent("Animation")
+	}
+	self._leftDotAnims2 = {
+		self._tfDotsLeft2:GetChild(0):GetComponent("Animation"),
+		self._tfDotsLeft2:GetChild(1):GetComponent("Animation"),
+		self._tfDotsLeft2:GetChild(2):GetComponent("Animation")
+	}
+	self._rightDotAnims1 = {
+		self._tfDotsRight1:GetChild(0):GetComponent("Animation"),
+		self._tfDotsRight1:GetChild(1):GetComponent("Animation"),
+		self._tfDotsRight1:GetChild(2):GetComponent("Animation")
+	}
+	self._rightDotAnims2 = {
+		self._tfDotsRight2:GetChild(0):GetComponent("Animation"),
+		self._tfDotsRight2:GetChild(1):GetComponent("Animation"),
+		self._tfDotsRight2:GetChild(2):GetComponent("Animation")
+	}
+
+	self._btnGoLeft:SetActive(false)
+	self._btnGoRight:SetActive(false)
+
+	if lc._isCN then
+		self._btnTrain:SetActive(false)
+	end
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:setClick(self._btnTip, function ()
+		UIManager.openPanel(PrefabDefine.CrisisZoneRulePanel)
+	end)
+	self:setClick(self._btnMissionTip, function ()
+		UIManager.openPanel(PrefabDefine.MissionInfoPanel, self._msId, self._msType)
+	end)
+	self:setClick(self._btnBattle, function ()
+		self:dealEnterBattle()
+	end)
+	self:setClick(self._btnLeft, function ()
+		self:showLastDifficult()
+	end)
+	self:setClick(self._btnRight, function ()
+		self:showNextDifficult()
+	end)
+	self:setClick(self._btnGoLeft, function ()
+		self:showLastDifficult()
+	end)
+	self:setClick(self._btnGoRight, function ()
+		self:showNextDifficult()
+	end)
+	self:setClick(self._btnAddChallengeNum, function ()
+		self:dealAddChance()
+	end)
+	self:setClick(self._btnRank, function ()
+		UIManager.openPanel(PrefabDefine.CrisisZoneRankPanel, self._showDifficult)
+	end)
+	self:setClick(self._btnMilestone, function ()
+		UIManager.openPanel(PrefabDefine.CrisisZoneMilestonePanel, self._showDifficult)
+	end)
+	self:setClick(self._btnGoodLuckTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_CRISIS_ZONE_LUCKY_TURRET
+		}, {
+			target = self._btnGoodLuckTip.gameObject,
+			offset = {
+				-20,
+				0,
+				0
+			}
+		})
+	end)
+	self:setClick(self._btnBadLuckTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_CRISIS_ZONE_UNLUCKY_TURRET
+		}, {
+			target = self._btnBadLuckTip.gameObject,
+			offset = {
+				-20,
+				0,
+				0
+			}
+		})
+	end)
+	self:setClick(self._btnTrain, function ()
+		if P._playerCrisisZone:hasTrainChance() then
+			V.showMessageBox({
+				_type = 2,
+				_cParams = 1,
+				_content = SID.TIP_CRISIS_TRAIN,
+				_confirmCallback = function ()
+					self:dealEnterBattle(true)
+				end,
+				_cancelCallback = function ()
+				end
+			})
+		else
+			V.showToast(SID.TIP_CRISIS_TRAIN_LIMITED)
+		end
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+end
+
+function M:init()
+	self._module = P._playerCrisisZone
+	self._msId = self._module:getLastMissionId()
+	self._msType = D.MissionType.CrisisZone
+	self._maxDiff = math.min(self._module:getMaxDifficulty(), self._module:getDifficultyByMissionId(self._module:getMissionId()) + 1)
+	local ttsid = D._challengeConfig[D.ChallengeId.RangerChallenge]._nameSid
+
+	self._txtTitle:SetLocalize(ttsid)
+
+	self._showEnemyTime = 0
+	self._showEnemyIdx = 1
+	self._lastShowEnemyIdx = 1
+	self._lastDiffShowEnemyIdx = 1
+	self._showDifficult = self._module:getDifficultyByMissionId(self._msId)
+
+	if self._interval then
+		lc.stopTimer(self._interval)
+
+		self._interval = nil
+	end
+
+	self._frameTimers = {}
+	self._interval = lc.setInterval(function ()
+		self:updateTimers()
+	end, 0.2)
+
+	self:insertTimer("expireTimer", 0.5, -1, function ()
+		self:updateExpireTime()
+	end, true)
+	self:updateUI()
+
+	if self._module:hasGotReward() then
+		MainGameRoot:showGlobalMask()
+
+		self._rewardTimer = lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+			UIManager.openPanel(PrefabDefine.CrisisZoneFinalRewardPanel, function ()
+				local rewards = self._module:getSettleRewards()
+
+				if #rewards > 0 then
+					V.showRewardClaimPanel(self._module:getSettleRewards())
+				end
+			end)
+		end, 0.5)
+	end
+end
+
+function M:updateUI()
+	self:updateLuckWeapon()
+	self:updateShowDifficult(true)
+	self:updateLimit()
+	self:updateBattleChance()
+	self:updateDot()
+	self:resetCurrentShowEnemy()
+end
+
+function M:insertTimer(key, dt, loop, callFunc, executeImme)
+	local ct = Time.timeSinceLevelLoad
+	self._frameTimers[key] = {
+		time = ct + dt,
+		loop = loop or 1,
+		deltaTime = dt,
+		callFunc = callFunc
+	}
+
+	if executeImme then
+		callFunc()
+	end
+end
+
+function M:updateTimers()
+	local ct = Time.timeSinceLevelLoad
+
+	for key, v in pairs(self._frameTimers) do
+		if v.time < ct then
+			v.callFunc()
+
+			v.time = ct + v.deltaTime
+
+			if v.loop > 0 then
+				v.loop = v.loop - 1
+			end
+
+			if v.loop == 0 then
+				self:removeTimer(key)
+			end
+		end
+	end
+end
+
+function M:removeTimer(key)
+	self._frameTimers[key] = nil
+end
+
+function M:updateMissionInfo(reset)
+	local txtComp = self._txtRecord1
+	local msId = self._module:getMissionIdByDifficulty(self._showDifficult)
+
+	self._module:setLastMissionId(msId)
+
+	local killNum = self._module:getMissionKillRecord(msId)
+
+	if D.CRISIS_ZONE_MAX_ENEMY_COUNT <= killNum then
+		local time = 9999 - (killNum - D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+		local m = math.floor(time / 60)
+		local s = time % 60
+
+		self._txtRecord1.transform.parent:SetActive(false)
+		self._txtRecordComplete1.transform.parent:SetActive(true)
+		self._txtRecordComplete1:SetLocalize(SID.TIMER_M_S, m, s)
+		self._txtRecordComplete1:SetLocalizeS(SID.TIP_CRISIS_ZONE_COMPLETE_RECORD, self._txtRecordComplete1.text)
+	else
+		self._txtRecord1.transform.parent:SetActive(true)
+		self._txtRecordComplete1.transform.parent:SetActive(false)
+		self._txtRecord1:SetLocalize(SID.TIP_CRISIS_ZONE_KILL_RECORD, killNum, D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+	end
+
+	if not reset then
+		local txtComp = self._txtRecord2
+		local msId = self._module:getMissionIdByDifficulty(self._lastShowDifficult)
+		local killNum = self._module:getMissionKillRecord(msId)
+
+		if D.CRISIS_ZONE_MAX_ENEMY_COUNT <= killNum then
+			local time = 9999 - (killNum - D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+			local m = math.floor(time / 60)
+			local s = time % 60
+
+			self._txtRecord2.transform.parent:SetActive(false)
+			self._txtRecordComplete2.transform.parent:SetActive(true)
+			self._txtRecordComplete2:SetLocalize(SID.TIMER_M_S, m, s)
+			self._txtRecordComplete2:SetLocalizeS(SID.TIP_CRISIS_ZONE_COMPLETE_RECORD, self._txtRecordComplete2.text)
+		else
+			self._txtRecord2.transform.parent:SetActive(true)
+			self._txtRecordComplete2.transform.parent:SetActive(false)
+			self._txtRecord2:SetLocalize(SID.TIP_CRISIS_ZONE_KILL_RECORD, killNum, D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+		end
+	end
+
+	if self._module:isMissionUnlocked(self._msId) then
+		self._goBattleArea:SetActive(true)
+		self._goLockArea:SetActive(false)
+	else
+		self._goBattleArea:SetActive(false)
+		self._goLockArea:SetActive(true)
+		self._txtLockTip:SetLocalize(SID.TIP_CRISIS_ZONE_UNLOCK_TIP, D._globalConfig._crisis_zone_pass_wave)
+	end
+end
+
+function M:updateBattleChance()
+	local remainChance = self._module:getCircleBattleTotalChance() - self._module:getCircleBattleChance()
+
+	self._txtLimitNum:SetLocalize(SID.TIP_BATTLE_CHANCE_X_Y, remainChance, self._module:getCircleBattleTotalChance())
+end
+
+function M:updateExpireTime()
+	local targetTime = self._module:getCircleEndTime()
+	local seconds = targetTime - C.getCurTime()
+	local d, h, m, s = C.getTimeEndArgs(seconds)
+
+	if d >= 2 then
+		self._txtRefreshTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._txtRefreshTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:updateLuckWeapon()
+	local good1, good2, bad1, bad2 = self._module:getLuckWeapon()
+
+	LuaUnity.setTPSprite(self._imgGoodLuckWeapon1, "weapon/weapon_" .. good1, true)
+	LuaUnity.setTPSprite(self._imgGoodLuckWeapon2, "weapon/weapon_" .. good2, true)
+	LuaUnity.setTPSprite(self._imgBadLuckWeapon1, "weapon/weapon_" .. bad1, true)
+	LuaUnity.setTPSprite(self._imgBadLuckWeapon2, "weapon/weapon_" .. bad2, true)
+end
+
+function M:showLastDifficult()
+	self:showDifficult(-1)
+end
+
+function M:showNextDifficult()
+	self:showDifficult(1)
+end
+
+function M:showDifficult(delta)
+	delta = delta > 0 and 1 or -1
+	local nextDiff = self._showDifficult + delta
+	local isMinDiff = nextDiff < 1
+
+	if isMinDiff then
+		return
+	end
+
+	local maxDiff = self._maxDiff
+	local isMaxDiff = maxDiff < nextDiff
+
+	if isMaxDiff then
+		return
+	end
+
+	for i = 1, 3 do
+		self._leftDotAnims1[i]:Stop()
+	end
+
+	for i = 1, 3 do
+		self._rightDotAnims1[i]:Stop()
+	end
+
+	self._animChangeMs:Stop()
+
+	local playChangeMsAnimName = delta == 1 and "anim_rangerInstance_switchRight" or "anim_rangerInstance_switchLeft"
+	self._lastDiffShowEnemyIdx = self._showEnemyIdx
+	self._showEnemyIdx = 1
+	self._lastShowDifficult = self._showDifficult
+	self._showDifficult = nextDiff
+	self._msId = self._msId + 1000 * delta
+	self._isInChangingDiff = true
+
+	self._animChangeMs:Play(playChangeMsAnimName)
+	self._atorHalo:SetFloat("speed", delta)
+	self._atorHalo:SetBool("rotating", true)
+	self:insertTimer("changeDiffEnd", 0.5, 1, function ()
+		self._atorHalo:SetBool("rotating", false)
+
+		self._isInChangingDiff = false
+	end)
+	self:removeTimer("changeEnemyEnd")
+	self:updateShowDifficult()
+	self:resetCurrentShowEnemy()
+	self:updateDot()
+end
+
+function M:updateArrow()
+	self._btnLeft:SetActive(self._showDifficult > 1)
+	self._btnRight:SetActive(self._showDifficult < self._maxDiff)
+end
+
+function M:updateShowEnemy()
+	self:insertTimer("changeEnemyEnd", 3, -1, function ()
+		self:showNextEnemy()
+	end)
+end
+
+function M:resetCurrentShowEnemy()
+	local enemies = self._showEnemies
+
+	if #enemies == 0 then
+		return
+	end
+
+	self._showEnemyIdx = 1
+
+	V.resetAnimToEndFrame(self._animChangeEnemy1, "anim_rangerInstance_monsterChange")
+
+	local showEnemyId = enemies[self._showEnemyIdx]
+
+	V.loadEnemySprite(self._imgCurrentShowEnemy1, showEnemyId)
+	self:updateEnemyTitle()
+
+	for i = 1, 3 do
+		lc.setLocalScale(self._leftDots1[i], i == 1 and 1 or 0)
+		self._leftDotAnims1[i]:Stop()
+	end
+
+	for i = 1, 3 do
+		lc.setLocalScale(self._rightDots1[i], i == 1 and 1 or 0)
+		self._rightDotAnims1[i]:Stop()
+	end
+end
+
+function M:showNextEnemy()
+	local enemies = self._showEnemies
+
+	if #enemies == 0 then
+		return
+	end
+
+	self._lastShowEnemyIdx = self._showEnemyIdx
+	self._showEnemyIdx = self._showEnemyIdx + 1
+
+	if self._showEnemyIdx > #enemies then
+		self._showEnemyIdx = 1
+	end
+
+	self._animChangeEnemy1:Play("anim_rangerInstance_monsterChange")
+	self._animEnemyTitle1:Play("anim_rangerInstance_name")
+
+	local showEnemyId = enemies[self._showEnemyIdx]
+	local lastShowEnemyId = enemies[self._lastShowEnemyIdx]
+
+	V.loadEnemySprite(self._imgCurrentShowEnemy1, showEnemyId)
+	V.loadEnemySprite(self._imgLastShowEnemy1, lastShowEnemyId)
+	self:insertTimer("updateEnemyTitle", 0.8, 1, function ()
+		self:updateEnemyTitle()
+	end)
+
+	if self._showEnemyIdx < 4 then
+		self._leftDotAnims1[self._showEnemyIdx]:Play("anim_rangerInstance_dots")
+		self._rightDotAnims1[self._showEnemyIdx]:Play("anim_rangerInstance_dots")
+	end
+
+	if self._lastShowEnemyIdx < 4 then
+		self._leftDotAnims1[self._lastShowEnemyIdx]:Play("anim_rangerInstance_dots_2")
+		self._rightDotAnims1[self._lastShowEnemyIdx]:Play("anim_rangerInstance_dots_2")
+	end
+end
+
+function M:updateEnemyTitle()
+	local enemies = self._showEnemies
+	local showEnemyId = enemies[self._showEnemyIdx]
+
+	self._txtEnemyTitle1:SetLocalize(D._battleEnemyConfig[showEnemyId]._nameSid)
+end
+
+function M:updateShowDifficult(reset)
+	local allEms = D._missionCrisisEnemyByDifficulty[self._showDifficult]
+	self._showEnemies = {}
+
+	for i = 1, #allEms do
+		local eid = allEms[i]
+
+		if not D._battleEnemyConfig[eid]._originId then
+			self._showEnemies[#self._showEnemies + 1] = eid
+		end
+	end
+
+	if #self._showEnemies == 0 then
+		self._showEnemies[1] = 1101
+	end
+
+	local showEnemyId = self._showEnemies[1]
+
+	self._txtDiffTitle1:SetLocalize(SID.STR_DIFFICULTY_X, self._showDifficult)
+	self._txtEnemyTitle1:SetLocalize(D._battleEnemyConfig[showEnemyId]._nameSid)
+	V.loadEnemySprite(self._imgCurrentShowEnemy1, showEnemyId)
+
+	if reset then
+		self._lastShowDifficult = self._showDifficult
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsLeft1:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i <= self._showDifficult and 1 or 0)
+		end
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsRight1:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i <= self._showDifficult and 1 or 0)
+		end
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsLeft2:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i <= self._lastShowDifficult and 1 or 0)
+		end
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsRight2:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i <= self._lastShowDifficult and 1 or 0)
+		end
+	else
+		local animName = "anim_rangerInstance_monsterChange"
+		local state = self._animChangeEnemy1:get_Item(animName)
+		local isPlayingChangeEnemy1 = self._animChangeEnemy1:IsPlaying(animName)
+
+		if state ~= nil then
+			local normalizedTime = state.normalizedTime
+
+			self._animChangeEnemy2:Play(animName)
+
+			self._animChangeEnemy2:get_Item(animName).normalizedTime = normalizedTime
+
+			self._animChangeEnemy2:Sample()
+		end
+
+		self._animChangeEnemy1:Stop()
+
+		for i = 1, 3 do
+			lc.setLocalScale(self._leftDots2[i], self._lastDiffShowEnemyIdx == i and 1 or 0)
+		end
+
+		for i = 1, 3 do
+			lc.setLocalScale(self._rightDots2[i], self._lastDiffShowEnemyIdx == i and 1 or 0)
+		end
+
+		local allEms = D._missionCrisisEnemyByDifficulty[self._lastShowDifficult]
+		local lastDiffEnemies = {}
+
+		for i = 1, #allEms do
+			local eid = allEms[i]
+
+			if not D._battleEnemyConfig[eid]._originId then
+				lastDiffEnemies[#lastDiffEnemies + 1] = eid
+			end
+		end
+
+		local lastPassedEid = self._lastDiffShowEnemyIdx - 1
+
+		if lastPassedEid == 0 then
+			lastPassedEid = lastDiffEnemies[#lastDiffEnemies]
+		else
+			lastPassedEid = lastDiffEnemies[lastPassedEid]
+		end
+
+		local lastShowEnemyId = lastDiffEnemies[self._lastDiffShowEnemyIdx]
+
+		self._txtDiffTitle2:SetLocalize(SID.STR_DIFFICULTY_X, self._lastShowDifficult)
+		self._txtEnemyTitle2:SetLocalize(D._battleEnemyConfig[lastShowEnemyId]._nameSid)
+
+		if isPlayingChangeEnemy1 then
+			V.loadEnemySprite(self._imgCurrentShowEnemy2, lastShowEnemyId)
+			V.loadEnemySprite(self._imgLastShowEnemy2, lastPassedEid)
+		else
+			V.loadEnemySprite(self._imgCurrentShowEnemy2, lastShowEnemyId)
+			V.loadEnemySprite(self._imgLastShowEnemy2, lastShowEnemyId)
+		end
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsLeft2:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i - 1 <= (self._lastShowDifficult - 1) % 5 and 1 or 0)
+		end
+
+		for i = 1, 5 do
+			local tfLight = self._tfLightsRight2:GetChild(i - 1)
+			local animLight = tfLight:GetComponent("Animation")
+
+			lc.setLocalScale(tfLight:GetChild(0), i - 1 <= (self._lastShowDifficult - 1) % 5 and 1 or 0)
+		end
+
+		local delayDotTime = 0.6
+
+		if self._lastShowDifficult < self._showDifficult then
+			if self._lastShowDifficult % 5 == 0 then
+				for i = 2, 5 do
+					local tfLight = self._tfLightsRight1:GetChild(i - 1)
+
+					tfLight:GetChild(0):DOScale(Vector3.static(0, 0, 0), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+
+					local tfLight = self._tfLightsLeft1:GetChild(i - 1)
+
+					tfLight:GetChild(0):DOScale(Vector3.static(0, 0, 0), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+				end
+			else
+				local tfLight = self._tfLightsRight1:GetChild((self._showDifficult - 1) % 5)
+
+				tfLight:GetChild(0):DOScale(Vector3.static(1, 1, 1), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+
+				local tfLight = self._tfLightsLeft1:GetChild((self._showDifficult - 1) % 5)
+
+				tfLight:GetChild(0):DOScale(Vector3.static(1, 1, 1), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+			end
+		elseif self._showDifficult % 5 == 0 then
+			for i = 2, 5 do
+				local tfLight = self._tfLightsRight1:GetChild(i - 1)
+
+				tfLight:GetChild(0):DOScale(Vector3.static(1, 1, 1), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+
+				local tfLight = self._tfLightsLeft1:GetChild(i - 1)
+
+				tfLight:GetChild(0):DOScale(Vector3.static(1, 1, 1), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+			end
+		else
+			local tfLight = self._tfLightsRight1:GetChild((self._lastShowDifficult - 1) % 5)
+
+			tfLight:GetChild(0):DOScale(Vector3.static(0, 0, 0), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+
+			local tfLight = self._tfLightsLeft1:GetChild((self._lastShowDifficult - 1) % 5)
+
+			tfLight:GetChild(0):DOScale(Vector3.static(0, 0, 0), 0.1):SetDelay(delayDotTime):SetLink(self.gameObject)
+		end
+	end
+
+	self:updateShowEnemy()
+	self:updateArrow()
+	self:updateMissionInfo(reset)
+end
+
+function M:updateLimit()
+	self._txtLimitNum:SetLocalize(SID.TIP_BATTLE_CHANCE_X_Y, 999, 999)
+end
+
+function M:updateDot()
+	self._btnMilestone.dot:SetActive(false)
+	self._btnBattle.dot:SetActive(self._module:getCircleBattleChance() == 0)
+
+	for i = 1, D.CRISIS_ZONE_MAX_DIFFICULTY do
+		local curTasks = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.CrisisZone, i)
+
+		for j = 1, #curTasks do
+			local id = curTasks[j][1]
+
+			if TaskHelper:isFinished(id) and not TaskHelper:isClaimed(id) then
+				self._btnMilestone.dot:SetActive(true)
+
+				break
+			end
+		end
+	end
+
+	self._goNewMissionUnlocked:SetActive(self._module:isNewMissionUnlocked())
+end
+
+function M:dealEnterBattle(isTrain)
+	if not isTrain and self._module:getCircleBattleTotalChance() - self._module:getCircleBattleChance() <= 0 then
+		self:dealAddChance()
+
+		return
+	end
+
+	if not self._module:isMissionUnlocked(self._msId) then
+		return
+	end
+
+	InputBattleData = {
+		msType = D.MissionType.CrisisZone,
+		msId = self._msId,
+		isTrain = isTrain
+	}
+
+	self._module:startBattle(InputBattleData.msId, isTrain)
+	P:setMsType(self._msType)
+	V.switchBetweenMainAndBattleScene("ranger", "battle")
+end
+
+function M:dealAddChance()
+	if self._module:getCircleBattleBuyChance() < D._globalConfig._crisis_zone_buy_limit then
+		local costNum = D._globalConfig._crisis_zone_buy_diamond_cost[self._module:getCircleBattleBuyChance() + 1] or D._globalConfig._crisis_zone_buy_diamond_cost[#D._globalConfig._crisis_zone_buy_diamond_cost]
+
+		UIManager.openPanel(PrefabDefine.PromptsPanel, {
+			_showResCid = D.ResType.diamond,
+			_title = SID.TITLE_BUY_CHANCE,
+			_content = SID.TIP_BUY_CHANCE,
+			_cParams = string.format("<sprite name=\"item_small_10002\">%d ", costNum),
+			_txtConfirm = SID.STR_CONFIRM,
+			_fcCancel = SID.STR_CANCEL,
+			_confirmCheck = function ()
+				return self._module:tryBuyCircleBattleChance()
+			end,
+			_confirmCallback = function ()
+				V.showToast(SID.TIP_CHANLLENGE_CHANCE_INCREASE)
+				self:updateBattleChance()
+			end,
+			_confirmCheckFail = function ()
+				UIManager.openPanel(PrefabDefine.DiamondPanel)
+			end
+		})
+	else
+		V.showToast(SID.TIP_BATTLE_BUY_CHANCE_NOT_ENOUGH)
+	end
+end
+
+function M:OnFocus()
+	self:updateDot()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+	Client.playMusic("music_city")
+end
+
+function M:OnDestroy()
+	if self._interval then
+		lc.stopTimer(self._interval)
+
+		self._interval = nil
+	end
+
+	if self._rewardTimer then
+		lc.stopTimer(self._rewardTimer)
+
+		self._rewardTimer = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+return M

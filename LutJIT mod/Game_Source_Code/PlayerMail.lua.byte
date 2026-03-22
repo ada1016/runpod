@@ -1,0 +1,232 @@
+local M = class("PlayerMail")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._mailIndex = meta.mailIndex or 1
+	self._mails = lc.assignTable(meta, "mails")
+	self._receivedMails = lc.assignTable(meta, "receivedMails")
+
+	for i = 1, #self._mails do
+		local rewardNums = self._mails[i].rewardNums
+
+		if rewardNums then
+			for j = 1, #rewardNums do
+				self._mails[i].rewardNums[j] = ConfusedNumber.create(rewardNums[j], "MailReward")
+			end
+		end
+	end
+end
+
+function M:start()
+	local mails = C._appConfig.mails or C._config.mails
+
+	if mails then
+		self:receiveMails(mails)
+	end
+end
+
+function M:dailyReset()
+	local expired = {}
+
+	for i = 1, #self._mails do
+		local mail = self._mails[i]
+		local expireTime = mail.sendTime + D._mailConfig[mail.template]._lastTime * 86400
+
+		if expireTime <= C.getCurTime() then
+			expired[#expired + 1] = mail
+		end
+	end
+
+	for i = 1, #expired do
+		table.erase(self._mails, expired[i])
+	end
+
+	if #expired > 0 then
+		SimpleEvent.emit("mail.read")
+	end
+end
+
+function M:receiveMail(data)
+	local mailCode = data.mailCode
+
+	if mailCode == nil or table.contains(self._receivedMails, mailCode) then
+		return
+	end
+
+	local condition = data.condition
+
+	if not condition or condition and loadstring(condition)() == true then
+		self:addMail(data.template, data.sendTime, data.rewardCids, data.rewardNums)
+		table.insert(self._receivedMails, mailCode)
+	end
+end
+
+function M:addMail(template, sendTime, rewardCids, rewardNums)
+	local newMail = {
+		id = self._mailIndex,
+		template = template
+	}
+	local cfg = D._mailConfig[newMail.template]
+	newMail.sendTime = C.getZeroTimestamp(sendTime or C.getCurTime())
+	local expireTime = newMail.sendTime + cfg._lastTime * 86400
+	local delta = expireTime - C.getCurTime()
+
+	if delta > 0 then
+		newMail.rewardCids = rewardCids or cfg._rewardCids
+		rewardNums = rewardNums or cfg._rewardNums
+
+		if rewardNums then
+			local tmp = {}
+
+			for i = 1, #rewardNums do
+				tmp[#tmp + 1] = ConfusedNumber.create(rewardNums[i], "MailReward")
+			end
+
+			newMail.rewardNums = tmp
+		end
+
+		self._mails[#self._mails + 1] = newMail
+		self._mailIndex = self._mailIndex + 1
+		self._meta.mailIndex = self._mailIndex
+
+		SimpleEvent.emit("mail.received", newMail)
+	end
+end
+
+function M:receiveMails(stashedMails)
+	for k, v in pairs(stashedMails) do
+		local mail = {
+			mailCode = k,
+			sendTime = C.getCurTime(),
+			template = v.template,
+			rewardCids = v.rewardCids,
+			rewardNums = v.rewardNums,
+			condition = v.condition
+		}
+
+		self:receiveMail(mail)
+	end
+end
+
+function M:popStashedMail()
+	local stashedMails = C._remoteFixOnce and C._remoteFixOnce.stashedMails
+
+	if stashedMails then
+		self:receiveMails(stashedMails)
+
+		C._remoteFixOnce.stashedMails = nil
+	end
+end
+
+function M:hasNewMail()
+	local hasDot = false
+
+	for i = 1, #self._mails do
+		local mail = self._mails[i]
+
+		if not mail.read then
+			hasDot = true
+		end
+	end
+
+	return hasDot
+end
+
+function M:listMails()
+	table.sort(self._mails, function (a, b)
+		return b.sendTime < a.sendTime
+	end)
+
+	return self._mails
+end
+
+function M:claimMail(mail)
+	local rewards = nil
+
+	if table.contains(self._mails, mail) and mail.rewardCids and not mail.claimed then
+		if mail.template == D.MailId.PurchaseRecover then
+			rewards = {}
+
+			self:claimIapMail(mail, rewards)
+		else
+			local tmp = {}
+
+			for i = 1, #mail.rewardNums do
+				tmp[#tmp + 1] = mail.rewardNums[i]()
+			end
+
+			rewards = P._playerAsset:increaseAssetNums(mail.rewardCids, tmp, D.LogWay.claim_mail)
+		end
+
+		mail.claimed = true
+	end
+
+	return rewards
+end
+
+function M:claimAll()
+	local rewards = {}
+	local hasReward = false
+	local hasIap = false
+
+	for i, mail in ipairs(self._mails) do
+		if mail.rewardCids and not mail.claimed then
+			hasReward = true
+
+			if mail.template == D.MailId.PurchaseRecover then
+				hasIap = true
+
+				self:claimIapMail(mail, rewards)
+			else
+				local rewards0 = P._playerAsset:increaseAssetNums(mail.rewardCids, mail.rewardNums, D.LogWay.claim_mail)
+
+				D.foldRewards(rewards, rewards0)
+			end
+
+			mail.read = true
+			mail.claimed = true
+		end
+	end
+
+	if not hasReward then
+		return false
+	else
+		SimpleEvent.emit("mail.read")
+	end
+
+	return rewards, hasIap
+end
+
+function M:claimIapMail(mail, rewards)
+	for i, iapId in ipairs(mail.rewardCids) do
+		local iapCfg = D._iapConfig[iapId]
+
+		if iapCfg then
+			local iapCfg = D._iapConfig[iapId]
+			local payMoney = iapCfg._USD
+			local num = mail.rewardNums[i]()
+
+			if num > 0 then
+				for j = 1, num do
+					local isFirst = P._playerStore:recordPurchase(iapId, payMoney)
+					local rewards0 = P._playerStore:obtainAssets(iapCfg, isFirst)
+
+					P._playerStore:doAfterPurchaseSucceed(iapId)
+					D.foldRewards(rewards, rewards0)
+				end
+			end
+		end
+
+		Trace.AF_traceEvent("e_stashed_purchase", {
+			{
+				_key = "iapId",
+				_value = iapId
+			}
+		})
+	end
+end
+
+return M

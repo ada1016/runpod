@@ -1,0 +1,235 @@
+local M = class("ArkShipManager", BLB)
+M.args = {
+	camera = Types.Camera,
+	atorShip = Types.Animator,
+	tfWeaponPivots = Types.Transform
+}
+M.FIT_SHIP_WIDTH_PREVIEW = 8
+M.FIT_SHIP_WIDTH_MAIN = 8
+M.FIT_SHIP_WIDTH_MAIN_OPEN = 4
+M.FIT_SHIP_MAIN_HEIGHT = 4
+M.FIT_SHIP_MAIN_HEIGHT_OPEN = 3.34
+M.IOS_AND_BOTTOM_FIT = -0.3
+M.MAX_FIT_3D_HEIGHT = 20
+M.designAspectRatio = 0.5625
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.ArkShipManager = self
+	self._goWeapons = {}
+	self._weapons = {}
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	lc.stopTimer(self._timer2)
+	M.super.OnDestroy(self)
+end
+
+function M:init(...)
+	self._tfCamera = self._camera.transform
+	self._tfShip = self._atorShip.transform.parent
+	self._aspectRatio = Screen.width / Screen.height
+	local x, y, z = lc.getLocalPosition(self._tfCamera)
+	self._previewSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_PREVIEW)
+	self._mainCloseSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_MAIN)
+	self._mainOpenSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_MAIN_OPEN)
+	self._cameraMainFitHeight = M.FIT_SHIP_MAIN_HEIGHT
+	self._cameraMainFocusFitHeight = M.FIT_SHIP_MAIN_HEIGHT_OPEN
+	self._fitDeltaCarmeraHeight = MainGameRoot._safeFit._safeBottomOffY > 0 and M.IOS_AND_BOTTOM_FIT or 0
+
+	if self._aspectRatio < M.designAspectRatio then
+		local height1 = M.FIT_SHIP_WIDTH_MAIN / M.designAspectRatio / 2
+		local height2 = self._mainCloseSize
+		local deltaRatio = 1 / self._aspectRatio - 1 / M.designAspectRatio
+		local autoHeight = deltaRatio * height1 / 5
+		local delta = height2 - height1
+		self._cameraMainFitHeight = M.FIT_SHIP_MAIN_HEIGHT + delta + M._fitDeltaCarmeraHeight
+		self._cameraMainFitHeight = self._cameraMainFitHeight - autoHeight
+		self._cameraMainFocusFitHeight = M.FIT_SHIP_MAIN_HEIGHT_OPEN + delta * self._mainOpenSize / self._mainCloseSize + M._fitDeltaCarmeraHeight
+	end
+
+	for i = 1, 5 do
+		local tfParent = self._tfWeaponPivots:GetChild(0)
+
+		tfParent:GetChild(0):SetActive(false)
+		tfParent:GetChild(1):SetActive(true)
+	end
+end
+
+function M:getFitCameraSizeByWidth(width, ignoreWidth)
+	if ignoreWidth then
+		return width / (M.designAspectRatio * 2)
+	elseif M.designAspectRatio < self._aspectRatio then
+		return width
+	else
+		return width / (self._aspectRatio * 2)
+	end
+end
+
+function M:adaptScreen(...)
+	self._camera.orthographicSize = self._previewSize
+end
+
+function M:playEnterArkRebuildAnim(callback)
+	local animTime = 24
+	local uiEnterTime = 26
+	local playSpeed = 1
+
+	self._atorShip:SetInteger("Status", 1)
+	self._atorShip:SetInteger("Speed", playSpeed)
+
+	self._timer = lc.setTimer(function ()
+		self._atorShip:SetInteger("Status", 2)
+	end, animTime / playSpeed)
+	self._timer2 = lc.setTimer(function ()
+		if callback then
+			callback()
+		end
+
+		self._camera:DOOrthoSize(self._mainCloseSize, 0.618)
+		self._tfCamera:DOMove(Vector3.static(0, self._cameraMainFitHeight, -10), 0.618)
+
+		self._isInMain = true
+	end, uiEnterTime / playSpeed)
+end
+
+function M:skipEnterArkRebuildAnim()
+	self._timer:Done()
+	self._timer2:Done()
+	self:enterMain()
+end
+
+function M:enterPreview()
+	self._atorShip:SetInteger("Status", 0)
+
+	self._camera.orthographicSize = self._previewSize
+
+	lc.setLocalPosition(self._tfCamera, 0, M.FIT_SHIP_MAIN_HEIGHT, -10)
+	self:setCamera(true)
+	lc.setLocalPosition(self._tfShip, 0, 0, 0)
+end
+
+function M:enterMain()
+	self._atorShip:SetTrigger("Skip")
+	self._atorShip:SetInteger("Status", 2)
+
+	self._camera.orthographicSize = self._mainCloseSize
+
+	lc.setLocalPosition(self._tfCamera, 0, self._cameraMainFitHeight, -10)
+	self:setCamera(true)
+	lc.setLocalPosition(self._tfShip, 0, 0, 0)
+	self._tfWeaponPivots:SetActive(false)
+
+	self._isInMain = true
+end
+
+function M:isInMain()
+	return self._isInMain
+end
+
+function M:exitMain()
+	self:setCamera(false)
+	lc.setLocalPosition(self._tfShip, 0, 0, -10000)
+
+	self._isInMain = false
+end
+
+function M:openShip()
+	self._atorShip:SetBool("OpenShip", true)
+	self._camera:DOOrthoSize(self._mainOpenSize, 0.3)
+	self._tfCamera:DOMove(Vector3.static(0, self._cameraMainFocusFitHeight, -10), 0.3)
+	self._tfWeaponPivots:SetActive(true)
+end
+
+function M:closeShip()
+	self._atorShip:SetBool("OpenShip", false)
+	self._camera:DOOrthoSize(self._mainCloseSize, 0.3)
+	self._tfCamera:DOMove(Vector3.static(0, self._cameraMainFitHeight, -10), 0.3)
+	self._tfWeaponPivots:SetActive(false)
+end
+
+function M:enterBattle()
+	lc.setLocalPosition(self._tfShip, 0, 0, -10000)
+end
+
+function M:doCameraFade(targetCamera, callback)
+	self._camera:DOOrthoSize(targetCamera.orthographicSize, 0.5):OnComplete(function ()
+		if callback then
+			callback()
+		end
+	end)
+
+	local x, y, z = lc.getPosition(targetCamera.transform)
+
+	self._tfCamera:DOMove(Vector3.static(x, y, z), 0.5)
+end
+
+function M:exitBattle()
+	self._camera:DOOrthoSize(self._mainCloseSize, 0.5):OnComplete(function ()
+	end)
+	self._tfCamera:DOMove(Vector3.static(0, self._cameraMainFitHeight, -10), 0.5)
+end
+
+function M:setCamera(show)
+	self._camera.enabled = show
+end
+
+function M:syncWeapons(weaponList)
+	for idx = 1, 5 do
+		local current = self._weapons[idx]
+		local target = weaponList[idx]
+
+		if current ~= target then
+			self._weapons[idx] = target
+			local tfParent = self._tfWeaponPivots:GetChild(idx - 1)
+
+			if current then
+				tfParent:GetChild(0):SetActive(false)
+				tfParent:GetChild(1):SetActive(true)
+				GameObject.Destroy(self._goWeapons[idx])
+			end
+
+			if target then
+				local obj, weaponAngle = nil
+
+				if target == 1 then
+					obj = LuaUnity.createGameObject("Assets/Battle/Prefabs/Player/Player_120000.prefab", tfParent)
+				else
+					local cfg = D._weaponConfig[target]
+					local prefabName = cfg._prefab
+
+					if BattleDefine.BatteryExtraParmas[target] and BattleDefine.BatteryExtraParmas[target]._hasMirror then
+						if idx == 1 or idx == 2 then
+							prefabName = prefabName .. "_left"
+							weaponAngle = 60
+						else
+							prefabName = prefabName .. "_right"
+							weaponAngle = 120
+						end
+					end
+
+					obj = LuaUnity.createGameObject(string.format("Assets/Battle/Prefabs/Weapon/%s.prefab", prefabName), tfParent)
+
+					tfParent:GetChild(0):SetActive(true)
+					tfParent:GetChild(1):SetActive(false)
+				end
+
+				lc.setLocalPosition(obj, 0, 0, 0)
+
+				if weaponAngle then
+					local tfRotateCenter = obj.transform:Find("Rotate") or obj.transform:Find("rotate")
+
+					if tfRotateCenter then
+						lc.setLocalEulerAngles(tfRotateCenter, 0, 0, weaponAngle)
+					end
+				end
+
+				self._goWeapons[idx] = obj
+			end
+		end
+	end
+end
+
+return M

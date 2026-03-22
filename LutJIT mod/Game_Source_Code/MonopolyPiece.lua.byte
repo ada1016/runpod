@@ -1,0 +1,138 @@
+local M = class("MonopolyPiece")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go._goVfx:SetActive(true)
+
+	return go
+end
+
+local txtColor = V.QUALITY_TRIANGLE
+local qualityIconColor = {
+	{
+		"8A8C90",
+		"FFFFFF"
+	},
+	{
+		"51CA9A",
+		"8BDDB6"
+	},
+	{
+		"5DC6FF",
+		"A3DBFF"
+	},
+	{
+		"C06AF9",
+		"E7C9FF"
+	},
+	{
+		"DAC158",
+		"FFF7BD"
+	}
+}
+local qualityTextColor = {
+	"86898F",
+	"76C298",
+	"84C7FF",
+	"C386F3",
+	"E6D277",
+	"86898F",
+	"86898F"
+}
+
+setmetatable(qualityIconColor, {
+	__index = function (tbl, index)
+		return qualityIconColor[1]
+	end
+})
+
+function M:init(idx, cellData)
+	if not cellData then
+		return
+	end
+
+	self._idx = idx
+	self._type = cellData._type
+	self._jumpType = cellData._jumpType
+
+	self._txtNum.gameObject:SetActive(self._type == 1)
+	self._imgResIcon.gameObject:SetActive(false)
+	self._imgIcon.gameObject:SetActive(true)
+
+	local uig = self._imgIcon.gameObject:GetComponent("UIGradient")
+	uig.enabled = false
+
+	if self._type == 1 then
+		lc.setLocalPosition(self._imgIcon, -7.7, 6.8)
+	else
+		lc.setLocalPosition(self._imgIcon, 0, 3.5)
+	end
+
+	self._quality = cellData._quality or D.Quality.White
+
+	if self._type == 1 then
+		self._cid = cellData._cid or 10001
+		self._num = cellData._num or 1
+		self._txtNum.text = "x" .. self._num
+		self._txtNum.color = Color.str2Static(qualityTextColor[self._quality])
+
+		if self._cid == D.ResType.monopoly_dice then
+			LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_02", true)
+		elseif self._cid == D.ResType.diamond then
+			LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_03", true)
+		elseif self._cid == D.ResType.monopoly_exp then
+			LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_05", true)
+		end
+
+		LuaUnity.setTPSprite(self._imgResIcon, "itemSmall/item_small_" .. self._cid, true)
+
+		uig.m_color1 = Color.str2Static(qualityIconColor[self._quality][1])
+		uig.m_color2 = Color.str2Static(qualityIconColor[self._quality][2])
+		uig.enabled = true
+	elseif self._type == 2 then
+		LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_07", true)
+
+		uig.m_color1 = Color.str2Static(qualityIconColor[self._quality][1])
+		uig.m_color2 = Color.str2Static(qualityIconColor[self._quality][2])
+		uig.enabled = true
+	elseif self._type == 3 then
+		LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_13", true)
+
+		uig.m_color1 = Color.str2Static(qualityIconColor[self._quality][1])
+		uig.m_color2 = Color.str2Static(qualityIconColor[self._quality][2])
+		uig.enabled = true
+	elseif self._type == 4 then
+		LuaUnity.setTPSprite(self._imgIcon, "monopoly/monopoly_icon_04", true)
+
+		uig.m_color1 = Color.str2Static(qualityIconColor[self._quality][1])
+		uig.m_color2 = Color.str2Static(qualityIconColor[self._quality][2])
+		uig.enabled = true
+	end
+
+	LuaHelper.ParticleSystemSetStartFrame(self._tfVfxPass:GetComponent("ParticleSystem"), self._quality / 7 - 0.1)
+	self._ator:SetInteger("Quality", self._quality)
+	LuaUnity.setTPSprite(self._imgGround, string.format("monopoly/monopoly_square_%02d", self._quality))
+end
+
+function M:playJump(type, targetIdx)
+	if targetIdx == self._idx then
+		self._ator:SetTrigger("SpecialJump")
+	else
+		self._ator:SetTrigger("Jump")
+	end
+
+	self:updateStanding(targetIdx)
+end
+
+function M:playArroundJump(distance)
+	self._ator:SetInteger("Type", distance or 1)
+	self._ator:SetTrigger("ArroundJump")
+end
+
+function M:updateStanding(targetIdx)
+	self._ator:SetBool("Standing", targetIdx == self._idx)
+end
+
+return M

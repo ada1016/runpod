@@ -1,0 +1,143 @@
+local M = class("BattleWeaponView")
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(weapon)
+	self._weapon = weapon
+	local group = self._weapon._group
+	local prefab = weapon._prefab
+	local skinId = self._battleSession:getEquipedSkin(group)
+
+	if not BattleManager:isMissionArkRebuild() and skinId then
+		prefab = D._skinWeaponConfig[skinId]._skinPrefab
+	end
+
+	if weapon._hasMirror then
+		if BattleManager:isMissionPVP() then
+			if weapon._index == 2 or weapon._index == 1 then
+				prefab = prefab .. "_left"
+			else
+				prefab = prefab .. "_right"
+			end
+		elseif weapon._index == 2 or weapon._index == 4 then
+			prefab = prefab .. "_left"
+		else
+			prefab = prefab .. "_right"
+		end
+	end
+
+	self._obj = self._sessionView:createWeapon(prefab, weapon._index)
+
+	self._obj:SetPosition(weapon._position.x, weapon._position.y, 0)
+
+	self._tf = self._obj.transform
+
+	if group == BattleSkillGroupEnum.PulsedLaser then
+		self._rotateRoot = self._tf:GetChild(0)
+	elseif group == BattleSkillGroupEnum.FollowMissile then
+		self._rotateRoot = self._tf:GetChild(0)
+		self._psFire = self._rotateRoot:Find("mullze_fire"):GetComponent("ParticleSystem")
+	elseif group == BattleSkillGroupEnum.Aeroblast then
+		self._rotateRoot = self._tf:GetChild(0)
+		self._psFire = self._rotateRoot:Find("mullze_fire"):GetComponent("ParticleSystem")
+	elseif group == BattleSkillGroupEnum.Penetrator then
+		self._rotateRoot = self._tf:GetChild(0)
+		self._psFire = self._rotateRoot:Find("mullze_fire"):GetComponent("ParticleSystem")
+	elseif group == BattleSkillGroupEnum.Plasma then
+		self._rotateRoot = self._tf:GetChild(0)
+	elseif group == BattleSkillGroupEnum.Railgun then
+		self._rotateRoot = self._tf:GetChild(0)
+		self._psCharge = self._rotateRoot:GetChild(1)
+	elseif group == BattleSkillGroupEnum.GravityVortex then
+		self._rotateRoot = self._tf:GetChild(0)
+
+		if skinId == nil or skinId == 131101 then
+			self._atorIdle = self._rotateRoot:GetChild(0):GetChild(0):GetChild(1):GetComponent("Animator")
+			self._atorIdle.speed = 0.5
+		elseif skinId == 131102 then
+			self._spriteAnimationEx = self._obj:GetComponent("SpriteAnimationEx")
+		end
+	elseif group == BattleSkillGroupEnum.BeeColony then
+		self._wheelRoot = self._tf:GetChild(0)
+		self._beeTfs = table.new(16, 0)
+	end
+
+	if weapon._hasShotAni or group == BattleSkillGroupEnum.Railgun then
+		self._ator = self._obj:GetComponent("Animator")
+	end
+end
+
+function M:beesCountEvent()
+	local weapon = self._weapon
+
+	for i = 1, 9 do
+		self._beeTfs[i] = self._wheelRoot:GetChild(i - 1)
+
+		self._beeTfs[i]:SetActive(true)
+	end
+
+	for i = weapon._beeCount + 1, 9 do
+		self._beeTfs[i]:SetActive(false)
+	end
+end
+
+function M:beesPositionAndRotationsEvent()
+	local weapon = self._weapon
+	local count = weapon._beeCount
+
+	for i = 1, count do
+		local bee = weapon._fixedBees[i]
+		local tfBee = self._beeTfs[i]
+		local angle = bee._angle
+
+		tfBee:SetLocalRotation(0, 0, angle - 90)
+
+		local pos = bee._localPosition
+
+		tfBee:SetLocalPosition(pos.x, pos.y, 0)
+	end
+end
+
+function M:rotationEvent()
+	if self._rotateRoot then
+		self._rotateRoot:SetLocalRotation(0, 0, self._weapon._angle)
+	end
+end
+
+function M:launchEvent()
+	if self._weapon._hasShotAni and self._ator then
+		self._ator:SetTrigger("attack")
+	end
+end
+
+function M:returnEvent()
+	if self._ator then
+		self._ator:SetTrigger("return")
+	end
+end
+
+function M:idleEvent()
+	if self._ator then
+		self._ator:SetTrigger("idle")
+	end
+end
+
+function M:shotEvent()
+	if self._psFire then
+		self._psFire:Play(true)
+	end
+end
+
+function M:addEffectEvent(id)
+	if id == 10000 and self._weapon._superDecoPrefab then
+		self._sessionView:addVFX(self._weapon._superDecoPrefab, self._obj.transform)
+	end
+end
+
+return M

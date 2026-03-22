@@ -1,0 +1,895 @@
+local M = class("MainPanel", requireLua("BasePanel"))
+M.args = {
+	tfPageContainer = Types.Transform,
+	goTop = Types.GameObject,
+	goPlayerInfo = Types.GameObject,
+	goRecover = Types.GameObject,
+	textRecoverEnergy = Types.TMP_Text,
+	eleNavBar1 = Types.GameObject,
+	eleNavBar2 = Types.GameObject,
+	eleNavBar3 = Types.GameObject,
+	eleNavBar4 = Types.GameObject,
+	eleNavBar5 = Types.GameObject,
+	eleNavBar6 = Types.GameObject,
+	btnMore = Types.Button,
+	btnCloseMore = Types.Button,
+	goMore = Types.GameObject,
+	atorMore = Types.Animator,
+	btnSetting = Types.Button,
+	btnMail = Types.Button,
+	btnMonthlyCheckin = Types.Button
+}
+local PAGE_PREFAB_PATH_HOLDER = "Assets/FW/Prefabs/UI/page/%s.prefab"
+local PAGE_PREFAB_NAME = {
+	"ShopPage",
+	"RolePage",
+	"HomePage",
+	"ArmoryPage",
+	"ChallengePage",
+	"UnionWaitingPage"
+}
+local tabSelectedColor = "64D3BF"
+local tabUnSelectedColor = "487F7B"
+local PAGE_SYSTEMS = {
+	D.SystemType.Store,
+	D.SystemType.Chip,
+	D.SystemType.CommonMission,
+	D.SystemType.Weapon,
+	D.SystemType.GlobalDefense,
+	D.SystemType.Union
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self:initNavBarElements()
+
+	self._lastPage = nil
+	self._lastIndex = nil
+	self._pages = {}
+
+	if C._config.genCsvCode then
+		self:genCsvCode()
+	end
+
+	P._inArkRebulid = false
+	P._inSparkScout = false
+
+	P._playerActivityArkRebuild:recordPlayTime()
+	P._playerActivitySparkScout:recordPlayTime()
+
+	if lc._isCN then
+		self._eleNavBar6:SetActive(false)
+	elseif D.isSystemUnlocked(D.SystemType.Union) then
+		self._eleNavBar6:SetActive(true)
+	else
+		self._eleNavBar6:SetActive(false)
+	end
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	Client.updateMusicVolume(0.5)
+	M.super.OnDestroy(self)
+end
+
+function M:Start()
+	if not lc._isCN and Client._ipaIsInitialized == nil then
+		Client._ipaIsInitialized = true
+
+		IAP:Init()
+	end
+
+	self._lbPlayerInfo = LuaHelper.GetLuaBehaviour(self._goPlayerInfo)
+
+	Client.playMusic("music_city")
+
+	if Client._firstEnterGuideFlag == nil then
+		Client._firstEnterGuideFlag = true
+
+		if not Client._config.disableGuide and P._playerGuide:isGroupFinished(D.GuideGroupId.Battle) and P._playerMission:getMissionIdByType(D.MissionType.Common) == 10001 then
+			GuideManager.battle()
+		end
+	end
+
+	if D._guideTriggerConfig[D.GuideGroupId.Ranger]._val <= P:getLevel() and not P._playerGuide:isGroupFinished(D.GuideGroupId.Ranger) then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Level, D._guideTriggerConfig[D.GuideGroupId.Ranger]._val)
+	end
+
+	if D._guideTriggerConfig[D.GuideGroupId.Union]._val <= P:getLevel() and not P._playerGuide:isGroupFinished(D.GuideGroupId.Union) then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Level, D._guideTriggerConfig[D.GuideGroupId.Union]._val)
+	end
+
+	self:addRedDots()
+end
+
+function M:addClicks()
+	self:setClick(self._btnMore, function ()
+		self:handleMoreBtn()
+	end)
+	self:setClick(self._btnCloseMore, function ()
+		self:handleMoreBtn()
+	end)
+	self:setClick(self._btnSetting, function ()
+		self:initMoreBtns()
+		UIManager.openPanel(PrefabDefine.ProfileSettingPanel, 2)
+	end)
+	self:setClick(self._btnMail, function ()
+		self:initMoreBtns()
+		UIManager.openPanel(PrefabDefine.ProfileSettingPanel, 3)
+	end)
+	self:setClick(self._btnMonthlyCheckin, function ()
+		self:initMoreBtns()
+		UIManager.openPanel(PrefabDefine.MonthlyCheckinPanel)
+	end)
+end
+
+function M:addEvents()
+	self:on("iap.purchase.fail", function (errorStr)
+		UIManager.hideWaiting()
+
+		if errorStr == "UserCancelled" then
+			V.showToast(SID.PURCHASE_CANCEL)
+		elseif errorStr == "invalid pay" then
+			V.showToast(SID.PURCHASE_FAIL)
+		elseif errorStr == "Unknown" then
+			V.showToast(SID.PURCHASE_WRONG)
+		elseif errorStr == "ProductUnavailable" then
+			V.showToast(SID.PURCHASE_UNAVAILABLE)
+		else
+			V.showToast(SID.PURCHASE_FAIL)
+		end
+	end)
+	self:on("iap.purchase.success", function (iapType)
+		RedDotManager.update("city.home.firstcharge")
+		RedDotManager.update("city.shop.dayweekmonth")
+
+		if P._playerStore:readRechargePoint(iapType) > 0 and P._playerActivity:isAnniversaryOpening() then
+			local data = P._playerActivityAnniversary:getCurrentData()
+
+			if not data then
+				return
+			end
+
+			if P._playerActivityAnniversary._moduleRecharge then
+				P._playerActivityAnniversary._moduleRecharge:tryRecordDesignEvent()
+			end
+		end
+	end)
+	self:on("ad.notready", function ()
+		V.showToast(SID.AD_NOT_READY)
+	end)
+	self:on("ad.ready", function ()
+		V.showToast(SID.AD_READY)
+	end)
+	self:on("ad.fail", function ()
+		V.showToast(SID.AD_FAIL)
+	end)
+	self:on("finished.ad", function ()
+		if Client._config.skipAdVideo then
+			V.showToast(SID.AD_TEST_JUMP)
+
+			return
+		end
+
+		if P._playerRight:isSVIP() then
+			V.showToast(SID.AD_JUMP)
+		elseif P._playerRight:isAdRemoved() then
+			V.showToast(SID.AD_REMOVED_JUMP)
+		else
+			V.showToast(SID.AD_FINISHED)
+		end
+	end)
+	self:on("gem.new.dirty", function ()
+	end)
+	self:on("atk.dirty", function (ignoreAnim)
+		if not ignoreAnim then
+			local atk = P._playerRole:getPlayerAtk()
+			local lastAtk = P._playerRole:getLastPlayerAtk()
+
+			if lastAtk < atk then
+				V.showScoreToast(lastAtk, atk - lastAtk)
+			end
+		end
+	end)
+	self:on("day.cross", function ()
+		RedDotManager.update("city.shop.resource")
+		RedDotManager.update("city.shop.dayweekmonth")
+		RedDotManager.update("city.shop.activityexchange")
+		RedDotManager.update("city.home.newbie")
+		RedDotManager.update("city.home.rightcard")
+		RedDotManager.update("city.home.limittime")
+		RedDotManager.update("city.challenge")
+	end)
+	self:on("level.dirty", function ()
+		self:updateMore()
+		self:updateNavLocks()
+
+		if P._playerProfile:hasStashedLevelUpgrade() then
+			UIManager.openPanel(PrefabDefine.LevelUpPanel)
+		end
+
+		if not lc._isCN and D.isSystemUnlocked(35) then
+			self._eleNavBar6:SetActive(true)
+		end
+	end)
+	self:on("gift.limit.update", function ()
+		RedDotManager.update("city.home.limittime")
+	end)
+	self:on("gift.trigger", function (giftType)
+		if giftType == D.GiftType.Newbie then
+			RedDotManager.update("city.home.newbie")
+		elseif giftType == D.GiftType.FirstCharge then
+			RedDotManager.update("city.home.firstcharge")
+		elseif giftType == D.GiftType.LimitTime then
+			RedDotManager.update("city.home.limittime")
+		end
+	end)
+	self:on("gift.claim", function (giftType)
+		if giftType == D.GiftType.Newbie then
+			RedDotManager.update("city.home.newbie")
+		elseif giftType == D.GiftType.FirstCharge then
+			RedDotManager.update("city.home.firstcharge")
+		elseif giftType == D.GiftType.LimitTime then
+			RedDotManager.update("city.home.limittime")
+		end
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.energy then
+			self:updateRecoverEnergyArea()
+		end
+	end)
+	self:on("rightcard.update", function ()
+		self:updateRecoverEnergyArea()
+	end)
+end
+
+function M:init(from)
+	self._from = from
+
+	if self._from == "battle" then
+		self._loginPopped = true
+	end
+
+	local lastMsType = P:getLastMsType()
+
+	if lastMsType == D.MissionType.Dome then
+		self._noPop = true
+
+		self:changePage(5)
+		lc.setTimer(function ()
+			UIManager.openPanel(PrefabDefine.DomeHomePanel)
+		end, 0.1)
+		RedDotManager.update("city.challenge")
+	elseif lastMsType == D.MissionType.GlobalDefense then
+		self._noPop = true
+
+		self:changePage(5)
+		MainGameRoot:showGlobalMask()
+		lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+			UIManager.openPanel(PrefabDefine.GlobalDefensePanel)
+		end, 0.1)
+		RedDotManager.update("city.challenge")
+	elseif lastMsType == D.MissionType.CrisisZone then
+		self._noPop = true
+
+		self:changePage(5)
+		lc.setTimer(function ()
+			UIManager.openPanel(PrefabDefine.CrisisZoneHomePanel)
+		end, 0.1)
+		RedDotManager.update("city.challenge")
+	elseif lastMsType == D.MissionType.ArkRebuild then
+		self._noPop = true
+
+		self:changePage(3)
+		MainGameRoot:showGlobalMask()
+		lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+
+			if P._playerActivity:isArkRebuildOpening() then
+				UIManager.openPanel(PrefabDefine.ArkRebuildMainPanel, "battle")
+			elseif ArkShipManager then
+				ArkShipManager:exitMain()
+			end
+		end, 0.1)
+	elseif lastMsType == D.MissionType.SparkScout then
+		self._noPop = true
+
+		self:changePage(3)
+		MainGameRoot:showGlobalMask()
+		lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+
+			if P._playerActivity:isSparkScoutOpening() then
+				UIManager.openPanel(PrefabDefine.SparkScoutMainPanel, "battle")
+			end
+		end, 0.1)
+	elseif lastMsType == D.MissionType.Common then
+		self._noPop = nil
+
+		self:changePage(3)
+	else
+		self._noPop = nil
+
+		self:changePage(3)
+	end
+
+	self:initMoreBtns()
+	self:updateCountdown()
+	self:updateUI()
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+	end
+
+	self._timer = lc.setInterval(function ()
+		self:updateCountdown()
+		self:handleCsvCode()
+	end, 0.5)
+end
+
+function M:updateUI()
+	self:updateMore()
+end
+
+function M:addRedDots()
+	RedDotManager.add(self._eleNavBar1, "city.shop", true)
+	RedDotManager.add(self._eleNavBar2, "city.role", true)
+	RedDotManager.add(self._eleNavBar4, "city.weapon", true)
+	self._eleNavBar3._imgDot:SetActive(false)
+	RedDotManager.add(self._eleNavBar5, "city.challenge", true)
+end
+
+function M:removeRedDots()
+	RedDotManager.remove("city.shop")
+	RedDotManager.remove("city.role")
+	RedDotManager.remove("city.weapon")
+	RedDotManager.remove("city.challenge")
+end
+
+function M:OnPanelOpened()
+	if self._from == "login" then
+		self:handleBackMainPop()
+
+		self._loginPopped = true
+		local lastMsId, lastMsType = P._playerMission:getLastMissionIdType()
+
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.CompleteMission, P._playerMission:getDisplayMissionIdByType(lastMsType) - 1)
+		self:tryTriggerCustomGuide()
+	end
+
+	self._from = nil
+
+	M.super.OnPanelOpened(self)
+end
+
+function M:OnPanelOpenedAfterLoading()
+	self._loginPopped = true
+
+	self:handleBackMainPop()
+
+	local lastMsId, lastMsType = P._playerMission:getLastMissionIdType()
+
+	SimpleEvent.emit("guide.trigger", D.GuideTriggerType.CompleteMission, P._playerMission:getDisplayMissionIdByType(lastMsType) - 1)
+	self:tryTriggerCustomGuide()
+
+	if self._lastPage and self._lastPage.handleBackMainPop then
+		self._lastPage:handleBackMainPop()
+	end
+
+	P:setMsType(nil)
+	GuideManager:tryShowAction()
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+
+	if self._lastPage and self._lastPage.showInternal then
+		self._lastPage:showInternal()
+	end
+end
+
+function M:OnHide()
+	if self._lastPage and self._lastPage.OnHide then
+		self._lastPage:OnHide()
+	end
+
+	self:removeRedDots()
+	M.super.OnHide(self)
+end
+
+function M:OnFocus()
+	if self._lastPage and self._lastPage.OnFocus then
+		self._lastPage:OnFocus()
+	end
+
+	self:updateMore()
+	MainGameRoot:setBlackBG(true)
+	GuideManager:tryShowAction()
+	M.super.OnFocus(self)
+end
+
+function M:OnUnfocus()
+end
+
+function M:getOrCreatePage(index)
+	local lb = self._pages[index]
+
+	if lb == nil then
+		local go = LuaUnity.createGameObject(string.format(PAGE_PREFAB_PATH_HOLDER, PAGE_PREFAB_NAME[index]), self._tfPageContainer)
+		lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self)
+
+		self._pages[index] = lb
+	end
+
+	self._lastPage = lb
+
+	lb:showInternal()
+
+	return lb
+end
+
+function M:getPageLb(index)
+	return self._pages[index]
+end
+
+function M:changePage(index)
+	if self._lastIndex == index then
+		return
+	end
+
+	if self._lastIndex then
+		Client.playSound("ui_Open_panel_1")
+	end
+
+	if self._lastIndex == 5 then
+		-- Nothing
+	end
+
+	if index == 5 then
+		-- Nothing
+	elseif index == 1 then
+		self._lbPlayerInfo:setDisplayItems(D.ResType.diamond, D.ResType.key_purple, D.ResType.key_gold)
+	elseif self._lbPlayerInfo then
+		self._lbPlayerInfo:setDisplayItems(D.ResType.coin, D.ResType.diamond, D.ResType.energy)
+	end
+
+	local isFirstOpen = self._lastPage ~= nil
+
+	if isFirstOpen then
+		self._lastPage:hideInternal()
+
+		if self._lastIndex then
+			self:setChoose(self._eleNavBars[self._lastIndex], false)
+		end
+	end
+
+	if index == 3 then
+		Client.updateMusicVolume(0.5)
+	else
+		Client.updateMusicVolume(0.25)
+	end
+
+	self:getOrCreatePage(index)
+	self:setChoose(self._eleNavBars[index], true)
+
+	self._lastIndex = index
+
+	self:updateRecoverEnergyArea()
+
+	if self._loginPopped and self._from ~= "battle" then
+		self:handleBackMainPop()
+	end
+
+	if lc._isCN and index == 3 then
+		P:saveGameData()
+	end
+end
+
+local weights = {
+	[PrefabDefine.PlayerReturnPopPanel.id] = 2000,
+	[PrefabDefine.ScorePanel.id] = 1000,
+	[PrefabDefine.AccountLinkTipsPanel.id] = 200,
+	[PrefabDefine.AnniversaryRechargeResetPanel.id] = 150,
+	[PrefabDefine.OfflineRewardPanel.id] = 100,
+	[PrefabDefine.LevelUpPanel.id] = 10,
+	[PrefabDefine.MissionInfoPanel.id] = 9,
+	[PrefabDefine.MissionGiftPanel.id] = 4,
+	[PrefabDefine.LimitGiftPanel.id] = 3,
+	[PrefabDefine.FirstChargePanel.id] = 2,
+	[PrefabDefine.NewbieGiftPanel.id] = 1,
+	[PrefabDefine.AnniversaryRechargePanel.id] = 1
+}
+
+setmetatable(weights, {
+	__index = function (tb, idx)
+		return 1
+	end
+})
+
+local pushPanels = {}
+
+function M:handleBackMainPop(isLogin)
+	if self._noPop then
+		self._noPop = nil
+
+		return
+	end
+
+	table.clear(pushPanels)
+
+	if Client._config.noPopFacePanel then
+		return
+	end
+
+	if C.isInReview() then
+		return
+	end
+
+	local lastMsType = P:getLastMsType()
+
+	if lastMsType ~= nil and lastMsType ~= D.MissionType.Common and lastMsType ~= D.MissionType.Elite then
+		return
+	end
+
+	local curMs = P._playerMission:getMissionId()
+
+	if self._lastIndex == 3 and curMs then
+		if P._playerGift:canPushPanel(D.GiftType.FirstCharge) then
+			table.insert(pushPanels, {
+				PrefabDefine.FirstChargePanel
+			})
+		end
+
+		if P._playerGift:canPushPanel(D.GiftType.LimitTime) then
+			local id = P._playerGift:getPushGiftId(D.GiftType.LimitTime)
+
+			if id then
+				table.insert(pushPanels, {
+					PrefabDefine.LimitGiftPanel,
+					id,
+					isLogin
+				})
+			end
+		end
+
+		if P._playerGift:canPushPanel(D.GiftType.Newbie) then
+			local id = P._playerGift:getPushGiftId(D.GiftType.Newbie)
+
+			if id then
+				table.insert(pushPanels, {
+					PrefabDefine.NewbieGiftPanel,
+					P._playerGift:getPushGiftId(D.GiftType.Newbie),
+					isLogin
+				})
+			end
+		end
+
+		if not lc._isCN then
+			local giftId = P._playerGift:getPopMissionGiftId()
+
+			if giftId then
+				table.insert(pushPanels, {
+					PrefabDefine.MissionGiftPanel,
+					giftId
+				})
+			end
+		end
+	end
+
+	if P._playerProfile:hasStashedLevelUpgrade() then
+		table.insert(pushPanels, {
+			PrefabDefine.LevelUpPanel
+		})
+	end
+
+	if not self._loginPopped then
+		local canShow = P._playerGuide:isGroupFinished(D.GuideGroupId.Offline) and D.isSystemUnlocked(D.SystemType.Afk)
+		local showTime = P._playerOffline:getRecordOfflineTime() + P._playerOffline:readOfflineShowTime()
+
+		if canShow and showTime < Client.getCurTime() then
+			table.insert(pushPanels, {
+				PrefabDefine.OfflineRewardPanel
+			})
+		end
+
+		local opening = P._playerActivity:isAnniversaryOpening() and P._playerActivityAnniversary:showSystemEntry()
+
+		if opening and P._playerActivityAnniversary and P._playerActivityAnniversary._moduleRecharge then
+			local popStage = P._playerActivityAnniversary._moduleRecharge:getPopStage()
+
+			if popStage then
+				table.insert(pushPanels, {
+					PrefabDefine.AnniversaryRechargePanel,
+					popStage
+				})
+
+				local findNewbie = table.findArray(pushPanels, function (v)
+					return v[1] == PrefabDefine.NewbieGiftPanel
+				end)
+
+				if findNewbie then
+					table.remove(pushPanels, findNewbie)
+				end
+			end
+		end
+
+		if P._playerReturn:isOpenedBefore() and not P._playerReturn:isExpired() and P._playerReturn:canCheckin() and not P._playerReturn:isTodayCheckedIn() then
+			table.insert(pushPanels, {
+				PrefabDefine.PlayerReturnPopPanel
+			})
+		end
+	elseif self._lastIndex == 1 then
+		if P._playerStore:canTriggerDiamondRefreshPop() then
+			P._playerStore:clearDiamondRefreshPop()
+			table.insert(pushPanels, {
+				PrefabDefine.AnniversaryRechargeResetPanel
+			})
+		end
+	elseif self._lastIndex == 3 then
+		if curMs > 10005 and P:canScore() then
+			if lc._isCN then
+				P:setScored()
+				LuaHelper.RequestReview()
+			else
+				table.insert(pushPanels, {
+					PrefabDefine.ScorePanel
+				})
+			end
+		end
+
+		local canShow = P._playerGuide:isGroupFinished(D.GuideGroupId.Offline) and D.isSystemUnlocked(D.SystemType.Afk)
+
+		if canShow and not P._playerOffline:isPoped() and P._playerOffline:isOfflineTimeFull() then
+			table.insert(pushPanels, {
+				PrefabDefine.OfflineRewardPanel
+			})
+		end
+
+		local popLink = P:canPopLink()
+
+		if popLink then
+			local linkCb = nil
+
+			if P:canPopLink_Mission() and D._globalConfig._account_link_tips_pop[1] < curMs then
+				function linkCb()
+					P:setLinkPop_Mission()
+				end
+			elseif P:canPopLink_AfterPurchase() and D._globalConfig._account_link_tips_pop[2] <= P._playerStore:getPayCount() then
+				function linkCb()
+					P:setLinkPop_AfterPurchase()
+				end
+			end
+
+			if linkCb then
+				if C.getIsGuest() then
+					table.insert(pushPanels, {
+						PrefabDefine.AccountLinkTipsPanel,
+						{
+							_type = 2,
+							_title = SID.TITLE_LINK,
+							_content = SID.LINK_TIPS,
+							_confirmCallback = function ()
+								linkCb()
+								Client.linkAccount()
+							end,
+							_cancelCallback = function ()
+								linkCb()
+							end
+						}
+					})
+				else
+					linkCb()
+				end
+			end
+		end
+	end
+
+	if V._openMissionRecord then
+		local lastMsId1, lastMsType1 = P._playerMission:getLastMissionIdType()
+
+		table.insert(pushPanels, {
+			PrefabDefine.MissionInfoPanel,
+			lastMsId1,
+			lastMsType1
+		})
+	end
+
+	if #pushPanels == 0 then
+		return
+	end
+
+	table.sort(pushPanels, function (a, b)
+		return weights[b[1].id] < weights[a[1].id]
+	end)
+
+	for i = 1, #pushPanels do
+		local data = pushPanels[i]
+
+		if not UIManager.isPanelPushed(data[1]) then
+			UIManager.pushPanel(unpack(data))
+		end
+	end
+
+	UIManager.popPanel()
+end
+
+function M:setChoose(goNavBar, choose)
+	goNavBar._imgChoose:SetActive(choose)
+	goNavBar._goLabel:SetActive(choose)
+	goNavBar._imgLight:SetActive(not choose)
+	lc.setLocalPosition(goNavBar._icon, 0, choose and 20.8 or 0, 0)
+
+	goNavBar._icon.color = Color.str2Static(choose and tabSelectedColor or tabUnSelectedColor)
+end
+
+function M:initNavBarElements()
+	self._eleNavBars = {
+		self._eleNavBar1,
+		self._eleNavBar2,
+		self._eleNavBar3,
+		self._eleNavBar4,
+		self._eleNavBar5,
+		self._eleNavBar6
+	}
+
+	lc.prefabVarPeer(self._eleNavBar1)
+	lc.prefabVarPeer(self._eleNavBar2)
+	lc.prefabVarPeer(self._eleNavBar3)
+	lc.prefabVarPeer(self._eleNavBar4)
+	lc.prefabVarPeer(self._eleNavBar5)
+	lc.prefabVarPeer(self._eleNavBar6)
+
+	for i = 1, #PAGE_PREFAB_NAME do
+		local eleNavBar = self._eleNavBars[i]
+
+		self:setClick(eleNavBar._click, function ()
+			if i == #PAGE_PREFAB_NAME and lc._isCN then
+				V.showToast(SID.TIP_COMING_SOON)
+
+				return
+			end
+
+			if not D.isSystemUnlocked(PAGE_SYSTEMS[i]) then
+				V.showToast({
+					SID.TIP_SYSTEM_UNLOCK_TIP_2,
+					D._systemUnlockConfig[PAGE_SYSTEMS[i]]._unlockVal
+				})
+
+				return
+			end
+
+			if i == 6 then
+				V.checkActivityVersion(function ()
+					self:changePage(i)
+
+					if P and P._playerGuide:isWaitingTrigger() then
+						GuideManager:tryShowAction()
+					end
+				end, "union")
+			else
+				self:changePage(i)
+
+				if P and P._playerGuide:isWaitingTrigger() then
+					GuideManager:tryShowAction()
+				end
+			end
+		end)
+	end
+
+	self:updateNavLocks()
+end
+
+function M:updateNavLocks()
+	for i = 1, #PAGE_PREFAB_NAME do
+		self:updateNavLock(self._eleNavBars[i], D.isSystemUnlocked(PAGE_SYSTEMS[i]))
+	end
+end
+
+function M:updateNavLock(go, unlocked)
+	go._icon:SetActive(unlocked)
+	go._lock:SetActive(not unlocked)
+	go._imgDot.transform:SetVisible(unlocked)
+	go._imgLight.transform:SetVisible(unlocked)
+end
+
+function M:updateMore()
+	local haveMail = P._playerMail:hasNewMail()
+	local checkin = P._playerMonthlyCheckin:haveDot()
+
+	self._btnMail.dot:SetActive(haveMail)
+	self._btnMonthlyCheckin.dot:SetActive(checkin)
+	self._btnMonthlyCheckin:SetActive(P._playerMonthlyCheckin:isUnlock())
+	self._btnMore.dot:SetActive(haveMail or checkin)
+end
+
+function M:updateCountdown()
+	self:updateRecoverText()
+end
+
+function M:updateRecoverEnergyArea()
+	local show = true
+
+	if self._lastIndex == 1 or self._lastIndex == 5 then
+		show = false
+	end
+
+	local t = P._playerRecord:getRecordRecoverTime()
+
+	self._goRecover:SetActive(show and t ~= 0)
+	self:updateRecoverText()
+end
+
+function M:updateRecoverText()
+	local t = P._playerRecord:getRecordRecoverTime()
+
+	if t == 0 then
+		return
+	end
+
+	local max = P._playerAsset:getEnergyRecoverMaxNum()
+	local cur = P._playerAsset:getAssetNum(D.ResType.energy)
+	local recoverTimeOnce = P._playerRecord:readEnergyRecoverTime()
+	local recoverNumOnce = P._playerRecord:readEnergyRecoverNum()
+	local deltaTime = recoverTimeOnce
+	self._textRecoverEnergy.text = V.formatTimeS2MS(t - Client.getCurTime() + deltaTime)
+end
+
+function M:tryTriggerCustomGuide()
+	if not P._playerGuide:isGroupFinished(D.GuideGroupId.EnhanceWeapon) and P._playerArmory:canUpgradeWeapon() then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.EnhanceWeapon)
+	end
+
+	if not P._playerGuide:isGroupFinished(D.GuideGroupId.EnhanceEquip) and P._playerRole:canUpgradeEquip() then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.EnhanceEquip)
+	end
+end
+
+function M:handleMoreBtn()
+	self._atorMore:ResetTrigger("Hide")
+
+	self._moreWidgetOpened = not self._moreWidgetOpened
+
+	if self._moreWidgetOpened then
+		self._goMore:SetActive(true)
+	else
+		self._atorMore:SetTrigger("Hide")
+	end
+
+	self._atorMore:SetInteger("Status", self._moreWidgetOpened and 1 or 0)
+	self._btnCloseMore:SetActive(self._moreWidgetOpened)
+end
+
+function M:initMoreBtns()
+	self._moreWidgetOpened = false
+
+	self._goMore:SetActive(false)
+	self._btnCloseMore:SetActive(false)
+end
+
+function M:genCsvCode()
+end
+
+function M:handleCsvCode()
+	if not C._csvCodeRunned then
+		C._csvCodeRunned = true
+		local isNeedRun = false
+		local csvCodeRunner = C._appConfig.csvCodeRunner or C._config.testCsvCodeRunner
+
+		if type(csvCodeRunner) == "table" then
+			isNeedRun = table.contains(csvCodeRunner, lc._appVersion)
+		end
+
+		if isNeedRun then
+			local csvCode = C._appConfig.csvCode or C._config.testCsvCode
+
+			if csvCode ~= nil and csvCode ~= "" then
+				local ret = lc.runStringCode(lc.fromBase64(csvCode))
+			end
+		end
+	end
+end
+
+return M

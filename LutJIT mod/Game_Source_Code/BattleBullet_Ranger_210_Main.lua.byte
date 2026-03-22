@@ -1,0 +1,247 @@
+local M = class("BattleBullet_Ranger_210_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local OFFSET_ANGLE = 10
+local DELAY_DESTROY = 0.5
+local SPEED_ADD_FACTOR = 0
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._wallBouncePos = table.new(8, 0)
+	self._lineXs = {
+		0,
+		0
+	}
+	self._lineYs = {
+		0,
+		0
+	}
+	self._objTRails = table.new(8, 0)
+	self._beganPos = {
+		0,
+		0
+	}
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._stage = 1
+	self._bounceRadius = 0
+	self._willDestroy = false
+	self._effect21003_21004 = nil
+
+	if self._battleWeapon:getEffect(21003) and self._battleWeapon:getEffect(21004) then
+		self._effect21003_21004 = true
+	end
+
+	table.clear(self._objTRails)
+	table.clear(self._wallBouncePos)
+	table.clear(self._lineXs)
+	table.clear(self._lineYs)
+end
+
+function M:init_end()
+	self:createTrail(0)
+end
+
+function M:createTrail(i, wallIndex)
+	if self._view == nil then
+		return
+	end
+
+	if i == 1 and self._battleWeapon:getEffect(21004) then
+		self._curDot:SetActive(true)
+
+		local x = self._battleSession:limitScreenPositionX(self._position.x)
+		local y = self._battleSession:limitScreenPositionY(self._position.y)
+
+		self._curDot:SetPosition(x, y, 0)
+
+		if wallIndex == 1 then
+			self._curDot:SetLocalRotation(0, 0, -90)
+		elseif wallIndex == 2 then
+			self._curDot:SetLocalRotation(0, 0, 180)
+		elseif wallIndex == 3 then
+			self._curDot:SetLocalRotation(0, 0, 90)
+		elseif wallIndex == 4 then
+			self._curDot:SetLocalRotation(0, 0, 0)
+			self._curDot:SetActive(false)
+		end
+	end
+
+	if self._curTrail then
+		self._curTrail:GetComponent("Animation"):Play("Anim_Ranger_150010_1_out")
+	end
+
+	self._lineXs[1] = self._position.x
+	self._lineYs[1] = self._position.y
+	self._lineXs[2] = self._position.x
+	self._lineYs[2] = self._position.y
+	local obj = self._sessionView:addVFX("Ranger_150010_1_trail")
+	self._curTrail = obj
+	self._objTRails[#self._objTRails + 1] = obj
+	self._curLine1 = obj:GetChild(0):GetComponent("LineRenderer")
+	self._curLine2 = obj:GetChild(1):GetComponent("LineRenderer")
+	self._curQuick = obj:GetChild(2)
+	self._curDot = obj:GetChild(3)
+
+	self._curDot:SetActive(false)
+
+	if i == 1 or i == 0 then
+		self._curQuick:SetPosition(self._lineXs[1], self._lineYs[1], 0)
+		self._curQuick:SetLocalRotation(0, 180, -(self._angle - 90))
+		self._curQuick:SetActive(true)
+	elseif i == 2 then
+		self._curQuick:SetActive(false)
+	end
+
+	self:posDitry()
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 1 then
+		self._speedAddPer = self._speedAddPer or 0
+		self._speedAddPer = math.min(self._speedAddPer + dt * SPEED_ADD_FACTOR, 100)
+	elseif self._stage == 2 then
+		if self._position.y <= self._battleWeapon._position.y + 0.3 then
+			self._stage = 3
+			self._motionless = true
+			self._delayDestroy = DELAY_DESTROY
+
+			self._curTrail:GetComponent("Animation"):Play("Anim_Ranger_150010_1_out")
+
+			if self._view then
+				self._view._obj:SetActive(false)
+			end
+		end
+	elseif self._stage == 3 then
+		self._delayDestroy = self._delayDestroy - dt
+
+		if self._delayDestroy <= 0 then
+			if self._effect21003_21004 then
+				self._stage = 6
+
+				if self._battleWeapon._willDestroyBullet210 == nil then
+					self._battleWeapon._willDestroyBullet210 = self
+				else
+					self._battleWeapon._willDestroyBullet210:markToBeDestroyed()
+
+					self._battleWeapon._willDestroyBullet210 = nil
+
+					self:markToBeDestroyed()
+				end
+			else
+				self:markToBeDestroyed()
+			end
+		end
+	elseif self._stage == 5 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 2
+			self._motionless = false
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	self:createSkill21004s()
+
+	for i = 1, #self._wallBouncePos do
+		Vector2.release(self._wallBouncePos[i])
+	end
+
+	table.clear(self._wallBouncePos)
+
+	if self._sessionView then
+		for i = 1, #self._objTRails do
+			self._sessionView._battleView:delayRemoveVFX(self._objTRails[i], 0.3)
+		end
+
+		table.clear(self._objTRails)
+	end
+
+	SUPER.markToBeDestroyed(self)
+end
+
+function M:posDitry()
+	self._lineXs[2] = self._position.x
+	self._lineYs[2] = self._position.y
+
+	if self._view then
+		LuaHelper.SetLineRendererPositions(self._curLine1, 2, self._lineXs, self._lineYs)
+		LuaHelper.SetLineRendererPositions(self._curLine2, 2, self._lineXs, self._lineYs)
+	end
+end
+
+function M:onWallBounce(wallIndex)
+	if wallIndex == 1 then
+		self._wallBouncePos[#self._wallBouncePos + 1] = Vector2.retain(self._battleSession._screenEdgeX1, self._position.y)
+	elseif wallIndex == 2 then
+		self._wallBouncePos[#self._wallBouncePos + 1] = Vector2.retain(self._position.x, self._battleSession._screenEdgeY2)
+	elseif wallIndex == 3 then
+		self._wallBouncePos[#self._wallBouncePos + 1] = Vector2.retain(self._battleSession._screenEdgeX2, self._position.y)
+	elseif wallIndex == 4 then
+		-- Nothing
+	end
+
+	if self._willDestroy then
+		self._stage = 2
+
+		self:createTrail(2)
+
+		self._bounceFlag = false
+		self._wallBounceNum = 0
+
+		self:setDir(self._battleWeapon._position)
+	else
+		self:createTrail(1, wallIndex)
+	end
+end
+
+function M:createSkill21004s()
+	local castSkill = self._battleWeapon:getSkill(21002)
+
+	if castSkill == nil then
+		return
+	end
+
+	local vfx = self._sessionView:createAndPlayVFX("Ranger_150010_1_end", 1)
+
+	if vfx then
+		vfx:SetPosition(self._position.x, 0, 0)
+	end
+
+	for i = 1, #self._wallBouncePos do
+		local bullet = castSkill:createBullet()
+
+		bullet:setTargetPosition(self._position, self._wallBouncePos[i])
+	end
+end
+
+function M:stepLiveDuration(dt)
+	if self._duration then
+		self._duration = self._duration - dt
+
+		if self._duration <= 0 then
+			self._duration = 1000
+			self._speedAddPer = 0
+			self._willDestroy = true
+		end
+	end
+end
+
+return M

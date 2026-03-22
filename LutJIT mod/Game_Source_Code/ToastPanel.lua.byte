@@ -1,0 +1,46 @@
+local M = class("ToastPanel", requireLua("BasePanel"))
+M.args = {
+	tmpDesc = Types.TMP_Text,
+	tfBody = Types.Transform,
+	atorMain = Types.Animator
+}
+local typeCG = typeof(UnityEngine.CanvasGroup)
+local DURATION_TIME = 1.5
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(param)
+	self:updateUI(param)
+end
+
+function M:updateUI(param)
+	if param == nil then
+		return
+	end
+
+	if self._isAgain == nil then
+		self._isAgain = true
+	else
+		self._atorMain:SetTrigger("show")
+	end
+
+	if type(param) == "table" then
+		local a, b = unpack(param)
+
+		if type(b) == "string" then
+			self._tmpDesc:SetLocalizeS(unpack(param))
+		elseif type(b) == "table" then
+			self._tmpDesc:SetLocalizeComplex(unpack(param))
+		else
+			self._tmpDesc:SetLocalize(unpack(param))
+		end
+	elseif type(param) == "string" then
+		self._tmpDesc.text = param
+	else
+		self._tmpDesc:SetLocalize(param)
+	end
+end
+
+return M

@@ -1,0 +1,87 @@
+local M = declare("SceneHelper", {})
+local SceneConfig = {
+	login = {
+		path = "Login",
+		name = "login"
+	},
+	city = {
+		path = "City",
+		name = "city"
+	},
+	battle = {
+		path = "Battle",
+		name = "Battle"
+	},
+	transition = {
+		path = "Transition",
+		name = "Transition"
+	},
+	test_battle = {
+		path = "TestBattle",
+		name = "TestBattle"
+	}
+}
+
+function M:ClearWhenSwitchScene()
+	LuaHelper.LuaGC()
+end
+
+function M:LoadScene(sceneCfg, onComplete)
+	self:ClearWhenSwitchScene()
+	RES:AsyncLoadLevel(sceneCfg.path, true, function ()
+		if onComplete then
+			onComplete()
+		end
+	end)
+end
+
+function M:EnterLoginScene(onComplete)
+	self:LoadScene(SceneConfig.login, onComplete)
+end
+
+function M:BackToLoginScene(onComplete)
+	DOTween.KillAll()
+
+	if BattleManager then
+		AudioService:StopAllBattleSound()
+	end
+
+	if GuideManager then
+		GuideManager:forceCloseGuide()
+	end
+
+	UIManager.cleanCanvas()
+	self:EnterLoginScene(onComplete)
+end
+
+function M:EenterBattleScene()
+	self:LoadScene(SceneConfig.battle)
+end
+
+function M:Login2CityScene(onComplete)
+	self:LoadScene(SceneConfig.city, onComplete)
+end
+
+function M:Battle2CityScene(onComplete)
+	self:LoadScene(SceneConfig.city, onComplete)
+end
+
+function M:City2BattleScene(onComplete)
+	self:LoadScene(SceneConfig.battle, onComplete)
+end
+
+function M:enterTestBattleScene()
+	self:LoadScene(SceneConfig.test_battle)
+end
+
+function M:enterTransScene(onComplete, to)
+	if to == "ark_rebuild" then
+		self:LoadScene(SceneConfig.transition, function ()
+			self:City2BattleScene(onComplete)
+		end)
+	elseif to == "main_mission" then
+		self:LoadScene(SceneConfig.transition, function ()
+			self:City2BattleScene(onComplete)
+		end)
+	end
+end

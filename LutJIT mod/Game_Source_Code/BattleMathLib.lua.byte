@@ -1,0 +1,384 @@
+local M = {}
+_G.BattleMathLib = M
+local Mathf = Mathf
+local math = math
+local pi = math.pi
+local Vector2 = Vector2
+M.TriangleArea = {
+	A = Vector2.retain(0, 0),
+	B = Vector2.retain(0, 0),
+	C = Vector2.retain(0, 0)
+}
+M.CircleArea = {
+	radius = 1,
+	O = Vector2.retain(0, 0)
+}
+
+function M.angle2dir(angle)
+	local rad = math.rad(angle)
+
+	return math.cos(rad), math.sin(rad)
+end
+
+function M.dir2angle(x, y)
+	return math.deg(math.atan2(y, x))
+end
+
+local s_vec2_1 = Vector2.retain(0, 0)
+
+function M.angle(p1, p2)
+	s_vec2_1:Set(p1.x, p1.y):Sub(p2):SetNormalize()
+
+	return math.deg(math.atan2(s_vec2_1.y, s_vec2_1.x))
+end
+
+function M.check_out_boundary(boundary, p)
+	if p.x <= boundary.x1 or boundary.x2 <= p.x or p.y <= boundary.y1 or boundary.y2 <= p.y then
+		return true
+	end
+
+	return false
+end
+
+function M.check_out_boundary_expect_y0(boundary, p)
+	if p.x <= boundary.x1 or boundary.x2 <= p.x or p.y <= boundary.y1 or boundary.y2 <= p.y then
+		return true
+	end
+
+	return false
+end
+
+function M.circle_circle_intersect(p1, p2, r1, r2)
+	local dx = p2.x - p1.x
+	local dy = p2.y - p1.y
+	local sum_r = r1 + r2
+	local sum_r_sq = sum_r * sum_r
+
+	return sum_r_sq > dx * dx + dy * dy
+end
+
+function M.rectangle_rectangle_intersect_align_axis(p1, p2, s1, s2)
+	local disX = s1[1] + s2[1]
+	local dx = math.abs(p2.x - p1.x) * 2
+
+	if disX < dx then
+		return false
+	end
+
+	local disY = s1[2] + s2[2]
+	local dy = math.abs(p2.y - p1.y) * 2
+
+	if disY < dy then
+		return false
+	end
+
+	return true
+end
+
+function M.rectangle_circle_intersect_align_axis(p1, p2, s, r)
+	local rectLeft = p1.x - s[1] / 2
+	local rectRight = p1.x + s[1] / 2
+	local rectBottom = p1.y - s[2] / 2
+	local rectTop = p1.y + s[2] / 2
+	local nearestX = math.max(rectLeft, math.min(p2.x, rectRight))
+	local nearestY = math.max(rectBottom, math.min(p2.y, rectTop))
+	local dx = nearestX - p2.x
+	local dy = nearestY - p2.y
+	local r_seq = r * r
+	local distance = dx * dx + dy * dy
+
+	return r_seq >= distance
+end
+
+function M.is_point_in_triangle(A, B, C, P)
+	local denominator = (B.y - C.y) * (A.x - C.x) + (C.x - B.x) * (A.y - C.y)
+	local alpha = ((B.y - C.y) * (P.x - C.x) + (C.x - B.x) * (P.y - C.y)) / denominator
+	local beta = ((C.y - A.y) * (P.x - C.x) + (A.x - C.x) * (P.y - C.y)) / denominator
+	local gamma = 1 - alpha - beta
+
+	return alpha > 0 and beta > 0 and gamma > 0
+end
+
+function M.closest_distance_point_to_line_sqrt(A, B, P)
+	local AP = opt.vec2_1
+	local AB = opt.vec2_2
+
+	AP:Set(P.x - A.x, P.y - A.y)
+	AB:Set(B.x - A.x, B.y - A.y)
+
+	local magnitudeAB = AB:SqrMagnitude()
+	local ABdotAP = Vector2.Dot(AP, AB)
+	local t = Mathf.Clamp01(ABdotAP / magnitudeAB)
+
+	opt.vec2_3:Set(A.x, A.y):Add(AB:Mul(t))
+
+	local dx = P.x - opt.vec2_3.x
+	local dy = P.y - opt.vec2_3.y
+
+	return dx * dx + dy * dy
+end
+
+function M.triangle_circle_intersect(triangleArea, circleArea)
+	local pA = triangleArea.A
+	local pB = triangleArea.B
+	local pC = triangleArea.C
+	local O = circleArea.O
+	local radius = circleArea.radius
+
+	if M.is_point_in_triangle(pA, pB, pC, O) then
+		return true
+	end
+
+	local distABSqrt = M.closest_distance_point_to_line_sqrt(pA, pB, O)
+	local distBCSqrt = M.closest_distance_point_to_line_sqrt(pB, pC, O)
+	local distCASqrt = M.closest_distance_point_to_line_sqrt(pC, pA, O)
+	local radiusSqrt = radius * radius
+
+	if distABSqrt < radiusSqrt or distBCSqrt < radiusSqrt or distCASqrt < radiusSqrt then
+		return true
+	end
+
+	if Vector2.DistanceSqrt(O, pA) < radiusSqrt or Vector2.DistanceSqrt(O, pB) < radiusSqrt or Vector2.DistanceSqrt(O, pC) < radiusSqrt then
+		return true
+	end
+
+	return false
+end
+
+function M.ring_circle_intersect(ringCenter, rInner, rOuter, circleCenter, r)
+	local d = Vector2.Distance(ringCenter, circleCenter)
+	local outsideIntersect = d <= rOuter + r
+	local insideIntersect = rInner <= d + r
+
+	return outsideIntersect and insideIntersect
+end
+
+function M.point_to_line_distance(point, lineDir, linePoint)
+	local A = -lineDir.y
+	local B = lineDir.x
+	local C = -(A * linePoint.x + B * linePoint.y)
+	local distance = math.abs(A * point.x + B * point.y + C) / math.sqrt(A * A + B * B)
+
+	return distance
+end
+
+function M.closest_point_on_ray(p, rayP, rayDir)
+	local dirNormalized = opt.vec2_1:Set(rayDir.x, rayDir.y):SetNormalize()
+	local toPoint = opt.vec2_2:Set(p.x, p.y):Sub(rayP)
+	local projectionLength = Vector2.Dot(toPoint, dirNormalized)
+
+	return dirNormalized:Mul(projectionLength):Add(rayP)
+end
+
+function M.rectangle_circle_intersect_not_align_axis(lineDir, linePoint, rectWidth, circlePt, circleRaduis)
+	local distance = M.point_to_line_distance(circlePt, lineDir, linePoint)
+
+	return distance <= rectWidth + circleRaduis
+end
+
+function M.aabbb_circle_intersect(obbArea, circleArea)
+	local center1 = obbArea.center
+	local center2 = circleArea.center
+	local vx = math.max(center1[1] - center2[1], center2[1] - center1[1])
+	local vy = math.max(center1[2] - center2[2], center2[2] - center1[2])
+	local extents = obbArea.extents
+	local ux = math.max(vx - extents[1], 0)
+	local uy = math.max(vy - extents[2], 0)
+	local radius = circleArea.radius
+
+	return ux * ux + uy * uy < radius * radius
+end
+
+function M.point_by_dir(p, dir, l)
+	return p.x + dir.x * l, p.y + dir.y * l
+end
+
+function M.obb_circle_intersect(obbArea, circleArea)
+	local center1 = obbArea.center
+	local center2 = circleArea.center
+	local px = center1[1] - center2[1]
+	local py = center1[2] - center2[2]
+	local x, y, z, w = Quaternion.AngleAxis_Forward(-obbArea.angle)
+	px, py = Quaternion.static(x, y, z, w):MulVec3XYZ(px, py, 0)
+	local vx = math.max(px, -px)
+	local vy = math.max(py, -py)
+	local extents = obbArea.extents
+	local ux = math.max(vx - extents[1], 0)
+	local uy = math.max(vy - extents[2], 0)
+	local radius = circleArea.radius
+
+	return ux * ux + uy * uy < radius * radius
+end
+
+function M.random_inside_circle(r)
+	local angle = BattleRandomLib:randomMN(0, 360)
+	r = BattleRandomLib:random() * r
+	local rad = math.rad(angle)
+	local x = math.cos(rad) * r
+	local y = math.sin(rad) * r
+
+	return x, y
+end
+
+function M.random_along_circle(r)
+	local angle = BattleRandomLib:randomMN(0, 360)
+	local rad = math.rad(angle)
+	local x = math.cos(rad) * r
+	local y = math.sin(rad) * r
+
+	return x, y
+end
+
+function M.point_in_circle_by_angle(r, angle)
+	local rad = math.rad(angle)
+	local x = math.cos(rad) * r
+	local y = math.sin(rad) * r
+
+	return x, y
+end
+
+function M.random_inside_triangle(p1, p2, p3)
+	local r1 = BattleRandomLib:random()
+	local r2 = BattleRandomLib:random()
+
+	if r1 + r2 > 1 then
+		r1 = 1 - r1
+		r2 = 1 - r2
+	end
+
+	local a = 1 - r1 - r2
+	local x = a * p1.x + r1 * p2.x + r2 * p3.x
+	local y = a * p1.y + r1 * p2.y + r2 * p3.y
+
+	return x, y
+end
+
+local vec2_1 = Vector2.retain(0, 0)
+local vec2_2 = Vector2.retain(0, 0)
+
+function M.is_ray_segment_intersect(o, dir, a, b, out)
+	local A = b.y - a.y
+	local B = a.x - b.x
+	local E = a.x * b.y - a.y * b.x
+	local c = vec2_1:Set(o.x, o.y)
+	local d = vec2_2:Set(o.x, o.y):Add(dir)
+	local C = d.y - c.y
+	local D = c.x - d.x
+	local F = c.x * d.y - c.y * d.x
+	local detDown = A * D - B * C
+
+	if Mathf.Approximately(detDown, 0) then
+		return false
+	end
+
+	local invDetDown = 1 / detDown
+	local x = (D * E - B * F) * invDetDown
+	local y = (-C * E + A * F) * invDetDown
+	local ab = vec2_1:Set(b.x, b.y):Sub(a)
+
+	if Mathf.Approximately(ab.x, 0) then
+		if (y - a.y) * (y - b.y) > 0 then
+			return false
+		end
+	elseif Mathf.Approximately(ab.y, 0) then
+		if (x - a.x) * (x - b.x) > 0 then
+			return false
+		end
+	elseif (x - a.x) * (x - b.x) > 0 or (y - a.y) * (y - b.y) > 0 then
+		return false
+	end
+
+	local op = vec2_1:Set(x, y):Sub(o)
+
+	if Vector2.Dot(dir, op) < 0 then
+		return false
+	end
+
+	out:Set(x, y)
+
+	return true
+end
+
+function M.is_ray_circle_intersect(rayPoint, rayDir, circle, radius, out)
+	local offset = vec2_1
+
+	offset:Set(circle.x, circle.y):Sub(rayPoint)
+
+	local e = offset.magnitude
+	local a = offset.x * rayDir.x + offset.y * rayDir.y
+
+	if radius * radius - (e * e - a * a) < 0 then
+		return false
+	end
+
+	local f = math.sqrt(radius * radius - e * e + a * a)
+	local t = a - f
+
+	out:Set(rayPoint.x + rayDir.x * t, rayPoint.y + rayDir.y * t)
+
+	return true
+end
+
+function M.sqrt_dis_xy(x1, y1, x2, y2)
+	return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)
+end
+
+function M.dis_square(p1, p2)
+	return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y)
+end
+
+function M.ease_linear(t, b, c, d)
+	return (c - b) * t / d + b
+end
+
+function M.ease_out_sine(t, b, c, d)
+	return (c - b) * math.sin(t / d * pi / 2) + b
+end
+
+function M.ease_in_sine(t, b, c, d)
+	return b + (c - b) * (1 - math.cos(pi / 2 * t / d))
+end
+
+function M.calculate_bezier_point_2(t, p0, p1, p2)
+	local u = 1 - t
+	local uu = u * u
+	local tt = t * t
+	local x = uu * p0.x + 2 * u * t * p1.x + tt * p2.x
+	local y = uu * p0.y + 2 * u * t * p1.y + tt * p2.y
+
+	return x, y
+end
+
+function M.calculate_second_bezier_tangent(t, p0, p1, p2)
+	local u = 1 - t
+	local x = -2 * u * p0.x + 2 * (1 - 2 * t) * p1.x + 2 * t * p2.x
+	local y = -2 * u * p0.y + 2 * (1 - 2 * t) * p1.y + 2 * t * p2.y
+
+	return x, y
+end
+
+function M.calculate_bezier_point_3(t, p0, p1, p2, p3)
+	local u = 1 - t
+	local tt = t * t
+	local uu = u * u
+	local uuu = uu * u
+	local ttt = tt * t
+	local x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x
+	local y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+
+	return x, y
+end
+
+function M.find_circle_y(ox, oy, radius, x)
+	local c = math.sqrt(radius * radius - (x - ox) * (x - ox))
+
+	return c + oy
+end
+
+function M.find_circle_y2(ox, oy, radius, x)
+	local c = math.sqrt(radius * radius - (x - ox) * (x - ox))
+
+	return -c + oy
+end
+
+return M

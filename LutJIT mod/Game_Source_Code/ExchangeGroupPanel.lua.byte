@@ -1,0 +1,146 @@
+local M = class("ExchangeGroupPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnIcon = Types.Button,
+	imgIcon = Types.Image,
+	txtItemNum = Types.TMP_Text,
+	txtItemDesc = Types.TMP_Text,
+	tfContainer = Types.Transform,
+	goTime = Types.GameObject,
+	textExpireTime = Types.TMP_Text
+}
+local CellWidget = requireLua("ExchangeGroupWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClickWithoutAction(self._btnIcon, function ()
+		V.showItemInfoPanel(self._cid)
+	end)
+end
+
+function M:init(exchangeCid, exchanceGroup, exchangeCallback, closeCallback)
+	self._cid = exchangeCid
+	self._exchanceGroup = exchanceGroup
+	self._exchangeCallback = exchangeCallback
+	self._closeCallback = closeCallback
+	self._widgets = {}
+	self._isActivityExchange = self._cid > 11000
+
+	if self._isActivityExchange then
+		self._txtItemDesc:SetLocalize(SID.TIP_ACTVITY_ITEM_REMAIN_NUM)
+	else
+		self._txtItemDesc:SetLocalize(SID.TIP_SPECIAL_EXCHANGE_ITEM)
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local exchanges = P._playerExchange:getUnlockedExchangeIdsByType(self._exchanceGroup)
+	local cid1, num1 = P._playerExchange:readExchangeCost(exchanges[1])
+	self._txtItemNum.text = string.format("<sprite name=\"item_small_%d\">%d", self._cid, P._playerAsset:getAssetNum(self._cid))
+
+	for k, exchangeId in pairs(exchanges) do
+		local widget = nil
+
+		if not self._widgets[exchangeId] then
+			widget = CellWidget.create(self._tfContainer)
+
+			widget:init()
+			lc.setSizeDelta(widget.transform, 700, 150)
+
+			self._widgets[exchangeId] = widget
+		else
+			widget = self._widgets[exchangeId]
+		end
+
+		widget:updateUI(exchangeId)
+		widget:setExchangeClick(self, function (originRewards)
+			self:updateUI()
+
+			if self._exchangeCallback then
+				self._exchangeCallback(originRewards)
+			end
+		end)
+
+		local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+		local cid, num = P._playerExchange:readExchangeCost(exchangeId)
+		local canExchange = leftExchangeCount > 0 and P._playerAsset:isAssetEnough(cid, num)
+
+		widget:setDot(canExchange)
+	end
+
+	local refreshType = D._exchangeConfig[exchanges[1]]._refreshType
+	self._refreshType = refreshType
+	self._targetTime = C.getTodayZeroTimestamp()
+
+	if refreshType < 4 then
+		self._goTime:SetActive(true)
+
+		if refreshType == 1 then
+			-- Nothing
+		elseif refreshType == 2 then
+			self._targetTime = C.getMondayTimestamp(self._targetTime, 1)
+		elseif refreshType == 3 then
+			self._targetTime = C.getMonthFirstDayTimestamp(self._targetTime, 1)
+		end
+
+		self:updateExpireTime()
+	else
+		self._goTime:SetActive(false)
+	end
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local seconds = self._targetTime - C.getCurTime()
+	local ts = seconds > 86400 and V.getLeftTimeStr(seconds, true) or V.formatTimeS2HMS(seconds)
+
+	self._textExpireTime:SetLocalizeS(SID.STR_REFRESH_IN, ts)
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+	end
+
+	if self._secondTimer then
+		lc.stopTimer(self._secondTimer)
+
+		self._secondTimer = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	if self._secondTimer then
+		lc.stopTimer(self._secondTimer)
+
+		self._secondTimer = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+return M

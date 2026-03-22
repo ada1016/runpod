@@ -1,0 +1,87 @@
+local M = class("UnionFlagEditPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goFlagWidget = Types.GameObject,
+	goFlagIconContent = Types.GameObject,
+	goFlagBaseContent = Types.GameObject,
+	btnConfirm = Types.Button
+}
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+local FLAG_COUNT = 7
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._confirmCallback then
+			self._confirmCallback()
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(pack)
+	self._goFlagWidget:init(pack.avatar_base, pack.avatar_badge)
+
+	self._lastBase = nil
+	self._lastIcon = nil
+
+	for i = 1, FLAG_COUNT do
+		local child = self._goFlagIconContent:GetChild(i - 1)
+
+		self:setClick(child:GetComponent("Button"), function ()
+			pack.avatar_badge = i
+
+			self._goFlagWidget:init(pack.avatar_base, pack.avatar_badge)
+			self._lastBase:Find("ImgChoose"):SetActive(false)
+			child:Find("ImgChoose"):SetActive(true)
+
+			self._lastBase = child
+		end)
+
+		if i == pack.avatar_badge then
+			child:Find("ImgChoose"):SetActive(true)
+
+			self._lastBase = child
+		end
+	end
+
+	for i = 1, FLAG_COUNT do
+		local child = self._goFlagBaseContent:GetChild(i - 1)
+
+		self:setClick(child:GetComponent("Button"), function ()
+			pack.avatar_base = i
+
+			self._goFlagWidget:init(pack.avatar_base, pack.avatar_badge)
+			self._lastIcon:Find("ImgChoose"):SetActive(false)
+			child:Find("ImgChoose"):SetActive(true)
+
+			self._lastIcon = child
+		end)
+
+		if i == pack.avatar_badge then
+			child:Find("ImgChoose"):SetActive(true)
+
+			self._lastIcon = child
+		end
+	end
+
+	for i = 4, FLAG_COUNT do
+		self._goFlagIconContent:GetChild(i - 1):SetActive(false)
+		self._goFlagBaseContent:GetChild(i - 1):SetActive(false)
+	end
+end
+
+return M

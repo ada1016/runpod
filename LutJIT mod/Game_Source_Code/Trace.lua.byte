@@ -1,0 +1,710 @@
+local M = {}
+
+declare("Trace", M)
+
+local GA_NewDesignEvent = GameAnalyticsSDK and GameAnalyticsSDK.GameAnalytics.NewDesignEvent or opt.empty_func
+local GA_NewBusinessEvent = GameAnalyticsSDK and GameAnalyticsSDK.GameAnalytics.NewBusinessEvent or opt.empty_func
+local GA_NewResourceEvent = GameAnalyticsSDK and GameAnalyticsSDK.GameAnalytics.NewResourceEvent or opt.empty_func
+local SDKFlowType = GameAnalyticsSDK and GameAnalyticsSDK.GAResourceFlowType or nil
+local GA_FlowType_Sink = SDKFlowType and SDKFlowType.Sink or nil
+local GA_FlowType_Source = SDKFlowType and SDKFlowType.Source or nil
+
+function M.GA_traceDesignEvent(key, val)
+	GA_NewDesignEvent(key, val or 0)
+end
+
+local res_name = {
+	[10003.0] = "Stamina",
+	[10047.0] = "ResonanceShard",
+	[10002.0] = "Gem",
+	[10001.0] = "Gold",
+	[10028.0] = "Titanium",
+	[10005.0] = "KeyA",
+	[10006.0] = "KeyB",
+	[3600000.0] = "RedChip",
+	[10012.0] = "Recruitment",
+	[10044.0] = "NeurCocoon",
+	[3700000.0] = "ColorfulChip",
+	[10104.0] = "RebuildArkAnchor"
+}
+local AF_res_name = {
+	[10002.0] = "diamond",
+	[10028.0] = "Titanium",
+	[10006.0] = "KeyB",
+	[10005.0] = "KeyA",
+	[10047.0] = "ResonanceShard",
+	[3600000.0] = "RedChip",
+	[3700000.0] = "ColorfulChip"
+}
+
+function M.traceResChanged(itemId, isSub, amount, totalNum, logWay)
+	if itemId >= 3600000 and itemId < 3700000 then
+		itemId = 3600000
+		totalNum = P._playerAsset:getAssetNum(itemId)
+
+		if logWay == D.LogWay.chip_wash then
+			return
+		end
+	end
+
+	if itemId >= 3700000 and itemId < 3800000 then
+		itemId = 3700000
+		totalNum = P._playerAsset:getAssetNum(3700000)
+
+		if logWay == D.LogWay.chip_wash then
+			return
+		end
+	end
+
+	if res_name[itemId] == nil then
+		if D._itemConfig[itemId] and D._itemConfig[itemId]._trace then
+			M.AF_traceResource(tostring(itemId), isSub and 2 or 1, amount, totalNum, logWay or D.LogWay.unknow)
+
+			return
+		end
+
+		return
+	end
+
+	logWay = logWay or D.LogWay.unknow
+	local flowType = isSub and GA_FlowType_Sink or GA_FlowType_Source
+
+	GA_NewResourceEvent(flowType, res_name[itemId], amount, res_name[itemId], logWay)
+	M.AF_traceResource(AF_res_name[itemId] or tostring(itemId), isSub and 2 or 1, amount, totalNum, logWay)
+end
+
+local S_ONE_KEY_VALUE = {
+	{
+		_key = "strParam",
+		_value = 1
+	}
+}
+
+function M.AF_traceOneKV(name, value)
+	S_ONE_KEY_VALUE[1]._value = value
+
+	M.AF_traceEvent(name, S_ONE_KEY_VALUE)
+end
+
+local S_TWO_KEY_VALUE = {
+	{
+		_key = "strParam",
+		_value = 1
+	},
+	{
+		_key = "strParam1",
+		_value = 1
+	}
+}
+
+function M.AF_traceTwoKV(name, value1, value2)
+	S_TWO_KEY_VALUE[1]._value = value1
+	S_TWO_KEY_VALUE[2]._value = value2
+
+	M.AF_traceEvent(name, S_TWO_KEY_VALUE)
+end
+
+function M.traceDesign(str, ...)
+	local str = string.format(str, ...)
+
+	if lc._isCN then
+		local p = string.split(str, ":")
+
+		if p[3] then
+			M.AF_traceTwoKV(p[1], p[2], p[3])
+		elseif p[2] then
+			M.AF_traceOneKV(p[1], p[2])
+		else
+			M.AF_traceKey(p[1])
+		end
+	else
+		M.GA_traceDesignEvent(str)
+	end
+end
+
+function M.traceDesign_Activity(str, aid, atype, asubType, ...)
+	if aid == 1 then
+		str = string.format(str, "1", ...)
+	else
+		str = string.format(str, string.format("%d_%d", atype, asubType), ...)
+	end
+
+	M.traceDesign(str, ...)
+end
+
+function M.traceAdRewardReceived(adName)
+	M.AF_traceKey("e03_receviedreward")
+	M.AF_traceAd("reward", adName)
+end
+
+function M.traceAdShow(adName)
+	M.AF_traceAd("rewarded", adName)
+end
+
+function M.traceAdFail(adName)
+	M.AF_traceAd("e_ad_fail", adName)
+end
+
+function M.traceIapPurchased(iapId, payMoney)
+	GA_NewBusinessEvent("USD", payMoney * 100, "default", D._iapConfig[iapId]._event, P._playerStore:getPurchaseChannel())
+end
+
+local emptyTable = {}
+local e_common_values = {
+	{
+		_key = "iapCount",
+		_value = 0
+	},
+	{
+		_key = "onlineTime",
+		_value = 0
+	},
+	{
+		_key = "onlineDay",
+		_value = 0
+	},
+	{
+		_key = "iapSum",
+		_value = 0
+	},
+	{
+		_key = "adCount",
+		_value = 0
+	},
+	{
+		_key = "installVersion",
+		_value = 0
+	},
+	{
+		_key = "testAB",
+		_value = 0
+	},
+	{
+		_key = "level",
+		_value = 0
+	},
+	{
+		_key = "appRunTime",
+		_value = 0
+	},
+	{
+		_key = "dataVersion2",
+		_value = 0
+	},
+	{
+		_key = "loginTimestamp",
+		_value = 0
+	},
+	{
+		_key = "userFlag",
+		_value = 0
+	},
+	{
+		_key = "bundleVersion",
+		_value = 0
+	},
+	{
+		_key = "isInBlacklist",
+		_value = 0
+	}
+}
+local ge_super_properties = {}
+local record_minutes = {
+	30,
+	40,
+	50,
+	60
+}
+M.lastOnlineTime = nil
+
+function M.AF_traceEvent(eventName, data)
+	data = data or emptyTable
+	local eventParams = {}
+
+	for _, info in ipairs(data) do
+		eventParams[info._key] = info._value
+	end
+
+	if P then
+		local onlineTime = P._playerRecord:getOnlineTime()
+
+		if not M.lastOnlineTime then
+			M.lastOnlineTime = onlineTime
+		end
+
+		e_common_values[1]._value = P._playerStore:getPayCount()
+		e_common_values[2]._value = math.floor(onlineTime)
+		e_common_values[3]._value = P._playerRecord:getOnlineDay()
+		e_common_values[4]._value = P._playerStore:getPayMoney()
+		e_common_values[5]._value = P._playerAd:getTotalRewardAdWatchCount()
+		e_common_values[6]._value = Client._saveData.version
+		e_common_values[7]._value = P:isATest() and "A" or "B"
+		e_common_values[8]._value = P:getLevel()
+		e_common_values[9]._value = math.floor(Client._saveData.appRunTime or 0)
+
+		if lc._isCN then
+			e_common_values[10]._value = C._serverDataVersion or 0
+		else
+			e_common_values[10]._value = C._saveData.dataVersion2 or 0
+		end
+
+		e_common_values[11]._value = math.floor(C._loginTimestamp or 0)
+		e_common_values[12]._value = C._userFlag or 0
+
+		if lc._isCN then
+			e_common_values[13]._value = C.getVersion()
+		else
+			e_common_values[14]._value = C._isInBlacklist and 1 or 0
+		end
+
+		if not string.startsWith(eventName, "e_playtime_") then
+			for i = 1, #record_minutes do
+				if onlineTime >= record_minutes[i] * 60 and P._playerRecord:getRecordOnlineTime() < record_minutes[i] * 60 then
+					M.AF_traceEvent("e_playtime_" .. record_minutes[i])
+				end
+			end
+
+			P._playerRecord:setRecordOnlineTime(onlineTime)
+		end
+
+		for _, info in ipairs(e_common_values) do
+			eventParams[info._key] = info._value
+		end
+	end
+
+	LuaHelper.LogAFEvent(eventName, eventParams)
+end
+
+function M.AF_traceKey(eventName)
+	M.AF_traceEvent(eventName)
+end
+
+local e_ad_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "type",
+		_value = 0
+	},
+	{
+		_key = "placement",
+		_value = 0
+	}
+}
+
+function M.AF_traceAd(type, placement)
+	e_ad_values[1]._value = P._playerMission:getMissionId()
+	e_ad_values[2]._value = Client.getVersion()
+	e_ad_values[3]._value = type
+	e_ad_values[4]._value = placement
+
+	M.AF_traceEvent("e_ad", e_ad_values)
+end
+
+local e_session_values = {
+	{
+		_key = "type",
+		_value = 0
+	},
+	{
+		_key = "elapsedTime",
+		_value = 0
+	}
+}
+
+function M.AF_traceSession(type, elapsedTime)
+	e_session_values[1]._value = type
+	e_session_values[2]._value = elapsedTime
+
+	M.AF_traceEvent("e_session", e_session_values)
+end
+
+local e_ad_revenue_values = {
+	{
+		_key = "type",
+		_value = 0
+	},
+	{
+		_key = "revenue",
+		_value = 0
+	},
+	{
+		_key = "network",
+		_value = ""
+	}
+}
+
+function M.AF_traceAdRevenue(type, revenue, network)
+	e_ad_revenue_values[1]._value = type
+	e_ad_revenue_values[2]._value = revenue
+	e_ad_revenue_values[3]._value = network
+
+	M.AF_traceEvent("e_ad_revenue", e_ad_revenue_values)
+end
+
+local af_purchase_values = {
+	{
+		_key = "af_currency",
+		_value = "USD"
+	},
+	{
+		_key = "af_quantity",
+		_value = 1
+	},
+	{
+		_key = "af_revenue",
+		_value = 0
+	}
+}
+local e_purchase_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "money",
+		_value = 0
+	},
+	{
+		_key = "purchase",
+		_value = ""
+	},
+	{
+		_key = "orderId",
+		_value = ""
+	}
+}
+
+function M.AF_tracePurchase(price, productName, orderId)
+	af_purchase_values[3]._value = price
+
+	M.AF_traceEvent("af_purchase", af_purchase_values)
+
+	e_purchase_values[1]._value = P._playerMission:getMissionId()
+	e_purchase_values[2]._value = Client.getVersion()
+	e_purchase_values[3]._value = price
+	e_purchase_values[4]._value = productName
+	e_purchase_values[5]._value = orderId
+
+	M.AF_traceEvent("e_purchase", e_purchase_values)
+
+	if not lc._isCN then
+		local t = lc.priceBinning(price)
+
+		for i = 1, #t do
+			LuaHelper.LogInAppPurchase(t[i])
+		end
+	end
+
+	if lc._isCN then
+		local payMethod = "WeChatPay"
+
+		LuaHelper.LogGravityEnginePayEvent(price * 100, "CNY", orderId, productName, payMethod)
+	end
+end
+
+local e_iap_values = {
+	{
+		_key = "iapId",
+		_value = ""
+	},
+	{
+		_key = "action",
+		_value = ""
+	}
+}
+
+function M.AF_traceIAP(productName, step)
+	e_iap_values[1]._value = productName
+	e_iap_values[2]._value = step
+
+	M.AF_traceEvent("e_iap", e_iap_values)
+end
+
+local e_resource_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "resourceId",
+		_value = 0
+	},
+	{
+		_key = "type",
+		_value = 0
+	},
+	{
+		_key = "num",
+		_value = 0
+	},
+	{
+		_key = "totalNum",
+		_value = 0
+	},
+	{
+		_key = "placement",
+		_value = 0
+	},
+	{
+		_key = "bxorKey",
+		_value = 0
+	}
+}
+
+function M.AF_traceResource(resourceId, type, num, totalNum, placement)
+	e_resource_values[1]._value = P and P._playerMission:getMissionId() or 0
+	e_resource_values[2]._value = Client.getVersion()
+	e_resource_values[3]._value = resourceId
+
+	if lc._isCN then
+		e_resource_values[4]._value = tostring(type)
+	else
+		e_resource_values[4]._value = type
+	end
+
+	e_resource_values[5]._value = num
+	e_resource_values[6]._value = totalNum
+	e_resource_values[7]._value = placement
+	e_resource_values[8]._value = P and P._playerAsset._bxorKey or "Empty"
+
+	M.AF_traceEvent("e_resource", e_resource_values)
+end
+
+function M.logDesign(eventName)
+	M.GA_traceDesignEvent(eventName)
+end
+
+local e_stage_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "status",
+		_value = 0
+	},
+	{
+		_key = "msType",
+		_value = 0
+	},
+	{
+		_key = "result",
+		_value = 0
+	},
+	{
+		_key = "num",
+		_value = 0
+	},
+	{
+		_key = "battery",
+		_value = 0
+	},
+	{
+		_key = "elapsedTime",
+		_value = 0
+	},
+	{
+		_key = "seed",
+		_value = 0
+	}
+}
+local e_stage_values_CN = {
+	{
+		_key = "$section_id",
+		_value = 0
+	},
+	{
+		_key = "$section_type",
+		_value = 0
+	}
+}
+
+function M.AF_traceStage(status, msType, msId, result, level, battery, dragTime, seed)
+	e_stage_values[1]._value = msId
+	e_stage_values[2]._value = Client.getVersion()
+	e_stage_values[3]._value = status
+	e_stage_values[4]._value = msType
+	e_stage_values[5]._value = result
+	e_stage_values[6]._value = level
+	e_stage_values[7]._value = battery or 0
+	e_stage_values[8]._value = dragTime or 0
+	e_stage_values[9]._value = seed or 0
+
+	M.AF_traceEvent("e_stage", e_stage_values)
+
+	if lc._isCN and result and result == "win" then
+		e_stage_values_CN[1]._value = msId
+		e_stage_values_CN[2]._value = tostring(msType - 1)
+
+		M.AF_traceEvent("$CompleteSection", e_stage_values_CN)
+	end
+end
+
+local e_player_level_values_CN = {
+	{
+		_key = "$user_level",
+		_value = 0
+	}
+}
+
+function M.AF_tracePlayerLevel(level)
+	if lc._isCN then
+		e_player_level_values_CN[1]._value = level
+
+		M.AF_traceEvent("$UpdateLevel", e_player_level_values_CN)
+	end
+end
+
+local e_upgrade_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "target",
+		_value = 0
+	},
+	{
+		_key = "targetId",
+		_value = 0
+	},
+	{
+		_key = "num",
+		_value = 0
+	}
+}
+
+function M.AF_traceUpgrade(target, targetId, level, stageId)
+	e_upgrade_values[1]._value = stageId or P._playerMission:getMissionId()
+	e_upgrade_values[2]._value = Client.getVersion()
+	e_upgrade_values[3]._value = target
+	e_upgrade_values[4]._value = targetId
+	e_upgrade_values[5]._value = level
+
+	M.AF_traceEvent("e_upgrade", e_upgrade_values)
+end
+
+local e_rouge_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "target",
+		_value = 0
+	},
+	{
+		_key = "rouges",
+		_value = 0
+	},
+	{
+		_key = "num",
+		_value = 0
+	}
+}
+
+function M.AF_traceRouge(target, rouges, level, stageId)
+	e_rouge_values[1]._value = stageId or P._playerMission:getMissionId()
+	e_rouge_values[2]._value = Client.getVersion()
+	e_rouge_values[3]._value = target
+	e_rouge_values[4]._value = rouges
+	e_rouge_values[5]._value = level
+
+	M.AF_traceEvent("e_rouge", e_rouge_values)
+end
+
+local e_equip_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "target",
+		_value = 0
+	},
+	{
+		_key = "targetId",
+		_value = 0
+	}
+}
+
+function M.AF_traceEquip(target, targetId)
+	e_equip_values[1]._value = P._playerMission:getMissionId()
+	e_equip_values[2]._value = Client.getVersion()
+	e_equip_values[3]._value = target
+	e_equip_values[4]._value = targetId
+
+	M.AF_traceEvent("e_equip", e_equip_values)
+end
+
+local e_guide_values = {
+	{
+		_key = "stageId",
+		_value = 0
+	},
+	{
+		_key = "version",
+		_value = 0
+	},
+	{
+		_key = "step",
+		_value = 0
+	}
+}
+
+function M.AF_traceGuide(step)
+	e_guide_values[1]._value = P._playerMission:getMissionId()
+	e_guide_values[2]._value = Client.getVersion()
+	e_guide_values[3]._value = step
+
+	M.AF_traceEvent("e_guide", e_guide_values)
+end
+
+local e_cheat_values = {
+	{
+		_key = "num",
+		_value = 0
+	},
+	{
+		_key = "cheatWay",
+		_value = 0
+	}
+}
+
+function M.AF_traceCheat(num, cheatWay)
+	e_cheat_values[1]._value = num
+	e_cheat_values[2]._value = cheatWay
+
+	M.AF_traceEvent("e_cheat", e_cheat_values)
+end

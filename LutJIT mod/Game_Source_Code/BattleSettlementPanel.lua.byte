@@ -1,0 +1,651 @@
+local M = class("BattleSettlementPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnDouble = Types.Button,
+	txtClose = Types.TMP_Text,
+	tmpWinMissionName = Types.TMP_Text,
+	tmpLoseMissionName = Types.TMP_Text,
+	tmpWinTitle = Types.TMP_Text,
+	tmpWinHpPercent = Types.TMP_Text,
+	tmpLoseHpPercent = Types.TMP_Text,
+	tmpDoubleTip = Types.TMP_Text,
+	goWin = Types.GameObject,
+	goFail = Types.GameObject,
+	tfWinRewardRect = Types.Transform,
+	tfLoseRewardRect = Types.Transform,
+	goRecordArea = Types.GameObject,
+	goNewRecord = Types.GameObject,
+	goWinSepLine = Types.GameObject,
+	btnBrowseCards = Types.Button,
+	btnFailGuide = Types.Button,
+	goDiscordShare = Types.GameObject,
+	btnShare = Types.Button,
+	tfRewardArea = Types.Transform,
+	lgRewards = Types.LayoutGroup,
+	goEmptyReward = Types.GameObject,
+	goWinRewardsTip = Types.GameObject,
+	txtWinRewardsTip = Types.TMP_Text,
+	goLoseRewardsTip = Types.GameObject,
+	txtLoseRewardsTip = Types.TMP_Text,
+	tfWeapons = Types.Transform,
+	tfStatsParent = Types.Transform,
+	goVip = Types.GameObject,
+	goInviteArea = Types.GameObject,
+	tfAvatar = Types.Transform,
+	tmpInviteName = Types.TMP_Text,
+	tmpInviteMsg = Types.TMP_Text,
+	btnsArea = Types.GameObject,
+	btnNextOrAgain = Types.Button,
+	txtNextOrAgain = Types.TMP_Text,
+	btnRetry = Types.Button,
+	tfBtnWhiteBox = Types.Transform,
+	goAutoBattle = Types.GameObject,
+	btnAutoBattle = Types.Button,
+	goAutoBattleCheckbox = Types.GameObject,
+	txtAutoBattle = Types.TMP_Text
+}
+local ItemWidget = requireLua("ItemWidget")
+local DiscordShareWidget = requireLua("DiscordShareWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+end
+
+function M:initPrefabVar()
+	DiscordShareWidget.noCreate(self._goDiscordShare)
+	self._goDiscordShare:setBtnsClick(self)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:dealClaimBtn()
+	end)
+	self:setClick(self._btnNextOrAgain, function ()
+		if self._result == D.BattleResult.Win then
+			self:dealContinueBattle(self._nextMsId)
+		else
+			self:dealContinueBattle(self._msId)
+		end
+	end)
+	self:setClick(self._btnRetry, function ()
+		self:dealContinueBattle(self._msId)
+	end)
+	self:setClick(self._btnDouble, function ()
+		if self._msType == D.MissionType.Dome then
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.Mission_Double)
+	end)
+	self:setClick(self._btnShare, function ()
+		self:previewShareDiscord()
+	end)
+	self:setClick(self._btnBrowseCards, function ()
+		if self._msType ~= D.MissionType.SparkScout then
+			UIManager.openPanel(PrefabDefine.ArkRebuildBattleCardsBrowsePanel, self._msId, self._msType, self._result, self._stats)
+		else
+			UIManager.openPanel(PrefabDefine.SparkScoutTemporaryCardsPanel, true)
+		end
+	end)
+	self:setClick(self._btnFailGuide, function ()
+		UIManager.openPanel(PrefabDefine.MissionGuideTipPanel, self._msId, self._msType)
+	end)
+	self:setClick(self._btnAutoBattle, function ()
+	end)
+end
+
+function M:addEvents()
+	self:on("finished.ad", function (adType)
+		if adType == D.AdType.Mission_Double then
+			self:dealDouble()
+		end
+	end)
+	self:on("rightcard.update", function (adType)
+		V.loadAdButton1(self._btnDouble.gameObject, false, SID.STR_DOUBLE_REWARD, SID.STR_DOUBLE_REWARD)
+	end)
+end
+
+function M:init(msId, msType, result, stats)
+	self:changeBtnEnables(false)
+
+	self._msId = msId
+	self._msType = msType
+	self._stats = stats
+	self._result = result
+
+	self._goDiscordShare:SetActive(true)
+	self._goAutoBattle:SetActive(false)
+	self:updateUI()
+
+	if UIManager.getPanel(PrefabDefine.BattleUpgradePanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleUpgradePanel)
+	end
+
+	if UIManager.getPanel(PrefabDefine.BattleDeathDrawPanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleDeathDrawPanel)
+	end
+
+	if UIManager.getPanel(PrefabDefine.BattleRebornUpgradePanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleRebornUpgradePanel)
+	end
+end
+
+function M:updateUI()
+	self._showVip = false
+	self._showDouble = false
+	self._showGuideTip = false
+	self._showDiscordShare = true
+	local isWin = self._result == D.BattleResult.Win
+	local leftCount = P._playerRecord:getDailyAdDoubleNum()
+	local maxCount = P._playerRecord:readMaxDailyAdDoubleNum()
+
+	self._tmpDoubleTip:SetLocalize(SID.TIP_TODAY_DOUBLE_COUNT, leftCount, maxCount)
+
+	local isMainMission = self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite
+
+	if self._msType == D.MissionType.Dome then
+		self._result = D.BattleResult.Win
+		self._showVip = true
+		self._showDouble = false
+	elseif self._msType == D.MissionType.CrisisZone then
+		self._result = D.BattleResult.Win
+		self._showVip = false
+		self._showDouble = false
+	elseif self._msType == D.MissionType.GlobalDefense then
+		self._showDouble = false
+		self._showVip = false
+	elseif self._msType == D.MissionType.ArkRebuild then
+		self._showDouble = false
+		self._showVip = false
+	elseif self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite then
+		self._showVip = true
+		self._showDouble = true
+	elseif self._msType == D.MissionType.SparkScout then
+		-- Nothing
+	end
+
+	if lc._isCN then
+		LuaUnity.setTPSprite(self._btnShare.transform:GetChild(0):GetComponent("Image"), "general/g_btn_share", true)
+
+		if BattleManager and BattleManager._msId == 10001 then
+			self._showVip = false
+		end
+	end
+
+	if not isWin and self._msType == D.MissionType.Common then
+		self._showGuideTip = true
+	end
+
+	self._showDiscordShare = not self._showGuideTip
+
+	self._btnFailGuide:SetActive(self._showGuideTip)
+	self._btnShare:SetActive(self._showDiscordShare)
+	self._btnDouble:SetActive(self._showDouble and leftCount > 0)
+	self._btnRetry:SetActive(isMainMission and not isWin and P._playerMission:getMissionId() > 10030)
+	self._goVip:SetActive(self._showVip)
+
+	local tmpTitle = self._tmpWinMissionName
+
+	if self._result == D.BattleResult.Win then
+		tmpTitle = self._tmpWinMissionName
+	else
+		tmpTitle = self._tmpLoseMissionName
+	end
+
+	V.loadMissionTitleText(tmpTitle, self._msId, self._msType)
+
+	if self._msType == D.MissionType.Dome then
+		local diff = LcLocalization.getTextStr(SID.STR_DIFFICULTY_X)
+		diff = string.gsub(diff, "{0}", " " .. D._missionConfigs[self._msType][self._msId]._difficulty)
+		local str = tmpTitle.text .. "-" .. diff
+		tmpTitle.text = str
+	end
+
+	self._goWinRewardsTip:SetActive(false)
+	self._goLoseRewardsTip:SetActive(false)
+
+	if self._msType == D.MissionType.SparkScout then
+		lc.setSizeDelta(self._tfRewardArea.parent.parent, 810, 175)
+		lc.setSizeDelta(self._tfWinRewardRect, 810, 260)
+		lc.setSizeDelta(self._tfLoseRewardRect, 0, 260)
+
+		local leftNum = P._playerActivitySparkScout:getLeftExtraRewardNum()
+		local maxNum = P._playerActivitySparkScout:readExtraRewardMaxNum()
+		local leftStr = V.getLeftStr(leftNum, maxNum)
+
+		if isWin then
+			self._goWinRewardsTip:SetActive(true)
+			self._txtWinRewardsTip:SetLocalizeS(SID.STR_REMAIN_REWARD_TIMES, leftStr)
+		else
+			self._goLoseRewardsTip:SetActive(true)
+			self._txtLoseRewardsTip:SetLocalizeS(SID.STR_REMAIN_REWARD_TIMES, leftStr)
+		end
+
+		lc.setSizeDelta(self._tfBtnWhiteBox, 0, 200)
+	else
+		lc.setSizeDelta(self._tfRewardArea.parent.parent, 810, 305)
+		lc.setSizeDelta(self._tfWinRewardRect, 0, 345)
+		lc.setSizeDelta(self._tfLoseRewardRect, 0, 345)
+		lc.setSizeDelta(self._tfBtnWhiteBox, 0, 0)
+	end
+
+	if self._result == D.BattleResult.Win then
+		Client.playSound("ui_Success_1")
+
+		if self._msType == D.MissionType.SparkScout then
+			self._goNewRecord:SetActive(false)
+
+			local scoreData = P._playerActivitySparkScout:getScoreChangeData()
+			local changeScore = scoreData and scoreData.totalScore or 0
+			local score1, score2 = BattleManager:getPvpFinalScore()
+			local scoreStr = string.format("%d : %d", score1 or 0, score2 or 0)
+			self._tmpWinHpPercent.text = scoreStr
+		elseif self._msType == D.MissionType.Dome then
+			if isWin then
+				self._tmpWinTitle:SetLocalize(SID.MISSION_CONGRATULATE_COMPLETE)
+				self._goRecordArea:SetActive(true)
+				self._tmpWinHpPercent:SetLocalize(SID.TIP_DOME_TRIAL_TODAY_TOP_SCORE, P._playerDome:getTodayRankValue())
+			else
+				self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE)
+				self._goRecordArea:SetActive(true)
+
+				local isNewRecord = P._playerDome:isNewRecord()
+
+				self._goNewRecord:SetActive(isNewRecord)
+
+				if isNewRecord then
+					self._tmpWinHpPercent:SetLocalize(SID.TIP_DOME_TRIAL_TODAY_TOP_SCORE, P._playerDome:getTodayRankValue())
+				else
+					local curScore, _ = P._playerDome:getBattleScores()
+
+					self._tmpWinHpPercent:SetLocalize(SID.TIP_DOME_TRIAL_SCORE, curScore)
+				end
+			end
+		elseif self._msType == D.MissionType.CrisisZone then
+			if isWin then
+				self._tmpWinTitle:SetLocalize(SID.MISSION_CONGRATULATE_COMPLETE)
+				self._goRecordArea:SetActive(true)
+
+				local time = 9999 - (P._playerCrisisZone:getLastRecord() - D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+				local isNewRecord = P._playerCrisisZone:isNewRecord()
+
+				self._goNewRecord:SetActive(isNewRecord)
+
+				local m = math.floor(time / 60)
+				local s = time % 60
+
+				self._tmpWinHpPercent:SetLocalize(SID.TIMER_M_S, m, s)
+				self._tmpWinHpPercent:SetLocalizeS(SID.TIP_CRISIS_ZONE_COMPLETE_RECORD, self._tmpWinHpPercent.text)
+
+				if BattleManager._isTrainMode then
+					self._goNewRecord:SetActive(false)
+				end
+			else
+				self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE)
+				self._goRecordArea:SetActive(true)
+
+				local isNewRecord = P._playerCrisisZone:isNewRecord()
+
+				self._goNewRecord:SetActive(isNewRecord)
+				self._tmpWinHpPercent:SetLocalize(SID.TIP_CRISIS_ZONE_KILL_RECORD, P._playerCrisisZone:getLastRecord(), D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+
+				if BattleManager._isTrainMode then
+					self._goNewRecord:SetActive(false)
+				end
+			end
+		elseif self._stats.hpPercent == 100 then
+			self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE_PERFECT)
+
+			self._tmpWinHpPercent.text = ""
+
+			self._goRecordArea:SetActive(false)
+		else
+			self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE)
+			self._tmpWinHpPercent:SetLocalize(SID.MISSION_MAX_LEFT_HP, self._stats.hpPercent)
+			self._goNewRecord:SetActive(P._playerMission:isNewRecord())
+		end
+
+		self._goWin:SetActive(true)
+		self._goFail:SetActive(false)
+
+		if self._msType == D.MissionType.ArkRebuild then
+			if D._missionArkRebuildConfig[self._msId + 1] and #P._playerActivityArkRebuild:getSelectingCardData() == 0 and P._playerActivity:isArkRebuildOpening() then
+				self._nextMsId = self._msId + 1
+
+				self._btnNextOrAgain:SetActive(true)
+				self._txtNextOrAgain:SetLocalize(SID.STR_NEXT_MISSION)
+			else
+				self._btnNextOrAgain:SetActive(false)
+			end
+
+			self._goAutoBattle:SetActive(false)
+		end
+	else
+		self._tmpLoseHpPercent.gameObject:SetActive(false)
+		Client.playSound("ui_Fail_1")
+		self._goWin:SetActive(false)
+		self._goFail:SetActive(true)
+
+		if self._msType == D.MissionType.ArkRebuild and P._playerActivity:isArkRebuildOpening() then
+			self._btnNextOrAgain:SetActive(true)
+			self._txtNextOrAgain:SetLocalize(SID.STR_REPLAY_MISSION)
+		elseif self._msType == D.MissionType.SparkScout then
+			local scoreData = P._playerActivitySparkScout:getScoreChangeData()
+			local score1, score2 = BattleManager:getPvpFinalScore()
+			local scoreStr = string.format("%d : %d", score1 or 0, score2 or 0)
+
+			self._tmpLoseHpPercent.gameObject:SetActive(true)
+
+			self._tmpLoseHpPercent.text = scoreStr
+		end
+	end
+
+	V.loadAdButton1(self._btnDouble.gameObject, false, SID.STR_DOUBLE_REWARD, SID.STR_DOUBLE_REWARD)
+
+	if self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite then
+		self._rewards = P._playerMission:getSettleRewards()
+	elseif self._msType == D.MissionType.GlobalDefense then
+		self._rewards = P._playerGlobalDefense:getSettleRewards()
+	elseif self._msType == D.MissionType.Dome then
+		self._rewards = P._playerDome:getSettleRewards()
+	elseif self._msType == D.MissionType.CrisisZone then
+		self._rewards = P._playerCrisisZone:getSettleRewards()
+	elseif self._msType == D.MissionType.ArkRebuild then
+		self._txtClose:SetLocalize(SID.STR_BACK)
+
+		if isWin then
+			self._rewards = P._playerActivityArkRebuild:getSettleRewards(self._msId, isWin)
+
+			if #P._playerActivityArkRebuild:getSelectingCardData() > 0 then
+				self._btnClose.transform:GetChild(1):GetComponent("TMP_Text"):SetLocalize(SID.ARK_REBUILD_DRAW)
+			end
+		else
+			self._rewards = {}
+		end
+	elseif self._msType == D.MissionType.SparkScout then
+		self._rewards = P._playerActivitySparkScout:getSettleRewards(self._msId, true)
+	end
+
+	self._goEmptyReward:SetActive(#self._rewards == 0)
+	self._goFail.transform:Find("bg"):Find("ImgNone"):SetActive(#self._rewards == 0)
+
+	Time.timeScale = 1
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+	end
+
+	self._timer = lc.setTimer(function ()
+		self:updateRewards()
+
+		if #self._rewards < 10 then
+			self:changeBtnEnables(true)
+		end
+	end, 1.3)
+
+	self:updateDamage()
+
+	if self._msType == D.MissionType.GlobalDefense and P._playerGlobalDefense:isInvite() then
+		self._goInviteArea:SetActive(true)
+
+		local avatar, avatarFrame, name = P._playerGlobalDefense:getInviteData()
+
+		V.loadAvatar(self._tfAvatar, avatar, tonumber(avatarFrame))
+
+		self._tmpInviteName.text = name
+
+		if isWin then
+			self._tmpInviteMsg:SetLocalize(SID["TIP_RANDOM_WIN_BATTLE_MSG_" .. math.random(1, 3)])
+		else
+			self._tmpInviteMsg:SetLocalize(SID["TIP_RANDOM_LOSE_BATTLE_MSG_" .. math.random(1, 3)])
+		end
+	else
+		self._goInviteArea:SetActive(false)
+	end
+
+	local tfBtnArea = self._btnDouble.transform.parent
+	local showBtnCount = 0
+	local childCount = tfBtnArea.childCount
+
+	for i = 1, childCount do
+		if tfBtnArea:GetChild(i - 1).gameObject.activeSelf then
+			showBtnCount = showBtnCount + 1
+		end
+	end
+
+	for i = 1, childCount do
+		local tfBtn = tfBtnArea:GetChild(i - 1)
+
+		lc.setSizeDelta(tfBtn, showBtnCount >= 3 and 252 or 300, 88)
+	end
+end
+
+function M:updateDamage()
+	if self._msType == D.MissionType.SparkScout then
+		local otherSession = BattleManager:getSession(2)
+		local go = requireLua("SparkScoutStatsWidget_Settle").create(self._tfStatsParent)
+
+		lc.setSizeDelta(go.transform, 810, 165)
+		lc.setAnchoredPosition(go, 0, 0)
+		go:updateUI(self._stats.weapons, otherSession:getBattleStats().weapons, self)
+	else
+		local go = requireLua("StatsWidget").createSettle(self._tfStatsParent)
+
+		lc.setAnchoredPosition(go, 0, 0)
+		go:updateUI(self._stats.weapons, self)
+	end
+end
+
+function M:updateRewards()
+	for i = 1, math.max(#self._goRewards, #self._rewards) do
+		if i <= #self._rewards then
+			local reward = self._rewards[i]
+
+			if self._goRewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._goRewards[i] = goItemWidget
+
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			self._goRewards[i]:SetActive(false)
+			self._goRewards[i]:init(reward[1], reward[2], reward[3])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+
+	local len = #self._rewards
+	local beginAlign = len <= 4 and 4 or 1
+	local i = 0
+	local _, y, _ = lc.getLocalPosition(self._tfRewardArea)
+	self._timer = lc.setInterval(function ()
+		i = i + 1
+
+		if not self._goRewards[i] then
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+
+			if len >= 10 then
+				self:changeBtnEnables(true)
+			end
+
+			return
+		end
+
+		self._lgRewards.childAlignment = i <= 4 and beginAlign or 0
+
+		self._goRewards[i]:SetActive(true)
+
+		local data = self._rewards[i]
+		local cid = data.cid or data[1]
+
+		if D.Quality.Blue <= D.toQuality(cid) then
+			self._goRewards[i]._goAnimGet:SetActive(true)
+		end
+
+		if self._msType == D.MissionType.GlobalDefense and i == len and P._playerGlobalDefense:isInvite() then
+			self._timer1 = lc.setTimer(function ()
+				self._goRewards[len]._goAnimGlobal:SetActive(true)
+			end, 0.5)
+		end
+
+		if i % 5 == 0 and i < len and i >= 10 then
+			self._tfRewardArea:DOKill()
+			self._tfRewardArea:DOLocalMoveY(y + 140 * i / 5 - 140, 0.5):SetLink(self.gameObject)
+		end
+	end, 0.1, true)
+end
+
+function M:changeBtnEnables(enable)
+	self._btnClose.enabled = enable
+	self._btnNextOrAgain.enabled = enable
+	self._btnDouble.enabled = enable
+	self._btnRetry.enabled = enable
+end
+
+function M:dealDouble()
+	self._btnDouble:SetActive(false)
+	self:claimDoubleReward()
+
+	for i = 1, #self._rewards do
+		self._goRewards[i]:setDouble(true)
+		self._goRewards[i]:playDoubleAnim()
+	end
+end
+
+function M:dealClaimBtn()
+	self:closePanel()
+
+	if self._msType == D.MissionType.ArkRebuild and #P._playerActivityArkRebuild:getSelectingCardData() > 0 then
+		UIManager.openPanel(PrefabDefine.ArkRebuildSelectPanel, function ()
+			BattleManager:leaveBattle()
+			V.switchBetweenMainAndBattleScene("battle", "city")
+		end)
+
+		return
+	end
+
+	BattleManager:leaveBattle()
+	V.switchBetweenMainAndBattleScene("battle", "city")
+end
+
+function M:claimDoubleReward()
+	P._playerAsset:increaseAssetNumsByList(self._rewards, D.LogWay.ad_double)
+	TaskHelper:increaseTaskValue(D.TaskType.GET_DOUBLE_REWARD, 1)
+	P._playerRecord:recordAdDouble()
+end
+
+function M:dealContinueBattle(msId)
+	if self._msType == D.MissionType.ArkRebuild then
+		Client.playMusic("music_ark_battle")
+	elseif self._msType == D.MissionType.SparkScout then
+		if BattleManager:isPVPDuel() then
+			Client.playMusic("music_scout_battle_duel")
+		else
+			Client.playMusic("music_scout_battle_match")
+		end
+	else
+		Client.playMusic("music_battle")
+	end
+
+	if self._msType == D.MissionType.ArkRebuild then
+		self:closePanel()
+
+		InputBattleData.msId = msId
+
+		P._playerActivityArkRebuild:startMission()
+		BattleView:reStart()
+	elseif self._msType == D.MissionType.Common or self._msType == D.MissionType.Elite then
+		local totalCost = D._globalConfig._mission_cost_energy[self._msType]
+
+		if not P._playerAsset:isAssetEnough(D.ResType.energy, totalCost) then
+			V.showToast(SID.TIP_ENERGY_NOT_ENOUGH)
+
+			return
+		end
+
+		self:closePanel()
+
+		InputBattleData.msId = msId
+		local type = self._msType == D.MissionType.Common and "Normal" or "Elite"
+
+		Trace.traceDesign("%sStageTimes:%d", type, self._msType == D.MissionType.Common and self._msId or self._msId + 10000)
+		BattleView:reStart()
+	end
+end
+
+function M:startAutoBattleTimer()
+	local t = 3
+
+	self._txtNextOrAgain:SetLocalize(SID.STR_NEXT_MISSION)
+
+	self._txtNextOrAgain.text = self._txtNextOrAgain.text .. "(3)"
+	self._timer = lc.setInterval(function ()
+		if t == 1 then
+			self:dealContinueBattle(self._nextMsId)
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+		end
+
+		t = t - 1
+
+		self._txtNextOrAgain:SetLocalize(SID.STR_NEXT_MISSION)
+
+		self._txtNextOrAgain.text = self._txtNextOrAgain.text .. "(" .. t .. ")"
+	end, 1)
+end
+
+function M:stopAutoBattleTimer()
+	self._txtNextOrAgain:SetLocalize(SID.STR_NEXT_MISSION)
+	lc.stopTimer(self._timer)
+
+	self._timer = nil
+end
+
+function M:previewShareDiscord()
+	self:showShareStatus()
+	self._goDiscordShare:previewShareDiscord(function ()
+		self:hideShareStatus()
+	end)
+end
+
+function M:showShareStatus()
+	self._goVip:SetActive(false)
+	self._btnsArea:SetActive(false)
+	self._btnShare:SetActive(false)
+end
+
+function M:hideShareStatus()
+	self._goVip:SetActive(self._showVip)
+	self._btnsArea:SetActive(true)
+	self._btnShare:SetActive(self._showDiscordShare)
+end
+
+function M:closePanel()
+	if self._timer1 then
+		lc.stopTimer(self._timer1)
+
+		self._timer1 = nil
+	end
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+return M

@@ -1,0 +1,192 @@
+local M = class("resource", BLB)
+M.args = {
+	cid = 10001,
+	btnResource = Types.Button,
+	textNum = Types.TMP_Text,
+	btnPlus = Types.Button,
+	imgIcon = Types.Image,
+	imgAdd = Types.Image,
+	imgAddBg = Types.Image,
+	goReddot = Types.GameObject
+}
+local resTextColor = {
+	[D.ResType.coin] = "B6AB6F",
+	[D.ResType.diamond] = "9E8BC5",
+	[D.ResType.energy] = "5FC4AE",
+	[D.ResType.key_purple] = "AA7CE5",
+	[D.ResType.key_gold] = "C8B367",
+	[D.ResType.global_defense_ticket] = "C8B367",
+	[D.ResType.equip_refine_mat] = "C8B367",
+	[D.ResType.ark_rebuild_key] = "5FC4AE",
+	[D.ResType.spark_scout_wafer] = "65A8C3",
+	[D.ResType.spark_scout_key] = "65A8C3",
+	[D.ResType.spark_scout_sp_wafer] = "D49857",
+	[D.ResType.spark_scout_sp_key] = "D49857",
+	[D.ResType.spark_scout_duel_ticket] = "D497C2",
+	[D.ResType.anniversary_lottery_core] = "a6b1ed",
+	[D.ResType.anniversary_exchange_key] = "f4bb4d"
+}
+
+setmetatable(resTextColor, {
+	__index = function (t, n)
+		return resTextColor[10003]
+	end
+})
+
+local resAddColor = {
+	[D.ResType.coin] = "C9BD7B",
+	[D.ResType.diamond] = "BA90E5",
+	[D.ResType.energy] = "70D3BD",
+	[D.ResType.key_purple] = "C1A9F4",
+	[D.ResType.key_gold] = "FFD968",
+	[D.ResType.global_defense_ticket] = "FFD968",
+	[D.ResType.ark_rebuild_key] = "70D3BD"
+}
+local resAddBgColor = {
+	[D.ResType.coin] = "38372D",
+	[D.ResType.diamond] = "333039",
+	[D.ResType.energy] = "223430",
+	[D.ResType.key_purple] = "333039",
+	[D.ResType.key_gold] = "38372D",
+	[D.ResType.global_defense_ticket] = "38372D",
+	[D.ResType.ark_rebuild_key] = "223430"
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._tfIcon = self._imgIcon.transform
+	self._goIcon = self._imgIcon.gameObject
+
+	self:init(self.args.cid)
+end
+
+function M:init(cid)
+	self._cid = cid
+	self.gameObject.name = "resource_" .. self._cid
+	self._goIcon.name = "icon_" .. self._cid
+
+	LuaUnity.setTPSprite(self._imgIcon, string.format("itemSmall/item_small_" .. self._cid), true)
+
+	self._textNum.color = Color.str2Static(resTextColor[self._cid])
+
+	if resAddColor[self._cid] then
+		self._imgAdd.color = Color.str2Static(resAddColor[self._cid])
+		self._imgAddBg.color = Color.str2Static(resAddBgColor[self._cid])
+	end
+
+	self:refreshNum()
+	self:updatePlus()
+	self:updateReddot()
+end
+
+function M:addPanel(panel)
+	self._panel = panel
+end
+
+function M:update(cid)
+	if cid == self._cid then
+		return
+	end
+
+	self:init(cid)
+end
+
+function M:OnEnable()
+	self:addEvents()
+end
+
+function M:OnDisable()
+	self:removeEvents()
+end
+
+function M:addEvents()
+	self:on("prop.dirty", function (cid)
+		if cid ~= self._cid then
+			return
+		end
+
+		self:refreshNum()
+	end)
+	self:on("sync.ui", function ()
+		self:refreshNum()
+	end)
+	self:on("rightcard.update", function (type)
+		if self._cid == D.ResType.energy then
+			self:refreshNum()
+		end
+	end)
+	self:setClick(self._btnPlus, function ()
+		self:jumpShop()
+	end)
+	self:setClick(self._btnResource, function ()
+		if self._cid == D.ResType.global_defense_ticket then
+			UIManager.openPanel(PrefabDefine.RecruitmentCenterPanel)
+		else
+			V.showItemInfoPanel(self._cid, P._playerAsset:getAssetNum(self._cid))
+		end
+	end)
+	self:on("stamina.produce.change", function ()
+		self:updateReddot()
+	end)
+	self:on("stamina.produce.reddot", function ()
+		self:updateReddot()
+	end)
+end
+
+function M:refreshNum()
+	local num = P._playerAsset:getAssetNum(self._cid, true)
+
+	if self._cid == D.ResType.energy then
+		self._textNum.text = string.format("%s/%s", string.formatNumber(num), P._playerAsset:getEnergyRecoverMaxNum())
+	else
+		self._textNum.text = string.formatNumber(num)
+	end
+end
+
+function M:canJump()
+	if self._cid == D.ResType.coin or self._cid == D.ResType.diamond or self._cid == D.ResType.energy or self._cid == D.ResType.global_defense_ticket then
+		return true
+	elseif self._cid == D.ResType.ark_rebuild_key and self._panel then
+		return self._panel.__prefabArg.id == "ArkRebuildSpinPanel"
+	end
+
+	return false
+end
+
+function M:updateReddot()
+	self._goReddot:SetVisible(self._cid == D.ResType.energy and P._playerStaminaProducer:showRedDot())
+end
+
+function M:updatePlus()
+	local canJump = self:canJump()
+	local show = canJump
+
+	self._btnPlus:SetVisible(show)
+
+	if self._cid == D.ResType.diamond and C.isInReview() then
+		self._btnPlus:SetVisible(false)
+	end
+end
+
+function M:jumpShop()
+	local canJump = self:canJump()
+
+	if not canJump then
+		return
+	end
+
+	if self._cid == D.ResType.coin then
+		V.showItemInfoPanel(self._cid)
+	elseif self._cid == D.ResType.diamond then
+		UIManager.openPanel(PrefabDefine.DiamondPanel)
+	elseif self._cid == D.ResType.energy then
+		UIManager.openPanel(PrefabDefine.PurchaseStaminaPanel)
+	elseif self._cid == D.ResType.global_defense_ticket then
+		UIManager.openPanel(PrefabDefine.RecruitmentCenterPanel)
+	elseif self._cid == D.ResType.ark_rebuild_key and self._panel and self._panel.__prefabArg.id == "ArkRebuildSpinPanel" and self._panel.handleQuickExchangeBtn then
+		self._panel:handleQuickExchangeBtn()
+	end
+end
+
+return M

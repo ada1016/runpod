@@ -1,0 +1,96 @@
+local function saveUpvalues(fn)
+	local upvalues = {}
+
+	for i = 1, 100 do
+		local name, value = debug.getupvalue(fn, i)
+
+		if name == nil then
+			break
+		end
+
+		upvalues[#upvalues + 1] = {
+			name,
+			value
+		}
+	end
+
+	return upvalues
+end
+
+local function restoreUpvalues(fn, upvalues)
+	for i = 1, #upvalues do
+		debug.setupvalue(fn, i, upvalues[i])
+	end
+end
+
+local function ReloadChunk(codeArgs)
+	local fileName = codeArgs.fileName
+	local funcName = codeArgs.funcName
+	local funcChunk = codeArgs.funcChunk
+	local invokeFlag = codeArgs.invokeFlag
+	local ok, ret = pcall(function ()
+		local t = _G_PANEL_LBS[tostring(fileName)] or _G[fileName]
+		local inst = nil
+
+		if t then
+			inst = t
+		else
+			t = _G_ALL_PACKAGES[fileName]
+			inst = _G_EXTENDS[tostring(t)]
+		end
+
+		if t == nil then
+			return string.format("Reload Fail: Function is not Exist")
+		end
+
+		local oldFunc = t[funcName]
+		local upvalues = saveUpvalues(oldFunc)
+		local upvalueStr = ""
+
+		for i = 1, #upvalues do
+			upvalueStr = upvalueStr .. "local "
+			upvalueStr = upvalueStr .. upvalues[i][1]
+			upvalueStr = upvalueStr .. "="
+			upvalueStr = upvalueStr .. "1"
+			upvalueStr = upvalueStr .. " "
+		end
+
+		local chunk, err = loadstring(upvalueStr .. funcChunk)
+
+		if chunk == nil then
+			return string.format("Reload Fail: %s", err)
+		end
+
+		t[funcName] = chunk()
+
+		for i = 1, 100 do
+			local name, value = debug.getupvalue(oldFunc, i)
+
+			if name == nil then
+				break
+			end
+
+			debug.upvaluejoin(t[funcName], i, oldFunc, i)
+		end
+
+		if invokeFlag then
+			t[funcName](inst)
+		end
+	end)
+
+	if ret then
+		return ret
+	end
+
+	return "Reload Successful!"
+end
+
+function RunCode(codeJson)
+	local codeArgs = json.decode(codeJson)
+
+	if codeArgs.actionType == 1 then
+		return ReloadChunk(codeArgs)
+	else
+		return lc.runStringCode(codeArgs.codeStr)
+	end
+end

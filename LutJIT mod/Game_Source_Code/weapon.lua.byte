@@ -1,0 +1,563 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		dup._1635,
+		1,
+		1,
+		1,
+		dup._1636,
+		1,
+		nil,
+		"Weapon_1",
+		nil,
+		nil,
+		nil,
+		nil,
+		11001,
+		1,
+		1,
+		0,
+		0,
+		0.15,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		3,
+		80,
+		15
+	},
+	{
+		2,
+		2,
+		dup._116,
+		5,
+		1,
+		3,
+		dup._1637,
+		1,
+		7,
+		"Weapon_2",
+		"Weapon_2_light_super",
+		1,
+		0.1,
+		1,
+		11002,
+		2,
+		2,
+		0,
+		0,
+		6,
+		0,
+		0.2,
+		10,
+		0,
+		0,
+		0,
+		2,
+		40,
+		12
+	},
+	{
+		3,
+		3,
+		{
+			3,
+			301
+		},
+		2,
+		1,
+		2,
+		dup._1636,
+		1,
+		3,
+		"Weapon_3",
+		"Weapon_3_light_super",
+		nil,
+		0.5,
+		nil,
+		11003,
+		3,
+		3,
+		301,
+		310,
+		8,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		3,
+		40,
+		13
+	},
+	{
+		4,
+		4,
+		dup._19,
+		3,
+		1,
+		6,
+		dup._1638,
+		6,
+		3,
+		"Weapon_4",
+		"Weapon_4_light_super",
+		1,
+		0.1,
+		1,
+		11004,
+		4,
+		4,
+		0,
+		1000,
+		9,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		3,
+		nil,
+		30
+	},
+	{
+		5,
+		5,
+		dup._95,
+		4,
+		1,
+		4,
+		dup._1637,
+		1,
+		7,
+		"Weapon_5",
+		"Weapon_5_light_super",
+		1,
+		0.1,
+		1,
+		11005,
+		5,
+		5,
+		0,
+		0,
+		10,
+		0,
+		0.5,
+		10,
+		0,
+		0,
+		0,
+		2,
+		nil,
+		11
+	},
+	{
+		6,
+		6,
+		{
+			6,
+			601
+		},
+		1,
+		1,
+		5,
+		dup._1636,
+		2,
+		3,
+		"Weapon_6",
+		"Weapon_6_light_super",
+		nil,
+		0.5,
+		nil,
+		11006,
+		6,
+		6,
+		601,
+		430,
+		7,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		40,
+		9
+	},
+	{
+		7,
+		7,
+		dup._188,
+		5,
+		1,
+		7,
+		dup._1637,
+		9,
+		7,
+		"Weapon_7",
+		"Weapon_7_light_super",
+		1,
+		0.1,
+		1,
+		11007,
+		7,
+		7,
+		0,
+		0,
+		10,
+		0,
+		0.2,
+		20,
+		0,
+		0,
+		0,
+		3,
+		40,
+		14
+	},
+	{
+		8,
+		8,
+		dup._181,
+		2,
+		1,
+		8,
+		{
+			1,
+			3,
+			7,
+			4,
+			11
+		},
+		13,
+		7,
+		"Weapon_8",
+		"Weapon_8_light_super",
+		1,
+		0.1,
+		1,
+		11008,
+		8,
+		8,
+		0,
+		250,
+		10,
+		0,
+		0.2,
+		75,
+		0,
+		0,
+		0,
+		1,
+		40,
+		9
+	},
+	{
+		9,
+		9,
+		dup._185,
+		1,
+		1,
+		10,
+		{
+			1,
+			5,
+			4,
+			11
+		},
+		22,
+		5,
+		"Weapon_9",
+		"Weapon_9_light_super",
+		nil,
+		0.5,
+		nil,
+		11009,
+		9,
+		9,
+		0,
+		0,
+		4,
+		2,
+		0,
+		0,
+		0,
+		0,
+		0,
+		2,
+		40,
+		12
+	},
+	{
+		10,
+		10,
+		{
+			10,
+			1001
+		},
+		3,
+		1,
+		11,
+		{
+			2,
+			3,
+			4,
+			11
+		},
+		27,
+		3,
+		"Weapon_10",
+		"Weapon_10_light_super",
+		1,
+		0.5,
+		nil,
+		11010,
+		10,
+		10,
+		1001,
+		230,
+		6,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		2,
+		40,
+		10
+	},
+	{
+		11,
+		11,
+		dup._34,
+		4,
+		1,
+		12,
+		dup._1638,
+		32,
+		3,
+		"Weapon_11",
+		"Weapon_11_light_super",
+		nil,
+		nil,
+		1,
+		11011,
+		11,
+		11,
+		0,
+		280,
+		6,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		40,
+		8
+	},
+	{
+		12,
+		12,
+		dup._111,
+		4,
+		1,
+		9,
+		{
+			1,
+			7,
+			4,
+			11
+		},
+		17,
+		7,
+		"Weapon_12",
+		"Weapon_12_light_super",
+		1,
+		0.1,
+		nil,
+		11012,
+		12,
+		1201,
+		0,
+		0,
+		12,
+		0,
+		1,
+		7,
+		0,
+		0,
+		0,
+		2,
+		40,
+		10
+	},
+	[99] = {
+		99,
+		99,
+		dup._1635,
+		nil,
+		0.5,
+		0,
+		nil,
+		0,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1,
+		0,
+		0,
+		0.15,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		3,
+		80,
+		15
+	},
+	[100] = {
+		100,
+		100,
+		dup._86,
+		nil,
+		1,
+		0,
+		nil,
+		0
+	}
+}
+local mapKeyIndex = {
+	k16302462 = 2,
+	k6773067 = 15,
+	k9865036 = 3,
+	k664170 = 4,
+	k4062043 = 25,
+	k16766597 = 14,
+	k14370403 = 24,
+	k1142943 = 10,
+	k1643364 = 20,
+	k3045448 = 21,
+	k5269558 = 7,
+	k2651113 = 5,
+	k3280214 = 22,
+	k9702232 = 16,
+	k5023450 = 8,
+	k5878286 = 19,
+	k5116447 = 9,
+	k9179893 = 11,
+	k9686501 = 26,
+	k4586833 = 17,
+	k13909709 = 27,
+	k12637735 = 23,
+	k15318337 = 28,
+	k10232925 = 29,
+	k5670226 = 18,
+	k1893402 = 6,
+	k15366985 = 12,
+	k5004697 = 13,
+	k1644150 = 1
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -7627
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_skillNameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_WEAPON_SKILLNAMESID_" .. table[2]]
+		elseif key == "_skillDescSid" then
+			if table[16] == nil then
+				return nil
+			end
+
+			return SID["SID_WEAPON_SKILLDESCSID_" .. table[16]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -7627
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

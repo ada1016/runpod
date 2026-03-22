@@ -1,0 +1,181 @@
+local M = class("UnionChatPage", requireLua("BasePanel"))
+local Types = Types
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+local ChatWidget = requireLua("ChatWidget")
+local LuaOutF = LuaOut.float
+M.args = {
+	btnEnterUnion = Types.Button,
+	goFlagWidget = Types.GameObject,
+	textUnionName = Types.Text,
+	svContent = Types.ScrollRect,
+	tfContent = Types.Transform,
+	inputContent = Types.InputField,
+	btnSend = Types.Button,
+	textContentClone = Types.Text,
+	goSyncWaiting = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._listData = {}
+	self._listDataCellHeight = {}
+
+	self._goSyncWaiting:SetActive(true)
+	P._playerUnion:tryJoinChat()
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnEnterUnion, function ()
+		UIManager.openPanel(PrefabDefine.UnionInfoFullPanel)
+	end)
+	self:setClick(self._btnSend, function ()
+		local content = self._inputContent.text
+
+		if content:len() == 0 then
+			V.showToast(SID.UNION_LETTER_ENTER_TIPS1)
+
+			return
+		end
+
+		if D.UnionChatMaxLength < string.utfstrlen(content) then
+			V.showToast(SID.UNION_CHAT_TIPS1)
+
+			return
+		end
+
+		P._playerUnion:trySendChatReq(content)
+
+		self._inputContent.text = ""
+	end)
+	self:on("union.chat.list.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+
+		self._listData = P._playerUnion._chats
+
+		for i = 1, #self._listData do
+			local chat = self._listData[i]
+
+			if chat.sender then
+				local width, height = self._textContentClone:CalHeight(chat.message, 460)
+				width = width / lc.getUI2ScreenScale()
+				height = height / lc.getUI2ScreenScale()
+				self._listDataCellHeight[i] = {
+					width,
+					height
+				}
+			else
+				self._listDataCellHeight[i] = {
+					500,
+					40
+				}
+			end
+		end
+
+		self._scrollViewEx:reloadData(#self._listData - 1)
+	end)
+	self:on("union.chat.ditry", function (chat)
+		self:appendNewContent(chat)
+	end)
+end
+
+function M:initPrefabVar()
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+end
+
+function M:addEvents()
+	self:on("union.edit.resp", function ()
+		local union = P._playerUnion:getUnion()
+
+		self._goFlagWidget:init(union.avatar_base, union.avatar_badge)
+
+		self._textUnionName.text = union.name
+	end)
+end
+
+function M:init()
+	if self._scrollViewEx == nil then
+		self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+			bottomPadding = 20,
+			topPadding = 10,
+			cellInitCount = 10,
+			cellMargin = 30
+		})
+	end
+
+	self:updateUI()
+end
+
+function M:onCellHeight(index)
+	if self._listData[index].sender then
+		return math.max(self._listDataCellHeight[index][2] + 90, 130)
+	else
+		return self._listDataCellHeight[index][2]
+	end
+end
+
+function M:onCellNum()
+	return #self._listData
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = ChatWidget.create(self._tfContent)
+
+		goCell:init(self)
+	end
+
+	goCell:update(self._listData[index], self._listDataCellHeight[index])
+
+	return goCell
+end
+
+function M:appendNewContent(chat)
+	local width, height = self._textContentClone:CalHeight(chat.message, 460)
+	width = width / lc.getUI2ScreenScale()
+	height = height / lc.getUI2ScreenScale()
+	self._listDataCellHeight[#self._listDataCellHeight + 1] = {
+		width,
+		height
+	}
+
+	self._scrollViewEx:reloadData()
+
+	if self._scrollViewEx:isIdxShow(#self._listData) then
+		self._scrollViewEx:moveToItemByIndex(#self._listData, 0.15)
+	end
+end
+
+function M:updateUI()
+	local union = P._playerUnion:getUnion()
+
+	self._goFlagWidget:init(union.avatar_base, union.avatar_badge)
+
+	self._textUnionName.text = union.name
+end
+
+function M:OnHide()
+	self._scrollViewEx:moveToItemByIndex(#self._listData)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+
+	if self._leaveTimestamp and C.getCurTime() - self._leaveTimestamp > 30 then
+		self._leaveTimestamp = C.getCurTime()
+
+		P._playerUnion:tryJoinChat()
+		self._goSyncWaiting:SetActive(true)
+	end
+
+	C._atUnionPage = true
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+
+	self._leaveTimestamp = C.getCurTime()
+	C._atUnionPage = false
+end
+
+return M

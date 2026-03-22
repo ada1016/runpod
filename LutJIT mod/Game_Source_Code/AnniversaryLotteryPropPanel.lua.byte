@@ -1,0 +1,128 @@
+local M = class("AnniversaryLotteryPropPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		direction = 1,
+		cellHeight = 120,
+		cellInitCount = 7
+	})
+end
+
+local AnniversaryLotteryPropWidget = requireLua("AnniversaryLotteryPropWidget")
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+	end)
+	self:on("day.cross", function ()
+	end)
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:initPrefabVar()
+	self._tfCards = {}
+	self._goWidgets = {}
+end
+
+local band = bit.band
+
+function M:init(confirmCallback)
+	self._module = P._playerActivityAnniversary._moduleLottery
+
+	self._tmpTitle:SetLocalize(SID.STR_PRIZE_CHANCE)
+
+	self._selectPackageId = self._module:getCurChosePackageId()
+	local drops, weights = self._module:getDrops(self._selectPackageId)
+	local curDrawNum = self._module:getCurDrawNum()
+	local nextDrawIdx = curDrawNum + 1
+	self._showDrops = {}
+
+	for i = 1, #drops do
+		local drop = drops[i]
+		local getCid, getNum = self._module:getRewardByIdx(i)
+		self._showDrops[#self._showDrops + 1] = {
+			idx = i,
+			cid = getCid,
+			num = getNum,
+			prop1 = drop._weight,
+			prop2 = weights[i]
+		}
+	end
+
+	local bigDropWeights = self._module:readBigDropWeights(self._selectPackageId)
+	self._showDrops[1].prop1 = bigDropWeights[1]
+	self._showDrops[1].prop2 = bigDropWeights[nextDrawIdx]
+	self._totalWeight1 = 0
+	self._totalWeight2 = 0
+
+	for i = 1, #self._showDrops do
+		local drop = self._showDrops[i]
+		self._totalWeight1 = self._totalWeight1 + drop.prop1
+		self._totalWeight2 = self._totalWeight2 + drop.prop2
+	end
+
+	table.sort(self._showDrops, function (a, b)
+		if a.prop2 ~= b.prop2 then
+			if a.prop2 == 0 and b.prop2 ~= 0 then
+				return false
+			elseif a.prop2 ~= 0 and b.prop2 == 0 then
+				return true
+			end
+
+			return a.prop1 < b.prop1
+		end
+
+		return a.idx < b.idx
+	end)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData()
+end
+
+function M:onCellNum()
+	return #self._showDrops
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = AnniversaryLotteryPropWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self)
+	end
+
+	local drop = self._showDrops[index]
+	local showWeight1 = math.round(drop.prop1 * 10000 / self._totalWeight1) / 100
+	local showWeight2 = math.round(drop.prop2 * 10000 / self._totalWeight2) / 100
+
+	goCell:updateUI(drop.cid, drop.num, showWeight1, showWeight2)
+
+	return goCell
+end
+
+return M

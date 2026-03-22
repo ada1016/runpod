@@ -1,0 +1,126 @@
+local M = {}
+
+declare("RedDotManager", M)
+
+local tree = requireLua("RedDotTree")
+local type = type
+M.paths = {}
+M.args = {}
+M.exFcuntions = {}
+
+function M.clean()
+	M.paths = {}
+	M.args = {}
+	M.exFcuntions = {}
+end
+
+function M.add(obj, path, updateFlag, exFcuntion)
+	M.paths[path] = obj
+
+	if exFcuntion then
+		M.exFcuntions[path] = exFcuntion
+	end
+
+	if updateFlag then
+		M.update(path)
+	end
+end
+
+function M.remove(path)
+	M.paths[path] = nil
+	M.args[path] = nil
+	M.exFcuntions[path] = nil
+end
+
+local get_flag = nil
+
+function get_flag(root, flag, pathArgs)
+	for k, v in pairs(root) do
+		if type(v) == "function" then
+			flag = v(pathArgs)
+
+			if flag then
+				return true
+			end
+		else
+			flag = get_flag(v, false, pathArgs)
+
+			if flag then
+				return true
+			end
+		end
+	end
+
+	return flag
+end
+
+local function _update(path, pathArgs)
+	local args = string.split(path, ".")
+	local root = tree[args[1]]
+
+	for i = 2, #args do
+		root = root[args[i]]
+	end
+
+	local flag = false
+
+	if type(root) == "function" then
+		flag = root(pathArgs)
+	else
+		flag = get_flag(root, false, pathArgs)
+	end
+
+	local obj = M.paths[path]
+
+	if obj and not CNull(obj.gameObject) then
+		if obj.dot then
+			obj.dot:SetActive(flag)
+		else
+			obj._imgDot:SetActive(flag)
+		end
+
+		if M.exFcuntions[path] then
+			M.exFcuntions[path](flag)
+		end
+	end
+
+	return flag
+end
+
+function M.update(path)
+	local args = string.split(path, ".")
+	local pathArgs = M.args[path]
+	local flag = _update(path, pathArgs)
+	local t = {}
+
+	for i = 1, #args - 1 do
+		t[#t + 1] = args[i]
+		local subPath = table.concat(t, ".")
+
+		_update(subPath, pathArgs)
+	end
+
+	return flag
+end
+
+function M.getPathFlag(path)
+	local args = string.split(path, ".")
+	local pathArgs = M.args[path]
+	local root = tree[args[1]]
+
+	for i = 2, #args do
+		root = root[args[i]]
+	end
+
+	local flag = false
+
+	if type(root) == "function" then
+		flag = root(pathArgs)
+	else
+		flag = get_flag(root, false, pathArgs)
+	end
+
+	return flag
+end
+
+return M

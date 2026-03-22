@@ -1,0 +1,37 @@
+local M = class("EmailPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtEmail = Types.TMP_Text,
+	btnCopy = Types.Button,
+	btnGo = Types.Button,
+	btnDeleteAccount = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnCopy, function ()
+		UniClipboard.SetText(D.URL_EMAIL)
+		V.showToast(SID.CONT_COPY_SUCCEED)
+	end)
+	self:setClick(self._btnGo, function ()
+		lc.openUrl(D.URL_EMAIL_TO)
+	end)
+	self:setClickWithoutAction(self._btnDeleteAccount, function ()
+		UIManager.openPanel(PrefabDefine.DeleteAccountPanel)
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtEmail.text = D.URL_EMAIL
+end
+
+return M

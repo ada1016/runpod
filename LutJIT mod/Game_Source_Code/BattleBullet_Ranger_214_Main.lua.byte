@@ -1,0 +1,270 @@
+local M = class("BattleBullet_Ranger_214_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local RADIUS_2 = 0.1
+local DESTROY_CD = 15
+local SPLICT_CD = 2
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._stage = 1
+	self._speed = self._battleSkill:getProp(BattlePropEnum.BallisticSpeed)
+	self._atkRange = self._battleWeapon._atkRange
+	self._dmgDelay = 99999
+	self._moveDuration = 0
+
+	if self._view then
+		self._view._ator = self._view._obj:GetComponent("Animator")
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 1 then
+		self._position.x = self._position.x + self._speed * dt * self._dir[1]
+		self._position.y = self._position.y + self._speed * dt * self._dir[2]
+		self._position.x = self._battleSession:limitEnemyPositionX(self._position.x)
+		self._position.y = self._battleSession:limitEnemyPositionY(self._position.y)
+
+		if self._view then
+			self._view:posEvent()
+		end
+
+		self._moveDuration = self._moveDuration - dt
+
+		if self._moveDuration <= 0 then
+			self._stage = 201
+			self._stageCD = 1
+		end
+	elseif self._stage == 201 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 2
+			self._stageCD = 1
+
+			if self._view then
+				self._view._ator:SetTrigger("began")
+			end
+		end
+	elseif self._stage == 2 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 3
+			self._destroyCD = DESTROY_CD
+
+			if not self._isSplit and (self._cid == 21400 or self._cid == 21402) and self._battleSession:getWeapon(BattleSkillGroupEnum.BeeColony) then
+				self._splitCD = SPLICT_CD
+			end
+		end
+	elseif self._stage == 3 then
+		self._destroyCD = self._destroyCD - dt
+
+		if self._destroyCD <= 0 then
+			if self._battleWeapon:getEffect(21404) then
+				local enemy = self._battleSession._battleEnemyFinder:randomOneEnemy(nil, self._battleWeapon)
+
+				if enemy == nil then
+					self:markToBeDestroyed()
+				else
+					self._stage = 4
+					self._stageCD = 1
+
+					self:setDir(enemy._position)
+
+					if self._view then
+						self._view._ator:SetTrigger("attack")
+					end
+				end
+			else
+				self:markToBeDestroyed()
+			end
+		else
+			if self._splitCD then
+				self._splitCD = self._splitCD - dt
+
+				if self._splitCD <= 0 then
+					self._splitCD = nil
+					local triggerSkill = self._battleWeapon:getSkill(self._cid)
+					local bullet = triggerSkill:createBullet()
+
+					bullet:setEndPosition()
+
+					bullet._isSplit = true
+
+					bullet:setPos(self._position.x, self._position.y)
+
+					if bullet._view then
+						bullet._view:posEvent()
+					end
+				end
+			end
+
+			self:checkEnemyWarning()
+		end
+	elseif self._stage == 4 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 5
+			self._radius = RADIUS_2
+		end
+	elseif self._stage == 5 then
+		self:moveTowardEnemy(dt)
+	end
+end
+
+function M:moveTowardEnemy(dt)
+	local x = self._position.x + self._speed * dt * self._dir[1]
+	local y = self._position.y + self._speed * dt * self._dir[2]
+	self._position.x = x
+	self._position.y = y
+
+	if self._view then
+		self._view:posEvent()
+	end
+
+	if self._battleSession._enemyBornEdgeX2 <= self._position.x or self._position.x <= self._battleSession._enemyBornEdgeX1 then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	if self._battleSession._enemyBornEdgeY1 <= self._position.y or self._position.y <= BattleDefine.DOME_POSY then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	local enemys = self._battleSession:getEnemys(self)
+	local cnt = #enemys
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and self:couldTakeDamageOnEnemy(enemy) and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+			self._stage = 6
+
+			self:markToBeDestroyed()
+
+			break
+		end
+	end
+end
+
+function M:checkEnemyWarning()
+	local enemys = self._battleSession:getEnemys(self)
+
+	if enemys == nil then
+		return
+	end
+
+	local lockEnemy = nil
+	local cnt = #enemys
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and self:couldTakeDamageOnEnemy(enemy) and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+			lockEnemy = enemy
+
+			break
+		end
+	end
+
+	if lockEnemy then
+		self._stage = 4
+		self._stageCD = 1
+
+		self:setDir(lockEnemy._position)
+
+		if self._view then
+			self._view._ator:SetTrigger("attack")
+		end
+	end
+end
+
+function M:setEndPosition(first)
+	self._stage = 1
+	local x = BattleRandomLib:randomMN(self._battleSession._screenEdgeX1 * 10 + 10, self._battleSession._screenEdgeX2 * 10 - 10) / 10
+
+	if self._cid == 21400 then
+		if first then
+			local y = BattleRandomLib:randomMN(BattleDefine.DOME_POSY * 10 + 10, self._atkRange * 10) / 10
+			self._moveDuration = Vector2.Distance(opt.vec2_1:Set(x, y), self._position) / self._speed
+		else
+			local y = BattleRandomLib:randomMN((self._position.y - 3) * 10, (self._position.y + 3) * 10) / 10
+			self._moveDuration = Vector2.Distance(opt.vec2_1:Set(x, y), self._position) / self._speed
+		end
+
+		self:setDir(opt.vec2_1)
+	elseif self._cid == 21402 then
+		local y = BattleRandomLib:randomMN((self._position.y - 3) * 10, (self._position.y + 3) * 10) / 10
+		self._moveDuration = Vector2.Distance(opt.vec2_1:Set(x, y), self._position) / self._speed
+
+		self:setDir(opt.vec2_1)
+	end
+end
+
+function M:markToBeDestroyed()
+	self._isSplit = nil
+
+	if self._cid == 21400 then
+		local secondSkill = self._battleWeapon._secondSkill
+		local bullet = secondSkill:createBullet()
+
+		bullet:setPos(self._position.x, self._position.y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+
+		if self._battleWeapon:getEffect(21401) then
+			local triggerSkill = self._battleWeapon:getSkill(21402)
+			local num = self._battleWeapon._mainSkill:getProp(BattlePropEnum.BattlePropParam1, 1)
+			local angle = BattleRandomLib:randomMN(1, 360)
+
+			for i = 1, num do
+				local bullet = triggerSkill:createBullet()
+				local x, y = BattleMathLib.point_in_circle_by_angle(1.5, angle + i * 90)
+				x = self._battleSession:limitEnemyPositionX(self._position.x + x)
+				y = self._battleSession:limitEnemyPositionY(self._position.y + y)
+
+				bullet:setPos(x, y)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		end
+	elseif self._cid == 21402 then
+		local triggerSkill = self._battleWeapon:getSkill(21403)
+		local bullet = triggerSkill:createBullet()
+
+		bullet:setPos(self._position.x, self._position.y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

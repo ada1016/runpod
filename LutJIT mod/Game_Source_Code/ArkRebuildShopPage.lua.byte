@@ -1,0 +1,390 @@
+local M = class("ArkRebuildShopPage", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnDraw1 = Types.Button,
+	btnDraw2 = Types.Button,
+	btnDraw3 = Types.Button,
+	btnDraw4 = Types.Button,
+	txtDrawCost1 = Types.TMP_Text,
+	txtDrawCost2 = Types.TMP_Text,
+	txtDrawCost3 = Types.TMP_Text,
+	txtDrawCost4 = Types.TMP_Text,
+	btnDrawIssue1 = Types.Button,
+	btnDrawIssue2 = Types.Button,
+	txtCountdown = Types.TMP_Text,
+	btnADIssue = Types.Button,
+	goSkipArea = Types.GameObject,
+	tfSkipPackRewardContainer = Types.Transform,
+	btnSkipMission = Types.Button,
+	txtSkipMissionPrice = Types.TMP_Text,
+	txtSkipMission = Types.TMP_Text,
+	txtSkipMissionHint = Types.TMP_Text,
+	btnSkipMissionInfo = Types.Button,
+	tfPurchaseWidget1 = Types.Transform,
+	tfPurchaseWidget2 = Types.Transform,
+	tfPurchaseWidget3 = Types.Transform,
+	tfPurchaseWidget4 = Types.Transform,
+	tfPurchaseWidget5 = Types.Transform,
+	tfPurchaseWidget6 = Types.Transform,
+	txtPool1 = Types.TMP_Text,
+	txtPool2 = Types.TMP_Text,
+	txtPool3 = Types.TMP_Text,
+	txtPool4 = Types.TMP_Text,
+	txtPool5 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timerCountdown)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnDrawIssue1, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildDropInfoPanel, 1)
+	end)
+	self:setClick(self._btnDrawIssue2, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildDropInfoPanel, 2)
+	end)
+	self:setClick(self._btnDraw1, function ()
+		self:tryHandleDrawBtn(D.ArkRebuildDropType.Pack1Drop)
+	end)
+	self:setClick(self._btnDraw2, function ()
+		self:tryHandleDrawBtn(D.ArkRebuildDropType.Pack2Drop)
+	end)
+	self:setClick(self._btnDraw3, function ()
+		self:tryHandleDrawBtn(D.ArkRebuildDropType.GoldDrop)
+	end)
+	self:setClick(self._btnDraw4, function ()
+		self:tryHandleDrawBtn(D.ArkRebuildDropType.SPGoldDrop)
+	end)
+	self:setClick(self._btnADIssue, function ()
+		self:handleADIssue()
+	end)
+	self:setClick(self._btnSkipMissionInfo, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_ARK_REBUILD_SKIP_MISSION
+		}, {
+			target = self._btnSkipMissionInfo.gameObject
+		})
+	end)
+	self:setClick(self._btnSkipMission, function ()
+		if P._playerActivityArkRebuild:getLeftBuyNum(D.IapType.ArkRebuild_Skip_Mission) == 0 then
+			V.showResultCode(ResultCode.THIS_TIME_NUM_MAX)
+
+			return
+		end
+
+		C.tryPurchase(D.IapType.ArkRebuild_Skip_Mission, function (iapId, rewards)
+			self:updateSkipMission()
+
+			local displayRewards = {}
+
+			for cid, num in pairs(rewards) do
+				displayRewards[#displayRewards + 1] = {
+					cid,
+					num
+				}
+			end
+
+			V.showRewardClaimPanel(displayRewards)
+			SimpleEvent.emit("ark_rebuild.mission.dirty")
+			self:updateGoldDraw()
+		end)
+	end)
+
+	for i = 1, 5 do
+		self:setClick(self["_txtPool" .. i].transform.parent:GetComponent("Button"), function ()
+			V.showBubbleTips({
+				desc = i <= 4 and SID["CARD_TYPE_TITLE_" .. i] or SID.ARK_REBUILD_MODULE_TITLE
+			}, {
+				alignment = 1,
+				offset = {
+					0,
+					10,
+					0
+				}
+			})
+		end)
+	end
+end
+
+function M:addEvents()
+	self:on("iap.purchase.success", function ()
+		self:updateUI()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.ark_rebuild_ticket_common or cid == D.ResType.ark_rebuild_ticket_advance or cid == D.ResType.ark_rebuild_gold or cid == D.ResType.ark_rebuild_sp_gold then
+			self:updateReddots()
+		end
+	end)
+	self:on("arkRebuildPool.dirty", function ()
+		self:showArkPool()
+	end)
+end
+
+function M:init(parentPanel)
+	self._parentPanel = parentPanel
+
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	lc.stopTimer(self._timerCountdown)
+	self:updateUI()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._timerCountdown)
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateReddots()
+	self:updateAllWidgets()
+	self:updateGoldDraw()
+	self:updateSkipMission()
+	self:showArkPool()
+end
+
+function M:updateGoldDraw()
+	local cid3, cost3 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.GoldDrop)
+	local cid4, cost4 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.SPGoldDrop)
+	self._txtDrawCost1.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.ark_rebuild_ticket_common)) .. 1
+	self._txtDrawCost2.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.ark_rebuild_ticket_advance)) .. 1
+	self._txtDrawCost3.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.ark_rebuild_gold)) .. cost3
+	self._txtDrawCost4.text = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.ark_rebuild_sp_gold)) .. cost4
+	local cid, cost = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.GoldDrop)
+
+	self._btnDraw3.transform.parent:SetActive(P._playerActivityArkRebuild:readCurrentCfg()._pack3UnlockStage < P._playerActivityArkRebuild:getCurMission() % 10000)
+	self._btnDraw4.transform.parent:SetActive(P._playerActivityArkRebuild:readCurrentCfg()._pack3UnlockStage < P._playerActivityArkRebuild:getCurMission() % 10000)
+end
+
+function M:updateReddots()
+	self._btnDraw1.dot:SetVisible(P._playerActivityArkRebuild:hasOpenPackDot(D.ArkRebuildDropType.Pack1Drop))
+	self._btnDraw2.dot:SetVisible(P._playerActivityArkRebuild:hasOpenPackDot(D.ArkRebuildDropType.Pack2Drop))
+	self._btnDraw3.dot:SetVisible(P._playerActivityArkRebuild:hasOpenPackDot(D.ArkRebuildDropType.GoldDrop))
+	self._btnDraw4.dot:SetVisible(P._playerActivityArkRebuild:hasOpenPackDot(D.ArkRebuildDropType.SPGoldDrop))
+end
+
+function M:updateAllWidgets()
+	self:updateAdWidget()
+	self:updatePurchaseWidget(self._tfPurchaseWidget2, D.IapType.ArkRebuild_Pack3, 2)
+	self:updatePurchaseWidget(self._tfPurchaseWidget3, D.IapType.ArkRebuild_Pack5, 3)
+	self:updatePurchaseWidget(self._tfPurchaseWidget4, D.IapType.ArkRebuild_Pack2, 4)
+	self:updatePurchaseWidget(self._tfPurchaseWidget5, D.IapType.ArkRebuild_Pack4, 5)
+	self:updatePurchaseWidget(self._tfPurchaseWidget6, D.IapType.ArkRebuild_Pack6, 6)
+end
+
+function M:updateAdWidget(refresh)
+	local tfWidget = self._tfPurchaseWidget1
+	local getCids, getNums = P._playerActivityArkRebuild:readAdPackRewards()
+	local leftNum = P._playerActivityArkRebuild:getLeftAdPackNum()
+	local maxNum = P._playerActivityArkRebuild:readAdMaxCacheNum()
+	local leftStr = V.getLeftStr(leftNum, maxNum)
+
+	tfWidget:GetChild(1):GetComponent("TMP_Text"):SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCids), getNums)
+	tfWidget:GetChild(4):GetChild(0):GetComponent("TMP_Text"):SetLocalizeS(SID.STR_REMAIN_TIMES, leftStr)
+
+	local tfBtn = tfWidget:Find("AdBtn")
+
+	V.loadAdButton1(tfBtn.gameObject, leftNum == 0)
+
+	local btn = tfBtn:GetComponent("Button")
+	btn.enabled = leftNum > 0
+
+	self:setClick(btn, function ()
+		local leftNum = P._playerActivityArkRebuild:getLeftAdPackNum()
+
+		if leftNum == 0 then
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.ArkRebuild_AdPack, function ()
+			P._playerActivityArkRebuild:recordAdPack()
+			self:updateAdWidget()
+			V.showRewardClaimPanel(D.formatRewards(getCids, getNums))
+		end)
+	end)
+	self:updateAdCountDown(refresh)
+end
+
+function M:updateAdCountDown(refresh)
+	local leftNum = P._playerActivityArkRebuild:getLeftAdPackNum()
+	local maxNum = P._playerActivityArkRebuild:readAdMaxCacheNum()
+
+	lc.stopTimer(self._timerCountdown)
+
+	if leftNum < maxNum then
+		self._timerCountdown = lc.setInterval(function ()
+			local newLeftNum = P._playerActivityArkRebuild:getLeftAdPackNum()
+			local dt = P._playerActivityArkRebuild:getAdPackCountdown()
+
+			if newLeftNum ~= leftNum then
+				lc.stopTimer(self._timerCountdown)
+				self:updateAdWidget(true)
+			end
+		end, 0.5)
+
+		self._timerCountdown.func()
+	end
+end
+
+function M:updatePurchaseWidget(tfWidget, iapId, idx)
+	local cids, nums = P._playerStore:readObtainAssets(iapId)
+	local leftNum = P._playerActivityArkRebuild:getLeftBuyNum(iapId)
+	local maxNum = P._playerActivityArkRebuild:getMaxBuyNum(iapId)
+	local leftStr = V.getLeftStr(leftNum, maxNum)
+	local textNum = tfWidget:GetChild(2):GetComponent("TMP_Text")
+
+	textNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(cids[1]), nums[1])
+	tfWidget:GetChild(3):GetComponent("TMP_Text"):SetLocalizeS(SID.STR_REMAIN_TIMES, leftStr)
+	tfWidget:GetChild(3):SetActive(maxNum > 0)
+
+	local tfBtn = tfWidget:Find("Btn")
+	local btn = tfBtn:GetComponent("Button")
+	local tmpCost = tfBtn:GetChild(1):GetComponent("TMP_Text")
+
+	if leftNum == 0 then
+		V.setBtnStyle(tfBtn, V.BTN_STYLE.gray)
+		tmpCost:SetLocalize(SID.STR_SOLD_OUT)
+	else
+		V.setBtnStyle(tfBtn, V.BTN_STYLE.green)
+
+		tmpCost.text = P._playerStore:getDisplayPrice(iapId)
+	end
+
+	btn.enabled = leftNum > 0
+
+	self:setClick(tfBtn:GetComponent("Button"), function ()
+		if P._playerActivityArkRebuild:getLeftBuyNum(iapId) == 0 then
+			V.showResultCode(ResultCode.THIS_TIME_NUM_MAX)
+
+			return
+		end
+
+		C.tryPurchase(iapId, function (iapId, rewards)
+			self:updatePurchaseWidget(tfWidget, iapId, idx)
+			V.showRewardClaimPanel(rewards)
+		end)
+	end)
+end
+
+function M:updateSkipMission()
+	if P._playerActivityArkRebuild:getLeftBuyNum(D.IapType.ArkRebuild_Skip_Mission) <= 0 then
+		self._goSkipArea:SetActive(false)
+	else
+		self._goSkipArea:SetActive(true)
+
+		local conf = D._iapConfig[D.IapType.ArkRebuild_Skip_Mission]
+
+		V.loadRewardsWidget(self, self._tfSkipPackRewardContainer, D.formatRewards(conf._cids, conf._nums))
+
+		self._txtSkipMissionPrice.text = P._playerStore:getDisplayPrice(D.IapType.ArkRebuild_Skip_Mission)
+		local lastMsId = P._playerActivityArkRebuild:getLastMissionId()
+		local skipMsId = math.ceil((lastMsId + 40000) / 2)
+
+		if lastMsId < D._globalConfig._ark_rebuild_skip_min_mission then
+			self._btnSkipMission:SetActive(false)
+			self._txtSkipMissionHint.transform.parent:SetActive(true)
+
+			skipMsId = math.ceil((D._globalConfig._ark_rebuild_skip_min_mission + 40000) / 2)
+
+			self._txtSkipMission:SetLocalize(D._missionArkRebuildConfig[skipMsId]._nameSid, skipMsId % 10000)
+			self._txtSkipMissionHint:SetLocalize(SID.TIP_ARK_REBUILD_SKIP_MISSION_REQUIREMENT, D._globalConfig._ark_rebuild_skip_min_mission % 10000)
+		else
+			self._txtSkipMission:SetLocalize(D._missionArkRebuildConfig[skipMsId]._nameSid, skipMsId % 10000)
+			self._btnSkipMission:SetActive(true)
+			self._txtSkipMissionHint.transform.parent:SetActive(false)
+		end
+	end
+end
+
+function M:tryHandleDrawBtn(type)
+	Client.checkNetworkAsync(function ()
+		self:handleDrawBtn(type)
+	end)
+end
+
+function M:handleDrawBtn(type)
+	local cid, cost = P._playerActivityArkRebuild:getDropCost(type)
+
+	if not P._playerAsset:isAssetEnough(cid, cost) then
+		V.showResultCode(ResultCode.RESOURCE_NOT_ENOUGH, cid)
+
+		return
+	end
+
+	P._playerAsset:decreaseAssetNum(cid, cost, D.LogWay.ark_rebuild_shop)
+	P._playerActivityArkRebuild:dropSelectCards(type)
+	P:saveGameData(type == D.ArkRebuildDropType.GoldDrop or D.ArkRebuildDropType.SPGoldDrop)
+	UIManager.openPanel(PrefabDefine.ArkRebuildOpenBoxPanel, type, function ()
+		self:updateGoldDraw()
+		self:updateReddots()
+	end)
+end
+
+function M:handleADIssue()
+	local leftNum = P._playerActivityArkRebuild:getLeftAdPackNum()
+	local maxNum = P._playerActivityArkRebuild:readAdMaxCacheNum()
+
+	if leftNum == maxNum then
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_MAX
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	else
+		local dt = P._playerActivityArkRebuild:getAdPackCountdown()
+		local day, hour, minute, second = Client.getTimeEndArgs(dt)
+		local timeSid = SID.PERIOD_DAY
+		local timeParam = 1
+
+		if day > 0 then
+			timeSid = SID.PERIOD_DAY
+			timeParam = day
+		elseif hour > 0 then
+			timeSid = SID.PERIOD_HOUR
+			timeParam = hour
+		elseif minute > 0 then
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = minute
+		else
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = 1
+		end
+
+		local recoverT = P._playerActivityArkRebuild:readAdRecoverSeconds()
+		local recoverHour = math.ceil(recoverT / 3600)
+		local str = LcLocalization.getTextStr(timeSid)
+		str = string.gsub(str, "{0}", timeParam)
+
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_TIME,
+			descParam = {
+				str,
+				recoverHour
+			}
+		}, {
+			target = self._btnADIssue.gameObject
+		})
+	end
+end
+
+function M:showArkPool()
+	local chipPools, multiCardMinus = P._playerActivityArkRebuild:calcCardPools()
+	self._txtPool1.text = #chipPools[2] * 3 - multiCardMinus
+	self._txtPool2.text = #chipPools[3]
+	self._txtPool3.text = #chipPools[4]
+	self._txtPool4.text = #chipPools[5]
+	self._txtPool5.text = #chipPools[6]
+end
+
+return M

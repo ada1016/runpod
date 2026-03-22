@@ -1,0 +1,464 @@
+local M = class("BattleDeathDrawPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	imgBG = Types.Image,
+	goAdBtn = Types.GameObject,
+	cg1 = Types.CanvasGroup,
+	goWeaponGroup = Types.GameObject,
+	tmpAdRefreshNum = Types.TMP_Text,
+	tfWeaponCards = Types.Transform,
+	tfRogueCardsArea = Types.Transform,
+	tfRogueCardPivots = Types.Transform,
+	btnGet = Types.Button,
+	goClickTips = Types.GameObject,
+	goRemoveAdBtn = Types.GameObject
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+local WeaponCardsGroup = requireLua("WeaponCardsGroup")
+local RightCardEntranceBtnWidget = requireLua("RightCardEntranceBtnWidget")
+local rogueCardsNum = 5
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._battleSession = BattleManager:getSession()
+
+	WeaponCardsGroup.noCreate(self._goWeaponGroup)
+	self._goWeaponGroup:addComboClicks(self)
+
+	self._goRogueCards = {}
+
+	for i = 1, rogueCardsNum do
+		local card = self._tfRogueCardsArea:GetChild(i - 1).gameObject
+
+		RogueCardInfoWidget.noCreate(card)
+
+		self._goRogueCards[i] = card
+
+		card:setBack()
+		card:showNew(false)
+		card:resetDraw()
+		self:setClick(card._btnClick, function ()
+			self:dealClickRogueCard(i)
+		end)
+	end
+
+	RightCardEntranceBtnWidget.noCreate(self._goRemoveAdBtn)
+	self._goRemoveAdBtn:setShowBtn(self._battleSession._battleRouge:getLeftAdDrawNum() > 0)
+	self._goRemoveAdBtn:setBtnClick(self)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnMask, function ()
+		self:clickContinue()
+	end)
+	self:setClickWithoutAction(self._btnGet, function ()
+		self:dealGetBtnLogic()
+	end)
+end
+
+function M:addEvents()
+	self:on("finished.ad", function (adType)
+		if adType == D.AdType.Rogue_Death_Draw then
+			self._adNum = self._adNum - 1
+
+			self._battleSession._battleRouge:dealAdDraw()
+			self:dealAfterClickCard()
+		end
+	end)
+	self:on("rightcard.update", function (rightCardType)
+		if rightCardType == D.RightCardType.SVIP then
+			self:updateCardStatus()
+			self._goRemoveAdBtn:setShowBtn(self._battleSession._battleRouge:getLeftAdDrawNum() > 0)
+		end
+	end)
+end
+
+function M:init()
+	self._adNum = self._battleSession._battleRouge:getLeftAdDrawNum()
+	self._maxDrawNum = 1
+	self._currentDrawNum = 0
+	self._rougeIds = {}
+	self._rogueDrawType = {
+		1,
+		1,
+		1,
+		1,
+		1
+	}
+	self._drawIdxType = self._battleSession._randomDeathDraw
+	self._selectCardIdxs = {}
+
+	self._goClickTips:SetActive(true)
+	self._btnGet.gameObject:SetActive(false)
+
+	self._btnMask.interactable = false
+	self._cg1.alpha = 1
+	self._imgBG.enabled = true
+
+	self:setCardClickable(true)
+	self._goWeaponGroup:initWeaponCards()
+	self._goWeaponGroup:resetUI()
+
+	self._cgWG = self._goWeaponGroup.transform:GetChild(0):GetComponent("CanvasGroup")
+	self._cgBgMask = self._imgBG.transform:GetComponent("CanvasGroup")
+	self._cgTips = self._goClickTips:GetComponent("CanvasGroup")
+	self._textTips = self._goClickTips:GetComponent("TextMeshProUGUI")
+	self._cgTips.alpha = 0
+	self._cgWG.alpha = 0
+	self._cgBgMask.alpha = 0
+
+	self._cgBgMask:DOFade(1, 0.6):SetUpdate(0, true):SetLink(self.gameObject)
+	self._cgWG:DOFade(1, 0.2):SetUpdate(0, true):SetDelay(0.6):SetLink(self.gameObject)
+	self._cgTips:DOFade(1, 0.2):SetUpdate(0, true):SetDelay(0.6):SetLink(self.gameObject)
+	self:playShowCardsAnim()
+end
+
+function M:isDrawAgain(idx)
+	return self._rogueDrawType[idx] == 2
+end
+
+function M:isGetAll(idx)
+	return self._rogueDrawType[idx] == 3
+end
+
+function M:refreshAdNum()
+	self._tmpAdRefreshNum.text = string.format("%d/%d", self._curAdRefreshNum, self._adRefreshNum)
+end
+
+function M:refreshRogueCards(rougueIds, showNew)
+	for i = 1, rogueCardsNum do
+		if i <= #rougueIds then
+			self._goRogueCards[i]:updateUI(rougueIds[i])
+			self._goRogueCards[i]:SetActive(true)
+			self._goRogueCards[i]:showNew(rougueIds[i] < 100)
+		else
+			self._goRogueCards[i]:SetActive(false)
+		end
+	end
+end
+
+function M:dealClickRogueCard(cardIdx)
+	if table.findArray(self._selectCardIdxs, cardIdx) then
+		if self._currentDrawNum < self._maxDrawNum then
+			V.showToast(SID.ROGUE_DRAW_AGAIN_CLICK)
+
+			return
+		end
+
+		V.showResultCode(ResultCode.ROGUE_DRAW_ALREADY_HAVE_IT)
+
+		return
+	end
+
+	self._clickCardIdx = cardIdx
+
+	if self._maxDrawNum <= self._currentDrawNum then
+		if self._adNum > 0 then
+			self:dealClickRogueCardAD(cardIdx)
+		else
+			V.showResultCode(ResultCode.ROGUE_DRAW_NUM_MAX)
+		end
+
+		return
+	else
+		self._currentDrawNum = self._currentDrawNum + 1
+
+		self:dealAfterClickCard()
+	end
+end
+
+function M:dealClickRogueCardAD()
+	P._playerAd:tryStartRewardAd(D.AdType.Rogue_Death_Draw)
+end
+
+function M:dealAfterClickCard(ignoreBonus)
+	local cardIdx = self._clickCardIdx
+
+	table.insert(self._selectCardIdxs, cardIdx)
+
+	self._rogueDrawType[cardIdx] = self._drawIdxType[#self._selectCardIdxs]
+
+	self._goRogueCards[cardIdx]:setFront()
+	self._goRogueCards[cardIdx]:playTurnAnim(true)
+
+	self._rougeIds[cardIdx] = self._battleSession._rougeIds[1]
+
+	self._battleSession:selectRogueCard(self._rougeIds[cardIdx])
+	P._playerRecord:recordEliteDrawCard()
+	self._goRogueCards[cardIdx]:showNew(self._rougeIds[cardIdx] < 100)
+
+	local isDrawAgain = self:isDrawAgain(cardIdx)
+
+	if isDrawAgain then
+		self._maxDrawNum = self._maxDrawNum + 1
+
+		UIManager.showDrawAgainToast(SID.ROGUE_DRAW_AGAIN)
+	end
+
+	local isGetAll = self:isGetAll(cardIdx)
+
+	if isGetAll then
+		self:getAllCards()
+	end
+
+	self:updateCardStatus()
+end
+
+function M:getAllCards()
+	UIManager.showDrawAllToast(SID.ROGUE_DRAW_GETALL)
+
+	for cardIdx = 1, rogueCardsNum do
+		if not self._rougeIds[cardIdx] then
+			self._rougeIds[cardIdx] = self._battleSession._battleRouge:randomCardsInPool(1, 1, true)[1]
+
+			self._battleSession:selectRogueCard(self._rougeIds[cardIdx])
+			table.insert(self._selectCardIdxs, cardIdx)
+			self._goRogueCards[cardIdx]:playTurnAnim(true)
+		end
+	end
+end
+
+function M:updateCardStatus()
+	for cardIdx = 1, rogueCardsNum do
+		local isDrawAgain = self:isDrawAgain(cardIdx)
+		local isGetAll = self:isGetAll(cardIdx)
+		local goCard = self._goRogueCards[cardIdx]
+
+		if table.findArray(self._selectCardIdxs, cardIdx) then
+			goCard:setFront()
+			goCard:showADBtn(false)
+
+			local rougeId = self._rougeIds[cardIdx]
+
+			goCard:updateUI(rougeId)
+			goCard:playWaveAnim(false)
+		else
+			local canDraw = self._currentDrawNum < self._maxDrawNum or self._adNum > 0
+			local canAdDraw = self._maxDrawNum <= self._currentDrawNum and self._adNum > 0
+
+			goCard:showADBtn(canAdDraw)
+			goCard:showGetAll(false)
+			goCard:showDrawAgain(false)
+			goCard:playWaveAnim(canDraw)
+
+			if not canDraw then
+				goCard._cg:DOFade(0.5, 0.15):SetUpdate(0, true):SetLink(self._goRogueCards[cardIdx]):SetDelay(0.2)
+
+				local scale = goCard._scale * 0.8
+
+				goCard.transform:DOScale(Vector3.static(scale, scale, scale), 0.15):SetUpdate(0, true):SetLink(self._goRogueCards[cardIdx]):SetDelay(0.2)
+			end
+		end
+	end
+
+	self:updatePanelStatus()
+end
+
+function M:updatePanelStatus()
+	local isMax = self._maxDrawNum <= self._currentDrawNum
+
+	if isMax then
+		self._btnGet.gameObject:SetActive(isMax)
+		lc.setLocalScale(self._btnGet.transform, 0, 0, 0)
+		self._btnGet.transform:DOScale(Vector3.constOne(), 0.2):SetUpdate(0, true):SetLink(self.gameObject)
+		self._goClickTips:SetActive(not isMax)
+	else
+		self._btnGet.gameObject:SetActive(isMax)
+		self._goClickTips:SetActive(not isMax)
+
+		if self._currentDrawNum == 0 then
+			self._textTips:SetLocalize(SID.ROGUE_CLICK_TO_GET)
+		else
+			self._textTips:SetLocalize(SID.ROGUE_DRAW_AGAIN_CLICK)
+		end
+	end
+end
+
+function M:dealGetBtnLogic()
+	self._waitFlyList = self._selectCardIdxs
+
+	for i = 1, #self._selectCardIdxs do
+	end
+
+	self:playResultAnim()
+	self._btnGet.gameObject:SetActive(false)
+end
+
+function M:playShowCardsAnim()
+	MainGameRoot:showGlobalMask()
+	self._goWeaponGroup:dealRefreshWeapons()
+
+	local lb = UIManager.getPanel(PrefabDefine.BattlePanel.id)
+	local startTf = lb._tfWeapons
+	local popTime = 0.5
+	local seq = DOTween.Sequence():SetUpdate(0, true):SetLink(self.gameObject)
+
+	seq:AppendInterval(popTime + 0.1)
+
+	local cardScale = 0.9
+
+	for i = 1, rogueCardsNum do
+		self._goRogueCards[i]:setBack()
+		self._goRogueCards[i]:setCardScale(cardScale)
+
+		local tf = self._goRogueCards[i].transform
+		local pivotTf = self._tfRogueCardPivots:GetChild(i - 1)
+
+		lc.setPosition(tf, lc.getPosition(startTf))
+		lc.setLocalScale(tf, 0, 0, 0)
+		seq:Insert(0, tf:DOMove(pivotTf.position, popTime):SetEase(V.EASE_OUT_BACK))
+		seq:Insert(0, tf:DOScale(Vector3.static(cardScale, cardScale, cardScale), popTime):SetEase(V.EASE_OUT_BACK))
+		seq:InsertCallback(popTime, function ()
+			self._goRogueCards[i]:playWaveAnim(true)
+		end)
+	end
+
+	seq:AppendCallback(function ()
+		MainGameRoot:hideGlobalMask()
+	end)
+end
+
+function M:playResultAnim()
+	MainGameRoot:showGlobalMask()
+
+	local selectCards = self._selectCardIdxs
+	local weaponOrdererIds = self._goWeaponGroup._weaponOrderedIds
+	local oldStars = {}
+
+	for i, weaponId in ipairs(weaponOrdererIds) do
+		oldStars[i] = self._goWeaponGroup:getStarNum(weaponId)
+	end
+
+	local weaponAddCards = {}
+
+	for idx, cardIdx in ipairs(selectCards) do
+		local rougeCardId = self._rougeIds[cardIdx]
+		local weaponIdx = self._goWeaponGroup:addSelectedRogueCard(rougeCardId)
+
+		if weaponAddCards[weaponIdx] == nil then
+			weaponAddCards[weaponIdx] = {}
+		end
+
+		table.insert(weaponAddCards[weaponIdx], cardIdx)
+	end
+
+	self._upgradeWeaponIdxList = {}
+	local stageStarNum = D._globalConfig._rogue_upgrade_star_num
+
+	for i, weaponId in ipairs(weaponOrdererIds) do
+		local oldStar = oldStars[i] or 0
+		local newStar = self._goWeaponGroup:getStarNum(weaponId) or 0
+		local oldStage = math.ceil(oldStar / stageStarNum) + (oldStar % stageStarNum == 0 and 1 or 0)
+		local newStage = math.ceil(newStar / stageStarNum) + (newStar % stageStarNum == 0 and 1 or 0)
+
+		if oldStage ~= newStage then
+			table.insert(self._upgradeWeaponIdxList, i)
+		end
+	end
+
+	self._waitUpgradeWeaponIdxList = clone(self._upgradeWeaponIdxList)
+	local playNum = 0
+
+	for idx, weaponId in ipairs(weaponOrdererIds) do
+		local addNum = weaponAddCards[idx] and #weaponAddCards[idx] or 0
+
+		if addNum > 0 then
+			local weaponCard = self._goWeaponGroup:getWeaponCardByIdx(idx)
+
+			for i = 1, addNum do
+				playNum = playNum + 1
+
+				if i == addNum then
+					local num = playNum
+
+					self:playSelectCardAnim(weaponAddCards[idx][i], idx, function ()
+						local upgrade = table.findArray(self._upgradeWeaponIdxList, idx)
+
+						if upgrade then
+							weaponCard:updateStar(4)
+						else
+							weaponCard:updateUI(weaponId, self._goWeaponGroup:getStarNum(weaponId))
+						end
+
+						if #selectCards == num then
+							self:playWeaponUpgradeAnim()
+						end
+					end)
+				else
+					self:playSelectCardAnim(weaponAddCards[idx][i], idx)
+				end
+			end
+		end
+	end
+end
+
+function M:playWeaponUpgradeAnim(jump)
+	if #self._waitUpgradeWeaponIdxList == 0 or jump then
+		self:dealClosePanel()
+
+		return
+	end
+
+	local weaponIdx = self._waitUpgradeWeaponIdxList[1]
+	local weaponId = self._goWeaponGroup._weaponOrderedIds[weaponIdx]
+
+	table.remove(self._waitUpgradeWeaponIdxList, 1)
+
+	local weaponCard = self._goWeaponGroup:getWeaponCardByIdx(weaponIdx)
+
+	UIManager.openPanel(PrefabDefine.BattleNewStagePanel, weaponCard, #self._waitUpgradeWeaponIdxList == 0, function (clickJump)
+		weaponCard:updateUI(weaponId, self._goWeaponGroup:getStarNum(weaponId))
+		self:playWeaponUpgradeAnim(clickJump)
+	end)
+end
+
+function M:playSelectCardAnim(cardIdx, weaponIdx, endCallback)
+	self:setCardClickable(false)
+
+	local selectRogueCard = self._goRogueCards[cardIdx]
+	local weaponCard = self._goWeaponGroup:getWeaponCardByIdx(weaponIdx)
+	local tfTargetWeaponCard = weaponCard.transform
+	local start = Vector3.new(lc.getPosition(selectRogueCard))
+	local target = Vector3.new(lc.getPosition(tfTargetWeaponCard))
+
+	selectRogueCard:playFlyAnimation(start, target, endCallback)
+end
+
+function M:setCardLayoutEnabled(enable)
+	self._tfRogueCardsArea:GetComponent("LayoutGroup").enabled = enable
+end
+
+function M:setCardClickable(enable)
+	self._cg1.blocksRaycasts = enable
+end
+
+function M:closePanel()
+	self._battleSession:recordRogueOptions(0)
+	self._battleSession:selectRogueCardEnd()
+	BattleManager:revertStopTime()
+	MainGameRoot:hideGlobalMask()
+
+	if self._battleSession._msId == 10001 and not P._playerGuide:isGroupFinished(2) then
+		Trace.traceDesign("GuideStep:%s", 1071)
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._closeTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:dealClosePanel()
+	if self._upgradeWeaponIdxList and #self._upgradeWeaponIdxList > 0 then
+		self:closePanel()
+	else
+		self._closeTimer = lc.setTimer(function ()
+			self:closePanel()
+		end, 0.5, true)
+	end
+end
+
+return M

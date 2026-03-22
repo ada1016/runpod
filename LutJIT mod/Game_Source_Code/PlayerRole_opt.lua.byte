@@ -1,0 +1,1419 @@
+local M = class("PlayerRole")
+
+function M:ctor()
+end
+
+local Equip = requireLua("Equip")
+local DEFAULT_EQUIPS = D._globalConfig._inital_equips
+
+function M:init(meta)
+	self._meta = meta
+	self._equipSlots = lc.assignTable(meta, "equipSlots")
+	self._equipSlotsNew = lc.assignTable(meta, "equipSlotsNew")
+	self._gemSlots = lc.assignTable(meta, "gemSlots")
+	self._gems = lc.assignTable(meta, "gems")
+	self._gemLocks = lc.assignTable(meta, "gemLocks")
+	self._gemNewFlags = lc.assignTable(meta, "gemNewFlags")
+	self._equipMetas = lc.assignTable(meta, "equips")
+	self._equipNums = lc.assignTable(meta, "equipNums")
+	self._gemSlotUnlocks = lc.assignTable(meta, "gemSlotUnlocks")
+	self._equipRefineFlags = lc.assignTable(meta, "equipRefineFlags")
+	self._equipLocks = lc.assignTable(meta, "equipLocks")
+	self._gemGroupNames = lc.assignTable(meta, "gemGroupNames")
+	self._equips = {}
+	self._equipIndex = meta.equipIndex or 1
+	self._currentGemGroup = meta.currentGemGroup or 1
+	self._level = meta.level or 1
+
+	if #self._gemSlots == 0 then
+		self._gemSlots[1] = {}
+		self._gemSlots[2] = {}
+		self._gemSlots[3] = {}
+	end
+
+	if #self._equipSlots == 0 then
+		self:initEquipData()
+	end
+
+	if #self._equipSlotsNew == 0 then
+		self._equipSlotsNew[1] = {}
+		self._equipSlotsNew[2] = {}
+		self._equipSlotsNew[3] = {}
+
+		for i = 1, D.PART_NUM do
+			table.insert(self._equipSlotsNew[1], self._equipSlots[i].eid)
+			table.insert(self._equipSlotsNew[2], self._equipSlots[i].eid)
+			table.insert(self._equipSlotsNew[3], self._equipSlots[i].eid)
+		end
+	end
+
+	if Client._config.testGems then
+		for p = 1, 6 do
+			self._gemSlots[self._currentGemGroup][p] = {}
+		end
+
+		for i = 1, #Client._config.testGems do
+			local part = math.floor((i - 1) / 6) + 1
+			local index = i % 6
+
+			if index == 0 then
+				index = 6
+			end
+
+			self._gemSlots[self._currentGemGroup][part][index] = Client._config.testGems[i]
+		end
+	end
+
+	self._availableGems = {}
+	self._availableEquips = {}
+	self._gemProps = {}
+	self._gemRouges = {}
+	self._gemBattleEffects = {}
+	self._gemEffects = {}
+	self._gemsDirty = true
+	self._equipsDirty = true
+	self._gemEffectDirty = true
+	self._atkDirty = true
+end
+
+local function genRandomAttribute(quality, grade)
+	local conf = D._equipRefineConfig[grade * 10 + quality]
+	local num = D._globalConfig._equip_extra_prop_num[quality] or 0
+	local attributes = {}
+	local unlockedWeapons = P._playerArmory:getUnlockedWeapons()
+
+	for i = 1, num do
+		local attribute = nil
+
+		if math.random() <= #unlockedWeapons / (#unlockedWeapons + 5) then
+			local value = math.random(conf._atkMin, conf._atkMax)
+			attribute = unlockedWeapons[math.random(#unlockedWeapons)]
+			attributes[#attributes + 1] = {
+				attribute,
+				value
+			}
+		else
+			local value = math.random(conf._atkMin, conf._atkMax)
+			attribute = math.random(BattlePropEnum.AtkNature1, BattlePropEnum.AtkNature5)
+			attributes[#attributes + 1] = {
+				attribute,
+				value
+			}
+		end
+	end
+
+	return attributes
+end
+
+function M:start()
+	if self._meta.optEquips == nil then
+		self._meta.optEquips = true
+		local equipNums = {}
+
+		for id, equipMeta in pairs(self._equipMetas) do
+			if type(equipMeta) == "number" then
+				if equipNums[equipMeta] == nil then
+					self._equips[id] = Equip.create({
+						cid = equipMeta
+					})
+					equipNums[equipMeta] = 1
+					self._equipMetas[id] = equipMeta
+				else
+					self._equipMetas[id] = nil
+					equipNums[equipMeta] = equipNums[equipMeta] + 1
+				end
+			elseif equipMeta.extra == nil then
+				if equipNums[equipMeta.cid] == nil then
+					self._equips[id] = Equip.create({
+						cid = equipMeta.cid
+					})
+					equipNums[equipMeta.cid] = 1
+					self._equipMetas[id] = equipMeta.cid
+				else
+					self._equipMetas[id] = nil
+					equipNums[equipMeta.cid] = equipNums[equipMeta.cid] + 1
+				end
+			else
+				self._equips[id] = Equip.create(equipMeta)
+
+				if D.Quality.Purple <= self._equips[id]:quality() and self._equips[id]:extra() == nil then
+					equipMeta.extra = genRandomAttribute(self._equips[id]:quality(), self._equips[id]:grade())
+				end
+			end
+		end
+
+		self._equipNums = equipNums
+		self._meta.equipNums = equipNums
+	else
+		for id, equipMeta in pairs(self._equipMetas) do
+			if type(equipMeta) == "number" then
+				self._equips[id] = Equip.create({
+					cid = equipMeta
+				})
+			else
+				self._equips[id] = Equip.create(equipMeta)
+
+				if D.Quality.Purple <= self._equips[id]:quality() and self._equips[id]:extra() == nil then
+					equipMeta.extra = genRandomAttribute(self._equips[id]:quality(), self._equips[id]:grade())
+				end
+			end
+		end
+	end
+
+	if self._meta.statisticsGem == nil then
+		self._meta.statisticsGem = true
+		local zero_cids = {}
+
+		for cid, num in pairs(self._gems) do
+			if num > 0 then
+				if cid >= 3700000 and cid < 3800000 then
+					P._playerAsset._props[3700000] = (P._playerAsset._props[3700000] or 0) + 1
+				elseif cid >= 3600000 and cid < 3700000 then
+					P._playerAsset._props[3600000] = (P._playerAsset._props[3600000] or 0) + 1
+				end
+			elseif num == 0 then
+				zero_cids[#zero_cids + 1] = cid
+			end
+		end
+
+		for i = 1, #zero_cids do
+			self._gems[zero_cids[i]] = nil
+		end
+	end
+
+	if self._meta.removeZeroCId == nil then
+		self._meta.removeZeroCId = true
+		local zero_cids = {}
+
+		for cid, num in pairs(self._gems) do
+			if num == 0 then
+				zero_cids[#zero_cids + 1] = cid
+			end
+		end
+
+		for i = 1, #zero_cids do
+			self._gems[zero_cids[i]] = nil
+		end
+	end
+
+	if self._meta.fixLockGems == nil then
+		self._meta.fixLockGems = true
+		local gemLocks = {}
+		local cnt = #self._gemLocks
+
+		for i = 1, cnt do
+			local cid = self._gemLocks[i]
+
+			if self._gems[cid] then
+				gemLocks[cid] = true
+			else
+				gemLocks[cid] = nil
+			end
+		end
+
+		self._gemLocks = gemLocks
+		self._meta.gemLocks = gemLocks
+		local gemNewFlags = {}
+		local cnt = #self._gemNewFlags
+
+		for i = 1, cnt do
+			local cid = self._gemNewFlags[i]
+			gemNewFlags[cid] = true
+		end
+
+		self._gemNewFlags = gemNewFlags
+		self._meta.gemNewFlags = gemNewFlags
+		local equipLocks = {}
+		local cnt = #self._equipLocks
+
+		for i = 1, cnt do
+			local cid = self._equipLocks[i]
+			equipLocks[cid] = true
+		end
+
+		self._equipLocks = equipLocks
+		self._meta.equipLocks = equipLocks
+	end
+
+	self:getPlayerAtk()
+end
+
+function M:setLevel(level)
+	self._level = level
+	self._meta.level = level
+end
+
+function M:initEquipData()
+	for i = 1, D.PART_NUM do
+		self:addEquipNum(DEFAULT_EQUIPS[i])
+		self:flagNewEquip(DEFAULT_EQUIPS[i])
+
+		self._equipSlots[i] = {
+			level = 0,
+			eid = i
+		}
+	end
+end
+
+function M:getGemNum(cid)
+	return self._gems[cid] or 0
+end
+
+function M:changeGemNum(cid, num, noEvent)
+	if not self._gems[cid] then
+		self._gems[cid] = num
+
+		SimpleEvent.emit("gem.new.dirty")
+	else
+		self._gems[cid] = self._gems[cid] + num
+
+		if self._gems[cid] == 0 then
+			self._gems[cid] = nil
+		end
+	end
+
+	local quality = D._gemConfig[cid]._quality
+
+	if num > 0 then
+		for i = 1, quality do
+			TaskHelper:increaseTaskValue(D.TaskType.GET_CHIP, num, i)
+		end
+	end
+
+	if D.Quality.Orange <= quality and not P._playerGuide:isGroupFinished(D.GuideGroupId.ChipWash) then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.ChipWash)
+	end
+
+	if quality == D.Quality.Red then
+		P._playerAsset._props[3600000] = (P._playerAsset._props[3600000] or 0) + num
+	elseif quality == D.Quality.COLORFUL then
+		P._playerAsset._props[3700000] = (P._playerAsset._props[3700000] or 0) + num
+	end
+
+	self._gemsDirty = true
+
+	if not noEvent then
+		SimpleEvent.emit("gems.dirty")
+		RedDotManager.update("city.role")
+	end
+end
+
+function M:lockGem(cid)
+	self._gemLocks[cid] = true
+	self._gemsDirty = true
+
+	SimpleEvent.emit("gems.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:unlockGem(cid)
+	self._gemLocks[cid] = nil
+	self._gemsDirty = true
+
+	SimpleEvent.emit("gems.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:isGemLocked(cid)
+	return self._gemLocks[cid]
+end
+
+function M:flagNewGem(cid, ignoreGemDirty)
+	self._gemNewFlags[cid] = true
+
+	SimpleEvent.emit("gem.new.dirty")
+
+	if not ignoreGemDirty then
+		self._gemsDirty = true
+
+		SimpleEvent.emit("gems.dirty")
+	end
+end
+
+function M:removeFlagNewGem(cid)
+	self._gemNewFlags[cid] = nil
+	self._gemsDirty = true
+
+	SimpleEvent.emit("gem.new.dirty")
+	SimpleEvent.emit("gems.dirty")
+end
+
+function M:hasNewGem()
+	for cid, num in pairs(self._gems) do
+		if num > 0 and not self._gemNewFlags[cid] then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:calcAutoMergeGems(availableGems)
+	local gems = {}
+	local curPart, curQuality, curIndex = nil
+	local count = 0
+	local mergeCount = 5
+
+	for i = #availableGems, 1, -1 do
+		local gem = availableGems[i]
+
+		if gem.canMergeNum > 0 then
+			if curPart ~= gem.part or curQuality ~= gem.quality then
+				if mergeCount <= count then
+					count = count - count % mergeCount
+
+					for j = curIndex, i - 1, -1 do
+						if count <= 0 then
+							break
+						end
+
+						local gem2 = availableGems[j]
+
+						if gem2.canMergeNum > 0 then
+							table.insert(gems, {
+								gem2.cid,
+								math.min(count, gem2.canMergeNum)
+							})
+
+							count = count - math.min(count, gem2.canMergeNum)
+						end
+					end
+				end
+
+				curIndex = i
+				count = gem.canMergeNum
+				curPart = gem.part
+				curQuality = gem.quality
+			else
+				count = count + gem.canMergeNum
+			end
+		end
+	end
+
+	if mergeCount <= count then
+		count = count - count % mergeCount
+
+		for j = curIndex, 1, -1 do
+			if count <= 0 then
+				break
+			end
+
+			local gem2 = availableGems[j]
+
+			if gem2.canMergeNum > 0 then
+				table.insert(gems, {
+					gem2.cid,
+					math.min(count, gem2.canMergeNum)
+				})
+
+				count = count - math.min(count, gem2.canMergeNum)
+			end
+		end
+	end
+
+	return gems
+end
+
+function M:canMergeGems()
+	return #self:calcAutoMergeGems(self:getAvaliableGems()) > 0
+end
+
+function M:genNewGem(part, quality)
+	return DropHelper.dropOne(D._qualityGemConfig[quality], function (e)
+		return e._part == part
+	end)
+end
+
+function M:genWashGem(part, quality, cid)
+	return DropHelper.dropOne(D._qualityGemConfig[quality], function (e)
+		return e._part == part and e._id ~= cid
+	end, 1, "_wash_weight")
+end
+
+function M:mergeGems(gems)
+	local curPart, curQuality, curIndex = nil
+	local mergeCount = 5
+	local count = 0
+	local gemCount = {}
+	local mergeTimes = 0
+
+	for i = 1, #gems do
+		local cid = gems[i][1]
+		local num = gems[i][2]
+
+		if self:getGemNum(cid) < num then
+			return {}
+		end
+
+		local part = D._gemConfig[cid]._part
+		local quality = D._gemConfig[cid]._quality
+
+		if curPart ~= part or curQuality ~= quality then
+			if mergeCount <= count then
+				for j = 1, math.floor(count / mergeCount) do
+					local gem = self:genNewGem(curPart, curQuality + 1)
+					gemCount[gem] = (gemCount[gem] or 0) + 1
+
+					self:changeGemNum(gem, 1, true)
+					Trace.traceResChanged(gem, false, 1, self:getGemNum(gem), D.LogWay.chip_merge)
+
+					mergeTimes = mergeTimes + 1
+				end
+			end
+
+			curIndex = i
+			count = num
+			curPart = part
+			curQuality = quality
+		else
+			count = count + num
+		end
+
+		self:changeGemNum(cid, -num, true)
+		Trace.traceResChanged(cid, true, 1, self:getGemNum(cid), D.LogWay.chip_merge)
+	end
+
+	if mergeCount <= count then
+		for j = 1, math.floor(count / mergeCount) do
+			local gem = self:genNewGem(curPart, curQuality + 1)
+			gemCount[gem] = (gemCount[gem] or 0) + 1
+
+			self:changeGemNum(gem, 1, true)
+			Trace.traceResChanged(gem, false, 1, self:getGemNum(gem), D.LogWay.chip_merge)
+			TaskHelper:increaseTaskValue(D.TaskType.CHIP_COMPOSE)
+		end
+	end
+
+	local result = {}
+
+	for k, v in pairs(gemCount) do
+		result[#result + 1] = {
+			k,
+			v
+		}
+	end
+
+	table.sort(result, function (a, b)
+		a = D._gemConfig[a[1]]
+		b = D._gemConfig[b[1]]
+
+		return -a._quality * 100000 + a._part * 10000 + a._id % 10000 < -b._quality * 100000 + b._part * 10000 + b._id % 10000
+	end)
+	TaskHelper:increaseTaskValue(D.TaskType.CHIP_COMPOSE, mergeTimes)
+	P:saveGameData(curQuality and curQuality >= 6)
+	SimpleEvent.emit("gems.dirty")
+	SimpleEvent.emit("gem.new.dirty")
+	RedDotManager.update("city.role")
+
+	return result
+end
+
+function M:tryWashGem(cid)
+	local quality = D._gemConfig[cid]._quality
+	local cost = D._globalConfig._chip_wash_cost[quality - D.Quality.Purple]
+	local costCid = D.ResType.chip_wash_mat
+
+	if P._playerAsset:getAssetNum(costCid) < cost then
+		return costCid, cost
+	end
+
+	P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.chip_wash)
+	P._playerAsset:increaseAssetNum(cid, -1, D.LogWay.chip_wash)
+
+	local gem = self:genWashGem(D._gemConfig[cid]._part, quality, cid)
+
+	P._playerAsset:increaseAssetNum(gem, 1, D.LogWay.chip_wash)
+	P:saveGameData(true)
+	Trace.traceDesign("ChipRefine:%d", quality)
+
+	return gem
+end
+
+function M:getEquipedGems(part)
+	if not self._gemSlots[self._currentGemGroup] then
+		self._gemSlots[self._currentGemGroup] = {}
+	end
+
+	if not self._gemSlots[self._currentGemGroup][part] then
+		self._gemSlots[self._currentGemGroup][part] = {}
+	end
+
+	return self._gemSlots[self._currentGemGroup][part]
+end
+
+function M:equipGem(cid, index)
+	local part = D._gemConfig[cid]._part
+	self:getEquipedGems(part)[index] = cid
+	self._gemsDirty = true
+	self._atkDirty = true
+	self._gemEffectDirty = true
+
+	TaskHelper:increaseTaskValue(D.TaskType.EQUIP_GEM)
+	RedDotManager.update("city.role")
+	SimpleEvent.emit("atk.dirty")
+	SimpleEvent.emit("gems.dirty")
+	Trace.AF_traceEquip("Chip", cid, 1)
+end
+
+function M:unequipGem(part, index)
+	self:getEquipedGems(part)[index] = nil
+	self._gemsDirty = true
+	self._atkDirty = true
+	self._gemEffectDirty = true
+
+	RedDotManager.update("city.role")
+	SimpleEvent.emit("atk.dirty")
+	SimpleEvent.emit("gems.dirty")
+end
+
+function M:dirtyGemEffect()
+	self._gemEffectDirty = true
+	self._atkDirty = true
+
+	SimpleEvent.emit("atk.dirty")
+end
+
+function M:dirtyAttack(noEmit)
+	self._atkDirty = true
+
+	if not noEmit then
+		SimpleEvent.emit("atk.dirty")
+	end
+end
+
+function M:hasPlayerLevelAtkGem()
+	return self._gems[3440036] and self._gems[3440036] > 0 or self._gems[3540036] and self._gems[3540036] > 0 or self._gems[3640036] and self._gems[3640036] > 0 or self._gems[3740036] and self._gems[3740036] > 0
+end
+
+function M:canEquiqGem(part)
+	if part then
+		local availableGems = self:getAvaliableGems()
+		local hasEmpty = false
+		local gems = self:getEquipedGems(part)
+		local num = self:isGemSlotLocked(part) and 5 or 6
+		hasEmpty = num > #gems
+
+		for i = 1, #availableGems do
+			local gem = availableGems[i]
+
+			if gem.part == part and gem.replaceQuality < gem.quality and (hasEmpty or gem.replaceQuality > 0) then
+				return true
+			end
+		end
+	else
+		local availableGems = self:getAvaliableGems()
+		local emptySlotPart = {}
+
+		for part = 1, D.PART_NUM do
+			local gems = self:getEquipedGems(part)
+			local num = self:isGemSlotLocked(part) and 5 or 6
+			emptySlotPart[part] = num > #gems
+		end
+
+		for i = 1, #availableGems do
+			local gem = availableGems[i]
+
+			if gem.replaceQuality < gem.quality and (emptySlotPart[gem.part] or gem.replaceQuality > 0) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:tryUnlockGemSlot(part)
+	local cost = D._globalConfig._unlock_chip_slot_diamond
+	local costCid = D.ResType.diamond
+
+	if P._playerAsset:getAssetNum(costCid) < cost then
+		return costCid, cost
+	end
+
+	P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.unlock_slot)
+	table.insert(self._gemSlotUnlocks, part)
+	TaskHelper:increaseTaskValue(D.TaskType.UNLOCK_CHIP_SLOT, 1)
+	RedDotManager.update("city.role")
+
+	self._gemsDirty = true
+
+	SimpleEvent.emit("gems.dirty")
+end
+
+function M:isGemSlotLocked(part)
+	return not table.contains(self._gemSlotUnlocks, part)
+end
+
+function M:setGemGroup(group)
+	self._currentGemGroup = group
+	self._meta.currentGemGroup = group
+	self._gemsDirty = true
+	self._equipsDirty = true
+	self._atkDirty = true
+	self._gemEffectDirty = true
+
+	SimpleEvent.emit("atk.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:getAvaliableGems()
+	if not self._gemsDirty then
+		return self._availableGems
+	end
+
+	table.clear(self._availableGems)
+
+	local group = self._currentGemGroup
+	local gems = self._availableGems
+	local usedGems = {}
+	local usedOtherGroupGems = {}
+
+	for g = 1, #self._gemSlots do
+		if self._gemSlots[g] then
+			local groups = nil
+
+			if g == group then
+				groups = usedGems
+			else
+				groups = usedOtherGroupGems
+			end
+
+			for i = 1, 6 do
+				local slots = self._gemSlots[g][i]
+
+				if slots then
+					for j = 1, 6 do
+						if slots[j] and slots[j] > 0 and not groups[slots[j]] then
+							groups[slots[j]] = g
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local emptySlotPart = {}
+
+	for part = 1, D.PART_NUM do
+		local gems = self:getEquipedGems(part)
+		local num = self:isGemSlotLocked(part) and 5 or 6
+
+		for i = 1, num do
+			if gems[i] == nil then
+				emptySlotPart[part] = true
+
+				break
+			end
+		end
+	end
+
+	for cid, num in pairs(self._gems) do
+		local conf = D._gemConfig[cid]
+		local part = conf._part
+		local slots = self._gemSlots[group][part]
+		local quality = conf._quality
+		local replaceQuality = 0
+
+		if slots then
+			for i = 1, 6 do
+				if slots[i] and slots[i] > 0 and (slots[i] - cid) % 10000 == 0 then
+					replaceQuality = D._gemConfig[slots[i]]._quality
+				end
+			end
+		end
+
+		local usedNum = usedGems[cid] and 1 or 0
+
+		if num - usedNum > 0 then
+			local gemInfo = {
+				cid = cid,
+				num = num - usedNum,
+				quality = quality,
+				part = part,
+				new = not self._gemNewFlags[cid],
+				lock = self:isGemLocked(cid),
+				replaceQuality = replaceQuality,
+				dot = emptySlotPart[part] and replaceQuality == 0 or replaceQuality > 0 and replaceQuality < quality,
+				filterValue = D._gemEffectFilterValueMap[conf._effect] + 2^(part - 1)
+			}
+
+			if usedNum < 1 then
+				gemInfo.usingInOtherGroup = usedOtherGroupGems[cid]
+			end
+
+			gemInfo.canMergeNum = num - ((usedNum > 0 or gemInfo.lock or gemInfo.usingInOtherGroup ~= nil) and 1 or 0)
+
+			if quality == D.Quality.COLORFUL then
+				gemInfo.canMergeNum = 0
+			end
+
+			table.insert(gems, gemInfo)
+		end
+	end
+
+	table.sort(gems, function (a, b)
+		return -a.quality * 100000 + a.part * 10000 + a.cid % 10000 < -b.quality * 100000 + b.part * 10000 + b.cid % 10000
+	end)
+
+	self._gemsDirty = false
+
+	return gems
+end
+
+function M:tryUnlockGemGroup()
+	local cost = D._globalConfig._unlock_chip_group_diamond
+	local costCid = D.ResType.diamond
+
+	if P._playerAsset:getAssetNum(costCid) < cost then
+		return ResultCode.RESOURCE_NOT_ENOUGH, costCid
+	end
+
+	P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.unlock_slot)
+
+	self._gemSlots[#self._gemSlots + 1] = {}
+	self._equipSlotsNew[#self._equipSlotsNew + 1] = clone(self._equipSlotsNew[self._currentGemGroup])
+
+	P._playerSkin:unlockSkillGroup()
+
+	return ResultCode.OK
+end
+
+function M:searchNearestId(cid)
+	for i = self._equipIndex - 1, 0, -1 do
+		if self._equips[i] and self._equips[i]:cid() == cid then
+			return i
+		end
+	end
+end
+
+function M:addEquipNum(cid)
+	local equipMeta = {
+		cid = cid
+	}
+	local conf = D._equipConfig[cid]
+
+	if D.Quality.Purple <= conf._quality then
+		equipMeta.extra = genRandomAttribute(conf._quality, conf._grade)
+		self._equipMetas[self._equipIndex] = equipMeta
+		self._equips[self._equipIndex] = Equip.create(equipMeta)
+		self._equipIndex = self._equipIndex + 1
+	elseif self._equipNums[cid] == nil then
+		self._equipMetas[self._equipIndex] = cid
+		self._equips[self._equipIndex] = Equip.create({
+			cid = cid
+		})
+		self._equipIndex = self._equipIndex + 1
+		self._equipNums[cid] = 1
+	else
+		self._equipNums[cid] = self._equipNums[cid] + 1
+	end
+
+	self._meta.equipIndex = self._equipIndex
+	self._equipsDirty = true
+
+	SimpleEvent.emit("equips.dirty")
+end
+
+function M:tryRefineEquip(id, locks)
+	local equip = self:getEquipById(id)
+	local cost = D._equipRefineConfig[equip:grade() * 10 + equip:quality()]._cost
+
+	if P._playerAsset:getAssetNum(D.ResType.equip_refine_mat) < cost then
+		return D.ResType.equip_refine_mat, cost
+	end
+
+	if locks then
+		local diamondCost = #locks * D._globalConfig._equip_refine_lock_cost
+
+		if P._playerAsset:getAssetNum(D.ResType.diamond) < diamondCost then
+			return D.ResType.diamond, diamondCost
+		end
+
+		P._playerAsset:decreaseAssetNum(D.ResType.diamond, -diamondCost, D.LogWay.refine_equip)
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.equip_refine_mat, -cost, D.LogWay.refine_equip)
+	TaskHelper:increaseTaskValue(D.TaskType.COMPLETE_EQUIP_REFINE, 1)
+	Trace.traceDesign("GearSmelt:%d:%d", equip:quality(), equip:grade())
+	equip:doRefine(locks)
+	P:saveGameData()
+
+	return ResultCode.OK
+end
+
+function M:lockEquip(id)
+	self._equipLocks[id] = true
+	self._equipsDirty = true
+
+	SimpleEvent.emit("equips.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:unlockEquip(id)
+	self._equipLocks[id] = nil
+	self._equipsDirty = true
+
+	SimpleEvent.emit("equips.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:isEquipLocked(id)
+	return self._equipLocks[id]
+end
+
+function M:acceptRefine(id)
+	local equip = self:getEquipById(id)
+
+	equip:acceptRefine()
+end
+
+function M:decomposeEquips(equipIds)
+	local decomposeGold = 0
+	local curEquips = {}
+
+	for i = 1, #self._equipSlotsNew do
+		for j = 1, #self._equipSlotsNew[i] do
+			local eid = self._equipSlotsNew[i][j]
+			curEquips[eid] = true
+		end
+	end
+
+	for _, id in pairs(equipIds) do
+		if self._equips[id] then
+			local cid = self._equips[id]:cid()
+			local isEquiping = curEquips[id]
+
+			if not isEquiping then
+				decomposeGold = decomposeGold + self._equips[id]:decomposeMat()
+				self._equipNums[cid] = nil
+				self._equipMetas[id] = nil
+				self._equips[id] = nil
+			elseif self._equipNums[cid] then
+				self._equipNums[cid] = 1
+			end
+		end
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.equip_refine_mat, decomposeGold, D.LogWay.decompose_equip)
+
+	self._equipsDirty = true
+
+	SimpleEvent.emit("equips.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:repalceSlotEquip(id, part)
+	local equip = self:getEquipById(id)
+
+	if not equip then
+		return
+	end
+
+	local oldId = self._equipSlotsNew[self._currentGemGroup][part]
+	local oldEquip = self:getEquipById(oldId)
+
+	if oldEquip:extra() and oldEquip:refineCount() == 0 then
+		self:removeFlagRefineEquip(oldId)
+	end
+
+	self._equipSlotsNew[self._currentGemGroup][part] = id
+	self._equipsDirty = true
+	self._atkDirty = true
+
+	if equip:extra() and equip:refineCount() == 0 then
+		self:flagRefineEquip(id)
+	end
+
+	if not P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine) and D.Quality.Purple <= equip:quality() then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.EquipRefine)
+	end
+
+	SimpleEvent.emit("atk.dirty")
+	SimpleEvent.emit("equips.dirty")
+	RedDotManager.update("city.role")
+end
+
+function M:getUpgradeShardCost(level)
+	return D._equipUpgradeConfig[level + 1]._shardNum
+end
+
+function M:getUpgradeCoinCost(level)
+	return D._equipUpgradeConfig[level + 1]._coinNum
+end
+
+function M:tryUpgradeChipAll()
+	local canUpgrade, part = self:canUpgradeEquip()
+	local isEnough = false
+
+	while canUpgrade do
+		self:tryUpgradeChip(part, true)
+
+		canUpgrade, part = self:canUpgradeEquip()
+		isEnough = true
+	end
+
+	if not isEnough then
+		return ResultCode.RESOURCE_NOT_ENOUGH
+	end
+
+	self._atkDirty = true
+
+	lc.setTimer(function ()
+		SimpleEvent.emit("atk.dirty")
+	end, 0.3)
+
+	return ResultCode.OK
+end
+
+function M:tryUpgradeChip(part, batch)
+	local level = self:getChipSystemLevelByPart(part)
+	local shardCostNum = self:getUpgradeShardCost(level)
+	local shardId = D.ChipShardId[part]
+
+	if P._playerAsset:getAssetNum(shardId) < shardCostNum then
+		return shardId, shardCostNum
+	end
+
+	local coinCostNum = self:getUpgradeCoinCost(level)
+
+	if P._playerAsset:getAssetNum(D.ResType.coin) < coinCostNum then
+		return D.ResType.coin, coinCostNum
+	end
+
+	self:upgradeSlot(part)
+	P._playerAsset:increaseAssetNum(shardId, -shardCostNum, D.LogWay.upgrade_equip)
+	P._playerAsset:increaseAssetNum(D.ResType.coin, -coinCostNum, D.LogWay.upgrade_equip)
+	TaskHelper:increaseTaskValue(D.TaskType.CHIP_SYSTEM_UPGRADE)
+
+	if not batch then
+		self._atkDirty = true
+
+		lc.setTimer(function ()
+			SimpleEvent.emit("atk.dirty")
+		end, 0.3)
+	end
+
+	if (level + 1) % 5 == 0 then
+		Trace.traceDesign("EquipLevel:%d_%d", part, level + 1)
+	end
+
+	Trace.AF_traceUpgrade("Equip", part, level + 1)
+
+	return ResultCode.OK
+end
+
+function M:canUpgradeEquip(part)
+	if not D.isSystemUnlocked(D.SystemType.EquipEnhance) then
+		return false
+	end
+
+	if part then
+		local level = self:getChipSystemLevelByPart(part)
+
+		if D.MAX_EQUIP_LEVEL <= level then
+			return false
+		end
+
+		local shardCostNum = self:getUpgradeShardCost(level)
+		local shardId = D.ChipShardId[part]
+
+		if P._playerAsset:getAssetNum(shardId) < shardCostNum then
+			return false
+		end
+
+		local coinCostNum = self:getUpgradeCoinCost(level)
+
+		if P._playerAsset:getAssetNum(D.ResType.coin) < coinCostNum then
+			return false
+		end
+
+		return true
+	else
+		for part = 1, D.PART_NUM do
+			local level = self:getChipSystemLevelByPart(part)
+
+			if level < D.MAX_EQUIP_LEVEL then
+				local shardCostNum = self:getUpgradeShardCost(level)
+				local shardId = D.ChipShardId[part]
+				local coinCostNum = self:getUpgradeCoinCost(level)
+
+				if shardCostNum <= P._playerAsset:getAssetNum(shardId) and coinCostNum <= P._playerAsset:getAssetNum(D.ResType.coin) and D._equipUpgradeConfig[level + 1] then
+					return true, part
+				end
+			end
+		end
+
+		return false
+	end
+end
+
+function M:canReplaceEquip()
+	for _, equip in pairs(self:getAvaliableEquips()) do
+		if not equip.invalid and equip.canReplace and equip.usingInOtherGroup == nil then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:upgradeSlot(part)
+	self._equipSlots[part].level = self._equipSlots[part].level + 1
+end
+
+function M:getGroupNum()
+	return #self._gemSlots
+end
+
+function M:getGroupName(group)
+	return self._gemGroupNames[group]
+end
+
+function M:setGroupName(group, name)
+	self._gemGroupNames[group] = name
+end
+
+function M:getGemSlots()
+	return self._gemSlots
+end
+
+function M:getEquipSlots()
+	return self._equipSlots
+end
+
+function M:getCurrentEquips()
+	return self._equipSlotsNew[self._currentGemGroup]
+end
+
+function M:getEquipById(id)
+	return self._equips[id]
+end
+
+function M:getChipSystemLevelAtk(level)
+	return D._equipUpgradeConfig[level] and D._equipUpgradeConfig[level]._atk or 0
+end
+
+function M:getChipSystemLevelByPart(part)
+	return self._equipSlots[part].level
+end
+
+function M:flagNewEquip(cid)
+end
+
+function M:flagRefineEquip(id)
+	table.insert(self._equipRefineFlags, id)
+end
+
+function M:removeFlagRefineEquip(id)
+	table.erase(self._equipRefineFlags, id)
+	RedDotManager.update("city.role")
+end
+
+function M:hasRefineFlagEquip(id)
+	if id then
+		return table.contains(self._equipRefineFlags, id)
+	end
+
+	for _, id in ipairs(self:getCurrentEquips()) do
+		if table.contains(self._equipRefineFlags, id) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:getAvaliableEquips()
+	if not self._equipsDirty then
+		return self._availableEquips
+	end
+
+	table.clear(self._availableEquips)
+
+	local availableEquips = self._availableEquips
+	local equipTable = {}
+	local equipOtherTable = {}
+	local equipedQualities = {}
+	local equipedAtks = {}
+
+	for i = 1, #self._equipSlotsNew do
+		local slots = self._equipSlotsNew[i]
+
+		if i == self._currentGemGroup then
+			for j = 1, #slots do
+				equipTable[slots[j]] = true
+				equipedQualities[j] = self._equips[slots[j]]:quality()
+				equipedAtks[j] = self._equips[slots[j]]:atk()
+			end
+		else
+			for j = 1, #slots do
+				if not equipOtherTable[slots[j]] then
+					equipOtherTable[slots[j]] = i
+				end
+			end
+		end
+	end
+
+	local equipMap = {}
+	local qualitySlots = D._globalConfig._equip_extra_prop_num
+
+	for id, equip in pairs(self._equips) do
+		local equipCid = equip:cid()
+		local grade = equipCid % 100
+		local equipNum = self._equipNums[equipCid] or 1
+
+		if equipTable[id] then
+			equipNum = equipNum - 1
+		end
+
+		if grade > 0 and equipNum > 0 then
+			local hash = equip:hashCode(id)
+			local locked = self:isEquipLocked(id)
+			local equipInfo = equip:toInfo(id)
+			equipMap[hash] = equipInfo
+			equipMap[hash].num = equipNum
+			equipMap[hash].invalid = false
+			equipMap[hash].ids = nil
+			equipInfo.canReplace = qualitySlots[equipedQualities[equipInfo.part]] < qualitySlots[equip:quality()] and equipedAtks[equipInfo.part] <= equip:atk()
+			equipInfo.canReplace = equipInfo.canReplace or qualitySlots[equipedQualities[equipInfo.part]] <= qualitySlots[equip:quality()] and equipedAtks[equipInfo.part] < equip:atk()
+			equipInfo.usingInOtherGroup = equipOtherTable[id]
+			equipInfo.lock = locked
+			availableEquips[#availableEquips + 1] = equipInfo
+		end
+	end
+
+	for i = 1, #self._equipSlotsNew[self._currentGemGroup] do
+		local equip = self:getEquipById(self._equipSlotsNew[self._currentGemGroup][i])
+		local hash = equip:hashCode(self._equipSlotsNew[self._currentGemGroup][i])
+
+		if equipMap[hash] then
+			equipMap[hash].invalid = true
+		end
+	end
+
+	table.sort(availableEquips, function (a, b)
+		return -a.grade * 100 - a.quality * 10 + a.part * 1 < -b.grade * 100 - b.quality * 10 + b.part * 1
+	end)
+
+	self._equipsDirty = false
+
+	return availableEquips
+end
+
+function M:getMaxEquipGrade()
+	local maxGrade = 1
+
+	for id, equip in pairs(self._equips) do
+		if maxGrade < equip:grade() then
+			maxGrade = equip:grade()
+		end
+	end
+
+	return maxGrade
+end
+
+function M:getGemProps()
+	if self._gemEffectDirty then
+		self:calcGemEffects()
+
+		self._gemEffectDirty = false
+	end
+
+	return self._gemProps
+end
+
+function M:getGemEffects()
+	if self._gemEffectDirty then
+		self:calcGemEffects()
+
+		self._gemEffectDirty = false
+	end
+
+	return self._gemEffects
+end
+
+local function wrapEffectValue(effect, value, index)
+	if effect == 401 then
+		value = value * 5
+	elseif effect == 502 then
+		value = value * 2
+	elseif effect == 701 then
+		value = value * 20 / 100
+	elseif effect == 806 then
+		value = value * 5
+	elseif effect == 36 and index == 2 then
+		value = math.min(D._globalConfig._chip_level_atk_limit, P:getLevel() * value)
+	end
+
+	return value
+end
+
+function M:calcGemEffects()
+	local props = self._gemProps
+	local effects = self._gemEffects
+
+	table.clear(props)
+	table.clear(effects)
+
+	for i = 1, 6 do
+		local slots = self._gemSlots[self._currentGemGroup][i]
+
+		if slots then
+			for j = 1, 6 do
+				if slots[j] and slots[j] > 0 then
+					local cid = slots[j]
+					local conf = D._gemConfig[cid]
+					local effect = conf._effect
+
+					if effects[effect] == nil then
+						if conf._param then
+							effects[effect] = conf._param
+						else
+							effects[effect] = {}
+							local len_params = lc.lenTable(conf._params)
+
+							for i = 1, len_params do
+								effects[effect][i] = conf._params[i]
+							end
+						end
+
+						if conf._param then
+							effects[effect] = wrapEffectValue(effect, effects[effect])
+						else
+							for i = 1, #effects[effect] do
+								effects[effect][i] = wrapEffectValue(effect, effects[effect][i], i)
+							end
+						end
+					elseif conf._param then
+						effects[effect] = effects[effect] + wrapEffectValue(effect, conf._param)
+					else
+						local len_params = lc.lenTable(conf._params)
+
+						for i = 1, len_params do
+							effects[effect][i] = effects[effect][i] + wrapEffectValue(effect, conf._params[i], i)
+						end
+					end
+
+					local effectConf = D._gemEffectConfig[effect]
+
+					if effectConf._props then
+						local key = effectConf._skillId and effectConf._skillId ~= 0 and -effectConf._skillId or effectConf._weaponId
+
+						for k = 1, #effectConf._props do
+							local prop = effectConf._props[k]
+
+							if not props[key] then
+								props[key] = {}
+							end
+
+							local value = conf._param or conf._params[k]
+							props[key][prop] = (props[key][prop] or 0) + wrapEffectValue(effect, value, k)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function M:calcPlayerAtk()
+	local atk = D._globalConfig._initial_atk
+
+	for i = 1, #self._equipSlots do
+		atk = atk + self:getChipSystemLevelAtk(self._equipSlots[i].level)
+		atk = atk + self:getEquipById(self._equipSlotsNew[self._currentGemGroup][i]):atk()
+	end
+
+	local props = self:getGemProps()[0] or {}
+	atk = atk + (props[BattlePropEnum.Atk] or 0)
+
+	return math.floor(atk)
+end
+
+function M:getPlayerAtk()
+	if self._atkDirty then
+		self._lastAtk = self._playerAtk
+		self._playerAtk = self:calcPlayerAtk()
+		self._atkDirty = false
+	end
+
+	return self._playerAtk
+end
+
+function M:getLastPlayerAtk()
+	return self._lastAtk
+end
+
+function M:getClassAtk()
+	local ret = {}
+
+	for i = 1, #self._equipSlots do
+		local extra = self:getEquipById(self._equipSlotsNew[self._currentGemGroup][i]):extra()
+
+		if extra then
+			for k, v in pairs(extra) do
+				ret[v[1]] = (ret[v[1]] or 0) + v[2]
+			end
+		end
+	end
+
+	return ret
+end
+
+function M:getWeaponAtk(id)
+	local atk = self:getPlayerAtk()
+
+	for k, v in pairs(self:getClassAtk()) do
+		if k == id or k == D._weaponConfig[id]._dmgType + BattlePropEnum.AtkNature1 - 1 then
+			atk = atk + v
+		end
+	end
+
+	return atk
+end
+
+function M:genBattleGemInput(input)
+	local gems = {
+		effects = self:getGemEffects()
+	}
+	input.gems = gems
+end
+
+function M:genBattleEquipInput(input)
+	local equips = {}
+	input.equips = equips
+	local atks = {
+		[0] = self:getPlayerAtk()
+	}
+
+	for k, v in pairs(self:getClassAtk()) do
+		atks[k] = (atks[k] or 0) + v
+	end
+
+	input.equips.atks = atks
+end
+
+function M:loadBattleEnv(env)
+	self._atkDirty = true
+	self._gemEffectDirty = true
+
+	for i = 1, D.PART_NUM do
+		if env.equips[i] then
+			self._equips[i] = Equip.create(env.equips[i].meta)
+			self._equipMetas[i] = env.equips[i].meta
+			self._equipSlots[i] = {
+				eid = i,
+				level = env.equips[i].level
+			}
+		end
+
+		if env.gemSlots then
+			self._gemSlots[self._currentGemGroup][i] = env.gemSlots[i] or {}
+		end
+	end
+
+	SimpleEvent.emit("atk.dirty")
+	SimpleEvent.emit("gems.dirty")
+end
+
+return M

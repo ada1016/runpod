@@ -1,0 +1,436 @@
+local M = class("TreasureHuntingMapWidget")
+local vfxPool = requireLua("SingleVfxPool")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TreasureHuntingMapWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+	self._vfxPool_bomb = vfxPool.create(self._goVfxBomb, self._tfVfx)
+	self._vfxPool_bomb1 = vfxPool.create(self._goVfxBomb1, self._tfVfx)
+	self._vfxPool_bomb2 = vfxPool.create(self._goVfxBomb2, self._tfVfx)
+	self._vfxPool_dig1 = vfxPool.create(self._goVfx1, self._tfVfx)
+	self._vfxPool_getItem = vfxPool.create(self._goGetItem, self._tfItems)
+	self._vfxPool_shovel = vfxPool.create(self._goShovel, self._tfItems)
+	self._goGridCells = {}
+	self._goTreasures = {}
+end
+
+function M:destroy()
+	self._vfxPool_bomb:onDestroy()
+	self._vfxPool_bomb1:onDestroy()
+	self._vfxPool_bomb2:onDestroy()
+	self._vfxPool_dig1:onDestroy()
+	self._vfxPool_getItem:onDestroy()
+	self._vfxPool_shovel:onDestroy()
+end
+
+M.CELL_SIZE = 90
+
+function M:createMap(mapEntity)
+	self._mapEntity = mapEntity
+	self._showGrids = {}
+	local tempGrid = self._tfCellContainer:GetChild(0).gameObject
+	self._isMissionCleared = self._mapEntity:isAllTreasureFound()
+
+	lc.setSizeDelta(self.transform, self._mapEntity.width * M.CELL_SIZE, self._mapEntity.height * M.CELL_SIZE)
+
+	local battleRandomLib = BattleRandomLib.new(self._mapEntity.blockRandom or 9999)
+
+	for y = 1, self._mapEntity.height do
+		self._showGrids[y] = {}
+
+		for x = 1, self._mapEntity.width do
+			local go = nil
+
+			if #self._goGridCells > 0 then
+				go = self._goGridCells[#self._goGridCells]
+				self._goGridCells[#self._goGridCells] = nil
+			else
+				go = GameObject.Instantiate(tempGrid, self._tfCellContainer)
+			end
+
+			self._panel:setClickWithoutAction(go.transform:Find("img_grid"):GetComponent("Button"), function ()
+				Client.checkNetworkAsync(function ()
+					self:handleDig(x, y)
+				end)
+			end)
+			go:SetActive(true)
+
+			go.name = string.format("grid_x%d_y%d", x, y)
+			self._showGrids[y][x] = go
+
+			lc.setAnchoredPosition(go, self:getGridPosition(x, y))
+			self:updateCell(x, y, battleRandomLib)
+		end
+	end
+
+	self._goShowTreasures = {}
+
+	for i = 1, #self._mapEntity.treasures do
+		local treasure = self._mapEntity.treasures[i]
+		local tid = treasure.id
+		local go = nil
+
+		if #self._goTreasures > 0 then
+			go = self._goTreasures[#self._goTreasures]
+			self._goTreasures[#self._goTreasures] = nil
+		else
+			go = LuaUnity.createGameObject(string.format("Assets/FW/Prefabs/UI/element/treasures/treasure_%d.prefab", 1), self._tfTreasureContainer)
+		end
+
+		go.name = "treasure_" .. tid
+
+		go:SetActive(true)
+
+		self._goShowTreasures[i] = go
+
+		lc.setAnchoredPosition(go, self:getGridPosition(treasure.x, treasure.y))
+		lc.setLocalEulerAngles(go.transform, 0, 0, treasure.rot * 90)
+
+		local gridW, gridH, gridOffsetX, gridOffsetY = self._mapEntity:getOriginTreasureBounds(treasure)
+		local childRT = go.transform:GetChild(0)
+		local sizeW = gridW * M.CELL_SIZE
+		local sizeH = gridH * M.CELL_SIZE
+
+		lc.setSizeDelta(childRT, sizeW, sizeH)
+
+		local offsetPx = gridOffsetX * M.CELL_SIZE
+		local offsetPy = gridOffsetY * M.CELL_SIZE
+		local tfIcon = go.transform:Find("icon")
+
+		LuaUnity.setTPSprite(tfIcon:GetComponent("Image"), string.format("digitems/dig_item_%d", tid), true)
+		lc.setAnchoredPosition(tfIcon, offsetPx, -offsetPy)
+		lc.setAnchoredPosition(childRT, 0, 0)
+	end
+
+	self._goSweep:SetActive(false)
+	self:updateTreasures()
+
+	self._showGlobalMaskCount = 0
+
+	self._goAllCleared:SetActive(self._isMissionCleared)
+end
+
+function M:resetMap()
+	for y = 1, #self._showGrids do
+		for x = 1, #self._showGrids[y] do
+			local go = self._showGrids[y][x]
+
+			go:SetActive(false)
+
+			self._goGridCells[#self._goGridCells + 1] = go
+		end
+	end
+
+	for i = #self._goShowTreasures, 1, -1 do
+		self._goTreasures[#self._goTreasures + 1] = self._goShowTreasures[i]
+
+		self._goShowTreasures[i]:SetActive(false)
+
+		self._goShowTreasures[i] = nil
+	end
+
+	self._showGlobalMaskCount = 0
+end
+
+function M:refreshMap(mapEntity)
+	self:resetMap()
+	self:createMap(mapEntity)
+end
+
+function M:getGridPosition(x, y)
+	return -(self._mapEntity.width / 2 * M.CELL_SIZE) + (x - 1) * M.CELL_SIZE + M.CELL_SIZE / 2, self._mapEntity.height / 2 * M.CELL_SIZE - (y - 1) * M.CELL_SIZE - M.CELL_SIZE / 2
+end
+
+function M:updateMap()
+	for y = 1, self._mapEntity.height do
+		self._showGrids[y] = {}
+
+		for x = 1, self._mapEntity.width do
+			self:updateCell(x, y)
+		end
+	end
+
+	self:updateTreasures()
+end
+
+function M:getCellGo(x, y)
+	return self._showGrids[y][x]
+end
+
+function M:updateCell(x, y, random)
+	local go = self._showGrids[y][x]
+	local img = go.transform:Find("img_grid"):GetComponent("Image")
+	local state = self._mapEntity:getDisplayState(x, y)
+
+	if state == TreasureHuntingMap.DisplayState.DUG or self._isMissionCleared then
+		img.enabled = false
+	else
+		img.enabled = true
+
+		if state == TreasureHuntingMap.DisplayState.COVERED then
+			LuaUnity.setTPSprite(img, "anniversary/anniversary_grid_3")
+		elseif state == TreasureHuntingMap.DisplayState.STONE then
+			LuaUnity.setTPSprite(img, "anniversary/anniversary_grid_4")
+		elseif state == TreasureHuntingMap.DisplayState.STONE_CRACKED then
+			LuaUnity.setTPSprite(img, "anniversary/anniversary_grid_3")
+		elseif random then
+			local ret = random:randomMN(1, 2)
+
+			LuaUnity.setTPSprite(img, ret == 1 and "anniversary/anniversary_grid_1" or "anniversary/anniversary_grid_2")
+		end
+	end
+end
+
+function M:getTreasureScale(tid)
+	return self._mapEntity.TreasureConfigs[tid].uiScale
+end
+
+function M:getMapTreasureObj(idx)
+	return self._goShowTreasures[idx]
+end
+
+function M:updateTreasures()
+	local treasures = self._mapEntity.treasures
+
+	for i = 1, #treasures do
+		self:updateTreasure(treasures[i])
+	end
+end
+
+function M:updateTreasure(treasureData)
+	local idx = treasureData.idx
+	local goTreasure = self._goShowTreasures[idx]
+
+	if goTreasure then
+		goTreasure:SetActive(not treasureData.found)
+	end
+end
+
+function M:handleDig(x, y)
+	if not P._playerActivity:isAnniversaryOpening() then
+		V.showToast(SID.TIP_EVENT_END)
+		self._panel:closePanel()
+
+		return
+	end
+
+	local result1, param1 = self._panel._module:checkDigMap(x, y)
+
+	if result1 ~= ResultCode.OK then
+		if result1 == ResultCode.LOCKED then
+			V.showToast(SID.TIP_CANT_DECODE)
+		elseif result1 == ResultCode.THIS_TIME_NUM_MAX then
+			V.showToast(SID.STR_CONVERTED)
+		elseif result1 == ResultCode.RESOURCE_NOT_ENOUGH then
+			local exchangeId = self._panel._module:readExchangeId()
+
+			if exchangeId then
+				UIManager.openPanel(PrefabDefine.ExchangeResourcePanel, exchangeId, {
+					expectExchangeNum = param1,
+					exchangeCheckFunc = function ()
+						if not P._playerActivity:isAnniversaryOpening() then
+							V.showToast(SID.TIP_EVENT_END)
+							self._panel:closePanel()
+
+							return ResultCode.NOT_MEET_CONDITION
+						end
+
+						return ResultCode.OK
+					end
+				})
+
+				return
+			end
+		end
+
+		return
+	end
+
+	local resCode, results = self._panel._module:tryDigMap(x, y)
+
+	if resCode == ResultCode.OK then
+		local currentResult = results
+		self._animSteps = {}
+
+		self:handleDigResults(currentResult)
+	end
+end
+
+function M:appendVfxAnim(result, seq, startTime)
+	startTime = startTime or 0
+	local go = self:getCellGo(result.x, result.y)
+
+	if result.isFirstDig then
+		seq:InsertCallback(startTime, function ()
+			self:playDigVfx(result.x, result.y)
+		end)
+
+		startTime = startTime + 1
+	end
+
+	if result.isBombSubResult then
+		local angle = 0
+
+		if result.py ~= result.y then
+			angle = 90
+		end
+
+		seq:InsertCallback(startTime, function ()
+			if result.py == result.y then
+				self._vfxPool_bomb2:playAt(4, go.transform.position, Vector3.static(0, 0, angle))
+			else
+				self._vfxPool_bomb1:playAt(4, go.transform.position, Vector3.static(0, 0, angle))
+			end
+		end)
+
+		startTime = startTime + 1.5
+
+		seq:InsertCallback(startTime, function ()
+			self:updateCell(result.x, result.y)
+		end)
+	elseif result.bonusType == 2 then
+		seq:InsertCallback(startTime, function ()
+			Client.playSound("ui_Annvy_hunting_boom_1")
+			self._vfxPool_bomb:playAt(2, go.transform.position, nil)
+			self:updateCell(result.x, result.y)
+		end)
+	else
+		seq:InsertCallback(startTime, function ()
+			self._vfxPool_dig1:playAt(2, go.transform.position)
+			self:updateCell(result.x, result.y)
+		end)
+
+		startTime = startTime + 0.5
+	end
+
+	if result.bonusType == 1 then
+		seq:InsertCallback(startTime, function ()
+			local getCid = result.items[1]
+			local getNum = result.items[2]
+
+			self._vfxPool_getItem:playAt(2, go.transform.position, nil, function (goVfx)
+				local img = goVfx.transform:GetChild(0):GetComponent("Image")
+				local tmpText = goVfx.transform:GetChild(1):GetComponent("TMP_Text")
+
+				LuaUnity.setTPSprite(img, D.toSprite(getCid), true, true)
+
+				tmpText.text = getNum
+			end)
+			self._panel:doResourceFly(getCid, getNum, go.transform)
+			self:updateCell(result.x, result.y)
+		end)
+	end
+
+	return seq, startTime
+end
+
+function M:playDigVfx(x, y)
+	local go = self:getCellGo(x, y)
+
+	self._vfxPool_shovel:playAt(2, go.transform.position)
+end
+
+function M:handleDigResults(result)
+	local x = result.x
+	local y = result.y
+	local startTime = 0
+	local seq = DOTween.Sequence():SetLink(self.gameObject)
+	local treasures = {}
+
+	if result.treasures then
+		table.append(treasures, result.treasures)
+	end
+
+	Client.playSound("ui_Annvy_hunting_decoder_1")
+
+	local showMask = false
+
+	if not result.dug then
+		-- Nothing
+	end
+
+	seq, startTime = self:appendVfxAnim(result, seq, startTime)
+
+	if result.bonusType == 2 and result.bombResults and #result.bombResults > 0 then
+		showMask = true
+
+		for i = 1, #result.bombResults do
+			local subResult = result.bombResults[i]
+
+			self:appendVfxAnim(subResult, seq, startTime)
+
+			if subResult.treasures then
+				table.append(treasures, subResult.treasures)
+			end
+		end
+
+		startTime = startTime + 2
+	end
+
+	if #treasures > 0 then
+		for i = 1, #treasures do
+			local treasure = treasures[i]
+
+			seq:InsertCallback(startTime, function ()
+				self:updateTreasure(treasure)
+				self._panel:doTreasureFound(treasure)
+			end)
+
+			startTime = startTime + 1.618
+		end
+	end
+
+	if result.finished then
+		showMask = true
+		startTime = startTime + 1.236
+
+		self:addGlobalMask()
+		seq:InsertCallback(startTime, function ()
+			self:reduceGlobalMask()
+			self._panel:doMapCleared()
+		end)
+	elseif showMask then
+		self:addGlobalMask()
+		seq:InsertCallback(startTime, function ()
+			self:reduceGlobalMask()
+		end)
+	end
+end
+
+function M:getTreasureCenterPosition(idx)
+	local go = self._goShowTreasures[idx]
+
+	return go.position
+end
+
+function M:addGlobalMask()
+	self._showGlobalMaskCount = self._showGlobalMaskCount + 1
+
+	MainGameRoot:showGlobalMask()
+end
+
+function M:reduceGlobalMask()
+	self._showGlobalMaskCount = self._showGlobalMaskCount - 1
+
+	if self._showGlobalMaskCount <= 0 then
+		MainGameRoot:hideGlobalMask()
+	end
+end
+
+return M

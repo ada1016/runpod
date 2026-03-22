@@ -1,0 +1,16 @@
+local M = class("PlayerBattlePassRanger", requireLua("PlayerBattlePassBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.Ranger
+	self._bpLevelCfg = D._battlePassRangerConfig
+	self._bpLogWay = D.LogWay.battle_pass_ranger
+	self._key_redDot = "city.home.special.battlepassranger"
+end
+
+function M:openReset()
+	if P._playerAsset:getAssetNum(D.ResType.crisis_zone_bag_slot) > 0 then
+		P._playerAsset:decreaseAssetNum(D.ResType.crisis_zone_bag_slot, P._playerAsset:getAssetNum(D.ResType.crisis_zone_bag_slot), D.LogWay.battle_pass_expire)
+	end
+end
+
+return M

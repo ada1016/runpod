@@ -1,0 +1,74 @@
+local M = class("MissionGiftWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MissionGiftWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	self._goMsItems = {}
+
+	for i = 1, self._tfMsRewards.childCount do
+		local go = self._tfMsRewards:GetChild(i - 1).gameObject
+		self._goMsItems[i] = go
+
+		ItemWidget.noCreate(go)
+	end
+end
+
+function M:updateUI(giftId)
+	self._showMsGiftId = giftId
+	local unlock = P._playerGift:isUnlock(giftId)
+	local unlockType, unlockMs = P._playerGift:readUnlockParams(giftId)
+	unlockMs = unlockMs - 1
+	self._textMsGiftTitle.text = unlockMs - 10000
+
+	self._textMsGiftRebate:SetLocalizeS(SID.STR_REBATE_X, P._playerGift:readValue(giftId) .. "%")
+	self._textMsLimit:SetLocalizeS(SID.SHOP_LIFE_LIMIT, "1/1")
+
+	local cids, nums = P._playerGift:readRewards(giftId)
+
+	for i = 1, #self._goMsItems do
+		local go = self._goMsItems[i]
+
+		if i <= #cids then
+			go:SetActive(true)
+			go:init(cids[i], nums[i])
+		else
+			go:SetActive(false)
+		end
+	end
+
+	self._btnBuyMsGift:SetActive(unlock)
+
+	local tmpCost = self._btnBuyMsGift.transform:Find("cost"):GetComponent("TMP_Text")
+
+	if P._playerGift:isIapBuy(giftId) then
+		tmpCost.text = P._playerStore:getDisplayPrice(P._playerGift:readBuyValue(giftId))
+	else
+		tmpCost.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_10002"), P._playerGift:readBuyValue(giftId))
+	end
+
+	self._goMsGiftUnlock:SetVisible(not unlock)
+
+	if not unlock then
+		self._textMsGiftUnlock:SetLocalize(SID.GIFT_MISSION_LIMIT, unlockMs - 10000)
+	end
+end
+
+return M

@@ -1,0 +1,94 @@
+local M = class("AnniversaryBindCodePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	txtInput = Types.TMP_InputField,
+	btnGet = Types.Button,
+	btnBind = Types.Button,
+	txtBindTip = Types.TMP_Text,
+	txtBindDesc1 = Types.TMP_Text,
+	txtBindDesc2 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:setClick(self._btnGet, function ()
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_GD)
+	end)
+	self:setClick(self._btnBind, function ()
+		local bindAllowedMission = P._playerActivityAnniversary:readInviteBindMission()
+
+		if P._playerMission:getMissionIdByType(D.MissionType.Common) % 10000 <= bindAllowedMission % 10000 then
+			V.showToast({
+				SID.TIP_PLEASE_PASS_MISSION_X,
+				bindAllowedMission % 10000
+			})
+
+			return
+		end
+
+		local text = self._txtInput.text
+
+		if P._playerActivityAnniversary:getInviteCode() == text and not C._config.testInvite then
+			V.showToast(SID.TIP_CANNOT_INVITE_SELF)
+
+			return
+		end
+
+		if string.sub(text, 1, 2) ~= "##" then
+			V.showToast(SID.TIP_INVALID_INVITE_CODE)
+
+			return
+		end
+
+		local col = "invite_data"
+
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		text = string.upper(text)
+
+		LuaHelper.queryDocData(col, text, function (data)
+			if data == "" then
+				V.showToast(SID.LINK_FAIL)
+			else
+				P._playerActivityAnniversary:setBeInviteCode(text)
+				V.showToast(SID.LINKED_CURRENT)
+				self:closePanel()
+
+				if self._callback then
+					self._callback()
+				end
+			end
+		end)
+	end)
+end
+
+function M:init(callback)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtBindTip:SetLocalize(SID.TIP_BIND_BONUS, P._playerActivityAnniversary:readBindInviteCodePoint())
+
+	local bindAllowedMission = P._playerActivityAnniversary:readInviteBindMission()
+
+	if P._playerMission:getMissionIdByType(D.MissionType.Common) % 10000 <= bindAllowedMission % 10000 then
+		self._txtBindDesc1:SetLocalize(SID.TIP_INVITE_REQUIRE_TITLE)
+		self._txtBindDesc2:SetLocalize(SID.TIP_PASS_MISSION_X_FINISH_BIND, bindAllowedMission % 10000)
+	else
+		self._txtBindDesc1:SetLocalize(SID.TIP_INVITE_STANDARD_TITLE)
+		self._txtBindDesc2:SetLocalize(SID.TIP_INVITE_STANDARD_DESC)
+	end
+end
+
+return M

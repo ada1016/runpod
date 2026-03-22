@@ -1,0 +1,64 @@
+local M = class("AnniversaryThanksRewardPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	tfContent = Types.Transform,
+	btnClaim = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaim, function ()
+		self:handleClaimBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:closePanel(enterBattle)
+	M.super.closePanel(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:init(from)
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_STAR_GIFT, P._playerActivityAnniversary:getFeedbackDay())
+	self:updateUI()
+end
+
+function M:updateUI()
+	local rewards = P._playerActivityAnniversary:calculateFeedbackRewards()
+	local isClaimed = P._playerActivityAnniversary:isFeedbackRewardClaimed()
+
+	V.loadRewardsWidget(self, self._tfContent, rewards or {}, isClaimed)
+
+	if isClaimed then
+		V.setBtnStyle(self._btnClaim, V.BTN_STYLE.gray)
+	else
+		V.setBtnStyle(self._btnClaim, V.BTN_STYLE.yellow)
+	end
+end
+
+function M:handleClaimBtn()
+	local result, rewards = P._playerActivityAnniversary:tryClaimFeedbackRewards()
+
+	if result ~= ResultCode.OK then
+		if result == ResultCode.REWARD_CLAIMED then
+			self:closePanel()
+		end
+
+		return
+	end
+
+	self:closePanel()
+	V.showRewardClaimPanel(rewards)
+end
+
+return M

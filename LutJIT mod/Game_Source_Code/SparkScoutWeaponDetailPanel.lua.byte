@@ -1,0 +1,138 @@
+local M = class("SparkScoutWeaponDetailPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtPart = Types.TMP_Text,
+	imgIcon = Types.Image,
+	goChip1 = Types.GameObject,
+	goChip2 = Types.GameObject,
+	goChip3 = Types.GameObject,
+	goChip4 = Types.GameObject,
+	goChip5 = Types.GameObject,
+	goChip6 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goChips = {
+		self._goChip1,
+		self._goChip2,
+		self._goChip3,
+		self._goChip4,
+		self._goChip5,
+		self._goChip6
+	}
+
+	for i = 1, #self._goChips do
+		lc.prefabVarPeer(self._goChips[i])
+		self:setClick(self._goChips[i]._btnRemove, function ()
+			P._playerActivitySparkScout:unequipChip(self._part, i)
+			self:updateUI()
+			self._equipCallback()
+		end)
+	end
+end
+
+function M:addClicks()
+end
+
+function M:init(part, equipCallback)
+	self._part = part
+	self._id = P._playerRole:getCurrentEquips()[part]
+	self._equip = P._playerRole:getEquipById(self._id)
+	self._equipCallback = equipCallback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtTitle:SetLocalize(SID.STR_NAME_EQUIP, -SID["STR_QUALITY_" .. self._equip:quality()], -SID["STR_PART_" .. self._equip:part()])
+	LuaUnity.setTPSprite(self._imgIcon, "general/equip1_" .. self._equip:part(), true)
+	self:updateGemUI()
+end
+
+function M:updateGemUI()
+	local isExtraSlotUnlocked = D.isSystemUnlocked(D.SystemType.ExtraChipSlot)
+
+	if not isExtraSlotUnlocked then
+		self._goChips[#self._goChips]:SetActive(false)
+	else
+		self._goChips[#self._goChips]:SetActive(true)
+	end
+
+	local chips = P._playerActivitySparkScout:getEquipedChips(self._part)
+	local count = isExtraSlotUnlocked and #self._goChips or #self._goChips - 1
+
+	for i = 1, count do
+		local goChip = self._goChips[i]
+
+		if P._playerActivitySparkScout:isChipSlotLocked(self._part, i) then
+			if P._playerActivitySparkScout:isChipSlotLocked(self._part, i - 1) then
+				goChip._goLockPrev:SetActive(true)
+				goChip._goLock:SetActive(false)
+			else
+				goChip._goLockPrev:SetActive(false)
+				goChip._goLock:SetActive(true)
+			end
+
+			local cost = P._playerActivitySparkScout:getChipUnlockCost(self._part, i - 1)
+			local costStr = string.format("<sprite name=\"item_small_10050\">%d", cost)
+
+			goChip._txtDiamondUnlock:SetLocalizeS(SID.TIP_REQUIRE_DIAMOND_UNLOCK, costStr)
+			self:setClick(goChip._btnDiamondUnlock, function ()
+				if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, cost) then
+					V.showResultCode(D.ResType.spark_scout_wafer, cost)
+
+					return
+				end
+
+				local promptKey = "spark_scout_unlock_weapon"
+				local showConfirm = lc.getIntKeyValue(promptKey, 0) < C.getCurTime()
+
+				if not showConfirm then
+					P._playerActivitySparkScout:tryUnlockChipSlot(self._part, i)
+					self:updateUI()
+
+					return
+				end
+
+				UIManager.openPanel(PrefabDefine.PromptsPanel, {
+					_promptKey = promptKey,
+					_title = SID.TITLE_UNLOCK_CHIP_SLOT,
+					_content = SID.TIP_UNLOCK_CHIP_SLOT,
+					_txtConfirm = SID.STR_CONFIRM,
+					_cParams = D.getTMPSpriteRichText(string.format("item_small_%d", D.ResType.spark_scout_wafer)) .. cost,
+					_fcCancel = SID.STR_CANCEL,
+					_confirmCallback = function ()
+						P._playerActivitySparkScout:tryUnlockChipSlot(self._part, i)
+						self:updateUI()
+					end,
+					_showResCid = D.ResType.spark_scout_wafer
+				})
+			end)
+		else
+			goChip._goLock:SetActive(false)
+			goChip._goLockPrev:SetActive(false)
+
+			if chips[i] then
+				local conf = D._gemConfig[chips[i]]
+
+				LuaUnity.setTPSprite(goChip._imgIcon, D.toSprite(chips[i]), true)
+				LuaUnity.setTPSprite(goChip._imgBg, string.format("item/frame-frame_%02d", conf._quality))
+				LuaUnity.setTPSprite(goChip._imgFrame, string.format("item/frame-frame_%02d_out", conf._quality))
+				V.loadChipDescription(goChip._txtDesc, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+				goChip._goEmpty:SetActive(false)
+				goChip._goChip:SetActive(true)
+			else
+				goChip._goEmpty:SetActive(true)
+				goChip._goChip:SetActive(false)
+			end
+		end
+	end
+end
+
+return M

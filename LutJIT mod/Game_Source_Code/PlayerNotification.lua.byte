@@ -1,0 +1,284 @@
+local M = class("PlayerNotification")
+
+local function getPrefKey(nType)
+	return "NotificationCache_" .. tostring(nType)
+end
+
+local function getPrefKey_openNotify()
+	return "NotificationOpenCache"
+end
+
+function M:ctor()
+	self._scheduledNotifications = {
+		[D.NotificationType.MainOffline_Full] = {},
+		[D.NotificationType.ArkRebuildOffline_Full] = {},
+		[D.NotificationType.RangerEgg_Incubate] = {},
+		[D.NotificationType.EnergyRecover_Full] = {},
+		[D.NotificationType.Player_Return] = {}
+	}
+
+	self:loadAllNotifications()
+end
+
+function M:init()
+	self._notificationOpen = lc.getTableKeyValue(getPrefKey_openNotify(), {})
+
+	if self._notificationOpen[D.NotificationType.Player_Return] == nil then
+		self._notificationOpen[D.NotificationType.Player_Return] = true
+	end
+end
+
+function M:start()
+end
+
+function M:isSettingOpen(nType)
+	return self._notificationOpen[nType] == true
+end
+
+function M:isConfigActive(nType)
+	return D._notificationConfig[nType]._active == 1
+end
+
+function M:readSettingShowSid(nType)
+	return D._notificationConfig[nType]._settingTitleSid, D._notificationConfig[nType]._settingDescSid
+end
+
+function M:readSettingOrder(nType)
+	return D._notificationConfig[nType]._order
+end
+
+function M:showInSetting(nType)
+	return self:isConfigActive(nType) and D._notificationConfig[nType]._show == 1
+end
+
+function M:toggleNotification(nType)
+	self._notificationOpen[nType] = not self._notificationOpen[nType]
+
+	lc.setTableKeyValue(getPrefKey_openNotify(), self._notificationOpen)
+end
+
+function M:saveNotificationType(nType)
+	lc.setTableKeyValue(getPrefKey(nType), self._scheduledNotifications[nType])
+end
+
+function M:loadAllNotifications()
+	for nType, _ in pairs(self._scheduledNotifications) do
+		self:loadNotificationType(nType)
+	end
+end
+
+function M:loadNotificationType(nType)
+	self._scheduledNotifications[nType] = {}
+	local tb = lc.getTableKeyValue(getPrefKey(nType), {})
+
+	for id, ts in pairs(tb) do
+		self._scheduledNotifications[nType][tonumber(id)] = tonumber(ts)
+	end
+end
+
+function M:doNotification(nType, timestamps)
+	local cfg = D._notificationConfig[nType]
+
+	if not cfg then
+		return
+	end
+
+	if lc._isWebGL then
+		return
+	end
+
+	local titleSid = cfg._titleSid
+	local contentSid = cfg._descSid
+
+	local function schedule(ts)
+		local notificationId = LcNotifycationConsole.Instance:SendNotification(titleSid, contentSid, ts)
+
+		if notificationId then
+			self._scheduledNotifications[nType][notificationId] = ts
+		end
+	end
+
+	if type(timestamps) == "table" then
+		for _, ts in pairs(timestamps) do
+			schedule(ts)
+		end
+	elseif timestamps then
+		schedule(timestamps)
+	end
+
+	self:saveNotificationType(nType)
+end
+
+function M:cancelAllNotifications()
+	for nType, t in pairs(self._scheduledNotifications) do
+		self:cancelAllNotificationsOfType(nType)
+	end
+end
+
+function M:cancelAllNotificationsOfType(nType)
+	local notifications = self._scheduledNotifications[nType]
+
+	if notifications then
+		local cancelNum = 0
+
+		for notificationId, _ in pairs(notifications) do
+			self:cancelNotification(nType, notificationId)
+
+			cancelNum = cancelNum + 1
+		end
+
+		if cancelNum > 0 then
+			-- Nothing
+		end
+
+		self._scheduledNotifications[nType] = {}
+
+		self:saveNotificationType(nType)
+	end
+end
+
+function M:cancelNotification(nType, notificationId)
+	if lc._isWebGL then
+		return
+	end
+
+	if self._scheduledNotifications[nType][notificationId] then
+		LcNotifycationConsole.Instance:CancelScheduledNotification(notificationId)
+
+		self._scheduledNotifications[nType][notificationId] = nil
+
+		self:saveNotificationType(nType)
+	end
+end
+
+function M:OnApplicationFocus()
+	self:cancelAllNotifications()
+	lc.saveSetValues()
+end
+
+function M:OnApplicationPause()
+	local ct = C.getCurTime()
+
+	self:updateNotify_offline(ct)
+	self:updateNotify_arkOffline(ct)
+	self:updateNotify_eggIncubate(ct)
+	self:updateNotify_energyFull(ct)
+	self:updateNotify_playerReturn(ct)
+	lc.saveSetValues()
+end
+
+function M:updateNotify_offline(ct)
+	local cType = D.NotificationType.MainOffline_Full
+
+	if not self:isSettingOpen(cType) then
+		return
+	end
+
+	local module = P._playerOffline
+
+	if module:isOfflineTimeFull() then
+		return
+	end
+
+	local fullTimestamp = module:getRecordOfflineTime() + module:getOfflineFullTimeSeconds()
+
+	if ct > fullTimestamp then
+		return
+	end
+
+	self:doNotification(cType, fullTimestamp)
+end
+
+function M:updateNotify_arkOffline(ct)
+	local cType = D.NotificationType.ArkRebuildOffline_Full
+
+	if not self:isSettingOpen(cType) then
+		return
+	end
+
+	if not P._playerActivity:isArkRebuildOpening() then
+		return
+	end
+
+	local module = P._playerArkRebuildOffline
+	local fullTimestamp = module:getRecordOfflineTime() + module:getOfflineFullTimeSeconds()
+
+	if ct > fullTimestamp then
+		return
+	end
+
+	self:doNotification(cType, fullTimestamp)
+end
+
+function M:updateNotify_eggIncubate(ct)
+	local cType = D.NotificationType.RangerEgg_Incubate
+
+	if not self:isSettingOpen(cType) then
+		return
+	end
+
+	local module = P._playerRanger
+
+	if not D.isSystemUnlocked(D.SystemType.Ranger) then
+		return
+	end
+
+	local targetTimestamp = module:getMinIncubatingTimestamp()
+
+	if targetTimestamp == 0 then
+		return
+	end
+
+	if targetTimestamp < ct then
+		return
+	end
+
+	self:doNotification(cType, targetTimestamp)
+end
+
+function M:updateNotify_energyFull(ct)
+	local cType = D.NotificationType.EnergyRecover_Full
+
+	if not self:isSettingOpen(cType) then
+		return
+	end
+
+	local module = P._playerAsset
+
+	if module:isEnergyFull() then
+		return
+	end
+
+	local fullTimestamp = module:getEnergyFullTime()
+
+	if fullTimestamp < ct then
+		return
+	end
+
+	self:doNotification(D.NotificationType.EnergyRecover_Full, fullTimestamp)
+end
+
+function M:updateNotify_playerReturn(ct)
+	local cType = D.NotificationType.Player_Return
+
+	if not self:isConfigActive(cType) then
+		return
+	end
+
+	if not self:isSettingOpen(cType) then
+		return
+	end
+
+	local module = P._playerReturn
+
+	if module:isOpenedBefore() and not module:isExpired() then
+		return
+	end
+
+	local ct = C.getCurTime()
+	local minTriggerTimestamp = ct + module:readTriggerIntervalSeconds()
+
+	self:doNotification(D.NotificationType.Player_Return, minTriggerTimestamp)
+end
+
+return M

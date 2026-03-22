@@ -1,0 +1,159 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_FireDrone", requireLua("BattleBattery"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._bullet = nil
+	self._reduceCD = 0
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+end
+
+function M:stepSeekingEnemy()
+	self._targetEnemy = self._battleRandomLib:randomOne(self._battleSession:getEnemysInBetweenY(0, self._atkRange))
+end
+
+function M:onEffectDitry(id)
+	if id == 803 then
+		local params = D.getBattleEffectParams(803)
+
+		if self._bullet then
+			self._bullet._speedAddPer = params[1]
+		end
+	end
+end
+
+function M:createBullet(angle, x, y)
+	local bullet = self._mainSkill:createBullet()
+	self._angle = angle or self._battleRandomLib:randomMN(0, 360)
+
+	bullet:setDirByAngle(self._angle)
+	bullet:setPos(x or self._targetEnemy._position.x, y or self._targetEnemy._position.y)
+
+	if self:getEffect(803) then
+		local params = D.getBattleEffectParams(803)
+		bullet._speedAddPer = params[1]
+	end
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	return bullet
+end
+
+function M:castSkill()
+	self._reduceCD = 0
+	self._isChanneling = true
+	local bullet = self:createBullet()
+	self._bullet = bullet
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		local count = self._skinSkillParam1
+
+		for i = 1, count do
+			self:createBullet()
+		end
+	end
+
+	local subSkill = self:getSkill(806)
+
+	if subSkill then
+		local bul = subSkill:createBullet()
+		bul._followBullet = bullet
+
+		bul:setPos(bullet._position.x, bullet._position.y)
+
+		if bul._view then
+			bul._view:posEvent()
+		end
+
+		bullet._806Bullet = bul
+	end
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._806Bullet then
+		bullet._806Bullet:markToBeDestroyed()
+
+		bullet._806Bullet = nil
+	end
+
+	if bullet == self._bullet then
+		self._bullet = nil
+		self._isChanneling = false
+
+		self:onChannelingEnd()
+	end
+end
+
+function M:bulletMarkToBeDelayDestroyed(bullet)
+	if bullet == self._bullet then
+		self._bullet = nil
+		self._isChanneling = false
+
+		if self:couldTriggerGemImmediatelyShot() then
+			self._prohibitImmediatelyShot = true
+			self._cd = self._continuousCastCD
+		else
+			self._cd = self._mainSkill:getSkillCD() - self._reduceCD
+		end
+	end
+end
+
+function M:castSkin62Effect(bullet, enemy)
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(enemy._position.x, enemy._position.y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	count = count - 1
+
+	for i = 1, count do
+		local bullet = castSkill:createBullet()
+		local x, y = BattleMathLib.random_along_circle(2)
+		x, y = self._battleSession:limitEnemyPosition(enemy._position.x + x, enemy._position.y + y)
+
+		bullet:setPos(x, y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+end
+
+function M:pvpEndRound()
+	if self._view then
+		self._view._obj:GetChild(2):SetActive(false)
+	end
+end
+
+function M:pvpBeganRound()
+	if self._view then
+		self._view._obj:GetChild(2):SetActive(false)
+	end
+end
+
+function M:pvpBeganRoundReady()
+	if self._view then
+		self._view._obj:GetChild(2):SetActive(true)
+	end
+end
+
+return M

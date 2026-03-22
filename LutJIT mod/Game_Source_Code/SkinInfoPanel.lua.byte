@@ -1,0 +1,247 @@
+local M = class("SkinInfoPanel", requireLua("BasePanel"))
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	rawImgBg_Gatlin = Types.RawImage,
+	rawImgBg_Role = Types.RawImage,
+	rawImgBg_Weapon = Types.RawImage,
+	rawImgBg_Dome = Types.RawImage,
+	imgGatlin = Types.Image,
+	txtGatlinName = Types.TMP_Text,
+	goGatlinArea = Types.GameObject,
+	txtGatlinDesc = Types.TMP_Text,
+	tfGatlinSkinContainer = Types.Transform,
+	tfGatlinStarContainer = Types.Transform,
+	goRoleArea = Types.GameObject,
+	imgRoleSkin = Types.Image,
+	txtRoleName = Types.TMP_Text,
+	goSpineWidget = Types.GameObject,
+	btnSwitch = Types.Button,
+	tfRoleStarContainer = Types.Transform,
+	goWeaponArea = Types.GameObject,
+	imgWeaponSkin = Types.RawImage,
+	txtWeaponName = Types.TMP_Text,
+	tfWeaponStarContainer = Types.Transform,
+	goDomeArea = Types.GameObject,
+	txtDomeSkinName = Types.TMP_Text,
+	txtDomeName = Types.TMP_Text,
+	rawImgDomeSkin = Types.RawImage,
+	tfDomeStarContainer = Types.Transform,
+	goLineGunInfo = Types.GameObject,
+	goLineSkinInfo = Types.GameObject,
+	txtSkinName = Types.TMP_Text,
+	goSkinIconWidget = Types.GameObject,
+	imgSkinQuality = Types.Image,
+	txtSkinProp1Name = Types.TMP_Text,
+	txtSkinProp1Value = Types.TMP_Text,
+	goSkinProp2 = Types.GameObject,
+	txtSkinProp2Name = Types.TMP_Text,
+	txtSkinProp2Value = Types.TMP_Text,
+	goSkinProp4 = Types.GameObject,
+	txtSkinSkillLevel = Types.TMP_Text,
+	imgSkinSkillIcon = Types.Image,
+	txtSkinSkillDesc = Types.TMP_Text
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnSwitch, function ()
+		self._displaySwith = not self._displaySwith
+
+		if self._displaySwith then
+			self._goSpineWidget:updateUI(self._cid, self._cid - 10000)
+		else
+			self._goSpineWidget:updateUI(self._cid, P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN) or 1)
+		end
+	end)
+end
+
+function M:init(cid, star)
+	self._cid = cid
+	local isItem = star == nil
+	star = star or 1
+	local cfg = P._playerSkin:getCfg(cid)
+	local quality = cfg._quality
+
+	self._goGatlinArea:SetActive(false)
+	self._goRoleArea:SetActive(false)
+	self._goWeaponArea:SetActive(false)
+	self._goDomeArea:SetActive(false)
+	self._goLineGunInfo:SetActive(false)
+	self._goLineSkinInfo:SetActive(false)
+
+	local skinStage = P._playerSkin:readSkinStageBg(self._cid)
+	local txtName = self._txtGatlinName
+	local type = D.toSkinType(cid)
+
+	if type == D.SkinType.Gatlin then
+		self._goGatlinArea:SetActive(true)
+		self._goLineGunInfo:SetActive(true)
+		self._goSkinProp2:SetActive(false)
+		self._goSkinProp4:SetActive(false)
+		self._txtGatlinName:SetLocalize(D._itemConfig[cid]._nameSid)
+
+		txtName = self._txtGatlinName
+
+		V.setSkinQualityStar(self._tfGatlinStarContainer, quality, star)
+
+		if isItem then
+			self._tfGatlinStarContainer.parent:SetActive(false)
+		end
+
+		LuaUnity.setTPSprite(self._imgGatlin, string.format("cardgun/skin_%d", cid), true)
+		self._txtGatlinDesc:SetLocalize(D._itemConfig[cid]._descSid)
+		self._txtSkinProp1Name:SetLocalize(SID.STR_FINAL_DAMAGE_NAME, -D._weaponConfig[cfg._weapon]._skillNameSid)
+
+		self._txtSkinProp1Value.text = string.format("%.2f%%", cfg._damageAdd * star)
+		self._gatlinObj = V.getGatlinSkinObj(self._tfGatlinSkinContainer, cid)
+
+		LuaUnity.setTexture(self._rawImgBg_Gatlin, string.format("img_bg_skin_gatlin_%d_small", skinStage))
+	elseif type == D.SkinType.Role then
+		self._goRoleArea:SetActive(true)
+		self._goLineSkinInfo:SetActive(true)
+		self._txtRoleName:SetLocalize(D._itemConfig[cid]._nameSid)
+
+		txtName = self._txtRoleName
+
+		self._goSpineWidget:updateUI(cid, P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN) or 1)
+		self._txtSkinName:SetLocalize(D._itemConfig[cid]._nameSid)
+		V.setSkinQualityStar(self._tfRoleStarContainer, quality, star)
+
+		if isItem then
+			self._tfRoleStarContainer.parent:SetActive(false)
+		end
+
+		ItemWidget.noCreate(self._goSkinIconWidget)
+		self._goSkinIconWidget:init(cid)
+		self._goSkinIconWidget:setNum(false)
+		V.setQualityImgText(self._imgSkinQuality, quality)
+		self._txtSkinProp1Name:SetLocalize(SID.WEAPON_CRIT_DMG)
+
+		self._txtSkinProp1Value.text = string.format("%.2f%%", cfg._critDmgAdd * star)
+		self._txtSkinProp2Value.text = string.format("%.2f%%", cfg._damageAdd * star)
+
+		LuaUnity.setTPSprite(self._imgSkinSkillIcon, "weapon/weapon_" .. cfg._weapon, true)
+		V.loadSkinSkillDesc(self._txtSkinSkillDesc, cfg, star)
+		self._txtSkinSkillLevel:SetLocalize(SID.STR_LEVEL_X, star)
+		LuaUnity.setTexture(self._rawImgBg_Role, string.format("img_bg_skin_role_%d", skinStage))
+
+		if cfg._weapon == 0 then
+			self._txtSkinProp2Name:SetLocalize(SID.STR_ALL_FINAL_DAMAGE_NAME)
+			self._goSkinProp4:SetActive(false)
+		elseif cfg._weapon == 1000 then
+			self._txtSkinProp2Name:SetLocalize(SID.STR_ALL_DAMAGE_NAME)
+			self._goSkinProp4:SetActive(false)
+		else
+			self._txtSkinProp2Name:SetLocalize(SID.STR_FINAL_DAMAGE_NAME, -D._weaponConfig[cfg._weapon]._skillNameSid)
+		end
+	elseif type == D.SkinType.Weapon then
+		self._goWeaponArea:SetActive(true)
+		self._goLineSkinInfo:SetActive(true)
+		self._txtWeaponName:SetLocalize(D._itemConfig[cid]._nameSid)
+
+		txtName = self._txtWeaponName
+
+		V.setSkinQualityStar(self._tfWeaponStarContainer, quality, star)
+
+		if isItem then
+			self._tfWeaponStarContainer.parent:SetActive(false)
+		end
+
+		LuaUnity.setTexture(self._imgWeaponSkin, string.format("skin_%d_big", cid), true)
+		self._txtSkinName:SetLocalize(D._itemConfig[cid]._nameSid)
+		ItemWidget.noCreate(self._goSkinIconWidget)
+		self._goSkinIconWidget:init(cid)
+		self._goSkinIconWidget:setNum(false)
+		V.setQualityImgText(self._imgSkinQuality, quality)
+		self._txtSkinProp1Name:SetLocalize(SID.WEAPON_CRIT_DMG)
+
+		self._txtSkinProp1Value.text = string.format("%.2f%%", cfg._critDmgAdd * star)
+
+		self._txtSkinProp2Name:SetLocalize(SID.STR_DAMAGE_NAME, -SID["STR_NATURE_" .. D._weaponConfig[cfg._weapon]._dmgType])
+
+		self._txtSkinProp2Value.text = string.format("%.2f%%", cfg._damageAdd * star)
+
+		LuaUnity.setTPSprite(self._imgSkinSkillIcon, "weapon/weapon_" .. cfg._weapon, true)
+		V.loadSkinSkillDesc(self._txtSkinSkillDesc, cfg, star)
+		self._txtSkinSkillLevel:SetLocalize(SID.STR_LEVEL_X, star)
+
+		if skinStage == 1 then
+			LuaUnity.setTexture(self._rawImgBg_Weapon, string.format("img_bg_skin_gatlin_%d_small", skinStage))
+		else
+			LuaUnity.setTexture(self._rawImgBg_Weapon, string.format("img_bg_skin_weapon_%d_small", skinStage))
+		end
+	elseif type == D.SkinType.Dome then
+		self._goDomeArea:SetActive(true)
+		self._goLineSkinInfo:SetActive(true)
+		self._goSkinProp2:SetActive(false)
+		self._txtDomeName:SetLocalize(D._itemConfig[cid]._nameSid)
+
+		txtName = self._txtDomeName
+
+		V.setSkinQualityStar(self._tfDomeStarContainer, quality, star)
+
+		if isItem then
+			self._tfDomeStarContainer.parent:SetActive(false)
+		end
+
+		LuaUnity.setTexture(self._rawImgDomeSkin, string.format("img_%d", cid), true)
+		self._txtSkinName:SetLocalize(D._itemConfig[cid]._nameSid)
+		ItemWidget.noCreate(self._goSkinIconWidget)
+		self._goSkinIconWidget:init(cid)
+		self._goSkinIconWidget:setNum(false)
+		V.setQualityImgText(self._imgSkinQuality, quality)
+
+		if cfg._domeHpPercent > 0 then
+			self._txtSkinProp1Name:SetLocalize(SID.STR_DOME_SKIN_HP_PERCENT_ADD)
+
+			self._txtSkinProp1Value.text = string.format("%d%%", cfg._domeHpPercent)
+		else
+			self._txtSkinProp1Name:SetLocalize(SID.STR_DOME_HP_ADD)
+
+			self._txtSkinProp1Value.text = string.format("%d", cfg._domeHp * star)
+		end
+
+		self._goSkinProp4:SetActive(cfg._weapon == 100)
+
+		if cfg._weapon == 100 then
+			LuaUnity.setTPSprite(self._imgSkinSkillIcon, "skill/item_skill_" .. cid, true)
+			V.loadSkinSkillDesc(self._txtSkinSkillDesc, cfg, star)
+			self._txtSkinSkillLevel:SetLocalize(SID.STR_LEVEL_X, star)
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+end
+
+function M:closePanel()
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+	M.super.closePanel(self)
+end
+
+return M

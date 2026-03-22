@@ -1,0 +1,226 @@
+local M = class("BattleWeapon", requireLua("BattleAbility"))
+local SUPER = M.super
+local BattleSkill = requireLua("BattleSkill")
+local BattlePropEnum = BattlePropEnum
+
+function M:initSkills(initialSkills)
+	self._effectsMap = table.new(0, 4)
+	self._skillsMap = table.new(0, 16)
+	self._damageRecrod = 0
+	self._birthTime = self._battleSession._elapsedTime
+	local mainSkillId = initialSkills[1]
+	local mainSkill = BattleSkill.create(self._battleSession)
+
+	mainSkill:init(mainSkillId, self)
+
+	self._mainSkill = mainSkill
+	self._skillsMap[mainSkill._id] = mainSkill
+	local secondSkillId = initialSkills[2]
+
+	if secondSkillId then
+		local subSkill = BattleSkill.create(self._battleSession)
+
+		subSkill:init(secondSkillId, self)
+
+		self._secondSkill = subSkill
+		self._skillsMap[subSkill._id] = subSkill
+
+		self._mainSkill:addSubSkill(subSkill._id)
+	end
+end
+
+function M:mainSkill()
+	return self._mainSkill
+end
+
+function M:secondSkill()
+	return self._secondSkill
+end
+
+function M:getSkill(id)
+	return self._skillsMap[id]
+end
+
+function M:addEffect(id, v)
+	self._effectsMap[id] = v or true
+
+	if id == 10000 then
+		self._isSuper = true
+	end
+
+	if self.onEffectDitry then
+		self:onEffectDitry(id)
+	end
+
+	if self._view and self._view.addEffectEvent then
+		self._view:addEffectEvent(id)
+	end
+end
+
+function M:getEffect(id)
+	return self._effectsMap[id] or self._battleSession:getEffect(id)
+end
+
+function M:addSkill(id)
+	if self._skillsMap[id] then
+		return self._skillsMap[id]
+	end
+
+	local subSkill = BattleSkill.create(self._battleSession)
+
+	subSkill:init(id, self)
+
+	self._skillsMap[id] = subSkill
+
+	return subSkill
+end
+
+function M:addSubSkill(belong, id)
+	local parentSkill = self._skillsMap[belong]
+
+	if parentSkill == nil then
+		return
+	end
+
+	parentSkill:addSubSkill(id)
+
+	return self:addSkill(id)
+end
+
+function M:addProp(k, v)
+	SUPER.addProp(self, k, v)
+
+	if self.onPropDitry then
+		self:onPropDitry(k, v)
+	end
+end
+
+function M:addInheritProps(k, v)
+	if self._inheritPropsMap == nil then
+		self._inheritPropsMap = table.new(0, 4)
+	end
+
+	self._inheritPropsMap[k] = (self._inheritPropsMap[k] or 0) + v
+end
+
+function M:addInheritAttachBuff(k, v)
+	if self._inheritAttachBuffsMap == nil then
+		self._inheritAttachBuffsMap = table.new(0, 4)
+	end
+
+	if type(v) == "number" then
+		self._inheritAttachBuffsMap[k] = (self._inheritAttachBuffsMap[k] or 0) + v
+	elseif self._inheritAttachBuffsMap[k] == nil then
+		self._inheritAttachBuffsMap[k] = {
+			v[1],
+			v[2],
+			v[3]
+		}
+	else
+		self._inheritAttachBuffsMap[k][1] = self._inheritAttachBuffsMap[k][1] + v[1]
+	end
+end
+
+function M:loadProps(props)
+	if props == nil then
+		return
+	end
+
+	for k, v in pairs(props) do
+		if k == BattlePropEnum.DmgAddMainPer then
+			self._mainSkill:addProp(BattlePropEnum.DmgAddPer, v)
+		elseif k == BattlePropEnum.DmgAddMain then
+			self._mainSkill:addProp(BattlePropEnum.DmgAdd, v)
+		elseif k == BattlePropEnum.DmgAddSubPer then
+			if self._secondSkill then
+				self._secondSkill:addProp(BattlePropEnum.DmgAddPer, v)
+			end
+		elseif k == BattlePropEnum.DmgAddSub then
+			if self._secondSkill then
+				self._secondSkill:addProp(BattlePropEnum.DmgAdd, v)
+			end
+		else
+			self._mainSkill:addProp(k, v)
+		end
+	end
+end
+
+function M:loadSkinProps(props)
+	if props == nil then
+		return
+	end
+
+	for k, v in pairs(props) do
+		self:addOutProp(k, v)
+	end
+end
+
+function M:loadEffects()
+end
+
+function M:loadSkinSkill(effectId, param)
+	local skinEffectCfg = D._skinEffectConfig[effectId]
+	local effect = skinEffectCfg._effect
+	local effectParam = skinEffectCfg._effectParam
+
+	if effect % 100 == 61 then
+		self._skinEffect61Actived = true
+		self._skinEffect61Param = effectParam + 1
+		self._skinSkillParam1 = param
+	elseif effect % 100 == 62 then
+		self._skinEffect62Actived = true
+		self._skinEffect62Params = {
+			count = 0,
+			effect_param = effectParam,
+			out_param = param,
+			skill_id = skinEffectCfg._skillId
+		}
+		local subSkill = self:addSkill(skinEffectCfg._skillId)
+
+		if skinEffectCfg._weaponId == BattleSkillGroupEnum.Penetrator then
+			subSkill:addProp(BattlePropEnum.BulletWallBounceNum, param)
+		elseif skinEffectCfg._weaponId == BattleSkillGroupEnum.FollowMissile then
+			if param > 1 then
+				subSkill:addProp(BattlePropEnum.Salvo, param - 1)
+			end
+
+			self:addSkill(322)
+		elseif skinEffectCfg._weaponId == BattleSkillGroupEnum.Aeroblast then
+			self:addSkill(622)
+			self:addSkill(623)
+			self:addSkill(624)
+		elseif skinEffectCfg._weaponId == BattleSkillGroupEnum.BeeColony then
+			self:addSkill(1222)
+		elseif skinEffectCfg._weaponId == BattleSkillGroupEnum.GravityVortex then
+			self:addSkill(1122)
+		elseif skinEffectCfg._weaponId == BattleSkillGroupEnum.Thunderbolt then
+			subSkill:addProp(BattlePropEnum.LiveDuration, param)
+		end
+	end
+end
+
+function M:recordDamage(damage)
+	self._damageRecrod = self._damageRecrod + damage
+end
+
+function M:getRecordDamage()
+	return math.ceil(self._damageRecrod)
+end
+
+function M:getRecordDps()
+	return math.ceil(self._damageRecrod / (self._battleSession._elapsedTime - self._birthTime))
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+end
+
+function M:bulletDestroyed(bullet)
+end
+
+function M:bulletHitEnemy(bullet, enemy)
+end
+
+function M:onEnemyKilled(bullet, enemy)
+end
+
+return M

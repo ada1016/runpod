@@ -1,0 +1,519 @@
+local M = class("BattleBattery", requireLua("BattleWeapon"))
+local SUPER = M.super
+local BattleDefine = BattleDefine
+local BattlePropEnum = BattlePropEnum
+local Mathf = Mathf
+local SimpleEntityFactory = requireLua("SimpleEntityFactory")
+
+function M:ctor()
+	self._position = Vector3.retain(0, 0, 0)
+end
+
+function M:init(id, index)
+	self._id = id
+	self._group = id
+	self._index = index
+	self._roundSkillCdSpeedAddPer = 0
+	self._skillCastedCount = 0
+	self._runingFireCount = 0
+	self._fireNumInTurn = 0
+	self._killEnemyCountInTurn = 0
+	self._hitEnemyCount = 0
+	local povit = BattleManager:weaponPovit(index)
+
+	if povit then
+		self._position:SetXYZ(povit[1], povit[2], 0)
+	end
+
+	if BattleDefine.BatteryMuzzleDistance[self._id] then
+		self._muzzleDistance = BattleDefine.BatteryMuzzleDistance[self._id][2]
+		self._muuzzleDtY = BattleDefine.BatteryMuzzleDistance[self._id][3]
+
+		if self._muuzzleDtY and (id == 3 or id == 9) and index >= 3 then
+			self._muuzzleDtY = -self._muuzzleDtY
+		end
+	end
+
+	local cfg = D._weaponConfig[id]
+	self._prefab = cfg._prefab
+	self._superDecoPrefab = cfg._superDecoPrefab
+	self._shotDelay = cfg._shotDelay
+	self._atkRange = cfg._atkRange2
+	self._rotateSpeed = cfg._rotateSpeed or 10
+	self._continuousCastCD = cfg._continuousCastCD or 1
+	self._isChannelSkill = cfg._isChannelSkill
+	self._defyInvisibility = cfg._defyInvisibility
+	self._dmgRateFactor = cfg._dmgRateFactor
+	local extraParams = BattleDefine.BatteryExtraParmas[id]
+
+	if extraParams then
+		for k, v in pairs(BattleDefine.BatteryExtraParmas[id]) do
+			self[k] = v
+		end
+	end
+
+	self:initSkills(cfg._skillId)
+
+	self._cd = self._firstCD or 1
+	self._skinEffect61Actived = false
+
+	if self._view then
+		self._view:init(self)
+	end
+end
+
+function M:onPropDitry(k, v, skill)
+	if k == BattlePropEnum.AtkRangeAddPer and skill == self._mainSkill then
+		self._atkRange = self._atkRange + self._atkRange * v / 100
+	end
+end
+
+function M:getAtkRange()
+	return self._atkRange
+end
+
+function M:step(dt, elapsedTime)
+	if self._view and self._view.stepEvent then
+		self._view:stepEvent(dt)
+	end
+
+	self:stepSeekingEnemy(dt)
+	self:stepSkillCountDown(dt)
+end
+
+function M:stepSeekingEnemy()
+	self._targetEnemy = self._battleSession._nearestEnemy
+end
+
+function M:stepSkillCountDown(dt)
+	self:stepRunningFire(dt)
+	self:stepDelayShot(dt)
+	self:stepExtraShot(dt)
+
+	if self._isChanneling then
+		return
+	end
+
+	if self._isShoting then
+		return
+	end
+
+	local stepCd = dt
+	stepCd = dt + dt * (self._mainSkill:getProp(BattlePropEnum.SkillCdSpeedAddPer, 0) / 100 + self._roundSkillCdSpeedAddPer / 100)
+	self._cd = self._cd - stepCd
+
+	if self._cd <= 0 then
+		self:tryCastSkill()
+	end
+end
+
+function M:launchShot()
+	self._fireNumInTurn = self._fireNumInTurn + 1
+
+	if self._hasShotAni then
+		self._shotDelayCD = self._shotAniDuration
+		self._lockToward = true
+	else
+		self:startShotBullet()
+	end
+
+	if self._view then
+		self._view:launchEvent()
+	end
+end
+
+function M:startShotBullet()
+	self:castSkill()
+
+	if self._view then
+		self._view:shotEvent()
+
+		if self._id ~= 7 or self._targetEnemy ~= nil then
+			Client.playBattleSound(self._mainSkill._audio)
+		end
+	end
+
+	self:onShotFinished()
+end
+
+function M:stepDelayShot(dt)
+	if not self._hasShotAni then
+		return
+	end
+
+	if self._shotDelayCD then
+		self._shotDelayCD = self._shotDelayCD - dt
+
+		if self._shotDelayCD <= 0 then
+			self._shotDelayCD = nil
+			self._lockToward = false
+
+			self:startShotBullet()
+		end
+	end
+end
+
+function M:stepExtraShot(dt)
+	if self._extraShotReadyCD then
+		self._extraShotReadyCD = self._extraShotReadyCD - dt
+
+		if self._extraShotReadyCD <= 0 then
+			self._extraShotReadyCD = nil
+
+			if self._view then
+				self._view:launchEvent()
+			end
+		end
+	end
+
+	if self._extraShotCD then
+		self._extraShotCD = self._extraShotCD - dt
+
+		if self._extraShotCD <= 0 then
+			self._extraShotCD = nil
+			self._lockToward = false
+
+			self:castExtraSkill()
+		end
+	end
+end
+
+function M:stepRunningFire(dt)
+	if self._runingFireCD and self._runingFireCount > 0 then
+		self._runingFireCD = self._runingFireCD - dt
+
+		if self._runingFireCD <= 0 then
+			self._runingFireCount = self._runingFireCount - 1
+			self._runingFireCD = nil
+
+			self:launchShot()
+		end
+	end
+end
+
+function M:tryCastSkill()
+	local pass = nil
+
+	if self._lockTargetEnemy then
+		pass = true
+	else
+		pass = self:isTargetEnemyInAttackRange()
+	end
+
+	if not pass then
+		return
+	end
+
+	self._isShoting = true
+
+	if not self._ignoreCastCount then
+		self._skillCastedCount = self._skillCastedCount + 1
+	end
+
+	self._fireNumInTurn = 0
+	self._killEnemyCountInTurn = 0
+	self._runingFireCount = 0
+	self._runingFireCD = nil
+	self._roundSkillCdSpeedAddPer = 0
+	self._lockTargetEnemy = nil
+	local rate = self._mainSkill:getProp(BattlePropEnum.RunningFireProbabilityPer, 100)
+
+	if rate >= 100 or self._battleRandomLib:randomTrue(rate) then
+		self._runingFireCount = self._mainSkill:getProp(BattlePropEnum.RunningFire, 0)
+	end
+
+	self:firstFireInTurn()
+	self:launchShot()
+end
+
+function M:onShotFinished()
+	if self._runingFireCount > 0 then
+		self._runingFireCD = self._shotInterval or 1
+
+		return
+	end
+
+	self._isShoting = false
+	self._fireNumInTurn = 0
+
+	if not self._isChannelSkill then
+		local skinEffect = false
+
+		if self._skinEffect61Actived and (self._id == BattleSkillGroupEnum.FollowMissile or self._id == BattleSkillGroupEnum.Penetrator) and self._skillCastedCount % self._skinEffect61Param == 0 then
+			skinEffect = true
+		end
+
+		if self._leftShotCountWithSkin and self._leftShotCountWithSkin >= 0 then
+			self:shotBySkin()
+		elseif self:getEffect(605) then
+			local param = D.getBattleEffectParams(605)
+			self._isShoting = true
+			self._extraShotReadyCD = param[4]
+			self._extraShotCD = self._extraShotReadyCD + self._shotAniDuration
+			self._cd = self._mainSkill:getSkillCD() + self._extraShotCD
+		elseif skinEffect then
+			self._cd = self._continuousCastCD
+			self._ignoreCastCount = true
+			self._leftShotCountWithSkin = self._skinSkillParam1 - 1
+		elseif self:couldTriggerGemImmediatelyShot_Penetrator() then
+			self._prohibitImmediatelyShot_Penetrator = true
+			self._cd = self._continuousCastCD
+		elseif self:couldTriggerGemImmediatelyShot() then
+			self._prohibitImmediatelyShot = true
+			self._cd = self._continuousCastCD
+		else
+			self._cd = self._mainSkill:getSkillCD()
+		end
+	elseif self._id == BattleSkillGroupEnum.Railgun then
+		if self._leftShotCountWithSkin and self._leftShotCountWithSkin >= 0 then
+			self:shotBySkin()
+		elseif self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+			self._cd = self._continuousCastCD
+			self._ignoreCastCount = true
+			self._leftShotCountWithSkin = self._skinSkillParam1 - 1
+		elseif self:couldTriggerGemImmediatelyShot() then
+			self._prohibitImmediatelyShot = true
+			self._cd = self._continuousCastCD
+		else
+			self._cd = self._mainSkill:getSkillCD()
+		end
+	end
+end
+
+function M:shotBySkin()
+	if self._leftShotCountWithSkin == 0 then
+		self._leftShotCountWithSkin = nil
+		self._ignoreCastCount = nil
+
+		if self:couldTriggerGemImmediatelyShot() then
+			self._prohibitImmediatelyShot = true
+			self._cd = self._continuousCastCD
+		else
+			self._cd = self._mainSkill:getSkillCD() - (self._reduceCD or 0)
+		end
+	else
+		self._leftShotCountWithSkin = self._leftShotCountWithSkin - 1
+		self._cd = self._continuousCastCD
+	end
+end
+
+function M:castExtraSkill()
+	if self:getEffect(605) then
+		self:castSkill607()
+
+		if self._view then
+			self._view:shotEvent()
+		end
+
+		self._isShoting = false
+
+		if self:couldTriggerGemImmediatelyShot() then
+			self._prohibitImmediatelyShot = true
+			self._cd = self._continuousCastCD
+		end
+	end
+end
+
+function M:firstFireInTurn()
+end
+
+function M:isTargetEnemyInAttackRange()
+	local targetEnemy = self._targetEnemy
+
+	if targetEnemy then
+		local _, y = targetEnemy:hitPosition()
+
+		if y <= self._atkRange then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:onEnemyKilled()
+	self._killEnemyCountInTurn = self._killEnemyCountInTurn + 1
+end
+
+function M:couldTriggerGemImmediatelyShot_Penetrator()
+	if self._id ~= BattleSkillGroupEnum.Penetrator then
+		return
+	end
+
+	if self._prohibitImmediatelyShot_Penetrator then
+		self._prohibitImmediatelyShot_Penetrator = nil
+
+		return false
+	end
+
+	local effPar = self:getEffect(952)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) then
+		return true
+	end
+
+	return false
+end
+
+function M:couldTriggerGemImmediatelyShot()
+	if self._id == 1 then
+		return false
+	end
+
+	if self._prohibitImmediatelyShot then
+		self._prohibitImmediatelyShot = nil
+
+		return false
+	end
+
+	local effPar = self:getEffect(27)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) then
+		return true
+	end
+
+	return false
+end
+
+function M:onChannelingEnd()
+	local skinEffect = false
+
+	if self._skinEffect61Actived and self._id == BattleSkillGroupEnum.Thunderbolt and self._skillCastedCount % self._skinEffect61Param == 0 then
+		skinEffect = true
+	end
+
+	if self._leftShotCountWithSkin and self._leftShotCountWithSkin >= 0 then
+		self:shotBySkin()
+	elseif skinEffect then
+		self._cd = self._continuousCastCD
+		self._ignoreCastCount = true
+		self._leftShotCountWithSkin = self._skinSkillParam1 - 1
+	elseif self:couldTriggerGemImmediatelyShot() then
+		self._prohibitImmediatelyShot = true
+		self._cd = self._continuousCastCD
+	else
+		self._cd = self._mainSkill:getSkillCD() - (self._reduceCD or 0)
+	end
+
+	if self._view then
+		Client.stopFadeOut(self._mainSkill._audio)
+	end
+end
+
+function M:bulletHitEnemy(bullet, enemy)
+	if self._skinEffect62Actived then
+		if bullet._battleSkill._id == 10 then
+			return
+		end
+
+		if bullet._battleWeapon._id == 12 then
+			return
+		end
+
+		if bullet._battleSkill._id == self._mainSkill._id or bullet._battleSkill._id == 1001 or bullet._battleSkill._id == 1201 or bullet._battleSkill._id == 1202 or bullet._battleSkill._id == 1203 or bullet._battleSkill._id == 301 then
+			if self._mainSkill._id ~= 7 and self._mainSkill._id ~= 12 then
+				if bullet._lifeCycleHitEnemyRecords == nil then
+					bullet._lifeCycleHitEnemyRecords = TablePool.fetch32()
+				end
+
+				if bullet._lifeCycleHitEnemyRecords[enemy._id] then
+					return
+				end
+
+				bullet._lifeCycleHitEnemyRecords[enemy._id] = true
+			elseif self._mainSkill._id == 12 then
+				if bullet._belongBee._lifeCycleHitEnemyRecords == nil then
+					bullet._belongBee._lifeCycleHitEnemyRecords = TablePool.fetch32()
+				end
+
+				if bullet._belongBee._lifeCycleHitEnemyRecords[enemy._id] then
+					return
+				end
+
+				bullet._belongBee._lifeCycleHitEnemyRecords[enemy._id] = true
+			end
+
+			self._skinEffect62Params.count = self._skinEffect62Params.count + 1
+
+			if self._skinEffect62Params.count == self._skinEffect62Params.effect_param then
+				self._skinEffect62Params.count = 0
+
+				if self._id == BattleSkillGroupEnum.SlowfieldDrone then
+					opt.BulletParams.x = self._position.x
+					opt.BulletParams.y = self._position.y + 0.9
+
+					opt.dict_arg8:clear()
+
+					for i = 1, self._skinEffect62Params.out_param do
+						local enemy = self._battleSession:randomOneEnemy(opt.dict_arg8, self)
+
+						if enemy == nil then
+							enemy = self._battleSession:randomOneEnemy(nil, self)
+
+							if enemy == nil then
+								break
+							end
+						end
+
+						opt.dict_arg8[enemy._id] = true
+						local angle = BattleMathLib.angle(enemy._position, opt.BulletParams)
+						opt.BulletParams.angle = angle
+
+						self:create62Bullet(self._skinEffect62Params.skill_id, opt.BulletParams)
+					end
+				elseif self._id == BattleSkillGroupEnum.Penetrator then
+					opt.BulletParams.angle = self._angle
+					opt.BulletParams.x = self._shootPos.x
+					opt.BulletParams.y = self._shootPos.y
+
+					self:create62Bullet(self._skinEffect62Params.skill_id, opt.BulletParams)
+
+					if self._view then
+						self._view:launchEvent()
+					end
+				elseif self._id == BattleSkillGroupEnum.PulsedLaser then
+					local angle = self._battleRandomLib:randomMN(0, 360)
+					opt.BulletParams.angle = angle
+					opt.BulletParams.x = enemy._position.x
+					opt.BulletParams.y = enemy._position.y
+					local bullet = self:create62Bullet(self._skinEffect62Params.skill_id, opt.BulletParams)
+					bullet._rotateSpeed = -bullet._rotateSpeed
+					bullet._duration = self._skinEffect62Params.out_param
+					opt.BulletParams.angle = angle + 30
+					opt.BulletParams.x = enemy._position.x
+					opt.BulletParams.y = enemy._position.y
+					local bullet = self:create62Bullet(self._skinEffect62Params.skill_id, opt.BulletParams)
+					bullet._duration = self._skinEffect62Params.out_param
+				else
+					self:castSkin62Effect(bullet, enemy)
+				end
+			end
+		end
+	end
+end
+
+function M:castSkin62Effect()
+	assert(false, "没有实现皮肤技能")
+end
+
+function M:create62Bullet(subSkillId, BulletParams)
+	local subSkill = self:getSkill(subSkillId)
+
+	if subSkill == nil then
+		return
+	end
+
+	local bullet = subSkill:createBullet()
+
+	bullet:setPos(BulletParams.x, BulletParams.y)
+	bullet:setDirByAngle(BulletParams.angle)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	return bullet
+end
+
+return M

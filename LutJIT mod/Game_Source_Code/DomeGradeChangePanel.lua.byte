@@ -1,0 +1,56 @@
+local M = class("DomeGradeChangePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	anim = Types.Animation,
+	imgIconNow = Types.RawImage,
+	imgIconPre = Types.RawImage,
+	txtTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(preGrade, grade)
+	if preGrade < grade then
+		LuaUnity.setTexture(self._imgIconNow, "img_rank_" .. preGrade, true)
+
+		if grade == D.DOME_GRADE_AVATAR_END then
+			self._anim:Play("ani_DomeRankUpSuper")
+		else
+			self._anim:Play("ani_DomeRankUpCommon")
+		end
+
+		self._txtTitle:SetLocalize(SID.DESC_DOME_RANK_UP)
+	elseif preGrade == grade then
+		LuaUnity.setTexture(self._imgIconNow, "img_rank_" .. grade, true)
+		LuaUnity.setTexture(self._imgIconPre, "img_rank_" .. preGrade, true)
+		self._anim:Play("ani_domeRankSame")
+		self._txtTitle:SetLocalize(SID.DESC_DOME_RANK_KEEP)
+	else
+		LuaUnity.setTexture(self._imgIconNow, "img_rank_" .. preGrade, true)
+		LuaUnity.setTexture(self._imgIconPre, "img_rank_" .. grade, true)
+		self._anim:Play("ani_domeRankDown")
+		self._txtTitle:SetLocalize(SID.DESC_DOME_RANK_DOWN)
+	end
+
+	self._anim.gameObject:GetComponent("AnimationEventCallback"):AddAnimationEvent(function (str)
+		if str == "change" then
+			LuaUnity.setTexture(self._imgIconNow, "img_rank_" .. grade, true)
+		elseif str == "end" then
+			self:closePanel()
+
+			if P._playerDome:getFinalRank() ~= 9999 then
+				UIManager.openPanel(PrefabDefine.DomeRewardPanel)
+
+				if UIManager.getPanel(PrefabDefine.DomeRankPanel.id) then
+					UIManager.closePanel(PrefabDefine.DomeRankPanel)
+				end
+			else
+				P._playerDome:tryClaimSettleRewards()
+			end
+		end
+	end)
+end
+
+return M

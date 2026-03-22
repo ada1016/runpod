@@ -1,0 +1,161 @@
+local M = {
+	settings = {},
+	settingFilename = UnityEngine.Application.persistentDataPath .. "/gm_set.json"
+}
+
+function M.init()
+	local str = FileDialogUtil.ReadFile(M.settingFilename)
+
+	if str ~= nil and str ~= "" then
+		local gmData = json.decode(str)
+		M.settings.udid = gmData.udid
+		M.settings.userId = gmData.userId
+		M.settings.regionServer = gmData.regionServer
+		M.settings.gameServer = gmData.gameServer
+	end
+
+	M._battleEnv = {
+		equips = {},
+		weaponLevels = {},
+		gemSlots = {},
+		buffs = {},
+		domeTechLevels = {}
+	}
+	M._battleInEnv = {}
+	M._initialEnv = {
+		battery_cd = -1,
+		init_enemy_id = -1,
+		battery_atk = -1,
+		enemy_count = -1,
+		dome_hp = -1,
+		enemy_hp = -1,
+		enemy_atk = -1,
+		crit_rate = -1,
+		player_invincible = true,
+		enemy_speed = -1,
+		run_step = -1,
+		initial_wave = 1,
+		enemy_id = -1,
+		role_shoot = 1,
+		missionId = 10001,
+		seed = 0,
+		init_enemy_count = -1,
+		weapons = {},
+		rouges = {},
+		init_enemy_bufs = {},
+		init_ranger_ids = {},
+		init_skin_role_ids = {},
+		init_skin_dome_ids = {},
+		dome_buffs = {}
+	}
+
+	M.clearBattleInEnv()
+end
+
+function M.clearBattleInEnv()
+	table.copy(M._initialEnv, M._battleInEnv)
+end
+
+function M.fillBattleInEnv(tbl)
+	local tmp = clone(M._initialEnv)
+
+	for k, v in pairs(tbl) do
+		tmp[k] = clone(v)
+	end
+
+	return tmp
+end
+
+function M.changeUDID(key)
+	local realUDID = Util.GetUDID()
+	local udid = nil
+
+	if key == 0 or key == nil then
+		udid = realUDID
+	else
+		local timefix = tostring(key)
+		udid = string.sub(realUDID, 1, #realUDID - #timefix) .. timefix
+	end
+
+	M.setUDID(udid)
+	Connect.disconnect()
+end
+
+function M.forceSetUserId(uid)
+	M.settings.udid = nil
+	M.settings.userId = uid
+
+	M.saveDatas()
+end
+
+function M.setUDID(udid)
+	M.settings.udid = udid
+	M.settings.userId = nil
+
+	M.saveDatas()
+end
+
+function M.setRegionServer(str)
+	M.settings.regionServer = str
+
+	M.saveDatas()
+	C.init()
+	C.reLogin()
+	Connect.disconnect(true)
+end
+
+function M.setGameServer(str)
+	M.settings.gameServer = str
+
+	M.saveDatas()
+	C.init()
+	C.reLogin()
+	Connect.disconnect(true)
+end
+
+function M.saveDatas()
+	local gmDataStr = json.encode(M.settings)
+
+	FileDialogUtil.WriteFile(M.settingFilename, gmDataStr)
+end
+
+function M.loadBattleEnv(callback, initialDir)
+	FileDialogUtil.openReadLuaFileDialog(function (path)
+		local battleEnv = GMTools.loadLuaContent(path)
+
+		if callback then
+			callback(battleEnv)
+		end
+	end, initialDir or "/")
+end
+
+function M.loadLuaContent(path)
+	local content = FileUtils.LoadFile(path)
+	local battleEnv = loadstring(content)()
+
+	if battleEnv == nil then
+		return
+	end
+
+	local args = string.split(path, "/")
+	local name = args[#args]
+	battleEnv.name = name
+
+	return battleEnv
+end
+
+function M.saveBattleEnv(battleEnv, callback, initialDir)
+	FileDialogUtil.openSaveFileDialog(function (path)
+		local luaStr = lc.serialize(battleEnv)
+
+		FileUtils.WriteFile(path, luaStr)
+
+		if callback then
+			callback()
+		end
+	end, initialDir or "/")
+end
+
+M.init()
+
+GMTools = M

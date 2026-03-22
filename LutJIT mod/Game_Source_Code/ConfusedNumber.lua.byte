@@ -1,0 +1,105 @@
+local math = math
+local setmetatable = setmetatable
+local bxor = bit.bxor
+local M = {
+	__cname = "ConfusedNumber",
+	__index = M,
+	__type = "number"
+}
+ConfusedNumber = M
+
+function M.create(val, tag)
+	local n = {}
+
+	setmetatable(n, M)
+	n:ctor(val, tag)
+
+	return n
+end
+
+function M:ctor(val, tag)
+	self._tag = tag
+	self._dt = math.random(1, 2048)
+	self._checkerDt = math.random(1, 2048)
+
+	self:confuseValue(val)
+end
+
+function M:reset(val)
+	self:confuseValue(val or 0)
+end
+
+function M:reset2Value(val)
+	self:confuseValue(val or 0)
+end
+
+function M:confuseValue(val)
+	self._dynamicCheckerDt = math.random(1, 2048)
+	self._val = val + self._dt
+	self._checker = val + self._checkerDt + self._dynamicCheckerDt
+end
+
+function M:value()
+	return self._val - self._dt
+end
+
+function M:checkValid()
+	local r1 = self._checker - self._checkerDt - self._dynamicCheckerDt
+	local r2 = self._val - self._dt
+
+	if r1 == r2 then
+		return true
+	end
+
+	Client.forbidLogin(self._tag)
+	Trace.AF_traceEvent("e_cheat", {
+		{
+			_key = "rid",
+			_value = self._tag or 0
+		},
+		{
+			_key = "num",
+			_value = self:value()
+		},
+		{
+			_key = "cheatWay",
+			_value = "ConfusedNumber"
+		}
+	})
+
+	return false
+end
+
+function M:add(b)
+	if not self:checkValid() then
+		return self
+	end
+
+	self._val = self._val + b
+
+	self:confuseValue(self._val - self._dt)
+
+	return self
+end
+
+function M.__call(a)
+	return a:value()
+end
+
+function M.__add(a, b)
+	return a:add(b)
+end
+
+function M.__sub(a, b)
+	return a:add(-b)
+end
+
+function M.__mul(a, b)
+	return a() * b
+end
+
+function M.__div(a, b)
+	return a() / b
+end
+
+return M

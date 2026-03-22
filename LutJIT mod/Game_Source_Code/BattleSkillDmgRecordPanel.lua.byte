@@ -1,0 +1,133 @@
+local M = class("BattleSkillDmgRecordPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	goWeapon = Types.GameObject,
+	imgWeapon = Types.Image,
+	imgRanger = Types.Image,
+	goDome = Types.GameObject,
+	imgDome = Types.Image,
+	tmpWeaponName = Types.TMP_Text,
+	txtLevel = Types.TMP_Text,
+	tfStars = Types.Transform,
+	goLevelArea = Types.GameObject,
+	goMaxArea = Types.GameObject,
+	tfContent = Types.Transform,
+	goNone = Types.GameObject
+}
+local PREFAB_NAME = "Assets/FW/Prefabs/UI/widget/BattleSkillDmgRecordWidget.prefab"
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+end
+
+function M:init(weaponId, sessionId)
+	self._weaponId = weaponId
+	local battleWeaponId = weaponId
+	self._battleSession = BattleManager:getSession(sessionId)
+
+	if D.WEAPON_RANGER_BEGAIN_ID <= weaponId and weaponId <= D.WEAPON_RANGER_BEGAIN_END then
+		battleWeaponId = D._rangerConfig[weaponId]._battleId
+	end
+
+	local dmgData = self._battleSession._skillRecordDmgs[battleWeaponId]
+	local totalDmgData = self._battleSession._weaponRecordDmgs[battleWeaponId]
+	local totalDmg = totalDmgData.dmg or 0
+
+	if dmgData then
+		local sort = {}
+
+		for skillId, num in pairs(dmgData) do
+			sort[#sort + 1] = {
+				skillId,
+				num
+			}
+		end
+
+		table.sort(sort, function (a, b)
+			if b[2] < a[2] then
+				return true
+			elseif a[2] < b[2] then
+				return false
+			end
+
+			return b[1] < a[1]
+		end)
+
+		for i = 1, #sort do
+			self:createWidgetCell(sort[i][1], sort[i][2], totalDmg)
+		end
+	else
+		self._goNone:SetActive(true)
+	end
+
+	local pool = self._battleSession._battleRouge._pool
+	local isMaxStar = pool:isMaxStar(weaponId)
+	local isDome = weaponId == D.WEAPON_DOME
+
+	self._goMaxArea:SetActive(isDome and isMaxStar)
+	self._goLevelArea:SetActive(isDome and not isMaxStar)
+	self._goWeapon:SetActive(not isDome)
+	self._goDome:SetActive(isDome)
+
+	local star = pool:getStarNum(weaponId) or 0
+
+	for i = 1, 4 do
+		self._tfStars:GetChild(i - 1):GetChild(0):SetActive(i <= star)
+	end
+
+	self._txtLevel.text = pool:getWeaponStage(weaponId)
+
+	LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. self._weaponId, true)
+
+	if weaponId <= D.WEAPON_DOME then
+		self._tmpWeaponName:SetLocalize(D._weaponConfig[weaponId]._skillNameSid)
+	else
+		self._tmpWeaponName:SetLocalize(D._rangerConfig[weaponId]._nameSid)
+	end
+
+	if D.WEAPON_DOME < weaponId then
+		self._imgRanger:SetActive(true)
+		self._imgDome:SetActive(false)
+		self._imgWeapon:SetActive(false)
+		LuaUnity.setTPSprite(self._imgRanger, "item/item_" .. weaponId, true, true)
+	elseif weaponId == D.WEAPON_DOME then
+		local equipedSkin = self._battleSession:getEquipedSkin(weaponId)
+
+		if equipedSkin and equipedSkin ~= D.DEFAULT_DOME_SKIN then
+			LuaUnity.setTPSprite(self._imgDome, "item/item_" .. equipedSkin or D.DEFAULT_DOME_SKIN, true)
+		else
+			LuaUnity.setTPSprite(self._imgDome, "item/item_" .. D.DEFAULT_DOME_SKIN, true)
+		end
+	else
+		LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. weaponId, true)
+	end
+end
+
+function M:createWidgetCell(skillId, num, totalDmg)
+	local go = LuaUnity.createGameObjectWithPeerVar(PREFAB_NAME, self._tfContent)
+
+	go._tmpSkillName:SetLocalize(D._battleSkillConfig[skillId]._showName)
+
+	go._tmpSkillDMGNum.text = string.formatNumber(num)
+	go._slicedImgPercent.fillAmount = num / totalDmg
+
+	if totalDmg <= num then
+		go._tmpSkillDMGPercent.text = "100%"
+	else
+		go._tmpSkillDMGPercent.text = string.format("%.2f%%", num / totalDmg * 100)
+	end
+
+	return go
+end
+
+return M

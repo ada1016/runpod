@@ -1,0 +1,188 @@
+local M = class("MailDetailPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	txtSendTime = Types.TMP_Text,
+	txtExpireHint = Types.TMP_Text,
+	goRewardArea = Types.GameObject,
+	tfRewardContainer = Types.Transform,
+	btnClaim = Types.Button,
+	goClaimed = Types.GameObject
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		local sendTime = os.date("!%Y/%m/%d(UTC)", self._mail.sendTime)
+		self._txtSendTime.text = sendTime
+		local cfg = D._mailConfig[self._mail.template]
+		local expireTime = self._mail.sendTime + cfg._lastTime * 86400
+		local delta = expireTime - C.getCurTime()
+
+		if delta < 0 then
+			self:closePanel()
+
+			return
+		end
+
+		self:updateExpireHint(expireTime)
+	end)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClaim, function ()
+		if self._mail.rewardCids and not self._mail.claimed then
+			local rewards = P._playerMail:claimMail(self._mail)
+			local lb = V.showRewardClaimPanel(rewards)
+
+			if self._mail.template == D.MailId.PurchaseRecover then
+				lb:showIapRecoverTip()
+			end
+
+			self:updateRewards()
+
+			if self._callback then
+				self._callback()
+			end
+		end
+	end)
+
+	local compLink = self._txtDesc:GetComponent("TMP_Text_LinkHandler")
+
+	if not compLink then
+		return
+	end
+
+	compLink:SetLinkClick(function (linkId)
+		lc.openUrl(linkId)
+	end)
+end
+
+function M:init(mail, callback)
+	self._mail = mail
+	self._callback = callback
+	local cfg = D._mailConfig[mail.template]
+
+	self._txtTitle:SetLocalize(cfg._titleSid)
+
+	if mail.template == D.MailId.VersionUpdate or mail.template == D.MailId.NewbieWelcome or mail.template == D.MailId.DiscordRewards or mail.template == D.MailId.SuperCharge then
+		self._txtDesc:SetLocalizeS(cfg._descSid, string.format("<color=#86FFF1><u><link=%s>%s</link></u></color>", D.URL_DISCORD_GALAXYDEFENSE_INVITE_MAIL, "Discord"), string.format("<color=#86FFF1><u><link=%s>%s</link></u></color>", D.URL_FACEBOOK_GALAXYDEFENSE, "Facebook"))
+	else
+		self._txtDesc:SetLocalize(cfg._descSid)
+	end
+
+	local sendTime = os.date("!%Y/%m/%d(UTC)", mail.sendTime)
+	self._txtSendTime.text = sendTime
+	local expireTime = mail.sendTime + cfg._lastTime * 86400
+
+	self:updateExpireHint(expireTime)
+	self:updateRewards()
+end
+
+function M:updateExpireHint(expireTime)
+	local delta = expireTime - C.getCurTime()
+
+	if delta < 60 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_SECOND, math.ceil(delta))
+	elseif delta < 3600 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_MINUTE, math.ceil(delta / 60))
+	elseif delta < 86400 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_HOUR, math.ceil(delta / 3600))
+	else
+		self._txtExpireHint:SetLocalize(SID.PERIOD_DAY, math.ceil(delta / 86400))
+	end
+
+	self._txtExpireHint:SetLocalizeS(SID.MAIL_EXPIRE, self._txtExpireHint.text)
+end
+
+function M:updateRewards()
+	local mail = self._mail
+
+	if mail.rewardCids then
+		local claimed = mail.claimed and true or false
+
+		self._goRewardArea:SetActive(true)
+
+		local rewards = {}
+		local cnt = #mail.rewardCids
+
+		for i = 1, cnt do
+			rewards[#rewards + 1] = {
+				mail.rewardCids[i],
+				mail.rewardNums[i]()
+			}
+		end
+
+		if mail.template == D.MailId.PurchaseRecover then
+			M.loadIapRewardWidget(self, self._tfRewardContainer, rewards, claimed, true)
+		else
+			D.sortRewards(rewards, true)
+			V.loadRewardsWidget(self, self._tfRewardContainer, rewards, claimed, true)
+		end
+
+		self._btnClaim:SetActive(not claimed)
+		self._goClaimed:SetActive(claimed)
+	else
+		self._goRewardArea:SetActive(false)
+	end
+end
+
+function M.loadIapRewardWidget(panel, tfRewardsParent, rewards, claimed, canClaim, scale)
+	local len = rewards.c or #rewards
+
+	if claimed == nil then
+		claimed = false
+	end
+
+	local childCount = tfRewardsParent.childCount
+	canClaim = canClaim or false
+
+	for i = 1, math.max(childCount, len) do
+		local goWidget = nil
+
+		if i <= childCount then
+			goWidget = tfRewardsParent:GetChild(i - 1).gameObject
+
+			SimpleItemWidget.noCreate(goWidget)
+		else
+			goWidget = SimpleItemWidget.create(tfRewardsParent)
+		end
+
+		if i <= len then
+			goWidget:SetActive(true)
+
+			local data = rewards[i]
+			local cid = data.cid or data[1]
+			local num = data.num or data[2]
+
+			LuaUnity.setTPSprite(goWidget._imgIcon, "item/item_99999", true)
+
+			goWidget._txtNum.text = num
+
+			panel:setClick(goWidget._btnClick, function ()
+				V.showBubbleTips({
+					desc = D._iapConfig[cid]._nameSid
+				}, {
+					offset = {
+						0,
+						60,
+						0
+					},
+					target = goWidget.transform
+				})
+			end)
+			goWidget:setClaimed(claimed)
+			goWidget:setCanClaim(canClaim and not claimed)
+		else
+			goWidget:SetActive(false)
+		end
+	end
+end
+
+return M

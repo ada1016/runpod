@@ -1,0 +1,204 @@
+local M = class("BattleBullet_Ranger_206_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local SWALLOW_TIME = 1
+local BUBBLE_MOVE_SPEED = 4
+local BUBBLE_MOVE_TIME = 1
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._battleView = battleSession._battleView
+	self._effectEnemys = table.new(32, 0)
+	self._bubbleCenter = Vector2.retain(0, 0)
+	self._effectEnemyIdMap = table.new(0, 32)
+end
+
+function M:init(id, battleSkill, castWeapon)
+	SUPER.init(self, id, battleSkill, castWeapon)
+
+	self._stage = 1
+	self._stageCD = 0.15
+
+	table.clear(self._effectEnemys)
+	table.clear(self._effectEnemyIdMap)
+
+	self._extraRate = 0
+end
+
+function M:step(dt)
+	if self._takeDMGCD then
+		self._takeDMGCD = self._takeDMGCD - dt
+
+		if self._takeDMGCD <= 0 then
+			self._takeDMGCD = nil
+			local castSkill = self._battleWeapon:getSkill(20601)
+			local extraRate = 0
+
+			if self._battleWeapon:getEffect(20601) then
+				local p1 = self._battleSkill:getProp(BattlePropEnum.BattlePropParam1, 20)
+				local p2 = self._battleSkill:getProp(BattlePropEnum.BattlePropParam2, 400)
+				extraRate = extraRate + math.min(p1 * #self._effectEnemys, p2) / 100
+				self._extraRate = extraRate
+			end
+
+			local removedCount = 0
+			local cnt = #self._effectEnemys
+
+			for i = 1, cnt do
+				local enemy = self._effectEnemys[i]
+
+				if not enemy._isToBeDestroyed then
+					if enemy._view and enemy._view._obj then
+						enemy._view._obj:SetLocalScale(0, 0, 0)
+					end
+
+					if enemy._originId == 2482 and enemy._enemy and enemy._enemy._view and enemy._enemy._view._obj then
+						enemy._enemy._view._obj:SetLocalScale(0, 0, 0)
+						enemy._enemy._view._tf:DOKill()
+					end
+
+					enemy._beSwallowing = false
+					local val, isCrit = castSkill:damage(nil, enemy, extraRate)
+
+					enemy:receiveDamage(val, castSkill, isCrit)
+
+					if enemy._isToBeDestroyed then
+						self._effectEnemyIdMap[enemy._id] = nil
+						self._effectEnemys[i] = nil
+						removedCount = removedCount + 1
+					end
+				end
+			end
+
+			if removedCount ~= cnt then
+				table.removeNilValuesOutOrder(self._effectEnemys, cnt)
+			end
+		end
+	end
+
+	if self._stage == 1 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 2
+
+			if self._view then
+				local vfx = self._sessionView:createAndPlayVFX("Ranger_150006_1", 1)
+
+				if vfx then
+					vfx:SetPosition(self._position.x, self._position.y + 0.3, 0)
+					vfx:SetLocalScale(self._scale, self._scale, self._scale)
+					self._sessionView:addUseCameraTexture()
+
+					local distortArea = vfx:GetChild(1)
+
+					distortArea:SetActive(self._sessionView:canUseCameraTexture())
+				end
+			end
+		end
+	elseif self._stage == 2 then
+		self._stage = 3
+		self._stageCD = SWALLOW_TIME - 0.2
+		self._takeDMGCD = SWALLOW_TIME - 0.2
+		local enemys = self._battleSession:getEnemys()
+		local cnt = #enemys
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and enemy:couldBeSwallow() and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+				enemy:appendSwallow(self._position, SWALLOW_TIME)
+
+				enemy._stopAction = true
+				self._effectEnemys[#self._effectEnemys + 1] = enemy
+				self._effectEnemyIdMap[enemy._id] = true
+			end
+		end
+	elseif self._stage == 3 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 4
+			self._stageCD = BUBBLE_MOVE_TIME * (1 + self._battleSkill:getProp(BattlePropEnum.BattlePropParam4, 0) / 100)
+			self._bubbleCenter.x = self._position.x
+			self._bubbleCenter.y = self._battleSession:limitEnemyPositionY(self._position.y + 0.3)
+
+			if self._view then
+				local vfx = self._battleSession._battleView:addVFX("Ranger_150006_100")
+
+				vfx:SetPosition(self._bubbleCenter.x, self._bubbleCenter.y, 0)
+
+				self._vfx = vfx
+
+				self._battleWeapon:onEnd()
+			end
+		end
+	elseif self._stage == 4 then
+		self._bubbleCenter.y = self._bubbleCenter.y + dt * BUBBLE_MOVE_SPEED
+		self._bubbleCenter.y = self._battleSession:limitEnemyPositionY(self._bubbleCenter.y)
+
+		if self._view then
+			self._vfx:SetPosition(self._bubbleCenter.x, self._bubbleCenter.y, 0)
+		end
+
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 5
+		end
+	elseif self._stage == 5 then
+		self._sessionView:removeUseCameraTexture()
+		self._battleView:removeVFX(self._vfx)
+
+		self._vfx = nil
+		local t = self._battleSkill:getProp(BattlePropEnum.BattlePropParam3, 0)
+		local per = self._battleSkill:getProp(BattlePropEnum.BattlePropParam5, 0)
+		per = per + self._battleSkill:getProp(BattlePropEnum.NegativeEffectAddPer, 0)
+		t = t + t * per / 100
+
+		for i = 1, #self._effectEnemys do
+			local enemy = self._effectEnemys[i]
+
+			if self._effectEnemyIdMap[enemy._id] then
+				enemy._stopAction = false
+
+				if not enemy._isToBeDestroyed then
+					local x = self._battleRandomLib:randomMN(-5, 5) / 10
+					local y = self._battleRandomLib:randomMN(-5, 5) / 10
+					x = self._battleSession:limitEnemyPositionX(self._bubbleCenter.x + x)
+					y = self._battleSession:limitEnemyPositionY(self._bubbleCenter.y + y)
+
+					enemy:setPos(x, y)
+
+					if enemy._view then
+						enemy._view._tf:DOScale(enemy._scale, 0.3)
+						enemy._view:posEvent()
+					end
+
+					enemy:addBuff(14, t)
+
+					local triggerSkill = self._battleWeapon:getSkill(20603)
+
+					if triggerSkill then
+						triggerSkill._extraRate = self._extraRate
+
+						enemy:addBuff(20402, t, triggerSkill)
+					end
+
+					if enemy._originId == 2482 and enemy._enemy and enemy._enemy._view and enemy._enemy._view._obj then
+						enemy._enemy._view._obj:SetLocalScale(1, 1, 1)
+					end
+				end
+			end
+		end
+
+		self:markToBeDestroyed()
+	end
+end
+
+function M:checkEnemyCollision(dt)
+end
+
+return M

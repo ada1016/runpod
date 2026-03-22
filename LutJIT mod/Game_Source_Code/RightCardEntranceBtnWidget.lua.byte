@@ -1,0 +1,36 @@
+local M = class("RightCardEntranceBtnWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:setBtnClick(panel, channel)
+	panel:setClickWithoutAction(self._btnClick, function ()
+		UIManager.openPanel(PrefabDefine.RightCardPanel, channel or D.PurchaseChannel.Battle)
+	end)
+end
+
+function M:init()
+	self._canShow = true
+
+	self:update()
+end
+
+function M:update()
+	local unlock = D.isSystemUnlocked(D.SystemType.MonthCard)
+
+	self.gameObject:SetActive(unlock and self._canShow and not P._playerRight:isSVIP())
+end
+
+function M:setShowBtn(show)
+	self._canShow = show or false
+
+	self:update()
+end
+
+return M

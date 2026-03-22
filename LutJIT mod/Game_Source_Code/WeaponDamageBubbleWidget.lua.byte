@@ -1,0 +1,52 @@
+local M = class("WeaponDamageBubbleWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/WeaponDamageBubbleWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(weapon, propId)
+	local finalValue, baseValue, upgradeValue, gemValue, skinValue = P._playerArmory:getWeaponPropValue(weapon, propId)
+	skinValue = skinValue or 0
+
+	if propId == D.WeaponProperty.LastTime then
+		local _, baseInterval = P._playerArmory:getWeaponPropValue(weapon, D.WeaponProperty.DamageInterval)
+		finalValue = finalValue * baseInterval
+		baseValue = baseValue * baseInterval
+		upgradeValue = upgradeValue * baseInterval
+		gemValue = gemValue * baseInterval
+		skinValue = skinValue * baseInterval
+	end
+
+	if upgradeValue == -0 then
+		upgradeValue = 0
+	end
+
+	if gemValue == -0 then
+		gemValue = 0
+	end
+
+	if skinValue == -0 then
+		skinValue = 0
+	end
+
+	if propId == D.WeaponProperty.Damage and D._weaponConfig[weapon]._rangeDamageSkillId ~= 0 then
+		propId = D.WeaponProperty.ImpactDamage
+	elseif weapon == D.WEAPON_HIVE and propId == D.WeaponProperty.LastTime then
+		propId = D.WeaponProperty.AttackTimes
+	end
+
+	self._txtFinalValue:SetLocalizeS(SID["WEAPON_PROP_" .. propId], finalValue)
+	self._txtBaseValue:SetLocalizeS(SID.WEAPON_BASE, baseValue)
+	self._txtUpgradeValue:SetLocalizeS(SID.WEAPON_UPGRADE, upgradeValue)
+	self._txtChipValue:SetLocalizeS(SID.WEAPON_GEM, gemValue)
+end
+
+function M:initClick(panel)
+end
+
+return M

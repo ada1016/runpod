@@ -1,0 +1,78 @@
+local M = class("UnionLogPanel", requireLua("BasePanel"))
+local Types = Types
+local UnionLogWidget = requireLua("UnionLogWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	svContent = Types.ScrollRect,
+	tfContent = Types.Transform,
+	goSyncWaiting = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:on("network.error", function ()
+		self:closePanel()
+	end)
+	self:on("union.not.in", function ()
+		self:closePanel()
+	end)
+	self:on("union.log.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+
+		self._listData = P._playerUnion:getLogs()
+
+		table.sort(self._listData, function (a, b)
+			return b.timestamp < a.timestamp
+		end)
+		self._scrollViewEx:reloadData()
+	end)
+end
+
+function M:init()
+	self._listData = P._playerUnion:getLogs()
+	self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+		bottomPadding = 10,
+		topPadding = 15,
+		cellMargin = 10,
+		cellHeight = 70,
+		cellInitCount = 14
+	})
+
+	self._goSyncWaiting:SetActive(true)
+
+	self._timer = lc.setTimer(function ()
+		P._playerUnion:tryGetUnionLogReq()
+	end, 0.5, true)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = UnionLogWidget.create(self._tfContent)
+
+		goCell:init(self._panel)
+	end
+
+	goCell:update(self._listData[index])
+
+	return goCell
+end
+
+function M:onCellNum()
+	if self._listData then
+		return #self._listData
+	end
+
+	return 0
+end
+
+return M

@@ -1,0 +1,74 @@
+local M = class("SaveDataChoosePanel", requireLua("BasePanel"))
+M.args = {
+	btnUseLocalSave = Types.Button,
+	btnUseRemoteSave = Types.Button,
+	textLocalPlayTime = Types.TMP_Text,
+	textRemotePlayTime = Types.TMP_Text,
+	textLocalMission = Types.TMP_Text,
+	textRemoteMission = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnUseLocalSave, function ()
+		V.showMessageBox({
+			_content = SID.STR_SAVE_DATA_CHOOST_TIP8,
+			_confirmCallback = function ()
+				local callback = self._callback
+
+				callback("local")
+				self:closePanel()
+			end
+		})
+	end)
+	self:setClick(self._btnUseRemoteSave, function ()
+		V.showMessageBox({
+			_content = SID.STR_SAVE_DATA_CHOOST_TIP9,
+			_confirmCallback = function ()
+				local callback = self._callback
+
+				callback("remote")
+				self:closePanel()
+			end
+		})
+	end)
+end
+
+function M:init(callback)
+	self._callback = callback
+	local localData = Client._localData
+
+	self:setPlaytimeText(self._textLocalPlayTime, localData.main.record.onlineTime)
+	self._textLocalMission:SetLocalize(SID.STR_SAVE_DATA_CHOOST_TIP5, localData.main.mission.missionId - 10000)
+
+	local remoteData = Client._remoteData
+
+	self:setPlaytimeText(self._textRemotePlayTime, remoteData.main.record.onlineTime)
+	self._textRemoteMission:SetLocalize(SID.STR_SAVE_DATA_CHOOST_TIP5, remoteData.main.mission.missionId - 10000)
+end
+
+function M:setPlaytimeText(textPlayTime, playTime)
+	local day, hour, minute, second = C.getTimeEndArgs(playTime, true)
+
+	if day > 0 then
+		textPlayTime:SetLocalize(SID.TIMER_D_H, day, hour)
+	elseif hour > 0 then
+		textPlayTime:SetLocalize(SID.TIMER_H_M, hour, minute)
+	elseif minute > 0 then
+		textPlayTime:SetLocalize(SID.TIMER_M_S, minute, second)
+	else
+		self._textLocalPlayTime:SetLocalize(SID.PERIOD_SECOND, second)
+	end
+
+	local str1 = textPlayTime.text
+
+	textPlayTime:SetLocalize(SID.STR_SAVE_DATA_CHOOST_TIP4)
+
+	local str2 = textPlayTime.text
+	textPlayTime.text = str2 .. str1
+end
+
+return M

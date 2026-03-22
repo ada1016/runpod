@@ -1,0 +1,131 @@
+local gradientColors = {
+	{
+		"FFE651_50",
+		"FFE651_0"
+	},
+	{
+		"7AE6FF_50",
+		"7AE6FF_0"
+	},
+	{
+		"FF9979_50",
+		"FF9979_0"
+	}
+}
+local bgColors = {
+	"FFF153_118",
+	"AFF2FF_118",
+	"FFB29E_118"
+}
+local M = class("SparkScoutRankWidget")
+local RANK_IMG = {
+	"general/g_icon_28",
+	"general/g_icon_29",
+	"general/g_icon_30"
+}
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutRankWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	lc.prefabVarPeer(go._goGradeWidget)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	lc.prefabVarPeer(go._goGradeWidget)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtPlayerName, data)
+
+	local rank = data.rank
+
+	if rank <= 3 then
+		self._txtRank.gameObject:SetActive(false)
+		self._imgBgRank:SetActive(true)
+		LuaUnity.setTPSprite(self._imgBgRank, RANK_IMG[rank])
+	else
+		self._txtRank.gameObject:SetActive(true)
+		self._imgBgRank:SetActive(false)
+
+		if data.rank == 9999 then
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		elseif data.rank <= 500 then
+			self._txtRank.text = data.rank
+		else
+			self._txtRank.text = "500+"
+		end
+	end
+
+	if self._txtAtk then
+		self._txtAtk.text = data.atk or 0
+	end
+
+	if self._txtChipNum then
+		self._txtChipNum.text = data.cn or "---"
+	end
+
+	local rankValue = nil
+
+	if lc._isCN then
+		rankValue = data.rankValue
+	else
+		rankValue = math.floor(data.rankValue / 1000000)
+	end
+
+	data.gradeId = rankValue
+
+	V.loadSparkGradeWidget(self._goGradeWidget, data.gradeId)
+	V.loadAvatar(self._tfAvatarWidget, data.avatar, data.avatarFrame)
+
+	if self._goBgGradient then
+		if rank < 4 then
+			local gradient = self._goBgGradient:GetComponent("UIGradient")
+			gradient.m_color1 = Color.str2Static(gradientColors[rank][1])
+			gradient.m_color2 = Color.str2Static(gradientColors[rank][2])
+
+			self._goBgGradient:SetActive(false)
+			self._goBgGradient:SetActive(true)
+
+			self._imgBg.color = Color.str2Static(bgColors[rank])
+		else
+			self._goBgGradient:SetActive(false)
+		end
+	end
+
+	if self._txtTime then
+		local rankTime = nil
+
+		if lc._isCN then
+			rankTime = data.timestamp
+		else
+			rankTime = 10000000000.0 - math.floor(data.rankValue % 10000000000.0)
+		end
+
+		local now = C.getCurTime()
+
+		if rankTime < now then
+			local delta = now - rankTime
+
+			if delta < 60 then
+				self._txtTime:SetLocalize(SID.TIMER_S_AGO, delta)
+			elseif delta < 3600 then
+				self._txtTime:SetLocalize(SID.TIMER_M_AGO, math.floor(delta / 60))
+			else
+				self._txtTime:SetLocalize(SID.TIMER_H_AGO, math.floor(delta / 3600))
+			end
+		else
+			self._txtTime:SetLocalize(SID.TIMER_S_AGO, 0)
+		end
+	end
+end
+
+return M

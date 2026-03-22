@@ -1,0 +1,86 @@
+local M = class("MissionPerfectRewardWidget")
+local MissionBoxWidget = requireLua("MissionBoxWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	MissionBoxWidget.noCreate(self._goBox1)
+	MissionBoxWidget.noCreate(self._goBox2)
+	MissionBoxWidget.noCreate(self._goBox3)
+end
+
+function M:updateUI(msId, msType)
+	self._missionId = msId
+	self._missionType = msType or D.MissionType.Common
+	local perfectType = P._playerMission:getMissionPerfectType(self._missionId, self._missionType)
+
+	for i = 1, 3 do
+		self:updateReward(i)
+	end
+
+	self._imgBar.fillAmount = (perfectType - 1) / 2
+end
+
+function M:updateReward(perfectType)
+	if perfectType then
+		self["_goBox" .. perfectType]:updateUI(self._missionId, self._missionType, perfectType)
+	else
+		for i = 1, 3 do
+			self:updateReward(i)
+		end
+	end
+end
+
+function M:showRewardText(show)
+	self._goBox1._tmpDesc.enabled = show or false
+	self._goBox2._tmpDesc.enabled = show or false
+	self._goBox3._tmpDesc.enabled = show or false
+end
+
+function M:clickCallback(perfectType)
+	local currentPerfectType = P._playerMission:getMissionPerfectType(self._missionId, self._missionType)
+
+	if currentPerfectType < perfectType then
+		self:showRewardBubble(perfectType)
+
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local msId = P._playerMission:getMissionId()
+	local result, finalRewards = nil
+	local batchClaim = msId > 10010
+
+	if batchClaim then
+		result, finalRewards = P._playerMission:tryClaimAllPerfectReward(self._missionType, self._missionId)
+	else
+		result, finalRewards = P._playerMission:tryClaimPerfectReward(self._missionId, self._missionType, perfectType)
+	end
+
+	if result ~= ResultCode.OK then
+		self:showRewardBubble(perfectType)
+
+		return result
+	end
+
+	V.showRewardClaimPanel(finalRewards, batchClaim and SID.CLEAR_CHEST_REWARD_TITLE or nil)
+	self:updateReward(not batchClaim and perfectType or nil)
+end
+
+function M:showRewardBubble(perfectType)
+	local cids, nums = P._playerMission:readMissionPerfectRewards(self._missionId, self._missionType, perfectType)
+	local rewards = D.formatRewards(cids, nums)
+
+	V.showRewardsBubblePanel({
+		rewards = rewards,
+		target = self["_goBox" .. perfectType]._imgIcon
+	})
+end
+
+return M

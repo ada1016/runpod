@@ -1,0 +1,133 @@
+local Screen = Screen
+local lc = lc
+local UnityEngine = UnityEngine
+local screenWidth = lc._screenWidth
+local screenHeight = lc._screenHeight
+local screenScale = screenHeight / screenWidth / (lc._designHeight / lc._designWidth)
+local M = {}
+local Anchor_Min, Anchor_Max, Anchor_Min_Revert, Anchor_Max_Revert = nil
+local uiToScreenScale = lc.getUI2ScreenScale()
+M._uiToScreenScale = uiToScreenScale
+M._canvasWidth = screenWidth / uiToScreenScale
+M._canvasHeight = screenHeight / uiToScreenScale
+local SAFE_TOP = 92
+local SAFE_BOTTOM = 68
+local ANDROID_IGNORE_BANG = {
+	"oppo A5"
+}
+local ANDROID_UNFIT_DEVICE = {
+	"Google Pixel 3XL",
+	"HUAWEI LIO-AL00"
+}
+
+local function is_contain_ignore_bang(deviceModel)
+	for i = 1, #ANDROID_IGNORE_BANG do
+		if deviceModel:find(ANDROID_IGNORE_BANG[i]) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function is_contain_unfit_device(deviceModel)
+	for i = 1, #ANDROID_UNFIT_DEVICE do
+		if deviceModel:find(ANDROID_UNFIT_DEVICE[i]) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function ()
+	M._safeTopOffY = 0
+	M._safeBottomOffY = 0
+	local deviceModel = UnityEngine.SystemInfo.deviceModel
+	local safeArea = Screen.safeArea
+	local safeRect = UnityEngine.Rect.New(safeArea.x, safeArea.y, safeArea.width, safeArea.height)
+
+	if not lc._isWebGLAndroid and not lc._isWebGLiOS then
+		local lexSize = screenHeight / screenWidth
+
+		if lexSize <= 2 then
+			return
+		end
+
+		if is_contain_ignore_bang(deviceModel) then
+			return
+		end
+	end
+
+	M._needFit = true
+	local safeTopOffY = 0
+	local safeBottomOffY = 0
+
+	if not lc._isWebGLAndroid and not lc._isWebGLiOS then
+		if is_contain_unfit_device(deviceModel) then
+			safeTopOffY = SAFE_TOP
+			safeBottomOffY = SAFE_BOTTOM
+			safeRect.y = safeBottomOffY
+			safeRect.height = screenHeight - safeTopOffY
+		else
+			safeTopOffY = screenHeight - safeArea.height - safeArea.y
+
+			if safeTopOffY <= 0 then
+				safeTopOffY = SAFE_TOP * uiToScreenScale
+			end
+
+			safeBottomOffY = safeArea.y
+			safeRect.y = safeBottomOffY
+			safeRect.height = screenHeight - safeTopOffY - safeBottomOffY
+		end
+	else
+		local sw, sh = LuaHelper.GetScreen(sw, sh)
+		local w = 0
+		local h = 0
+		local t = 0
+		local l = 0
+		local b = 0
+		local r = 0
+		w, h, t, l, b, r = LuaHelper.GetMenuButtonInfo(w, h, t, l, b, r)
+		safeTopOffY = b * screenHeight / sh
+		safeRect.y = safeBottomOffY
+		safeRect.height = screenHeight - safeTopOffY - safeBottomOffY
+	end
+
+	M._safeTopOffY = safeTopOffY
+	M._safeBottomOffY = safeBottomOffY
+	Anchor_Min = safeRect.position
+	Anchor_Max = Anchor_Min:Clone()
+
+	Anchor_Max:Add(safeRect.size)
+
+	Anchor_Min.x = Anchor_Min.x / screenWidth
+	Anchor_Min.y = Anchor_Min.y / screenHeight
+	Anchor_Max.x = Anchor_Max.x / screenWidth
+	Anchor_Max.y = Anchor_Max.y / screenHeight
+end()
+
+function M.fitCanvas(canvasFit)
+	if not M._needFit then
+		return
+	end
+
+	canvasFit.sizeDelta = Vector2.constZero()
+	canvasFit.anchorMin = Anchor_Min
+	canvasFit.anchorMax = Anchor_Max
+end
+
+function M.fitScreen(fitRectTf, forceUpdate)
+	local oriParent = fitRectTf.parent
+	local idx = fitRectTf:GetSiblingIndex()
+
+	fitRectTf:SetParentFull(MainGameRoot._currentCanvasTop)
+	fitRectTf:SetParent(oriParent, true)
+	fitRectTf:SetSiblingIndex(idx)
+
+	if forceUpdate then
+		fitRectTf:ForceUpdateRectTransforms()
+	end
+end
+
+return M

@@ -1,0 +1,308 @@
+local M = class("GlobalDefensePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnTip = Types.Button,
+	btnRecruitmentCenter = Types.Button,
+	btnBattle = Types.Button,
+	btnCallUp = Types.Button,
+	animText = Types.Animation,
+	txtTitle = Types.TMP_Text,
+	txtBuffName = Types.TMP_Text,
+	txtPlayerBuff = Types.TMP_Text,
+	txtEnemyBuff = Types.TMP_Text,
+	imgBuff = Types.Image,
+	txtBuffNamePre = Types.TMP_Text,
+	txtPlayerBuffPre = Types.TMP_Text,
+	txtEnemyBuffPre = Types.TMP_Text,
+	imgBuffPre = Types.Image,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	imgCost1 = Types.Image,
+	txtCost1 = Types.TMP_Text,
+	imgCost2 = Types.Image,
+	txtCost2 = Types.TMP_Text,
+	goLockArea = Types.GameObject,
+	txtLockTip = Types.TMP_Text,
+	animLockChange = Types.Animation,
+	goComplete = Types.GameObject,
+	goNotComplete = Types.GameObject,
+	txtNotComplete = Types.TMP_Text,
+	tfEarthRotator = Types.Transform,
+	goPointVfx = Types.GameObject,
+	tfContinents = Types.Transform,
+	imgRT = Types.RawImage,
+	camera = Types.Camera,
+	btnShowRewards = Types.Button,
+	tfShowArrow = Types.Transform,
+	goRewardMask = Types.GameObject,
+	goRewardEquip1 = Types.GameObject,
+	goRewardEquip2 = Types.GameObject,
+	goRewardEquip3 = Types.GameObject,
+	goRewardEquip4 = Types.GameObject,
+	goRewardEquip5 = Types.GameObject,
+	goRewardEquip6 = Types.GameObject,
+	goRewardChip = Types.GameObject
+}
+local areaQuaternions = {
+	Quaternion.Euler(40, 180, 2, 0),
+	Quaternion.Euler(-10, 210, -30, 0),
+	Quaternion.Euler(24, -65, 10, 0),
+	Quaternion.Euler(18, -60, 35, 0),
+	Quaternion.Euler(-50, -40, 10, 0),
+	Quaternion.Euler(-50, -35, 35, 0),
+	Quaternion.Euler(-30, -2, 20, 0),
+	Quaternion.Euler(0, 10, 20, 0),
+	Quaternion.Euler(-5, 55, 40, 0),
+	Quaternion.Euler(90, 0, 0, 0)
+}
+local pointLocations = {
+	Vector3.new(0.05, 0, -0.1),
+	Vector3.new(0, 0.2, -0.35),
+	Vector3.new(0.12, -0.1, 0),
+	Vector3.new(0.2, 0, 0.1),
+	Vector3.new(0.1, 0, 0.3),
+	Vector3.new(0.05, -0.1, 0),
+	Vector3.new(0.1, 0.15, 0),
+	Vector3.new(0, 0.25, 0),
+	Vector3.new(0.1, 0, -0.2),
+	Vector3.new(0, 0, -0.02)
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	Client.playMusic("music_earth")
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:setClick(self._btnTip, function ()
+		UIManager.openPanel(PrefabDefine.MissionInfoPanel, self._msId, D.MissionType.GlobalDefense)
+	end)
+	self:setClick(self._btnRecruitmentCenter, function ()
+		UIManager.openPanel(PrefabDefine.RecruitmentCenterPanel)
+	end)
+	self:setClick(self._btnBattle, function ()
+		self:dealEnterBattle()
+	end)
+	self:setClick(self._btnCallUp, function ()
+		UIManager.openPanel(PrefabDefine.RecruitmentBattlePanel, self._msId, function (code)
+		end)
+	end)
+	self:setClick(self._btnLeft, function ()
+		self._msId = self._msId - 1
+
+		P._playerGlobalDefense:setLastMissionId(self._msId)
+		self:updateUI()
+		Client.playSound("ui_Changezone_1")
+	end)
+	self:setClick(self._btnRight, function ()
+		self._msId = self._msId + 1
+
+		P._playerGlobalDefense:setLastMissionId(self._msId)
+		self:updateUI()
+		Client.playSound("ui_Changezone_1")
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+end
+
+function M:init()
+	self._goRewardEquip1.transform.parent:SetActive(false)
+
+	self._msId = P._playerGlobalDefense:getLastUnlockMissionId()
+	self._tfEarthRotator.rotation = areaQuaternions[self._msId % 10000]
+
+	self:updateUI()
+
+	self._camera.orthographicSize = 8 * Screen.height / 1440
+end
+
+function M:scrollEarth(oldArea, newArea)
+	self._imgBuffPre.sprite = self._imgBuff.sprite
+	self._txtBuffNamePre.text = self._txtBuffName.text
+	self._txtPlayerBuffPre.text = self._txtPlayerBuff.text
+	self._txtEnemyBuffPre.text = self._txtEnemyBuff.text
+
+	self._goPointVfx:SetActive(false)
+	self._animText:Play(newArea < oldArea and "anim_GlobalBuffSwitch1" or "anim_GlobalBuffSwitch2")
+	self._tfEarthRotator:DOKill()
+	self._tfEarthRotator:DORotateQuaternion(areaQuaternions[newArea], 1):OnComplete(function ()
+		self._goPointVfx:SetLocalPosition(pointLocations[newArea]:Get())
+		self._goPointVfx:SetActive(true)
+		self._tfContinents:GetChild(self._areaId - 1):SetActive(true)
+	end):SetEase(V.EASE_OUT_SINE):SetLink(self.gameObject)
+end
+
+function M:updateUI()
+	if self._areaId and self._areaId ~= self._msId % 10000 then
+		self._tfContinents:GetChild(self._areaId - 1):SetActive(false)
+		self:scrollEarth(self._areaId, self._msId % 10000)
+
+		self._areaId = self._msId % 10000
+	else
+		self._areaId = self._msId % 10000
+
+		self._tfContinents:GetChild(self._areaId - 1):SetActive(true)
+		self._goPointVfx:SetLocalPosition(pointLocations[self._areaId]:Get())
+	end
+
+	self._txtTitle:SetLocalize(D._missionGlobalDefenseConfig[self._msId]._nameSid)
+
+	if self._areaId <= 1 then
+		self._btnLeft:SetActive(false)
+	else
+		self._btnLeft:SetActive(true)
+	end
+
+	if not D._missionGlobalDefenseConfig[self._msId + 1] or not P._playerGlobalDefense:isMissionUnlocked(self._msId) then
+		self._btnRight:SetActive(false)
+	else
+		self._btnRight:SetActive(true)
+	end
+
+	local missionTime = P._playerGlobalDefense:getMissionTimeRecord(self._msId)
+
+	if missionTime == -1 then
+		self._goComplete:SetActive(true)
+		self._goNotComplete:SetActive(false)
+	else
+		self._goComplete:SetActive(false)
+
+		if missionTime == 0 then
+			self._goNotComplete:SetActive(false)
+		else
+			self._goNotComplete:SetActive(true)
+			self._txtNotComplete:SetLocalizeS(SID.MISSION_MAX_TIME, V.formatTimeS2MS(missionTime))
+		end
+	end
+
+	local buff = P._playerGlobalDefense:getMissionBuff(self._areaId)
+	local conf = D._battleGlobalBuffConfig[buff]
+
+	LuaUnity.setTPSprite(self._imgBuff, "general/GlobalBuff-Globalbuff_" .. buff, true)
+	self._txtBuffName:SetLocalize(conf._nameSid)
+	self._txtPlayerBuff:SetLocalize(conf._descSid1)
+	self._txtEnemyBuff:SetLocalize(conf._descSid2)
+
+	local isUnlocked = P._playerGlobalDefense:isMissionUnlocked(self._msId)
+
+	if isUnlocked then
+		local ticketCost, energyCost = P._playerGlobalDefense:getMissionCost(self._msId)
+
+		LuaUnity.setTPSprite(self._imgCost1, D.toSmallSprite(D.ResType.global_defense_ticket), true)
+
+		self._txtCost1.text = ticketCost
+
+		LuaUnity.setTPSprite(self._imgCost2, D.toSmallSprite(D.ResType.energy), true)
+
+		self._txtCost2.text = energyCost
+	end
+
+	if self._prevUnlocked == nil then
+		self._btnBattle:SetActive(isUnlocked)
+		self._btnCallUp:SetActive(isUnlocked)
+		self._goLockArea:SetActive(not isUnlocked)
+
+		if not isUnlocked then
+			local unLockEliteMission = P._playerGlobalDefense:getUnlockEliteMission(self._msId)
+
+			self._txtLockTip:SetLocalize(SID.TIP_SYSTEM_UNLOCK_TIP_4, -D._missionEliteConfig[unLockEliteMission]._nameSid)
+
+			self._txtLockTip.text = string.gsub(self._txtLockTip.text, "{0}", unLockEliteMission % 10000)
+		end
+	elseif self._prevUnlocked ~= isUnlocked then
+		self._btnBattle:SetActive(true)
+		self._btnCallUp:SetActive(true)
+		self._goLockArea:SetActive(true)
+
+		if not isUnlocked then
+			local unLockEliteMission = P._playerGlobalDefense:getUnlockEliteMission(self._msId)
+
+			self._txtLockTip:SetLocalize(SID.TIP_SYSTEM_UNLOCK_TIP_4, -D._missionEliteConfig[unLockEliteMission]._nameSid)
+
+			self._txtLockTip.text = string.gsub(self._txtLockTip.text, "{0}", unLockEliteMission % 10000)
+
+			self._animLockChange:Play("anim_GlobalMapLock")
+
+			self._btnCallUp.enabled = false
+			self._btnBattle.enabled = false
+		else
+			self._animLockChange:Play("anim_GlobalMapUnlock")
+
+			self._btnCallUp.enabled = true
+			self._btnBattle.enabled = true
+		end
+	end
+
+	self._prevUnlocked = isUnlocked
+
+	self._btnRecruitmentCenter.dot:SetActive(P._playerExchange:getLeftExchangeCount(D.ExchangeId.ExchangeGlobalDefenseTicketFree) > 0)
+
+	if lc._isCN then
+		self._btnCallUp:SetActive(false)
+		self._btnBattle.gameObject:SetLocalPosition(0, 45, 0)
+	end
+end
+
+function M:dealEnterBattle(code)
+	local ticketCost, energyCost = P._playerGlobalDefense:getMissionCost(self._msId)
+
+	if code then
+		ticketCost = ticketCost - 1
+	end
+
+	if P._playerAsset:isAssetEnough(D.ResType.energy, energyCost) and P._playerAsset:isAssetEnough(D.ResType.global_defense_ticket, ticketCost) then
+		local ret = P._playerGlobalDefense:startBattle(code)
+
+		if ret then
+			V.showResultCode(ret)
+
+			return
+		end
+
+		InputBattleData = {
+			msType = D.MissionType.GlobalDefense,
+			msId = self._msId
+		}
+
+		P:setMsType(D.MissionType.GlobalDefense)
+		P._playerGlobalDefense:startBattle(self._msId, true)
+		V.switchBetweenMainAndBattleScene("globalDefense", "battle")
+	else
+		local costCid, costNum = nil
+		costCid = D.ResType.global_defense_ticket
+		costNum = ticketCost
+
+		if not P._playerAsset:isAssetEnough(costCid, ticketCost) then
+			UIManager.openPanel(PrefabDefine.RecruitmentCenterPanel)
+
+			return
+		end
+
+		costCid = D.ResType.energy
+		costNum = energyCost
+
+		if not P._playerAsset:isAssetEnough(costCid, energyCost) then
+			V.showItemNotEnough(costCid, P._playerAsset:getAssetNum(costCid), costNum)
+		end
+	end
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+	Client.playMusic("music_city")
+end
+
+return M

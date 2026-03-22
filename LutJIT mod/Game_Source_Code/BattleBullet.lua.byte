@@ -1,0 +1,1105 @@
+local M = class("BattleBullet")
+local math = math
+local table = table
+local opt = opt
+local BattlePropEnum = BattlePropEnum
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+local BattleTriggerEnum = BattleTriggerEnum
+local BattleDefine = BattleDefine
+local DamageReason = BattleDefine.DamageReason
+local DestroyReason = BattleDefine.DestroyReason
+local BattleMathLib = BattleMathLib
+local rectangle_circle_intersect_not_align_axis = BattleMathLib.rectangle_circle_intersect_not_align_axis
+local check_out_boundary_expect_y0 = BattleMathLib.check_out_boundary_expect_y0
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._size = {
+		0,
+		0
+	}
+	self._dir = {
+		0,
+		0
+	}
+	self._position = {
+		x = 0,
+		y = 0
+	}
+	self._lastPosition = {
+		x = 0,
+		y = 0
+	}
+	self._towardDir = Vector3.retain(0, 0, 0)
+	self._initialSize = {
+		0,
+		0
+	}
+	self._scale = 1
+	self._hitEnemysMap = table.new(8, 0)
+end
+
+function M:init(id, battleSkill, castWeapon)
+	self._id = id
+	self._cid = battleSkill._cid
+	self._battleSkill = battleSkill
+	self._battleWeapon = battleSkill._battleWeapon
+	self._castWeapon = castWeapon
+	self._position.x = 0
+	self._position.y = 0
+	local skillCfg = battleSkill._cfg
+	self._scaleType = skillCfg._scaleType or 1
+	self._defyInvisibility = skillCfg._defyInvisibility
+	self._doubleCheck = skillCfg._doubleCheck
+	self._initialRaduis = skillCfg._radius
+
+	if self._initialRaduis then
+		self._initialSize[1] = self._initialRaduis * 2
+		self._initialSize[2] = self._initialRaduis * 2
+	else
+		local size = skillCfg._size
+		self._initialSize[1] = size[1]
+		self._initialSize[2] = size[2]
+	end
+
+	local dmgRangeAddPer = battleSkill:getProp(BattlePropEnum.DmgRangeAddPer, 0) / 100
+	self._scale = 1 + dmgRangeAddPer
+
+	if self._initialRaduis then
+		self._radius = self._initialRaduis * self._scale
+	end
+
+	if self._scaleType == 2 then
+		self._size[1] = self._initialSize[1] * self._scale
+		self._size[2] = self._initialSize[2]
+	elseif self._scaleType == 3 then
+		self._size[1] = self._initialSize[1]
+		self._size[2] = self._initialSize[2] * self._scale
+	else
+		self._size[1] = self._initialSize[1] * self._scale
+		self._size[2] = self._initialSize[2] * self._scale
+	end
+
+	self._moveMode = skillCfg._moveMode
+	self._detectType = skillCfg._detectType
+	self._destroyType = skillCfg._destroyType
+	self._duration = self._battleSkill._duration
+
+	if self._duration == nil then
+		local duration = self._battleSkill:getProp(BattlePropEnum.LiveDuration, 0)
+
+		if duration > 0 then
+			duration = duration + duration * self._battleSkill:getProp(BattlePropEnum.LiveDurationAddPer, 0) / 100
+			self._duration = duration
+		end
+	end
+
+	self._1007TriggerCount = nil
+	self._1009TriggerCount = nil
+	self._block504 = nil
+	self._floatSpeed = nil
+	self._isToBeDestroyed = nil
+	self._destroyReason = nil
+	self._bulletPrefab = skillCfg._bulletPrefab
+	self._superBulletPrefab = skillCfg._superBulletPrefab
+	self._damageNum = 0
+	self._penetrateNum = 0
+	self._damageAddPer = 0
+	self._damageFactor = 100
+	self._wallBounceNum = battleSkill:getProp(BattlePropEnum.BulletWallBounceNum, 0)
+	self._bounceFlag = self._wallBounceNum > 0
+	self._effect804Casted = false
+	self._hitEnemyCount = 0
+	self._damageAddNum = 0
+	self._jumpNum = 0
+	self._canJump = nil
+	self._atkPercent = 1
+	self._blockTrigger = nil
+	self._hitIndex = nil
+	self._motionless = nil
+	self._trigSrc = nil
+	self._effect103_1 = false
+	self._effect103_2 = false
+	self._bulletAddScale = 0
+	self._4trigger402Count = 0
+	self._isLeft = nil
+	self._dmgDelay = battleSkill._dmgDelay
+
+	table.clear(self._hitEnemysMap)
+
+	if self._lifeCycleHitEnemyRecords then
+		TablePool.release32(self._lifeCycleHitEnemyRecords)
+
+		self._lifeCycleHitEnemyRecords = nil
+	end
+
+	self._lockEnemy = nil
+	self._isCouldTrigger = nil
+	self._followBullet = nil
+	self._belongBee = nil
+	self._bounceRadius = nil
+	self._overridePrefab = nil
+	self._overrideHitPrefab = nil
+
+	if not self._battleSession:isSkipView() and battleSkill._viewScript then
+		self._view = requireLua(battleSkill._viewScript).new(self._battleSession)
+
+		self._view:init(self)
+	end
+end
+
+function M:changePrefab(bullet, hit)
+	self._overridePrefab = bullet
+	self._overrideHitPrefab = hit
+end
+
+function M:prefab()
+	return self._overridePrefab or self._battleSkill._cfg._bulletPrefab
+end
+
+function M:superPrefab()
+end
+
+function M:associatedPrefab()
+	return self._battleSkill._cfg._associatedPrefab
+end
+
+function M:hitPrefab()
+	if self._battleWeapon._group == BattleSkillGroupEnum.BeeColony then
+		if self._battleWeapon._isSuper and self._superBulletPrefab then
+			return "Bullet_12_hit_super", 0.25
+		else
+			return self._overrideHitPrefab or self._battleSkill._cfg._hitPrefab, self._battleSkill._cfg._hitDuration
+		end
+	end
+
+	return self._overrideHitPrefab or self._battleSkill._cfg._hitPrefab, self._battleSkill._cfg._hitDuration
+end
+
+function M:strickenPrefab()
+	return self._battleSkill._cfg._strickenPrefab, self._battleSkill._cfg._strickenDuration
+end
+
+function M:hitEnemyPrefab()
+	return self._battleSkill._cfg._bulletHitPrefab, self._battleSkill._cfg._hitDuration
+end
+
+function M:stepMove(dt)
+	if self._motionless then
+		return
+	end
+
+	if self._moveMode == 1 then
+		self._lastPosition.x = self._position.x
+		self._lastPosition.y = self._position.y
+		local speed = self._battleSkill:getProp(BattlePropEnum.BallisticSpeed)
+
+		if self._floatSpeedPer then
+			speed = speed + speed * self._floatSpeedPer / 100
+		end
+
+		speed = speed + speed * self._battleSkill:getProp(BattlePropEnum.BallisticSpeedAddPer, 0) / 100
+		local dtX = speed * dt * self._dir[1]
+		local dtY = speed * dt * self._dir[2]
+
+		if self._speedAddPer then
+			dtX = dtX * (1 + self._speedAddPer / 100)
+			dtY = dtY * (1 + self._speedAddPer / 100)
+		end
+
+		self._position.x = self._position.x + dtX
+		self._position.y = self._position.y + dtY
+
+		if self._view then
+			self._view:posEvent()
+		end
+
+		if self.posDitry then
+			self:posDitry()
+		end
+
+		if self._wallBounceNum > 0 then
+			local bounceFlag = 0
+			local radius = self._bounceRadius or self._radius or 0
+
+			if self._position.x - radius <= self._battleSession._screenEdgeX1 then
+				bounceFlag = 1
+				self._dir[1] = math.abs(self._dir[1])
+				self._wallBounceNum = self._wallBounceNum - 1
+
+				self:setDirByXY(self._dir[1], self._dir[2])
+			elseif self._battleSession._screenEdgeX2 <= self._position.x + radius then
+				bounceFlag = 3
+				self._dir[1] = -1 * math.abs(self._dir[1])
+				self._wallBounceNum = self._wallBounceNum - 1
+
+				self:setDirByXY(self._dir[1], self._dir[2])
+			elseif self._battleSession._screenEdgeY2 <= self._position.y + radius then
+				if self._dir[2] > 0 then
+					bounceFlag = 2
+					self._dir[2] = -1 * math.abs(self._dir[2])
+					self._wallBounceNum = self._wallBounceNum - 1
+
+					self:setDirByXY(self._dir[1], self._dir[2])
+				end
+			elseif self._position.y - radius <= self._battleSession._screenEdgeY1 and self._dir[2] < 0 then
+				bounceFlag = 4
+				self._dir[2] = math.abs(self._dir[2])
+				self._wallBounceNum = self._wallBounceNum - 1
+
+				self:setDirByXY(self._dir[1], self._dir[2])
+			end
+
+			if bounceFlag > 0 then
+				self:clearEnemyHitted()
+
+				if self._battleWeapon._id == BattleSkillGroupEnum.FireDrone then
+					local effPar = self._battleWeapon:getEffect(851)
+
+					if effPar then
+						self._damageAddPer = self._damageAddPer + effPar[1]
+
+						if effPar[2] < self._damageAddPer then
+							self._damageAddPer = effPar[2]
+						end
+					end
+				end
+
+				if self.onWallBounce then
+					self:onWallBounce(bounceFlag)
+				end
+			end
+		end
+	elseif self._moveMode == 2 then
+		if self._followBullet then
+			self._position.x = self._followBullet._position.x
+			self._position.y = self._followBullet._position.y
+			self._angle = self._followBullet._angle
+			self._dir[1] = self._followBullet._dir[1]
+			self._dir[2] = self._followBullet._dir[2]
+
+			if self._view then
+				self._view:posEvent()
+			end
+		end
+	elseif self._moveMode == 3 and self._lockEnemy then
+		self._position.x = self._lockEnemy._position.x
+		self._position.y = self._lockEnemy._position.y
+
+		if self._view then
+			self._view:posEvent()
+		end
+	end
+
+	if (self._cid == 9 or self._cid == 901 or self._cid == 902) and self._battleWeapon:getEffect(903) then
+		if self._9TrackCD == nil then
+			self._9TrackCD = 0.5
+		end
+
+		self._9TrackCD = self._9TrackCD - dt
+
+		if self._9TrackCD <= 0 then
+			local bullet = self._battleWeapon:getSkill(906):createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+end
+
+function M:stepLiveDuration(dt)
+	if self._duration then
+		self._duration = self._duration - dt
+
+		if self._duration <= 0 then
+			self._duration = nil
+
+			self:markToBeDestroyed()
+		end
+	end
+end
+
+function M:check_out_boundary(p)
+	if self._battleWeapon._group == BattleSkillGroupEnum.FollowMissile then
+		return false
+	end
+
+	if self._battleWeapon._group == BattleSkillGroupEnum.Dome and self._cid ~= 10032 then
+		return false
+	end
+
+	if self._cid == 20500 or self._cid == 20502 or self._cid == 20700 or self._cid == 20401 or self._cid == 21002 or self._cid == 21100 or self._cid == 21201 or self._cid == 21000 then
+		return false
+	end
+
+	if p.x < self._battleSession._screenEdgeX1 - 1 or p.x > self._battleSession._screenEdgeX2 + 1 or p.y < 0 or p.y > self._battleSession._screenEdgeY2 + 1 then
+		return true
+	end
+
+	return false
+end
+
+function M:checkOutBounday()
+	if self._wallBounceNum > 0 then
+		return
+	end
+
+	local p = self._position
+
+	if self._bounceFlag then
+		if self:check_out_boundary(p) then
+			self:markToBeDestroyed(DestroyReason.out_boundary)
+
+			return true
+		end
+
+		if p.y < BattleDefine.DOME_POSY then
+			local y = p.y - self._initialSize[1]
+
+			if BattleMathLib.sqrt_dis_xy(p.x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT - 1 and self._dir[2] < 0 then
+				self:markToBeDestroyed(DestroyReason.out_boundary)
+
+				return true
+			end
+
+			if y < 0 then
+				self:markToBeDestroyed(DestroyReason.out_boundary)
+
+				return true
+			end
+		end
+	elseif self:check_out_boundary(p) then
+		if self._cid == BattleSkillGroupEnum.Railgun and self._hitIndex and self._hitIndex == 0 then
+			local effPar = self._battleWeapon:getEffect(1053)
+
+			if effPar then
+				local params = D.getBattleEffectParams(1053)
+				self._battleWeapon._roundSkillCdSpeedAddPer = effPar
+			end
+		end
+
+		self:markToBeDestroyed(DestroyReason.out_boundary)
+
+		return true
+	end
+end
+
+function M:step(dt, elapsedTime)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self:stepLiveDuration(dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self:checkOutBounday() then
+		return
+	end
+
+	if self._delayStep then
+		self._delayStep = self._delayStep - dt
+
+		if self._delayStep <= 0 then
+			self._delayStep = nil
+		end
+
+		return
+	end
+
+	if self._cid == 21201 then
+		self._moveDuration = self._moveDuration - dt
+
+		if self._moveDuration <= 0 then
+			if self._moveDurationRaw then
+				if self._battleWeapon:getEffect(21204) then
+					self:clearEnemyHitted()
+
+					self._delayStep = 0.5
+					self._moveDuration = self._moveDurationRaw
+					self._moveDurationRaw = nil
+					self._duration = self._moveDuration - 0.016666666666666666 + self._delayStep
+					self._angle = self._angle + 180
+
+					self:setDirByAngle(self._angle)
+
+					if self._view then
+						if self._left then
+							self._left = nil
+
+							self._view:rotationEvent2(1)
+						else
+							self._view:rotationEvent2(-1)
+						end
+
+						Client.playBattleSound("se_Ranger_150012_bullet")
+					end
+				end
+
+				self._battleWeapon._subFly:endAttack()
+			end
+
+			return
+		end
+	end
+
+	self:stepMove(dt)
+	self:checkEnemyCollision(dt)
+	self:stepDmgRangeAdd()
+end
+
+function M:stepDmgRangeAdd()
+	local addPer = self._battleSkill:getProp(BattlePropEnum.BulletDmgRangeAddEveryStep)
+
+	if addPer and addPer > 0 then
+		self:addScale(addPer / 1000)
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	end
+end
+
+function M:enemyBeHitBefore()
+end
+
+function M:bulletHitEnemy(enemy)
+	self:enemyBeHitBefore(enemy)
+	enemy:onHit(self)
+
+	if enemy._isToBeDestroyed and self._battleSkill:hasProp(BattlePropEnum.BulletDmgNumAddFor1) then
+		local maxVal = self._battleSkill:hasProp(BattlePropEnum.BattlePropParam1)
+		self._damageAddNum = math.min(self._damageAddNum + 1, maxVal)
+	end
+
+	self:hitEnemy(enemy)
+
+	if self._hitEnemyCount == 1 then
+		self:tryTriggerWhenFirstHitEnemy(enemy)
+	end
+
+	self:tryTriggerWhenHitEnemy(enemy)
+	self._battleWeapon:bulletHitEnemy(self, enemy)
+end
+
+function M:doWalkSkillId3(enemy)
+	if (not enemy._invisibility or enemy._invisibility and self._defyInvisibility) and self._lockEnemy ~= enemy then
+		local effect303 = self._battleWeapon:getEffect(303)
+		local effect304 = self._battleWeapon:getEffect(304)
+
+		if effect303 or effect304 then
+			local params303 = D.getBattleEffectParams(303)
+			local params304 = D.getBattleEffectParams(304)
+
+			if (enemy._effectByEffect303 == nil or enemy._effectByEffect304 == nil) and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+				local mainSkill = self._battleWeapon:getSkill(3)
+
+				if effect303 and enemy._effectByEffect303 == nil then
+					enemy._effectByEffect303 = true
+
+					enemy:addBuff(params303[2], params303[3], mainSkill)
+				end
+
+				if effect304 and enemy._effectByEffect304 == nil then
+					enemy._effectByEffect304 = true
+					local castSkill = self._battleWeapon:getSkill(params304[1])
+					local val, isCrit = castSkill:damage(self, enemy)
+
+					enemy:receiveDamage(val, castSkill, isCrit)
+
+					if self._view then
+						self._view:hitEnemyEvent()
+					end
+				end
+
+				if enemy._isToBeDestroyed then
+					local castSkill = self._battleWeapon:getSkill(307)
+
+					if castSkill then
+						local bullet = castSkill:createBullet()
+
+						bullet:setPos(enemy._position.x, enemy._position.y)
+
+						if bullet._view then
+							bullet._view:posEvent()
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function M:walkEnemyCollision()
+	local enemys = self._battleSession:getEnemys(self)
+
+	if enemys == nil then
+		return
+	end
+
+	local cnt = #enemys
+	self._hitEnemyStep = nil
+
+	if self._doubleCheck and self._battleSession._stepGrap > 0.02 then
+		self._doubleCheckFlag = true
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and self:couldTakeDamageOnEnemy(enemy) and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy, true) then
+				self:bulletHitEnemy(enemy)
+
+				if self._isToBeDestroyed then
+					break
+				end
+			end
+		end
+
+		self._doubleCheckFlag = false
+
+		if self._isToBeDestroyed then
+			self._hitEnemyStep = nil
+
+			return
+		end
+	end
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed then
+			if self:couldTakeDamageOnEnemy(enemy) then
+				local hitted = false
+
+				if self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+					hitted = true
+
+					self:bulletHitEnemy(enemy)
+
+					if self._isToBeDestroyed then
+						break
+					end
+				end
+
+				if not enemy._isToBeDestroyed and self._battleSkill._id == 2 and self._battleWeapon:getEffect(206) then
+					local p = D.getBattleEffectParams(206)
+
+					if hitted or rectangle_circle_intersect_not_align_axis(self._towardDir, self._position, self._size[1] * p[1], enemy._position, enemy._radius) then
+						self:dragEnemy(enemy)
+					end
+				end
+			elseif self._battleSkill._cid == 3 then
+				self:doWalkSkillId3(enemy)
+			end
+		end
+	end
+
+	self._hitEnemyStep = nil
+end
+
+function M:checkEnemyCollision(dt)
+	if self._detectType == 0 then
+		return
+	end
+
+	if self._dmgDelay then
+		self._dmgDelay = self._dmgDelay - dt
+
+		if self._dmgDelay > 0 then
+			return
+		end
+
+		self._dmgDelay = nil
+	end
+
+	self:walkEnemyCollision()
+end
+
+function M:setDamageFactor(f)
+	self._damageFactor = f
+end
+
+function M:damage(enemy)
+	local damage, isCrit = self._battleSkill:damage(self, enemy)
+	damage = damage * self._damageFactor / 100
+
+	return damage, isCrit
+end
+
+function M:markToBeDestroyed(reason)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._isToBeDestroyed = true
+	self._destroyReason = reason
+
+	self:tryTriggerWhenBulletDestroyed()
+
+	if self._view then
+		self._view:destroyedEvent()
+	end
+
+	self._battleSkill:bulletMarkToBeDestroyed(self)
+	self._battleWeapon:bulletMarkToBeDestroyed(self)
+end
+
+function M:tryMarkToBeDestroyedWithEnemyBlock()
+	if self._destroyType == 1 then
+		if self._battleSkill._dmgSource == 3 then
+			if self._battleSkill._id == 20300 then
+				self:markToBeDestroyed()
+			end
+		else
+			self:markToBeDestroyed()
+		end
+	end
+end
+
+function M:destroy()
+	self._battleSkill:bulletDestroyed(self)
+	self._battleWeapon:bulletDestroyed(self)
+end
+
+function M:hitEnemy(enemy)
+	self._hitEnemyCount = self._hitEnemyCount + 1
+
+	if self._view then
+		self._view:hitEnemyEvent()
+	end
+
+	self._hitEnemysMap[enemy._id] = enemy
+
+	if self._battleWeapon._id == 212 then
+		enemy._hitByRanger212Count = enemy._hitByRanger212Count or 0
+		enemy._hitByRanger212Count = enemy._hitByRanger212Count + 1
+	end
+
+	if self._destroyType == 1 then
+		self._damageNum = self._damageNum + 1
+		local penetrateNum = 0
+
+		if self._battleSkill._dmgSource == 3 then
+			penetrateNum = self._battleSkill:getProp(BattlePropEnum.RangerPenetrateNum, 0)
+		else
+			penetrateNum = self._battleSkill:getProp(BattlePropEnum.PenetrateNum, 0)
+
+			if self._cid ~= 10 and penetrateNum > 0 then
+				penetrateNum = penetrateNum + self._battleSkill:getProp(BattlePropEnum.PenetrateNumAdd, 0)
+			end
+		end
+
+		if self._damageNum >= self._damageAddNum + penetrateNum + 1 then
+			self:markToBeDestroyed(DestroyReason.hit_enemy)
+		end
+
+		if self._battleSkill._cid == 20700 then
+			self._dmgDelay = 0.3
+
+			self:clearEnemyHitted()
+		end
+
+		if not self._isToBeDestroyed then
+			if self._cid == 21100 then
+				self:clearEnemyHitted()
+
+				local lockEnemy = self._battleSession._battleEnemyFinder:randomOneEnemyWithExcludeOne(self._lockEnemy)
+
+				if lockEnemy then
+					self:lockEnemy(lockEnemy)
+					self:setDir(lockEnemy._position)
+				else
+					self:markToBeDestroyed()
+				end
+			elseif self._jumpNum > 0 then
+				self:clearEnemyHitted()
+
+				self._jumpNum = self._jumpNum - 1
+				local enemy = self._battleSession._battleEnemyFinder:randomOneEnemyWithExcludeOne(self._lockEnemy)
+
+				self:lockEnemy(enemy)
+			end
+		end
+	elseif self._destroyType == 4 then
+		self:markToBeDestroyed(DestroyReason.hit_enemy)
+	end
+
+	if self._battleWeapon:getEffect(501) then
+		local params = D.getBattleEffectParams(501)
+
+		if self._battleRandomLib:randomTrue(params[1]) and not enemy._isToBeDestroyed then
+			enemy:doPortal(nil, enemy._position.y + self._battleRandomLib:randomMN(params[2], params[3]))
+		end
+	end
+
+	if self._battleWeapon:getEffect(502) then
+		local params = D.getBattleEffectParams(502)
+
+		if self._battleRandomLib:randomTrue(params[1]) and not enemy._isToBeDestroyed then
+			enemy:doPortal(nil, self._battleSession._battleFieldEdgeY2)
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(29)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) and not enemy._isToBeDestroyed then
+		enemy:doPortal(nil, self._battleSession._battleFieldEdgeY2)
+	end
+
+	self._battleSkill:appendBuffsToEnemy(enemy, self)
+
+	local effPar = self._battleWeapon:getEffect(405)
+
+	if effPar and self._battleSkill == self._battleWeapon._mainSkill and enemy:isParalysis() and not enemy._isToBeDestroyed then
+		local params = D.getBattleEffectParams(405)
+		local dmg = enemy._maxHp * params[1] / 100
+		dmg = self._battleSkill:limitSkillDmg(dmg, params[2])
+
+		enemy:receiveDamage(dmg, self._battleSkill, nil, , , true)
+	end
+
+	if self._battleWeapon._id == BattleSkillGroupEnum.SlowfieldDrone then
+		local effPar = self._battleWeapon:getEffect(553)
+
+		if effPar and self._battleSkill == self._battleWeapon._mainSkill and not enemy._isToBeDestroyed and enemy:existBuffClass(BattleDefine.BuffMainClass.Vulnerable) then
+			local dmg = enemy._maxHp * effPar[1] / 100
+			dmg = self._battleSkill:limitSkillDmg(dmg, effPar[2])
+
+			enemy:receiveDamage(dmg, self._battleSkill, nil, , 2, true)
+		end
+	end
+
+	local addPer = self._battleSkill:getProp(BattlePropEnum.BulletDmgAddPerAfterHit)
+
+	if addPer then
+		self._damageAddPer = self._damageAddPer + addPer
+		self._damageAddPer = math.min(self._damageAddPer, self._battleSkill:getProp(BattlePropEnum.BulletDmgAddPerAfterHitMax, 500))
+	end
+end
+
+function M:couldTakeDamageOnEnemy(enemy)
+	if self._cid == 10032 and enemy:hasBuffType(BattleBuffEnum.Portal) then
+		return false
+	end
+
+	if self._cid == 10032 and enemy._type == BattleDefine.EnemyType.Boss then
+		return false
+	end
+
+	if self._lockEnemy and self._lockEnemy ~= enemy then
+		return false
+	end
+
+	if enemy._invisibility and not self._defyInvisibility then
+		return false
+	end
+
+	if enemy._conceal then
+		return false
+	end
+
+	return not self._hitEnemysMap[enemy._id]
+end
+
+function M:clearEnemyHitted()
+	table.clear(self._hitEnemysMap)
+end
+
+function M:copyFromHitEnemysCDMap(srcBullet)
+	for k, v in pairs(srcBullet._hitEnemysMap) do
+		self._hitEnemysMap[k] = v
+	end
+end
+
+function M:setDir(targetPos)
+	local x = targetPos.x
+	local y = targetPos.y
+
+	opt.vec3_1:SetXYZ(x - self._position.x, y - self._position.y, 0):SetNormalize()
+	self:setDirByXY(opt.vec3_1.x, opt.vec3_1.y)
+end
+
+function M:setDirByXY(x, y)
+	self._dir[1] = x
+	self._dir[2] = y
+	self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+
+	self._towardDir:SetXYZ(self._dir[1], self._dir[2], 0)
+
+	if self._view then
+		self._view:rotationEvent()
+	end
+end
+
+function M:setDirByAngle(angle)
+	local rad = math.rad(angle)
+	self._dir[1] = math.cos(rad)
+	self._dir[2] = math.sin(rad)
+	self._angle = angle
+
+	self._towardDir:SetXYZ(self._dir[1], self._dir[2], 0)
+end
+
+function M:addScale(s)
+	self._scale = self._scale + s
+
+	self:setScale(self._scale)
+end
+
+function M:setScale(s)
+	self._scale = s
+
+	if self._initialRaduis then
+		self._radius = self._initialRaduis * s
+
+		if self._scaleType == 2 then
+			self._size[1] = self._radius * 2
+		elseif self._scaleType == 3 then
+			self._size[2] = self._radius * 2
+		else
+			self._size[1] = self._radius * 2
+			self._size[2] = self._radius * 2
+		end
+	elseif self._scaleType == 2 then
+		self._size[1] = self._initialSize[1] * s
+	elseif self._scaleType == 3 then
+		self._size[2] = self._initialSize[2] * s
+	else
+		self._size[1] = self._initialSize[1] * s
+		self._size[2] = self._initialSize[2] * s
+	end
+end
+
+function M:hitPosition()
+	return self._position.x, self._position.y
+end
+
+function M:setPos(x, y)
+	self._position.x = x
+	self._position.y = y
+
+	if self._view and BattleDefine.NEED_FIX_PS_TRAIL_BUG[self._cid] then
+		self._view._obj:SetActive(false)
+	end
+end
+
+function M:lockEnemy(enemy)
+	self._lockEnemy = enemy
+end
+
+function M:castSubSkill(subSkill, tEnemy, triggerInfo, index)
+	local bullet = subSkill:castSkill()
+
+	if triggerInfo.on_pos == 1 then
+		bullet:setPos(tEnemy._position.x, tEnemy._position.y)
+	elseif triggerInfo.on_pos == 2 then
+		bullet:setPos(self._position.x, self._position.y)
+	elseif triggerInfo.on_pos == 4 then
+		local x, y = BattleMathLib.random_along_circle(self._radius)
+		x = self._position.x + x
+		y = self._position.y + y
+
+		bullet:setPos(x, y)
+	end
+
+	if triggerInfo.ignore_cur_enemy then
+		bullet._hitEnemysMap[tEnemy._id] = tEnemy
+	end
+
+	if triggerInfo.seek_enemy_type then
+		local enemy = nil
+
+		if triggerInfo.seek_enemy_type == 1 then
+			enemy = self._battleSession:randomOneEnemyWithExcludeOne(tEnemy)
+		elseif triggerInfo.seek_enemy_type == 2 then
+			enemy = self._battleSession:randomOneEnemyWithExcludeOne(tEnemy)
+		elseif triggerInfo.seek_enemy_type == 3 then
+			enemy = self._battleSession:randomOneEnemyWithExcludeOne(tEnemy)
+
+			bullet:lockEnemy(enemy)
+		end
+
+		if triggerInfo.dir_type == 1 then
+			if enemy then
+				bullet:setDir(enemy._position)
+			else
+				local angle = self._battleRandomLib:randomMN(0, 360)
+
+				bullet:setDirByAngle(angle)
+			end
+		end
+	end
+
+	if triggerInfo.dir_type == 2 then
+		local angle = self._battleRandomLib:randomMN(0, 360)
+
+		bullet:setDirByAngle(angle)
+	elseif triggerInfo.dir_type == 3 then
+		local angle = triggerInfo.dir_angle
+
+		bullet:setDirByAngle(angle)
+	elseif triggerInfo.dir_type == 4 then
+		local angle = triggerInfo.fc_dir_angle(self)
+
+		bullet:setDirByAngle(angle)
+	elseif triggerInfo.dir_type == 5 then
+		-- Nothing
+	elseif triggerInfo.dir_type == 6 then
+		local angle = triggerInfo.dir_angle
+
+		bullet:setDirByAngle(self._angle + angle)
+	elseif triggerInfo.dir_type == 7 then
+		local targetPos = tEnemy._position
+		local x = targetPos.x
+		local y = targetPos.y
+
+		opt.vec3_1:SetXYZ(x - self._position.x, y - self._position.y, 0):SetNormalize()
+
+		local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+
+		bullet:setDirByAngle(angle)
+	end
+
+	if triggerInfo.onBulletCreate then
+		triggerInfo.onBulletCreate(self, bullet, index, tEnemy)
+	end
+
+	if bullet._view then
+		bullet._view:posEvent()
+
+		if triggerInfo.dir_type then
+			bullet._view:rotationEvent()
+		end
+	end
+end
+
+function M:tryTriggerSkill(tEnemy, inTriggerWhen)
+	if self._blockTrigger then
+		return
+	end
+
+	local battleSkill = self._battleSkill
+	local triggers = battleSkill._triggers
+
+	if triggers == nil then
+		return
+	end
+
+	for i = 1, #triggers do
+		local triggerInfo = triggers[i]
+		local triggerWeapon = triggerInfo.trigger_weapon
+		local triggerSkillId = triggerInfo.trigger_skill_id
+		local triggerWhen = triggerInfo.trigger_when
+		local triggerProbability = triggerInfo.trigger_probability
+		local triggerEffectOn = triggerInfo.effect_on
+		local triggerOn = triggerInfo.trigger_on
+		local version = triggerInfo.version
+
+		for j = 1, 1 do
+			if triggerWhen ~= inTriggerWhen then
+				break
+			end
+
+			if triggerOn and not battleSkill:hasTriggerOn(triggerOn) then
+				break
+			end
+
+			if triggerEffectOn and not self._battleWeapon:getEffect(triggerEffectOn) then
+				break
+			end
+
+			local subSkill = nil
+
+			if triggerWeapon then
+				local battleWeapon = self._battleSession:getWeapon(triggerWeapon)
+
+				if battleWeapon == nil then
+					break
+				end
+
+				subSkill = battleWeapon:getSkill(triggerSkillId)
+			elseif version == 2 then
+				subSkill = self._battleWeapon:getSkill(triggerSkillId)
+			elseif triggerInfo.getSkill then
+				subSkill = triggerInfo.getSkill(self)
+			else
+				subSkill = battleSkill:getSubSkill(triggerSkillId)
+			end
+
+			if subSkill == nil then
+				break
+			end
+
+			if triggerInfo.check and not triggerInfo.check(self, subSkill, tEnemy) then
+				break
+			end
+
+			if triggerProbability then
+				local rate = triggerProbability + self._battleSkill:getProp(BattlePropEnum.TriggerProbabilityAddPer, 0)
+
+				if triggerInfo.fc_add_trigger_probability then
+					rate = rate + triggerInfo.fc_add_trigger_probability(self, subSkill)
+				end
+
+				if not self._battleRandomLib:randomTrue(rate) then
+					break
+				end
+			end
+
+			if triggerInfo.fc_cast then
+				triggerInfo.fc_cast(self, subSkill, tEnemy)
+			elseif triggerInfo.call == nil then
+				self:castSubSkill(subSkill, tEnemy, triggerInfo, 1)
+
+				local fc_castAddNum = triggerInfo.cast_add_num
+
+				if fc_castAddNum then
+					local castNum = fc_castAddNum(self, subSkill)
+
+					for i = 1, castNum do
+						self:castSubSkill(subSkill, tEnemy, triggerInfo, i + 1)
+					end
+				end
+			else
+				triggerInfo.call(self, subSkill, tEnemy)
+			end
+
+			if self._view then
+				Client.playBattleSound(subSkill._audio)
+			end
+		end
+	end
+end
+
+function M:tryTriggerWhenBulletDestroyed()
+	self:tryTriggerSkill(nil, BattleTriggerEnum.BulletDestoryOnCurPos)
+end
+
+function M:tryTriggerWhenEnemyKilled(tEnemy)
+	self:tryTriggerSkill(tEnemy, BattleTriggerEnum.KillOnTargetPos)
+end
+
+function M:tryTriggerWhenFirstHitEnemy(tEnemy)
+	self:tryTriggerSkill(tEnemy, BattleTriggerEnum.HitFirstOnTargetPos)
+end
+
+function M:tryTriggerWhenHitEnemy(tEnemy)
+	self:tryTriggerSkill(tEnemy, BattleTriggerEnum.HitOnTargetPos)
+end
+
+function M:tryTriggerWhenEffectt()
+	self:tryTriggerSkill(nil, BattleTriggerEnum.WhenEffect)
+end
+
+function M:tryTriggerWhenCast()
+	self:tryTriggerSkill(nil, BattleTriggerEnum.WhenCast)
+end
+
+return M

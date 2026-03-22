@@ -1,0 +1,47 @@
+local M = class("RangerStatPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goContent = Types.GameObject,
+	goContentTemplate = Types.GameObject
+}
+local RangerStatWidget = requireLua("RangerStatWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._contents = {}
+
+	lc.prefabVarPeer(self._goContent)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init()
+	local orderedRangers = P._playerRanger:getOrderedRangers()
+
+	self._goContent._txtPropName:SetLocalize(SID.WEAPON_ELITE_BOSS_DAMAGE)
+
+	self._goContent._txtPropValue.text = "+" .. P._playerRanger:getTotalEliteDmg() .. "%"
+
+	for i = 1, #orderedRangers do
+		local skinId = orderedRangers[i]
+		local star = P._playerRanger:getRangerLevel(skinId)
+
+		if star > 0 then
+			local widget = RangerStatWidget.create(self._goContent._tfContainer)
+
+			widget:init(skinId, "_eliteDamageAdd")
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+return M

@@ -1,0 +1,291 @@
+local M = class("GemEquipPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnEquipBg = Types.Button,
+	btnEquip = Types.Button,
+	btnWash = Types.Button,
+	btnEquipSmall = Types.Button,
+	goSelectSlot = Types.GameObject,
+	imgChip = Types.Image,
+	imgChipBg = Types.Image,
+	imgChipFrame = Types.Image,
+	imgChipLock = Types.Image,
+	btnChipLock = Types.Button,
+	imgQuality = Types.Image,
+	txtName = Types.TMP_Text,
+	txtPart = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	goChip1 = Types.GameObject,
+	goChip2 = Types.GameObject,
+	goChip3 = Types.GameObject,
+	goChip4 = Types.GameObject,
+	goChip5 = Types.GameObject,
+	goChip6 = Types.GameObject,
+	tfEffectWeapon = Types.Transform
+}
+local triangleColor = V.QUALITY_TRIANGLE
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._equiping = false
+
+	self._btnEquipBg.gameObject:SetActive(false)
+	self._goSelectSlot:SetActive(false)
+
+	self._goChips = {
+		self._goChip1,
+		self._goChip2,
+		self._goChip3,
+		self._goChip4,
+		self._goChip5,
+		self._goChip6
+	}
+
+	for i = 1, #self._goChips do
+		local goChip = self._goChips[i]
+
+		lc.prefabVarPeer(goChip)
+		self:setClick(goChip._btnClick, function ()
+			if not self._equiping then
+				return
+			end
+
+			P._playerRole:equipGem(self._cid, i)
+
+			if self._equipCallback then
+				self._equipCallback(i)
+			else
+				self:closePanel()
+			end
+		end)
+	end
+end
+
+function M:addClicks()
+	local function equipFunc()
+		if self._equipSlot then
+			if self._equipQuality < self._quality then
+				P._playerRole:equipGem(self._cid, self._equipSlot)
+
+				if self._equipCallback then
+					self._equipCallback(self._equipSlot)
+				else
+					self:closePanel()
+				end
+			else
+				self._goChips[self._equipSlot]._imgRed:DOKill()
+
+				if self._seq then
+					self._seq:Complete()
+				end
+
+				self._seq = DOTween.Sequence()
+
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				V.showToast(SID.RESULT_CODE_103)
+			end
+		else
+			self._equiping = true
+
+			self._goSelectSlot:SetActive(true)
+			self._btnEquipBg.gameObject:SetActive(true)
+
+			for i = 1, #self._goChips do
+				if i ~= #self._goChips or not P._playerRole:isGemSlotLocked(self._part) then
+					self._goChips[i]._aniWaitChoose.gameObject:SetActive(true)
+					self._goChips[i]._aniWaitChoose:Play()
+				end
+			end
+		end
+	end
+
+	self:setClick(self._btnEquip, equipFunc)
+	self:setClick(self._btnEquipSmall, equipFunc)
+	self:setClick(self._btnWash, function ()
+		if (self._info.usingInOtherGroup ~= nil or self._info.lock) and self._info.num == 1 then
+			V.showToast(self._info.lock and SID.TIP_CHIP_LOCKED or SID.TIP_CHIP_IN_USING)
+
+			return
+		end
+
+		self:closePanel()
+		UIManager.openPanel(PrefabDefine.ChipWashPanel, self._cid)
+	end)
+	self:setClickWithoutAction(self._btnEquipBg, function ()
+		self._equiping = false
+
+		self._goSelectSlot:SetActive(false)
+		self._btnEquipBg.gameObject:SetActive(false)
+
+		for i = 1, #self._goChips do
+			self._goChips[i]._aniWaitChoose.gameObject:SetActive(false)
+			self._goChips[i]._aniWaitChoose:Stop()
+		end
+	end)
+	self:setClick(self._btnChipLock, function ()
+		if P._playerRole:isGemLocked(self._cid) then
+			SimpleEvent.emit("gem.locked", false, self._cid)
+			P._playerRole:unlockGem(self._cid)
+			LuaUnity.setTPSprite(self._imgChipLock, "general/g_icon_lock02_big")
+
+			self._info.lock = false
+		else
+			P._playerRole:lockGem(self._cid)
+			SimpleEvent.emit("gem.locked", true, self._cid)
+			LuaUnity.setTPSprite(self._imgChipLock, "general/g_icon_lock_big")
+
+			self._info.lock = true
+		end
+	end)
+end
+
+function M:init(cid, info, equipCallback, closeCallback)
+	self._cid = cid
+	self._info = info
+	self._part = info.part
+	self._quality = info.quality
+	self._effect = D._gemConfig[cid]._effect
+	self._equipCallback = equipCallback
+	self._closeCallback = closeCallback
+	self._equipSlot = nil
+	self._equipQuality = nil
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if self._seq then
+		self._seq:Complete()
+	end
+
+	local conf = D._gemConfig[self._cid]
+	local effectConf = D._gemEffectConfig[conf._effect]
+
+	self._txtName:SetLocalize(SID.STR_NAME_CHIP, -SID["STR_PART_" .. conf._part], -SID["STR_QUALITY_" .. conf._quality])
+	self._txtPart:SetLocalize(SID["STR_QUALITY_" .. self._quality])
+	V.loadChipDescription(self._txtDesc, effectConf, conf._param, conf._params)
+	V.setQualityImgText(self._imgQuality, conf._quality)
+	self._btnEquip:SetActive(conf._quality < D.Quality.Orange)
+	self._btnWash:SetActive(D.Quality.Orange <= conf._quality)
+	self._btnEquipSmall:SetActive(D.Quality.Orange <= conf._quality)
+	LuaUnity.setTPSprite(self._imgChip, D.toSprite(self._cid), true)
+	LuaUnity.setTPSprite(self._imgChipBg, string.format("item/frame-frame_%02d", conf._quality))
+	LuaUnity.setTPSprite(self._imgChipFrame, string.format("item/frame-frame_%02d_out", conf._quality))
+	LuaUnity.setTPSprite(self._imgChipLock, P._playerRole:isGemLocked(self._cid) and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+
+	local effectWeapons = D.calcEffectWeapons(effectConf)
+
+	if effectWeapons then
+		self._tfEffectWeapon.parent:SetActive(true)
+
+		for i = 1, 4 do
+			if effectWeapons[i] then
+				self._tfEffectWeapon:GetChild(i):SetActive(true)
+
+				if effectWeapons[i] ~= 100 then
+					LuaUnity.setTPSprite(self._tfEffectWeapon:GetChild(i):GetChild(1):GetComponent("Image"), "weapon/small_weapon_" .. effectWeapons[i], true, true)
+				else
+					LuaUnity.setTPSprite(self._tfEffectWeapon:GetChild(i):GetChild(1):GetComponent("Image"), "weapon/small_weapon_140000", true, true)
+				end
+			else
+				self._tfEffectWeapon:GetChild(i):SetActive(false)
+			end
+		end
+	else
+		self._tfEffectWeapon.parent:SetActive(false)
+	end
+
+	local part = self._part
+	local gemSlots = P._playerRole:getEquipedGems(part)
+	local isExtraSlotUnlocked = D.isSystemUnlocked(D.SystemType.ExtraChipSlot)
+
+	if not isExtraSlotUnlocked then
+		self._goChips[#self._goChips]:SetActive(false)
+	else
+		self._goChips[#self._goChips]:SetActive(true)
+	end
+
+	for i = 1, #self._goChips do
+		local goChip = self._goChips[i]
+
+		goChip._aniWaitChoose.gameObject:SetActive(false)
+
+		if i == #self._goChips and P._playerRole:isGemSlotLocked(part) then
+			goChip._btnClick.enabled = false
+
+			goChip._goLock:SetActive(true)
+			goChip._goChip:SetActive(false)
+
+			local costStr = string.format("<sprite name=\"item_small_10002\">%d", D._globalConfig._unlock_chip_slot_diamond)
+
+			goChip._txtDiamondUnlock:SetLocalizeS(SID.TIP_REQUIRE_DIAMOND_UNLOCK, costStr)
+			self:setClick(goChip._btnDiamondUnlock, function ()
+				UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+					_type = 2,
+					_title = SID.TITLE_UNLOCK_CHIP_SLOT,
+					_content = SID.TIP_UNLOCK_CHIP_SLOT,
+					_cParams = costStr,
+					_confirmCheck = function ()
+						return P._playerRole:tryUnlockGemSlot(part)
+					end,
+					_confirmCallback = function ()
+						self:updateUI()
+					end,
+					_confirmCheckFail = function ()
+						UIManager.openPanel(PrefabDefine.DiamondPanel)
+					end
+				})
+			end)
+		else
+			goChip._btnClick.enabled = true
+
+			if gemSlots[i] then
+				local conf = D._gemConfig[gemSlots[i]]
+
+				if conf._effect == self._effect then
+					self._equipSlot = i
+					self._equipQuality = conf._quality
+				end
+
+				LuaUnity.setTPSprite(goChip._imgIcon, D.toSprite(gemSlots[i]))
+				V.loadChipDescription(goChip._txtDesc, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+				goChip._goEmpty:SetActive(false)
+				goChip._goLock:SetActive(false)
+				goChip._goChip:SetActive(true)
+			else
+				goChip._goEmpty:SetActive(true)
+				goChip._goLock:SetActive(false)
+				goChip._goChip:SetActive(false)
+
+				if not self._equipSlot then
+					self._equipSlot = i
+					self._equipQuality = 0
+				end
+			end
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._seq then
+		self._seq:Kill()
+
+		self._seq = nil
+	end
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+	end
+end
+
+return M

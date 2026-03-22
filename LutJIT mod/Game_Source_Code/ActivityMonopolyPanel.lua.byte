@@ -1,0 +1,1267 @@
+local M = class("ActivityMonopolyPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	btnActivityIssue = Types.Button,
+	txtActivityCountdown = Types.TMP_Text,
+	btnRank = Types.Button,
+	btnPack = Types.Button,
+	btnExchange = Types.Button,
+	btnTask = Types.Button,
+	btnBP = Types.Button,
+	goVfxClaim = Types.GameObject,
+	btnIconClaim = Types.Button,
+	imgIconClaim = Types.Image,
+	goClaimItem = Types.GameObject,
+	animClaimMS = Types.Animation,
+	btnAllRewards = Types.Button,
+	txtLeftExp = Types.TMP_Text,
+	txtRightExp = Types.TMP_Text,
+	pgsExp = Types.SlicedFilledImage,
+	tfMissileParent = Types.Transform,
+	goMissileTemplate = Types.Transform,
+	tfMissile = Types.Transform,
+	tfExps = Types.Transform,
+	atorScores = Types.Animator,
+	goScoreVfx = Types.GameObject,
+	tfMonopolyRoot = Types.Transform,
+	tfMonopoly = Types.Transform,
+	tfPieces = Types.Transform,
+	tfChess = Types.Transform,
+	atorChess = Types.Animator,
+	atorLotteryChess = Types.Animator,
+	tfDices = Types.Transform,
+	tfDiceAnimEnd = Types.Transform,
+	tfDiceAnim = Types.Transform,
+	goDice1 = Types.GameObject,
+	goDice2 = Types.GameObject,
+	imgDice1 = Types.Image,
+	imgDice2 = Types.Image,
+	atorDice1 = Types.Animator,
+	atorDice2 = Types.Animator,
+	btnDraw = Types.Button,
+	txtDiceNum = Types.TMP_Text,
+	goAuto = Types.GameObject,
+	goHold2Auto = Types.GameObject,
+	btnRate = Types.Button,
+	txtRate = Types.TMP_Text,
+	atorToastRate = Types.Animator,
+	txtToastRate = Types.TMP_Text,
+	txtDiceToast = Types.TMP_Text,
+	atorDiceToast = Types.Animator,
+	tfClickMask = Types.Transform
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	SimpleItemWidget.noCreate(self._goClaimItem)
+end
+
+function M:Start()
+	self:startUpdater()
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._refreshTimer)
+	lc.stopTimer(self._delayShowSpinTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnDraw, function ()
+	end)
+	self:setClick(self._btnRate, function ()
+		self:handleChangeRateBtn()
+	end, "ui_Monopoly_multiplier_button_1")
+	self:setClick(self._btnIconClaim, function ()
+		self:handleIconClaimBtn()
+	end)
+	self:setClick(self._btnAllRewards, function ()
+		self:handleAllRewardsBtn()
+	end)
+	self:setClick(self._btnActivityIssue, function ()
+		UIManager.openPanel(PrefabDefine.ActivityMonopolyDescPanel, self._module, self._auid)
+	end)
+	self:setClick(self._btnPack, function ()
+		UIManager.openPanel(PrefabDefine.ActivityPackGroupPanel, P._playerActivity:readNameSid(self._type or 1), self._module:readPackExchangeGroup(self._subType), {
+			D.IapType.Monopoly_Pack4,
+			D.IapType.Monopoly_Pack5,
+			D.IapType.Monopoly_Pack6,
+			D.IapType.Monopoly_Pack7,
+			D.IapType.Monopoly_Pack8
+		})
+	end)
+	self:setClick(self._btnExchange, function ()
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.monopoly_key, self._module:readExchangeGroup(self._subType))
+	end)
+	self:setClick(self._btnBP, function ()
+		self:handleBPBtn()
+	end)
+	self:setClick(self._btnRank, function ()
+		V.checkRankVersion(function ()
+			local limits = P._playerActivityMonopoly:readCfg(self._subType)._limitScore
+
+			if P._playerActivityMonopoly:getExpNum() <= limits[#limits] then
+				V.showToast({
+					SID.MONOPOLY_RANK_TOAST1,
+					limits[#limits]
+				})
+
+				return
+			end
+
+			UIManager.openPanel(PrefabDefine.MonopolyRankPanel, self._id, self._subType)
+		end)
+	end)
+	self:setClick(self._btnTask, function ()
+		UIManager.openPanel(PrefabDefine.TaskPanel, D.TaskClass.Monopoly)
+	end)
+	self._btnRank.dot:SetVisible(false)
+	self._btnExchange.dot:SetVisible(false)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		if not self._activityData then
+			return
+		end
+
+		if self:tryExpire() then
+			return
+		end
+
+		self:updateTimer()
+		self:updateDiceNum()
+		self:updateDot()
+	end)
+	self:on("monopoly.rank_reward", function ()
+		if self._waitingSettle then
+			UIManager.hideWaiting()
+
+			self._waitingSettle = false
+
+			UIManager.openPanel(PrefabDefine.MonopolyRankRewardPanel, self._id, self._subType)
+		end
+	end)
+	self:on("monopoly.rank_fail", function ()
+		if self._waitingSettle then
+			UIManager.hideWaiting()
+			V.showMessageBox({
+				_type = 1,
+				_content = SID.NETWORK_NOTREACHABLE,
+				_confirmCallback = function ()
+					UIManager.closeToPanelOrMain()
+				end
+			})
+
+			self._waitingSettle = false
+		end
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.monopoly_exp then
+			self._monopolyExpDirty = true
+
+			self:updateMilestoneArea()
+			self._module:tryRecordMilestoneReach()
+		elseif cid == D.ResType.monopoly_dice then
+			self:updateDiceNum()
+			self:updateRate()
+		end
+	end)
+	self:on("monopoly.milestone.claim", function ()
+		self:updateMilestoneArea()
+	end)
+end
+
+function M:init(parent, pageIdx, auid)
+	self._isInit = true
+	self._parent = parent
+	self._pageIdx = pageIdx
+
+	self:regisiterLongPress()
+	self:initPieces()
+	self:initMissiles()
+	self:updateShowActivity(auid)
+	self:updateUI()
+
+	self._isInit = false
+
+	self:updateDot()
+end
+
+function M:OnPageOpened()
+	self:tryExpire()
+	self:handleAfterDice()
+end
+
+function M:initPieces()
+	self._goPieces = {}
+	local monopolyPiece = requireLua("MonopolyPiece")
+
+	for i = 1, 12 do
+		self._goPieces[i] = self._tfPieces:GetChild(i - 1).gameObject
+	end
+
+	for i = 13, 24 do
+		self._goPieces[24 - i + 12 + 1] = self._tfPieces:GetChild(i - 1).gameObject
+	end
+
+	for i = 1, #self._goPieces do
+		local go = self._goPieces[i]
+
+		monopolyPiece.noCreate(go)
+	end
+end
+
+function M:openPanelTrace()
+	Trace.traceDesign_Activity("Monopoly_Enter:%s", "Monopoly", D.ActivityType.Monopoly, self._subType or 1)
+
+	local day = Client.getDayIdx(Client.getCurTime() - self._activityData.startTime)
+
+	Trace.traceDesign_Activity("EventWeekDay:%s:%d", self._id, self._type, self._subType, Mathf.Clamp(day, -1, 31))
+end
+
+function M:showInternal(uid)
+	M.super.showInternal(self)
+	self:updateShowActivity(uid)
+	self:addEvents()
+	self:updateUI()
+	self:handleAfterDice()
+	self:startUpdater()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._refreshTimer)
+
+	self._refreshTimer = nil
+
+	self:removeEvents()
+
+	if self._seq then
+		self._seq:Kill()
+	end
+
+	lc.stopTimer(self._delayShowSpinTimer)
+	self:stopUpdater()
+	C.enterMusicEnv(C.Env2Music.Main)
+	M.super.hideInternal(self)
+end
+
+function M:Update()
+	if self._updateBullet then
+		self._updateBullet()
+	end
+
+	if self._targetFillAmount == self._currentFillAmount then
+		return
+	end
+
+	if self._monopolyExpDirty then
+		self._monopolyExpDirty = false
+
+		C.playSound("ui_Point_claim_1")
+	end
+
+	self._currentFillAmount = self._currentFillAmount + Time.deltaTime
+
+	if self._targetFillAmount < self._currentFillAmount then
+		self._currentFillAmount = self._targetFillAmount
+	end
+
+	self._pgsExp.fillAmount = self._currentFillAmount
+end
+
+function M:updateShowActivity(uid)
+	self._module = P._playerActivityMonopoly
+
+	C.enterMusicEnv(C.Env2Music.Monopoly)
+	self:setPlayingAnim(false)
+
+	self._expireDealed = false
+	self._lastDrawNum = 1
+	self._activityData = P._playerActivity:getDataByUid(uid)
+
+	if not self._activityData then
+		return
+	end
+
+	self._auid = self._activityData.uid
+	self._id = self._activityData.id
+	self._subType = self._activityData.subType
+	self._type = self._activityData.type
+	self._cfg = self._module:readCfg(self._subType)
+	self._milestonePeriod = self._cfg._milestonePeriod
+	self._cellPeriod = self._cfg._cellPeriod
+	self._lotteryData = self._module:getData(self._auid)
+	self._positionIdx = self._lotteryData.positionIdx
+	self._lastPositionIdx = self._positionIdx
+	self._targetPositionIdx = self._positionIdx
+	self._currentFillAmount = self:calFillAmount()
+	self._targetFillAmount = self._currentFillAmount
+	self._pgsExp.fillAmount = self._currentFillAmount
+
+	lc.setPosition(self._tfChess, lc.getPosition(self._goPieces[self._positionIdx]))
+
+	if self._isInit then
+		self._atorDice1:SetInteger("Type", 1)
+		self._atorDice2:SetInteger("Type", 2)
+	end
+
+	self._atorDiceToast.gameObject:SetActive(false)
+	self._atorLotteryChess:Play("portal_hide_idle")
+	self._tfMissile:SetVisible(false)
+	self._atorToastRate.gameObject:SetActive(false)
+	self:updateAllPieces()
+	self:resetMissiles()
+	self:openPanelTrace()
+end
+
+function M:updateAllPieces()
+	local cfgs = self._module:readCellCfg(self._subType)
+
+	for i = 1, #self._goPieces do
+		local go = self._goPieces[i]
+
+		go:init(i, cfgs[i])
+		go:updateStanding(self._positionIdx)
+	end
+end
+
+function M:checkExpired()
+	if self:isExpired() then
+		if P._playerActivityMonopoly:hasSettleRewards() then
+			MainGameRoot:showGlobalMask()
+			lc.setTimer(function ()
+				MainGameRoot:hideGlobalMask()
+				UIManager.openPanel(PrefabDefine.MonopolyRankRewardPanel, self._id, self._subType)
+			end, 0.2)
+		elseif P._playerActivityMonopoly:isSettleClaimed() then
+			UIManager.closeToPanelOrMain()
+		else
+			UIManager.showWaiting(30, SID.NETWORK_NOTREACHABLE)
+
+			self._waitingSettle = true
+		end
+	end
+end
+
+function M:isExpired()
+	return self._lotteryData.expired
+end
+
+function M:isTimeExpired()
+	return self._activityData.endTime < C.getCurTime()
+end
+
+function M:updateUI()
+	self._txtTitle:SetLocalize(self._module:readNameSid(self._subType))
+	self:updateTimer()
+	self:updateRate()
+	self:updateMilestoneArea()
+	self:updateDiceNum()
+	self:updateDices()
+end
+
+function M:updateDices()
+	local v1, v2 = self._module:getLastThrowValues()
+
+	LuaUnity.setTPSprite(self._imgDice1, string.format("monopoly/monopoly_dice_%d", v1))
+	LuaUnity.setTPSprite(self._imgDice2, string.format("monopoly/monopoly_dice_%d", v2))
+end
+
+function M:updateTimeText()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		V.formatLeftTime(self._txtActivityCountdown, 0, 2)
+		self._txtActivityCountdown:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(0))
+
+		return
+	end
+
+	local ct = Client.getCurTime()
+	local endTime = self._activityData.endTime
+	local d, h, m, s = C.getTimeEndArgs(endTime - ct)
+
+	if d >= 2 then
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:updateTimer()
+	lc.stopTimer(self._refreshTimer)
+
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local endTime = self._activityData.endTime
+	local leftTime = endTime - C.getCurTime()
+	self._dayEndTime = Client.getZeroTimestamp(C.getCurTime(), 1)
+
+	self:updateTimeText()
+
+	self._refreshTimer = lc.setInterval(function ()
+		self:updateTimeText()
+	end, 1)
+end
+
+function M:updateLuckyValue(value)
+	self._showLuckyValue = value or self._module:getLuckyValue(self._auid)
+	self._txtLuckyValue.text = self._showLuckyValue
+end
+
+function M:updateDiceNum()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local diceNum = self._module:getDiceNum()
+	self._txtDiceNum.text = diceNum
+
+	self._btnDraw.dot:SetActive(diceNum > 0)
+end
+
+function M:calFillAmount()
+	local curExp = self._module:getExpNum()
+	local claimIdx = self._module:getMilestoneClaimIdx()
+	local leftNum = 0
+	local rightNum = 0
+	leftNum = self._module:getMilestoneNeedExp(claimIdx)
+	rightNum = self._module:getMilestoneNeedExp(claimIdx + 1)
+	local fill = curExp / rightNum
+
+	return math.min(1, fill)
+end
+
+function M:updateMilestoneArea()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local curExp = self._module:getExpNum()
+	local claimIdx = self._module:getMilestoneClaimIdx()
+	local maxClaimIdx = self._module:getMilestoneRewardMaxStep()
+	local leftNum = 0
+	local rightNum = 0
+	leftNum = self._module:getMilestoneNeedExp(claimIdx)
+	rightNum = self._module:getMilestoneNeedExp(math.min(maxClaimIdx, claimIdx + 1))
+	local txtExppp = string.format("%d/%d", curExp, rightNum)
+	self._txtLeftExp.text = txtExppp
+	self._txtRightExp.text = rightNum
+	local fill = curExp / rightNum
+	self._targetFillAmount = math.min(1, fill)
+	local cids, nums = self._module:getMilestoneRewards(claimIdx + 1)
+	local nextIdx = claimIdx + 1
+	local isComplete = maxClaimIdx >= nextIdx and self._module:isStepComplete(nextIdx)
+
+	self._goVfxClaim:SetActive(isComplete)
+
+	if isComplete then
+		self._animClaimMS:Play("ani_MonopolyRewardClaim")
+	else
+		self._animClaimMS:Stop()
+		lc.setLocalRotation(self._imgIconClaim.transform, 0, 0, 0, 0)
+	end
+
+	self._goClaimItem:init(cids[1], nums[1])
+	self._goClaimItem:setCanClaim(isComplete)
+	self._goClaimItem:setClaimed(maxClaimIdx < nextIdx)
+end
+
+function M:OnFocus()
+	self:handleAfterDice()
+	self:updateDot()
+	self:updateParentDot()
+end
+
+function M:regisiterLongPress()
+	lc.addLongPress(self._btnDraw, self, 111)
+	self:updateAutoHolding()
+
+	self._intervalTime = 0.015
+	self._autoHoldTime = 0.5
+	self._autoHolding = false
+	self._longLevelTime = 0
+	local listener = self._btnDraw.gameObject:GetOrAddComponent(typeof(LongPressEventListener))
+	self._longPressEventListener = listener
+	self._isLongPress = false
+	listener.LongPressThreshold = 0.3
+
+	listener.onPointDown:AddListener(function ()
+		self._resetClick = false
+		self._longPressInvokeNum = 0
+		self._longLevelTime = 0
+		self._autoHoldingFlag = false
+	end)
+	listener.onLongPress:AddListener(function ()
+		self._longLevelTime = self._longLevelTime + Time.unscaledDeltaTime
+
+		if self._isLongPress then
+			if self._intervalTime <= self._longLevelTime then
+				self._longLevelTime = 0
+				self._longPressInvokeNum = self._longPressInvokeNum + 1
+			end
+		elseif self._autoHoldTime <= self._longLevelTime then
+			self._autoHoldingFlag = true
+
+			if not self:isAutoHolding() then
+				self:enterAutoHolding()
+			end
+
+			self._longPressInvokeNum = self._longPressInvokeNum + 1
+			self._longLevelTime = 0
+			self._isLongPress = true
+
+			self:stopLongLevelPress()
+			self:handleThrowDice()
+		end
+	end)
+	listener.onPointUp:AddListener(function ()
+		if listener.IsDragging then
+			self:stopLongLevelPress()
+
+			return
+		end
+
+		if self._isLongPress == true then
+			-- Nothing
+		elseif not self._autoHoldingFlag then
+			if self:isAutoHolding() then
+				self:exitAutoHolding()
+			else
+				self:handleThrowDice()
+			end
+
+			return
+		end
+
+		self:stopLongLevelPress()
+	end)
+	listener.onPointExit:AddListener(function ()
+		self:stopLongLevelPress()
+	end)
+end
+
+function M:stopLongLevelPress()
+	if self._resetClick then
+		return
+	end
+
+	self._resetClick = true
+
+	if not self._isLongPress then
+		return
+	end
+
+	self._longPressEventListener:ResetLongPress()
+
+	self._isLongPress = false
+	self._longLevelTime = 0
+end
+
+function M:isAutoHolding()
+	return self._autoHolding
+end
+
+function M:enterAutoHolding()
+	self._autoHolding = true
+
+	self:updateAutoHolding()
+	V.showToast(SID.MONOPOLY_AUTO_SUCCESS)
+end
+
+function M:exitAutoHolding()
+	self._autoHolding = false
+
+	self:updateAutoHolding()
+	V.showToast(SID.MONOPOLY_AUTO_CANCEL)
+end
+
+function M:updateAutoHolding()
+	local holding = self:isAutoHolding()
+
+	self._goAuto:SetVisible(holding)
+	self._goHold2Auto:SetVisible(not holding)
+end
+
+function M:handleThrowDice()
+	if lc.isNetworkNotReachable() then
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+
+		return
+	end
+
+	if self._playingAnim then
+		return
+	end
+
+	if self._module:haveUnclaimDiceRewards() then
+		self:handleAfterDice()
+
+		return
+	end
+
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		if self:isAutoHolding() then
+			self:exitAutoHolding()
+		end
+
+		local ret = self:tryExpire()
+
+		if ret then
+			return
+		end
+	end
+
+	if self:isTimeExpired() then
+		return
+	end
+
+	if self:isExpired() then
+		return
+	end
+
+	local rate = self._module:getThrowRate()
+	local ret, param = self._module:checkThrowDice(rate)
+
+	if ret ~= ResultCode.OK then
+		self:handleRateDown()
+
+		if self:isAutoHolding() then
+			self:exitAutoHolding()
+		end
+
+		V.showResultCode(ret, param)
+
+		return
+	end
+
+	self:playThrowAnim_start()
+	self:setPlayingAnim(true)
+
+	local function executeFunction()
+		self:setPlayingAnim(false)
+
+		local ret, param = self._module:tryThrowDice(rate)
+
+		if ret ~= ResultCode.OK then
+			return
+		end
+
+		local v1, v2 = self._module:getLastThrowValues()
+		self._targetPositionIdx = param
+		self._lastPositionIdx = self._positionIdx
+
+		self:updateDiceNum()
+		self:playJumpAnim()
+	end
+
+	local function timeoutFunction()
+		self:playThrowAnim_end()
+	end
+
+	C.checkNetworkAsync(executeFunction, timeoutFunction, 5)
+end
+
+function M:playThrowAnim_start()
+	self._tfDices:SetParent(self._tfDiceAnim)
+	self._atorDice1:SetTrigger("Throw")
+	self._atorDice2:SetTrigger("Throw")
+end
+
+function M:playThrowAnim_end()
+	local seq = DOTween.Sequence():SetLink(self.gameObject)
+	self._seq = seq
+
+	seq:InsertCallback(1, function ()
+		self._atorDice1:SetTrigger("ThrowEnd")
+		self._atorDice2:SetTrigger("ThrowEnd")
+	end)
+	seq:InsertCallback(2, function ()
+		self:setPlayingAnim(false)
+	end)
+end
+
+local stepPrepareTime = 0.08333333333333333
+local stepAnimMoveTime1 = 0.25
+local stepAnimMoveTime2 = 0.5
+local stepAnimMoveTime3 = 0.5833333333333334
+
+function M:playJumpAnim()
+	if self._playingAnim then
+		return
+	end
+
+	C.playSound("ui_Monopoly_dice_run_1")
+	self:setPlayingAnim(true)
+
+	local steps = self._module:calThrowStep(self._positionIdx, self._targetPositionIdx)
+	local seq = DOTween.Sequence():SetLink(self.gameObject)
+	self._seq = seq
+	local animTime = 0
+	local waitDiceAnimTime = 1.5
+	local diceChangeTime = 0.8
+
+	seq:AppendInterval(animTime + waitDiceAnimTime)
+	seq:InsertCallback(animTime + diceChangeTime, function ()
+		self:updateDices()
+		self._atorDice1:SetTrigger("ThrowEnd")
+		self._atorDice2:SetTrigger("ThrowEnd")
+	end)
+
+	animTime = animTime + waitDiceAnimTime
+	animTime = animTime + 0.5
+
+	seq:AppendInterval(0.5)
+	seq:InsertCallback(animTime, function ()
+		self._tfDices:SetParent(self._tfDiceAnimEnd)
+		self._goPieces[self._lastPositionIdx]:updateStanding(self._targetPositionIdx)
+	end)
+
+	local drop = self._module:getCachedDiceDrop()
+	local dropType = drop._type
+	local isBigJump = drop._jumpType == 1
+
+	for i = 1, steps do
+		local stepAnimMoveTime = stepAnimMoveTime1
+		local type = 1
+
+		if isBigJump then
+			if i == steps then
+				stepAnimMoveTime = stepAnimMoveTime3
+				type = 3
+			elseif i == steps - 1 then
+				stepAnimMoveTime = stepAnimMoveTime2
+				type = 2
+			else
+				stepAnimMoveTime = stepAnimMoveTime1
+				type = 1
+			end
+		else
+			stepAnimMoveTime = stepAnimMoveTime1
+			type = 1
+		end
+
+		local pieceIdx = self._positionIdx + i
+		pieceIdx = self:getRealIdx(pieceIdx)
+
+		seq:InsertCallback(animTime, function ()
+			self._atorChess:SetInteger("Type", type)
+			self._atorChess:SetTrigger("Jump")
+			self:popDiceToast(steps - i + 1)
+		end)
+
+		animTime = animTime + stepPrepareTime
+
+		seq:AppendInterval(stepPrepareTime)
+		seq:Append(self._tfChess:DOMove(Vector3.new(lc.getPosition(self._goPieces[pieceIdx])), stepAnimMoveTime))
+
+		animTime = animTime + stepAnimMoveTime
+
+		seq:InsertCallback(animTime, function ()
+			self._goPieces[pieceIdx]:playJump(type, self._targetPositionIdx)
+			self:popDiceToast(0)
+
+			if i == steps then
+				if dropType == 3 then
+					C.playSound("ui_Monopoly_jackpot_1")
+
+					return
+				elseif isBigJump then
+					C.playSound("ui_Chess_jump_special_1")
+
+					return
+				end
+			end
+
+			C.playSound("ui_Chess_jump_normal_1")
+		end)
+
+		if i == steps and isBigJump then
+			seq:InsertCallback(animTime, function ()
+				self:arroundPieceJump()
+			end)
+		end
+	end
+
+	local endAnimTime = 0.5
+
+	seq:AppendInterval(endAnimTime)
+
+	animTime = animTime + endAnimTime
+
+	if dropType == 2 or dropType == 3 then
+		seq:AppendInterval(endAnimTime)
+
+		animTime = animTime + endAnimTime
+	end
+
+	seq:InsertCallback(animTime, function ()
+		self:setPlayingAnim(false)
+
+		self._lastPositionIdx = self._positionIdx
+		self._positionIdx = self._targetPositionIdx
+
+		if UIManager.isTopPanel(PrefabDefine.ActivityPanel.id) then
+			self:handleAfterDice()
+		end
+	end)
+end
+
+function M:getRealIdx(pieceIdx)
+	if pieceIdx > 24 then
+		return pieceIdx - 24
+	end
+
+	if pieceIdx < 1 then
+		return pieceIdx + 24
+	end
+
+	return pieceIdx
+end
+
+function M:arroundPieceJump(targetPos, popTarget)
+	for i = 1, 7 do
+		if popTarget or i ~= 4 then
+			local pieceIdx = self:getRealIdx((targetPos or self._targetPositionIdx) + i - 4)
+			local distance = math.abs(i - 4)
+
+			if distance == 0 then
+				distance = 3
+			end
+
+			self._goPieces[pieceIdx]:playArroundJump(distance)
+		end
+	end
+
+	self._tfMonopolyRoot:DOShakeRotation(1, Vector3.static(10, 10, 0), 20, 20):SetLink(self.gameObject):SetLink(self.gameObject)
+	self._tfMonopolyRoot:DOShakeAnchorPos(1, Vector2.static(10, 10)):SetLink(self.gameObject)
+end
+
+function M:totalPieceJump(targetPos)
+	for i = 1, 24 do
+		local pieceIdx = self:getRealIdx((targetPos or self._targetPositionIdx) + i - 12)
+		local distance = math.abs(i - targetPos)
+
+		if distance < 5 then
+			distance = 1
+		elseif distance < 10 then
+			distance = 2
+		else
+			distance = 3
+		end
+
+		self._goPieces[pieceIdx]:playArroundJump(distance)
+	end
+
+	self._tfMonopolyRoot:DOShakeRotation(1, Vector3.static(10, 10, 0), 20, 20):SetLink(self.gameObject):SetLink(self.gameObject)
+	self._tfMonopolyRoot:DOShakeAnchorPos(1, Vector2.static(10, 10)):SetLink(self.gameObject)
+
+	local x, y = lc.getPosition(self._tfChess)
+
+	self._tfChess:DOJump(Vector3.new(x, y, 0), 25, 1, 0.5)
+end
+
+function M:popDiceToast(num)
+	if num > 0 then
+		self._atorDiceToast.gameObject:SetActive(true)
+		self._atorDiceToast:SetTrigger("show")
+
+		self._txtDiceToast.text = num
+	else
+		self._atorDiceToast.gameObject:SetActive(false)
+	end
+end
+
+function M:handleAfterDice()
+	if self._positionIdx ~= self._targetPositionIdx then
+		return
+	end
+
+	local leftRewards = self._module:haveUnclaimDiceRewards()
+
+	if not leftRewards then
+		return
+	end
+
+	if self:isExpired() then
+		return
+	end
+
+	if self:isTimeExpired() then
+		self:tryExpire()
+
+		return
+	end
+
+	local drop = self._module:getCachedDiceDrop()
+	local dropType = drop._type
+
+	if dropType == 2 then
+		self:setPlayingAnim(true)
+		self._atorChess:SetTrigger("PortalHide")
+		self._atorLotteryChess:SetTrigger("PortalShow")
+		C.playSound("ui_Monopoly_portal_enter_1")
+
+		self._delayShowSpinTimer = lc.setTimer(function ()
+			UIManager.openPanel(PrefabDefine.ActivityMonopolySpinPanel, drop._dropId, function ()
+				self._delayShowSpinTimer = nil
+
+				self:setPlayingAnim(false)
+				C.playSound("ui_Monopoly_portal_out_1")
+				self._atorChess:SetTrigger("PortalShow")
+				self._atorLotteryChess:SetTrigger("PortalHide")
+
+				if self._autoHolding then
+					self:handleThrowDice()
+				end
+			end)
+		end, 2)
+	elseif dropType == 3 then
+		self:setPlayingAnim(true)
+		self:startUpdater()
+
+		local items, idx = self._module:getCachedDropRewards()
+		self._missileLaunchCount = idx
+
+		self:launchMissiles(self._tfChess, self._tfExps, function ()
+			self:setPlayingAnim(false)
+
+			self._bulletCallback = nil
+
+			self:dealClaimRewards()
+		end)
+	else
+		self:dealClaimRewards()
+	end
+end
+
+function M:setPlayingAnim(playing)
+	self._playingAnim = playing or false
+
+	self._tfClickMask:SetVisible(playing or false)
+end
+
+function M:dealClaimRewards()
+	local rewards = self._module:tryClaimCachedRewards()
+
+	if rewards then
+		V.showRewardClaimPanel(rewards, nil, function ()
+			if self._autoHolding then
+				self:handleThrowDice()
+			end
+		end, self._autoHolding and 3 or nil)
+	end
+end
+
+function M:initMissiles()
+	if self._tfMissiles then
+		return
+	end
+
+	self._missileCount = 10
+	self._tfMissiles = {
+		self._goMissileTemplate.transform
+	}
+
+	for i = 2, self._missileCount do
+		local go = GameObject.Instantiate(self._goMissileTemplate, self._tfMissileParent)
+		self._tfMissiles[i] = go.transform
+	end
+
+	self._missilesData = {}
+
+	for i = 1, self._missileCount do
+		self._missilesData[i] = {
+			complete = false,
+			inited = false,
+			elapsedTime = 0,
+			delayTime = math.random(1, 50) / 50,
+			startPos = {
+				x = 0,
+				y = 0
+			},
+			endPos = {
+				x = 0,
+				y = 0
+			},
+			controlPoint = {
+				x = 0,
+				y = 0
+			}
+		}
+	end
+end
+
+function M:resetMissiles()
+	for i = 1, self._missileCount do
+		self._tfMissiles[i]:SetVisible(false)
+	end
+
+	self._updateBullet = nil
+end
+
+function M:reInitMissiles(fromTf, toTf)
+	local startPos = fromTf.position
+	local endPos = toTf.position
+
+	for i = 1, self._missileLaunchCount do
+		self._tfMissiles[i]:SetVisible(false)
+		self._tfMissiles[i]:GetChild(0):SetVisible(true)
+		self._tfMissiles[i]:GetChild(1):SetActive(false)
+
+		local data = self._missilesData[i]
+		data.launched = false
+		data.elapsedTime = 0
+		data.flyTime = math.random(100, 150) / 100
+		data.delayTime = math.random(1, 50) / 100 * i
+		data.complete = false
+		data.startPos.x = startPos.x
+		data.startPos.y = startPos.y
+		data.endPos.x = endPos.x + math.random(-50, 50)
+		data.endPos.y = endPos.y + math.random(-10, 40)
+		local sign = Mathf.Sign(endPos.x - startPos.x)
+		data.controlPoint.x = (endPos.x + math.random(-500, 500)) / 2
+		data.controlPoint.y = math.max(startPos.y, endPos.y) + math.random(200, 1000)
+	end
+end
+
+function M:launchMissiles(fromTf, toTf, callback)
+	self._delayInvokeTime = 0
+	self._lastMissileEndCount = 0
+
+	self:initMissiles()
+	self:reInitMissiles(fromTf, toTf)
+
+	self._missileCallback = callback
+
+	function self._updateBullet()
+		self:updateMissiles()
+	end
+end
+
+function M:updateMissiles()
+	local dt = Time.deltaTime
+	local endCount = 0
+
+	for i = 1, self._missileLaunchCount do
+		local ret = self:updateMissile(i, dt)
+
+		if ret then
+			endCount = endCount + 1
+		end
+	end
+
+	local delayInvokeTime = 1
+
+	if endCount > 0 and self._lastMissileEndCount == 0 then
+		self:totalPieceJump(12)
+	end
+
+	if endCount == self._missileLaunchCount then
+		self._delayInvokeTime = self._delayInvokeTime + dt
+
+		if delayInvokeTime < self._delayInvokeTime then
+			self._updateBullet = nil
+
+			if self._missileCallback then
+				self._missileCallback()
+
+				self._missileCallback = nil
+			end
+		end
+	end
+
+	self._lastMissileEndCount = endCount
+end
+
+function M:updateMissile(idx, dt)
+	local tfMissile = self._tfMissiles[idx]
+	local data = self._missilesData[idx]
+	data.elapsedTime = data.elapsedTime + dt
+
+	if not data.launched then
+		if data.delayTime < data.elapsedTime then
+			data.launched = true
+			data.elapsedTime = 0
+
+			tfMissile:SetVisible(true)
+			C.playSound("se_Bullet_3")
+		else
+			return
+		end
+	end
+
+	if data.complete then
+		return true
+	end
+
+	local t = math.min(data.elapsedTime / data.flyTime, 1)
+	local posX, posY = M.calculate_bezier_point_2(t, data.startPos, data.controlPoint, data.endPos)
+
+	lc.setPosition(tfMissile, posX, posY, 0)
+
+	if t < 1 then
+		local nextT = math.min(t + 0.05, 1)
+		local nextX, nextY = M.calculate_bezier_point_2(nextT, data.startPos, data.controlPoint, data.endPos)
+		local dirX = nextX - posX
+		local dirY = nextY - posY
+		local angle = math.deg(math.atan2(dirY, dirX))
+		tfMissile.rotation = Quaternion.Euler(0, 0, angle - 90)
+	end
+
+	if t >= 1 then
+		tfMissile:GetChild(0):SetVisible(false)
+		tfMissile:GetChild(1):SetActive(true)
+
+		data.complete = true
+
+		self._atorScores:SetTrigger("show")
+		self._goScoreVfx:GetComponent("UIParticle"):Play()
+		C.playSound("se_Bullet_3_boom")
+	end
+end
+
+function M.calculate_bezier_point_2(t, p0, p1, p2)
+	local u = 1 - t
+	local uu = u * u
+	local tt = t * t
+	local x = uu * p0.x + 2 * u * t * p1.x + tt * p2.x
+	local y = uu * p0.y + 2 * u * t * p1.y + tt * p2.y
+
+	return x, y
+end
+
+function M:updateRate()
+	local rate = self._module:getThrowRate()
+	self._txtRate.text = "x" .. rate
+	self._txtToastRate.text = "X" .. rate
+
+	self._btnRate.transform:GetChild(1):SetActive(self._module:canUpRate())
+end
+
+function M:handleChangeRateBtn()
+	local ret = self._module:changeRate()
+
+	if ret then
+		self:updateRate()
+	end
+
+	self._atorToastRate.gameObject:SetActive(true)
+	self._atorToastRate:SetTrigger("show")
+	C.playSound("ui_Monopoly_multiplier_button_1")
+end
+
+function M:handleRateDown()
+	local rate = self._module:getThrowRate()
+
+	if rate == 1 then
+		return
+	end
+
+	local ret = self._module:changeRate()
+
+	self:updateRate()
+	self._atorToastRate.gameObject:SetActive(true)
+	self._atorToastRate:SetTrigger("show")
+end
+
+function M:handleBPBtn()
+	UIManager.openPanel(PrefabDefine.BattlePassContainerPanel, {
+		"BattlePassMonopolyPanel"
+	})
+end
+
+function M:handleIconClaimBtn()
+	local canClaim = false
+	local currentIdx = self._module:getMilestoneClaimIdx()
+	local nextIdx = currentIdx + 1
+	local isComplete = self._module:isStepComplete(nextIdx)
+	local maxClaimIdx = self._module:getMilestoneRewardMaxStep()
+
+	if not isComplete or maxClaimIdx < nextIdx then
+		local cids, nums = self._module:getMilestoneRewards(nextIdx)
+
+		V.showItemInfoPanel(cids[1], nums[1])
+
+		return
+	end
+
+	local resultCode, paramOrRewards = self._module:tryClaimNextStepRewards()
+
+	if resultCode ~= ResultCode.OK then
+		return V.showResultCode(resultCode, paramOrRewards)
+	end
+
+	V.showRewardClaimPanel(paramOrRewards)
+
+	self._currentFillAmount = self:calFillAmount()
+	self._pgsExp.fillAmount = self._currentFillAmount
+
+	self:updateMilestoneArea()
+end
+
+function M:handleAllRewardsBtn()
+	UIManager.openPanel(PrefabDefine.ActivityMonopolyMilestonePanel, self._module, self._subType)
+end
+
+function M:handleMilestoneRewardBtn()
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return true
+	end
+
+	if not self:isExpired() then
+		return false
+	end
+
+	if not self:isTimeExpired() then
+		return false
+	end
+
+	if self._playingAnim then
+		return
+	end
+
+	self._expireDealed = true
+
+	V.showMessageBox({
+		_type = 1,
+		_content = SID.TIP_EVENT_END,
+		_confirmCallback = function ()
+			self:checkExpired()
+		end
+	})
+
+	return true
+end
+
+function M:updateParentDot()
+	RedDotManager.update("city.home.weeklottery")
+	self._parent:updateDot(self._pageIdx)
+end
+
+function M:updateDot()
+	local isOpening = P._playerActivity:getActivityNum(D.ActivityType.Monopoly) > 0
+
+	self._btnExchange.dot:SetActive(false)
+
+	local currentIdx = self._module:getMilestoneClaimIdx()
+	local nextIdx = currentIdx + 1
+	local isComplete = self._module:isStepComplete(nextIdx)
+	local isClaimed = self._module:isStepClaimed(nextIdx)
+	local isMax = self._module:isStepMax(nextIdx)
+
+	self._btnAllRewards.dot:SetVisible(isOpening and isComplete and not isClaimed and not isMax)
+	self._btnBP.dot:SetVisible(isOpening and P._playerBPMonopoly:isStatusOpen() and P._playerBPMonopoly:haveUnclaimRewards())
+	self._btnPack.dot:SetVisible(isOpening and P._playerExchange:getLeftExchangeCount(D.ExchangeId.Monopoly_Pack_Free) > 0)
+	self._btnTask.dot:SetVisible(isOpening and P._playerTask:haveTask(D.TaskClass.Monopoly) and P._playerTask:haveRewards(D.TaskClass.Monopoly))
+end
+
+return M

@@ -1,0 +1,482 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	[110000] = {
+		110000,
+		110000,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		0,
+		0,
+		0,
+		0,
+		0,
+		110000
+	},
+	[110001] = {
+		110001,
+		110001,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		599,
+		0,
+		2,
+		0,
+		3,
+		110001
+	},
+	[110002] = {
+		110002,
+		110002,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		598,
+		0,
+		2,
+		0,
+		3,
+		110002
+	},
+	[110003] = {
+		110003,
+		110003,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		597,
+		0,
+		2,
+		0,
+		3,
+		110003
+	},
+	[110004] = {
+		110004,
+		110004,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		596,
+		0,
+		2,
+		0,
+		3,
+		110004
+	},
+	[110005] = {
+		110005,
+		110005,
+		5,
+		1,
+		1,
+		1,
+		nil,
+		595,
+		0,
+		2,
+		0,
+		3,
+		110005
+	},
+	[110006] = {
+		110006,
+		110006,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		699,
+		0,
+		2,
+		0,
+		5,
+		110006
+	},
+	[110007] = {
+		110007,
+		110007,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		698,
+		0,
+		2,
+		0,
+		5,
+		110007
+	},
+	[110008] = {
+		110008,
+		110008,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		697,
+		0,
+		2,
+		0,
+		5,
+		110008
+	},
+	[110009] = {
+		110009,
+		110009,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		696,
+		0,
+		2,
+		0,
+		5,
+		110009
+	},
+	[110010] = {
+		110010,
+		110010,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		695,
+		0,
+		2,
+		0,
+		5,
+		110010
+	},
+	[110011] = {
+		110011,
+		110011,
+		6,
+		1,
+		1,
+		1,
+		nil,
+		694,
+		0,
+		2,
+		0,
+		5,
+		110011
+	},
+	[110012] = {
+		110012,
+		110012,
+		7,
+		2,
+		2,
+		1,
+		110001,
+		799,
+		0,
+		2,
+		0,
+		7,
+		110012
+	},
+	[110014] = {
+		110014,
+		110014,
+		7,
+		2,
+		2,
+		1,
+		110008,
+		798,
+		0,
+		2,
+		0,
+		7,
+		110014
+	},
+	[110015] = {
+		110015,
+		110015,
+		7,
+		2,
+		2,
+		1,
+		110005,
+		797,
+		0,
+		2,
+		0,
+		7,
+		110015
+	},
+	[110016] = {
+		110016,
+		110016,
+		7,
+		2,
+		2,
+		1,
+		110010,
+		796,
+		0,
+		2,
+		0,
+		7,
+		110016
+	},
+	[110017] = {
+		110017,
+		110017,
+		7,
+		2,
+		2,
+		1,
+		110007,
+		795,
+		0,
+		2,
+		0,
+		7,
+		110017,
+		1
+	},
+	[110018] = {
+		110018,
+		110018,
+		7,
+		2,
+		2,
+		1,
+		110009,
+		794,
+		0,
+		2,
+		0,
+		7,
+		110018
+	},
+	[110019] = {
+		110019,
+		110019,
+		7,
+		2,
+		2,
+		1,
+		110004,
+		793,
+		0,
+		2,
+		0,
+		7,
+		110019
+	},
+	[110020] = {
+		110020,
+		110020,
+		7,
+		2,
+		2,
+		1,
+		110003,
+		792,
+		0,
+		2,
+		0,
+		7,
+		110020,
+		1
+	},
+	[110021] = {
+		110021,
+		110021,
+		7,
+		2,
+		2,
+		1,
+		110002,
+		791,
+		0,
+		2,
+		0,
+		7,
+		110021
+	},
+	[110022] = {
+		110022,
+		110022,
+		7,
+		2,
+		2,
+		1,
+		110006,
+		790,
+		0,
+		2,
+		0,
+		7,
+		110022
+	},
+	[110023] = {
+		110023,
+		110023,
+		7,
+		2,
+		2,
+		1,
+		110011,
+		789,
+		0,
+		2,
+		0,
+		7,
+		110023
+	},
+	[110024] = {
+		110024,
+		110024,
+		7,
+		-1,
+		100,
+		1,
+		nil,
+		750,
+		0,
+		0,
+		0,
+		15,
+		110024
+	},
+	[110025] = {
+		110025,
+		110025,
+		6,
+		-1,
+		1,
+		1,
+		nil,
+		650,
+		0,
+		1,
+		0,
+		5,
+		110025
+	}
+}
+local mapKeyIndex = {
+	k2297816 = 5,
+	k15255765 = 2,
+	k7324583 = 4,
+	k13849634 = 3,
+	k3158452 = 7,
+	k1644150 = 1,
+	k13922009 = 9,
+	k3917261 = 11,
+	k8655535 = 13,
+	k1677555 = 8,
+	k13631784 = 14,
+	k16213948 = 6,
+	k14229058 = 10,
+	k11340686 = 12
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -1582
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_SKIN_GATLIN_NAMESID_" .. table[2]]
+		elseif key == "_descSid" then
+			if table[13] == nil then
+				return nil
+			end
+
+			return SID["SID_SKIN_GATLIN_DESCSID_" .. table[13]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -1582
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

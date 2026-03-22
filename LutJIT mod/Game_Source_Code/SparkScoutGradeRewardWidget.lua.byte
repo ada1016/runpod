@@ -1,0 +1,96 @@
+local M = class("SparkScoutGradeRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutGradeRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:init(data)
+end
+
+function M:updateUI(idx, showGrades, curGradeId)
+	local gradeId = showGrades[idx]
+	local cfgs = D._gradeSparkScoutConfig
+	local grade1, subGrade1, star1 = P._playerActivitySparkScout:parseGradeId(curGradeId)
+	local grade2, subGrade2, star2 = P._playerActivitySparkScout:parseGradeId(gradeId)
+
+	if gradeId == P._playerActivitySparkScout:getBaseGradeId() or idx == 1 then
+		self._goExpArea:SetActive(false)
+	else
+		self._goExpArea:SetActive(true)
+
+		if gradeId < curGradeId then
+			self._imgExp.fillAmount = 1
+		elseif curGradeId == gradeId then
+			self._imgExp.fillAmount = 1
+		else
+			self._imgExp.fillAmount = 0
+		end
+	end
+
+	if idx == #showGrades then
+		self._goExpArea1:SetActive(false)
+	else
+		self._goExpArea1:SetActive(true)
+
+		if gradeId < curGradeId then
+			self._imgExp1.fillAmount = 1
+
+			if showGrades[idx + 1] and curGradeId < showGrades[idx + 1] then
+				self._imgExp1.fillAmount = 0
+			end
+		else
+			self._imgExp1.fillAmount = 0
+		end
+	end
+
+	V.loadSparkGradeIcon(self._tfGradesContainer, self._currentShowGradeId, gradeId)
+
+	self._currentShowGradeId = gradeId
+
+	self._goGet:SetActive(gradeId <= curGradeId)
+
+	local reward = D._gradeSparkScoutConfig[gradeId]._rewards
+
+	if reward then
+		self._goReward:SetActive(true)
+
+		local cid = reward[1]
+		local num = reward[2]
+
+		self._goItem:init(cid, num)
+	else
+		self._goReward:SetActive(false)
+	end
+
+	local cfg = cfgs[gradeId]
+
+	V.loadSparkGradeTitle(self._tmpRankName, gradeId)
+
+	if P._playerActivitySparkScout:getFinalGrade() <= gradeId then
+		lc.setSizeDelta(self._tfGradeTitle, 140, 100)
+
+		self._tmpRankStarNum.text = string.format("<sprite name=\"grade_star\">x%d", star2)
+	else
+		lc.setSizeDelta(self._tfGradeTitle, 140, 50)
+
+		self._tmpRankStarNum.text = ""
+	end
+end
+
+return M

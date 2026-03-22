@@ -1,0 +1,61 @@
+local M = class("BattlePassTreasureHuntingPanel", requireLua("BaseBattlePassPanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	textTitle = Types.TMP_Text,
+	imgExpProgress = Types.SlicedFilledImage,
+	textExpProgress = Types.TMP_Text,
+	textLevel = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goLastReward = Types.GameObject,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	btnBuyStep3 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goStep3Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	goLock3 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text,
+	textBuyStep3 = Types.TMP_Text,
+	goTopMask = Types.GameObject,
+	goBottomMask = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initOnce()
+	self._activityModule = P._playerActivityAnniversary._moduleTreasureHunting
+	self._module = P._playerActivityAnniversary._moduleTreasureHunting._bpModule
+	self._bpCfg = {
+		showLastReward = false,
+		widgetName = "BPRewardWidget_TreasureHunting",
+		widgetCellProgress = true,
+		e_levelChange = self._module._key_levelEvent,
+		e_expire = self._module._key_expireEvent,
+		reddot = self._module._key_redDot,
+		missRewardTitleId = SID.TITLE_PREV_BP_REWARDS
+	}
+end
+
+function M:init(parentPanel, param, isJump)
+	M.super.init(self, parentPanel, param, isJump)
+
+	local buyType, buyCost = self._module:readStepBuy(2)
+
+	if buyType == 1 then
+		V.addRechargeScoreWidget(buyCost, self._btnBuyStep2.transform)
+	end
+end
+
+function M:customCellClick(goCell)
+	goCell:setRewardsClick(self, self._parentPanel:updateReddots())
+end
+
+function M:claimAllCallback()
+	self._parentPanel:updateReddots()
+end
+
+return M

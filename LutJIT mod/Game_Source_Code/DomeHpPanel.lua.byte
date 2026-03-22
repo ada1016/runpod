@@ -1,0 +1,61 @@
+local M = class("DomeImproveTipPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	txtHp1 = Types.TMP_Text,
+	txtHp2 = Types.TMP_Text,
+	txtHp3 = Types.TMP_Text,
+	txtHp4 = Types.TMP_Text,
+	txtHp5 = Types.TMP_Text,
+	txtHpTotal = Types.TMP_Text,
+	txtHpReduce1 = Types.TMP_Text,
+	txtHpReduce2 = Types.TMP_Text,
+	txtHpReduce3 = Types.TMP_Text,
+	txtHpReduce4 = Types.TMP_Text,
+	txtHpReduce5 = Types.TMP_Text,
+	txtHpReduceTotal = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	local hp1 = D._battleGlobalConfig._battle_player_initial_hp
+	local hpReduce1 = 0
+	self._txtHp1.text = hp1
+	self._txtHpReduce1.text = hpReduce1
+	local props = P._playerArmory:getDomeProps()
+	local hp2 = props[BattlePropEnum.MaxHp]
+	local hpReduce2 = props[BattlePropEnum.HpDmgReduce]
+	self._txtHp2.text = hp2
+	self._txtHpReduce2.text = hpReduce2
+	local gemProps = P._playerRole:getGemProps()[0]
+	local hp4 = gemProps and gemProps[BattlePropEnum.MaxHp] or 0
+	local hpReduce4 = gemProps and gemProps[BattlePropEnum.HpDmgReduce] or 0
+	self._txtHp4.text = hp4
+	self._txtHpReduce4.text = hpReduce4
+	local hp5 = P._playerSkin:getTotalDomeHp()
+	local hpReduce5 = 0
+	self._txtHp5.text = hp5
+	self._txtHpReduce5.text = hpReduce5
+	local percentAdd = P._playerArmory:getTotalDomeTechHpPercentAdd()
+	local techLevel = P._playerArmory:getDomeTechLevel(D.TECH_DOME_DMG_REDUCE)
+	local hp3 = math.floor((hp2 + hp5) * percentAdd / 100)
+	local hpReduce3 = props[BattlePropEnum.HpDmgReduce] * (D._domeTechConfig[D.TECH_DOME_DMG_REDUCE]._param[techLevel] or 0) / 100
+	self._txtHp3.text = hp3
+	self._txtHpReduce3.text = hpReduce3
+	local hpTotal = hp1 + hp2 + hp3 + hp4 + hp5
+	local hpReduceTotal = hpReduce1 + hpReduce2 + hpReduce3 + hpReduce4 + hpReduce5
+	self._txtHpTotal.text = hpTotal
+	self._txtHpReduceTotal.text = hpReduceTotal
+end
+
+return M

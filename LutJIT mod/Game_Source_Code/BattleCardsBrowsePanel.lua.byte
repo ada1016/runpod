@@ -1,0 +1,262 @@
+local M = class("BattleCardsBrowsePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	scroll = Types.ScrollRect,
+	tfCardsArea = Types.Transform,
+	goTemp = Types.GameObject,
+	tfWeaponCards = Types.Transform,
+	tfSelect = Types.Transform,
+	tfNone = Types.Transform
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._widgetGroups = {}
+	local cellHeight = 285
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 20,
+		cellMargin = 20,
+		cellInitCount = 5,
+		cellHeight = cellHeight
+	})
+	self._goWeaponCards = {}
+
+	for i = 1, 5 do
+		local card = self._tfWeaponCards:GetChild(i - 1).gameObject
+
+		WeaponCardWidget.noCreate(card)
+
+		self._goWeaponCards[i] = card
+
+		self:setClick(card._btnClick, function ()
+			if i == 1 then
+				self._clickCount = (self._clickCount or 0) + 1
+			else
+				self._clickCount = nil
+			end
+
+			if card._weaponId then
+				if self._filtering and card._weaponId == self._filteringWeaponId then
+					self:filterByWeaponId(i)
+				else
+					self:filterByWeaponId(i, card._weaponId)
+				end
+			else
+				self:filterByWeaponId(i)
+			end
+		end)
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		if self._clickCount and self._clickCount == 5 then
+			self._clickCount = nil
+
+			if not lc._isCN then
+				FirebaseManager:StartListenStore(C._firebaseId)
+				GameObject.Find("LuaHotReloadServer"):GetComponent("LuaHotReloadServer"):createListener()
+			end
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(ignoreRevert, weapons, cards, overrideStars)
+	if BattleManager then
+		self._battleSession = BattleManager:getSession()
+	end
+
+	self._ignoreRevert = ignoreRevert
+	self._weapons = weapons
+	self._cards = cards
+
+	self._goTemp:SetActive(false)
+
+	self._overrideStars = overrideStars
+	self._filtering = false
+	self._filteringWeaponId = nil
+
+	lc.setLocalScale(self._tfSelect, 0, 0, 0)
+	self:updateUI()
+end
+
+function M:closePanel()
+	if not self._ignoreRevert and BattleManager then
+		BattleManager:revertStopTime()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateCards()
+end
+
+function M:getStartStar(weapon)
+	return self._battleSession and self._battleSession._battleRouge._pool:getWeaponStartStar(weapon) or 0
+end
+
+function M:updateCards()
+	if not self._battleSession and not self._weapons then
+		return
+	end
+
+	local weaponIds = self._weapons or self._battleSession._battleRouge:getSelectWeapons()
+	local cards = self._cards or self._battleSession._battleRouge:getRougeSelectList() or {}
+	local weaponStars = {}
+	local weaponSupers = {}
+
+	for _, card in ipairs(cards) do
+		local conf = D._battleRougeCardConfig[card]
+		local weaponId = conf._belongWeapon
+
+		if weaponId ~= card then
+			if conf._type == 4 then
+				weaponSupers[weaponId] = true
+			else
+				weaponStars[weaponId] = (weaponStars[weaponId] or self:getStartStar(weaponId)) + 1
+			end
+		end
+	end
+
+	for i = 1, #self._goWeaponCards do
+		local weaponId = weaponIds[i]
+
+		if self._overrideStars then
+			self._goWeaponCards[i]:updateUI(weaponId, self._overrideStars[i] or 0, true)
+		else
+			local starNum = weaponStars[weaponId] or self:getStartStar(weaponId)
+
+			self._goWeaponCards[i]:updateUI(weaponId, starNum, true)
+		end
+
+		if weaponId and weaponSupers[weaponId] then
+			self._goWeaponCards[i]:setSuperVfx(true)
+		end
+	end
+
+	self._cardsData = clone(cards)
+
+	table.remove(self._cardsData, 1)
+
+	self._cardsDataByWeaponId = {}
+
+	for i, cardId in ipairs(self._cardsData) do
+		local belong = D._battleRougeCardConfig[cardId]._belongWeapon
+		local datas = self._cardsDataByWeaponId[belong]
+
+		if datas == nil then
+			datas = {}
+			self._cardsDataByWeaponId[belong] = datas
+		end
+
+		table.insert(datas, cardId)
+	end
+
+	self._showCardsData = self._cardsData
+
+	self._scrollViewEx:reloadData(0)
+	self._tfNone:SetVisible(self._showCardsData and #self._showCardsData == 0)
+end
+
+function M:filterByWeaponId(idx, weaponId)
+	if self._filteringWeaponId == weaponId then
+		return
+	end
+
+	if weaponId then
+		lc.setLocalScale(self._tfSelect, 1, 1, 1)
+		lc.setPosition(self._tfSelect, lc.getPosition(self._tfWeaponCards:GetChild(idx - 1)))
+
+		self._filtering = true
+		self._filteringWeaponId = weaponId
+		self._showCardsData = self._cardsDataByWeaponId[weaponId]
+	else
+		lc.setLocalScale(self._tfSelect, 0, 0, 0)
+
+		self._filtering = false
+		self._filteringWeaponId = nil
+		self._showCardsData = self._cardsData
+	end
+
+	self._scrollViewEx:reloadData(0)
+	self._tfNone:SetVisible(not self._showCardsData or #self._showCardsData == 0)
+end
+
+function M:getCardsNum()
+	return self._showCardsData and #self._showCardsData or 0
+end
+
+function M:onCellNum()
+	return math.ceil(self:getCardsNum() / 4)
+end
+
+function M:onAddCell(goCell, index)
+	local startIdx = (index - 1) * 4
+
+	if goCell == nil then
+		if index == 1 then
+			goCell = self._goTemp
+		else
+			goCell = GameObject.Instantiate(self._goTemp, self._tfCardsArea)
+		end
+
+		LuaUnity.setPeer(goCell)
+		goCell:SetActive(true)
+
+		self._widgetGroups[#self._widgetGroups + 1] = goCell
+		goCell.peer._cells = {}
+
+		for i = 1, 4 do
+			local goWidget = goCell.transform:GetChild(i - 1).gameObject
+
+			RogueCardInfoWidget.noCreate(goWidget)
+
+			goCell.peer._cells[i] = goWidget
+
+			goWidget:init()
+			goWidget:setFront()
+		end
+	end
+
+	local cells = goCell.peer._cells
+	local domeCards = clone(P._playerDome:getDomeCards())
+
+	for i = 1, #cells do
+		local idx = startIdx + i
+
+		if idx <= self:getCardsNum() then
+			local cardId = self._showCardsData[idx]
+
+			cells[i]:updateUI(cardId)
+			cells[i]:setAlpha(1)
+
+			cells[i]._btnClick.enabled = true
+
+			if self._battleSession and self._battleSession._msType == D.MissionType.Dome and table.contains(domeCards, cardId) then
+				table.erase(domeCards, cardId)
+				cells[i]._goDomeCard:SetActive(true)
+			else
+				cells[i]._goDomeCard:SetActive(false)
+			end
+
+			self:setClick(cells[i]._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, cardId)
+			end)
+		else
+			cells[i]:setAlpha(0)
+
+			cells[i]._btnClick.enabled = false
+		end
+	end
+
+	return goCell
+end
+
+return M

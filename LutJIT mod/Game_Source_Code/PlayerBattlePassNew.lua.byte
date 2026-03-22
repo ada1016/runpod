@@ -1,0 +1,10 @@
+local M = class("PlayerBattlePassNew", requireLua("PlayerBattlePassBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.New
+	self._bpLevelCfg = D._battlePassNewConfig
+	self._bpLogWay = D.LogWay.battle_pass
+	self._key_redDot = "city.home.special.battlepassnew"
+end
+
+return M

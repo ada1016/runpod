@@ -1,0 +1,53 @@
+local M = class("BattlePassSkinPanel", requireLua("BaseBattlePassPanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	textTitle = Types.TMP_Text,
+	imgExpProgress = Types.SlicedFilledImage,
+	textExpProgress = Types.TMP_Text,
+	textLevel = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goLastReward = Types.GameObject,
+	btnBuyLevel = Types.Button,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	btnBuyStep3 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goStep3Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	goLock3 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text,
+	textBuyStep3 = Types.TMP_Text,
+	goTopMask = Types.GameObject,
+	goBottomMask = Types.GameObject,
+	btnExchange = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExchange, function ()
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.bp_skin_key, D.ExchangeId.BP_Skin_Group)
+	end)
+end
+
+function M:initOnce()
+	self._module = P._playerBPSkin
+	self._bpCfg = {
+		exchangeReddot = "city.shop.activityexchange",
+		showLastReward_interval = 10,
+		showLastReward = true,
+		widgetName = "BPRewardWidget_Skin",
+		e_levelChange = self._module._key_levelEvent,
+		e_expire = self._module._key_expireEvent,
+		reddot = self._module._key_redDot,
+		missRewardTitleId = SID.TITLE_PREV_BP_REWARDS,
+		title = D._systemUnlockConfig[D.SystemType.BPSkin]._nameSid
+	}
+end
+
+return M

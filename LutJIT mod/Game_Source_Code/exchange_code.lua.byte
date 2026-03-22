@@ -1,0 +1,505 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	[101] = {
+		101,
+		"GDFUN",
+		202501,
+		dup._85,
+		dup._86,
+		dup._87,
+		nil,
+		"0.0.0"
+	},
+	[102] = {
+		102,
+		"GDLUCK",
+		202502,
+		dup._88,
+		dup._86,
+		dup._87,
+		nil,
+		"0.0.0"
+	},
+	[103] = {
+		103,
+		"GDV5QW",
+		202503,
+		dup._89,
+		dup._20,
+		dup._90,
+		dup._91,
+		"0.5.0"
+	},
+	[104] = {
+		104,
+		"GDV5GH",
+		202504,
+		dup._92,
+		dup._93,
+		dup._90,
+		dup._91,
+		"0.5.0"
+	},
+	[105] = {
+		105,
+		"GDV6HU",
+		202505,
+		dup._94,
+		dup._95,
+		dup._96,
+		dup._97,
+		"0.6.0"
+	},
+	[106] = {
+		106,
+		"GDV6VM",
+		202506,
+		dup._98,
+		dup._99,
+		dup._96,
+		dup._97,
+		"0.6.0"
+	},
+	[107] = {
+		107,
+		"GDV7HL",
+		202507,
+		dup._88,
+		dup._86,
+		dup._100,
+		dup._101,
+		"0.7.0"
+	},
+	[108] = {
+		108,
+		"GDV7VY",
+		202508,
+		{
+			11103
+		},
+		dup._86,
+		dup._100,
+		dup._101,
+		"0.7.0"
+	},
+	[109] = {
+		109,
+		"GDV8LH",
+		202509,
+		dup._89,
+		dup._20,
+		dup._102,
+		dup._103,
+		"0.8.0"
+	},
+	[110] = {
+		110,
+		"GDV8NC",
+		202510,
+		dup._85,
+		dup._86,
+		dup._102,
+		dup._103,
+		"0.8.0"
+	},
+	[111] = {
+		111,
+		"GDV81S",
+		202502,
+		dup._88,
+		dup._86,
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[112] = {
+		112,
+		"GDV82O",
+		202501,
+		dup._85,
+		dup._86,
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[113] = {
+		113,
+		"GDV83R",
+		202503,
+		dup._89,
+		dup._20,
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[114] = {
+		114,
+		"GDV84R",
+		202502,
+		dup._88,
+		dup._86,
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[115] = {
+		115,
+		"GDV85Y",
+		202503,
+		dup._89,
+		dup._20,
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[116] = {
+		116,
+		"QWERT",
+		nil,
+		{
+			10001,
+			10003
+		},
+		{
+			100,
+			10
+		},
+		dup._104,
+		dup._105,
+		"0.0.0"
+	},
+	[117] = {
+		117,
+		"GDC60K",
+		202503,
+		dup._89,
+		dup._20,
+		{
+			2025,
+			6,
+			3
+		},
+		{
+			2025,
+			6,
+			17
+		},
+		"0.8.0"
+	},
+	[118] = {
+		118,
+		"GDV9VP",
+		nil,
+		dup._92,
+		dup._93,
+		dup._106,
+		dup._107,
+		"0.9.0"
+	},
+	[119] = {
+		119,
+		"GDV9WV",
+		nil,
+		dup._88,
+		dup._86,
+		dup._106,
+		dup._107,
+		"0.9.0"
+	},
+	[120] = {
+		120,
+		"GDN70K",
+		202501,
+		dup._85,
+		dup._86,
+		{
+			2025,
+			6,
+			24
+		},
+		{
+			2025,
+			7,
+			15
+		},
+		"0.8.0"
+	},
+	[121] = {
+		121,
+		"GDV9RK",
+		nil,
+		dup._88,
+		dup._108,
+		{
+			2025,
+			7,
+			8
+		},
+		{
+			2025,
+			7,
+			22
+		},
+		"0.9.0"
+	},
+	[122] = {
+		122,
+		"GDV10LF",
+		nil,
+		dup._89,
+		dup._20,
+		dup._109,
+		dup._110,
+		"0.10.0"
+	},
+	[123] = {
+		123,
+		"GDV10UZ",
+		nil,
+		dup._85,
+		dup._86,
+		dup._109,
+		dup._110,
+		"0.10.0"
+	},
+	[124] = {
+		124,
+		"GDHN80K",
+		nil,
+		dup._88,
+		dup._86,
+		{
+			2025,
+			7,
+			11
+		},
+		{
+			2025,
+			7,
+			25
+		},
+		"0.9.0"
+	},
+	[125] = {
+		125,
+		"90KCHAT",
+		nil,
+		dup._98,
+		dup._111,
+		{
+			2025,
+			7,
+			23
+		},
+		{
+			2025,
+			8,
+			6
+		},
+		"0.10.0"
+	},
+	[126] = {
+		126,
+		"GDRANGER",
+		nil,
+		dup._88,
+		dup._86,
+		{
+			2025,
+			7,
+			29
+		},
+		{
+			2025,
+			8,
+			29
+		},
+		"0.10.0"
+	},
+	[127] = {
+		127,
+		"GDV11RA",
+		nil,
+		{
+			10044
+		},
+		dup._20,
+		dup._112,
+		dup._113,
+		"0.11.0"
+	},
+	[128] = {
+		128,
+		"GDV11NG",
+		nil,
+		{
+			10045
+		},
+		dup._86,
+		dup._112,
+		dup._113,
+		"0.11.0"
+	},
+	[129] = {
+		129,
+		"TOPTAPVIP",
+		nil,
+		dup._88,
+		dup._86,
+		dup._114,
+		dup._115,
+		"0.10.0"
+	},
+	[130] = {
+		130,
+		"GDLO100K",
+		nil,
+		dup._89,
+		dup._116,
+		dup._114,
+		{
+			2025,
+			8,
+			22
+		},
+		"0.10.0"
+	},
+	[131] = {
+		131,
+		"GDAR110K",
+		nil,
+		dup._92,
+		dup._93,
+		{
+			2025,
+			8,
+			25
+		},
+		dup._115,
+		"0.10.0"
+	},
+	[132] = {
+		132,
+		"GDV12CR",
+		nil,
+		{
+			10048
+		},
+		dup._117,
+		dup._118,
+		dup._119,
+		"0.12.0"
+	},
+	[133] = {
+		133,
+		"GDV12IT",
+		nil,
+		{
+			10047
+		},
+		dup._111,
+		dup._118,
+		dup._119,
+		"0.12.0"
+	},
+	[134] = {
+		134,
+		"GDP120K",
+		nil,
+		dup._88,
+		dup._86,
+		{
+			2025,
+			9,
+			12
+		},
+		{
+			2025,
+			10,
+			13
+		},
+		"0.10.0"
+	}
+}
+local mapKeyIndex = {
+	k4797140 = 4,
+	k1644150 = 1,
+	k12956039 = 5,
+	k11020068 = 8,
+	k13204862 = 6,
+	k16253736 = 2,
+	k10590491 = 7,
+	k5252885 = 3
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -2114
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -2114
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

@@ -1,0 +1,59 @@
+local M = class("TaskInfoPanel", requireLua("BasePanel"))
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	goItem = Types.GameObject,
+	btnGoto = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goItem)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+	self:setClick(self._btnGoto, function ()
+		self:closePanel()
+
+		local jumpConf = D._jumpConfig[TaskHelper:getTaskGo(self._tid)]
+
+		V.jumpTo(jumpConf, TaskHelper:getTaskProgress(self._tid))
+	end)
+end
+
+function M:init(taskId)
+	self._tid = taskId
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local TaskHelper = TaskHelper
+	local tid = self._tid
+
+	V.updateTaskTitleDesc(tid, self._txtTitle, self._txtDesc)
+	V.updateTaskDescProgress(tid, {
+		showBreifDesc = false,
+		red = "458879",
+		green = "a4ff39",
+		txtDesc = self._txtDesc,
+		txtProgress = self._txtProgress
+	})
+	self._goItem:init(TaskHelper:getTaskRewardCids(tid)[1], TaskHelper:getTaskRewardNums(tid)[1])
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

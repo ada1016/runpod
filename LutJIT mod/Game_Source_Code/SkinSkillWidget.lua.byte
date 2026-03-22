@@ -1,0 +1,30 @@
+local M = class("SkinSkillWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SkinSkillWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVarPeer(go, go.peer)
+
+	return go
+end
+
+function M:init(cid)
+	local cfg = P._playerSkin:getCfg(cid)
+	local skinType = D.toSkinType(cid)
+
+	if skinType == D.SkinType.Dome then
+		LuaUnity.setTPSprite(self._imgWeapon, "skill/item_skill_" .. cid, true)
+	else
+		LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. cfg._weapon, true)
+	end
+
+	local level = P._playerSkin:getSkinLevel(cid)
+
+	V.loadSkinSkillDesc(self._txtDesc, cfg, level)
+	self._goLevel:SetActive(false)
+	self._goStarContainer:SetActive(true)
+	V.setSkinQualityStar(self._goStarContainer, nil, level)
+end
+
+return M

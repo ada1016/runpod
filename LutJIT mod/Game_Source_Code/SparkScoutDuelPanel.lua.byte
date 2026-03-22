@@ -1,0 +1,206 @@
+local M = class("SparkScoutDuelPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	goContent = Types.GameObject,
+	txtAtk = Types.TMP_Text,
+	txtChipNum = Types.TMP_Text,
+	goDuelWidget1 = Types.GameObject,
+	goDuelWidget2 = Types.GameObject,
+	goDuelWidget3 = Types.GameObject,
+	txtTips = Types.TMP_Text,
+	btnAd = Types.Button,
+	btnAbandon = Types.Button
+}
+local SparkScoutDuelWidget = requireLua("SparkScoutDuelWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	SparkScoutDuelWidget.noCreate(self._goDuelWidget1)
+	SparkScoutDuelWidget.noCreate(self._goDuelWidget2)
+	SparkScoutDuelWidget.noCreate(self._goDuelWidget3)
+
+	self._goDuelWidgets = {
+		self._goDuelWidget1,
+		self._goDuelWidget2,
+		self._goDuelWidget3
+	}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnAd, function ()
+		P._playerAd:tryStartRewardAd(D.AdType.SparkScout_DuelRefresh, function ()
+			self:findDuelData(function ()
+				self._btnAd:SetActive(false)
+			end)
+		end)
+	end)
+	self:setClick(self._btnAbandon, function ()
+		local ret = V.tryShowConfirm(nil, function ()
+			P._playerActivitySparkScout:clearDuelData()
+			self:closePanel()
+		end, SID.TIP_GIVE_UP_DUEL)
+
+		if not ret then
+			self:closePanel()
+		end
+	end)
+
+	for i = 1, 3 do
+		self:setClick(self._goDuelWidgets[i]._btnSelect, function ()
+			if P._playerActivitySparkScout:getMaxStarGradeId() <= P._playerActivitySparkScout:getCurGradeId() then
+				V.showToast(SID.SPARK_SCOUT_RANK_MAX_TIP)
+
+				return
+			end
+
+			self:closePanel()
+
+			local msId = P._playerActivitySparkScout:genMissionId()
+
+			P._playerActivitySparkScout:startMission(msId, self._duelDatas[i], true)
+
+			InputBattleData = {
+				duel = true,
+				defaultBlood = 1000,
+				msType = D.MissionType.SparkScout,
+				msId = msId
+			}
+
+			V.switchBetweenMainAndBattleScene("spark_scout", "battle")
+			P:setMsType(D.MissionType.SparkScout)
+		end)
+		self:setClick(self._goDuelWidgets[i]._btnViewInfo, function ()
+			V.viewOtherInfo(self._duelDatas[i])
+		end)
+	end
+end
+
+function M:addEvents()
+end
+
+function M:init()
+	self._txtAtk.text = P._playerActivitySparkScout:getAtk()
+	self._txtChipNum.text = P._playerActivitySparkScout:getChipNum()
+
+	self:updateUI()
+	self._goContent:SetActive(false)
+
+	self._duelDatas = P._playerActivitySparkScout:getDuelData()
+
+	self._txtTips:SetLocalize(SID.SPARK_SCOUT_DUEL_TIP)
+
+	local strItem = D.getTMPSpriteRichText("item_small_10052")
+	self._txtTips.text = self._txtTips.text .. strItem
+
+	if self._duelDatas and #self._duelDatas >= 3 then
+		self._excludes = clone(P._playerActivitySparkScout:getCurrentExcludes())
+
+		for i = 1, 3 do
+			local duelData = self._duelDatas[i]
+
+			table.insert(self._excludes, duelData._userId)
+		end
+
+		self:updateDuelData()
+	else
+		self._excludes = clone(P._playerActivitySparkScout:getCurrentExcludes())
+
+		P._playerActivitySparkScout:clearDuelData()
+		self:findDuelData()
+	end
+end
+
+function M:updateUI()
+	self._goDuelWidget1:init()
+	self._goDuelWidget2:init()
+	self._goDuelWidget3:init()
+
+	local refreshed = false
+
+	self._btnAd:SetActive(not refreshed)
+	V.loadAdButton1(self._btnAd.gameObject, refreshed, SID.STR_REFRESH, SID.STR_REFRESH)
+end
+
+function M:updateDuelData()
+	self._goContent:SetActive(true)
+	self._goDuelWidget1:updateUI(self._duelDatas[1])
+	self._goDuelWidget2:updateUI(self._duelDatas[2])
+	self._goDuelWidget3:updateUI(self._duelDatas[3])
+	self._btnAd:SetActive(not P._playerActivitySparkScout:isDuelRefreshed())
+end
+
+function M:findDuelData(finishedCallback)
+	self._duelDatas = {}
+	local curGrade = P._playerActivitySparkScout:getCurGradeId()
+	local highGrade = P._playerActivitySparkScout:getNextGradeId(curGrade)
+	local starOffset = P._playerActivitySparkScout:readCurrentCfg()._duelStarOffset
+
+	for i = 1, starOffset - 1 do
+		highGrade = P._playerActivitySparkScout:getNextGradeId(highGrade)
+	end
+
+	local lowGrade = P._playerActivitySparkScout:getLastGradeId(curGrade)
+
+	for i = 1, starOffset - 1 do
+		lowGrade = P._playerActivitySparkScout:getLastGradeId(lowGrade)
+	end
+
+	UIManager.showMatchWaiting(10, SID.NETWORK_NOTREACHABLE)
+	self:findOneMatchData(curGrade, self._excludes, function ()
+		self:findOneMatchData(highGrade, self._excludes, function ()
+			self:findOneMatchData(lowGrade, self._excludes, function ()
+				local isAdRefresh = finishedCallback ~= nil
+
+				if isAdRefresh then
+					P._playerActivitySparkScout:setDuelRefreshed()
+				else
+					P._playerActivitySparkScout:tryDuelCost()
+				end
+
+				P._playerActivitySparkScout:setDuelData(self._duelDatas)
+				UIManager.hideMatchWaiting()
+				self:updateDuelData()
+
+				if finishedCallback then
+					finishedCallback()
+				end
+			end)
+		end)
+	end)
+end
+
+function M:findOneMatchData(grade, excludes, callback)
+	P._playerActivitySparkScout:findMatchData(grade, excludes, function (data)
+		if data == 0 then
+			UIManager.hideMatchWaiting()
+
+			if #self._duelDatas < 3 then
+				self:closePanel()
+			end
+
+			return
+		end
+
+		if not data then
+			UIManager.hideMatchWaiting()
+			V.showToast(SID.TIP_SPARK_SCOUT_MATCH_FAILED)
+			self:closePanel()
+
+			return
+		end
+
+		self._duelDatas[#self._duelDatas + 1] = data
+		self._excludes[#self._excludes + 1] = data._userId
+
+		if callback then
+			callback()
+		end
+	end, true)
+end
+
+return M

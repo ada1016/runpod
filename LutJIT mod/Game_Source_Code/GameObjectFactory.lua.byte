@@ -1,0 +1,74 @@
+local M = class("GameObjectFactory")
+local RES = RES
+local GameObject = GameObject
+local string = string
+local table = table
+
+local function _instantiate_obj(path, parent)
+	local res = RES:SyncLoadAsset(string.lower(path))
+
+	return GameObject.Instantiate(res.m_oAssetObject, parent)
+end
+
+function M:ctor()
+	self._gameobjectsMap = table.new(0, 32)
+	self._usingCount = table.new(0, 32)
+end
+
+local function _get_obj(self, name, initialSize)
+	local objs = self._gameobjectsMap[name]
+
+	if objs == nil then
+		objs = table.new(initialSize or 16, 0)
+		self._gameobjectsMap[name] = objs
+	end
+
+	local obj = objs[#objs]
+
+	if obj then
+		objs[#objs] = nil
+	end
+
+	return obj
+end
+
+function M:getObj(prefabPathHolder, name, parent, initialSize)
+	self._usingCount[name] = self._usingCount[name] or 0
+
+	if initialSize and initialSize <= self._usingCount[name] then
+		return
+	end
+
+	local obj = _get_obj(self, name, initialSize)
+	local new = false
+
+	if obj == nil then
+		obj = _instantiate_obj(string.format(prefabPathHolder, name), parent)
+		obj.name = name
+		new = true
+	end
+
+	self._usingCount[name] = self._usingCount[name] + 1
+
+	return obj, new
+end
+
+function M:putObj(obj)
+	local name = obj.name
+	local gameobjects = self._gameobjectsMap[name]
+
+	if gameobjects then
+		gameobjects[#gameobjects + 1] = obj
+		self._usingCount[name] = self._usingCount[name] - 1
+	end
+end
+
+function M:clean()
+	for name, objs in pairs(self._gameobjectsMap) do
+		table.clear(self._gameobjectsMap[name])
+	end
+
+	table.clear(self._gameobjectsMap)
+end
+
+return M

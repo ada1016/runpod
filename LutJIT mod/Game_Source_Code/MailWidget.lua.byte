@@ -1,0 +1,62 @@
+local M = class("MailWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MailWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(mail)
+	self._mail = mail
+
+	if mail.rewardCids then
+		LuaUnity.setTPSprite(self._imgIcon, mail.read and "general/g_icon_119" or "general/g_icon_118", true)
+		self._goClaimed:SetActive(mail.claimed and true or false)
+	else
+		LuaUnity.setTPSprite(self._imgIcon, mail.read and "general/g_icon_117" or "general/g_icon_116", true)
+		self._goClaimed:SetActive(mail.read and true or false)
+	end
+
+	local cfg = D._mailConfig[mail.template]
+
+	self._goDot:SetActive(mail.read == nil and true or false)
+	self._txtTitle:SetLocalize(cfg._titleSid)
+
+	local sendTime = os.date("!%Y/%m/%d(UTC)", mail.sendTime)
+	self._txtSendTime.text = sendTime
+	local expireTime = mail.sendTime + cfg._lastTime * 86400
+	local delta = expireTime - C.getCurTime()
+	delta = math.max(delta, 0)
+
+	if delta < 60 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_SECOND, math.ceil(delta))
+	elseif delta < 3600 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_MINUTE, math.ceil(delta / 60))
+	elseif delta < 86400 then
+		self._txtExpireHint:SetLocalize(SID.PERIOD_HOUR, math.ceil(delta / 3600))
+	else
+		self._txtExpireHint:SetLocalize(SID.PERIOD_DAY, math.ceil(delta / 86400))
+	end
+
+	self._txtExpireHint:SetLocalizeS(SID.MAIL_EXPIRE, self._txtExpireHint.text)
+end
+
+function M:setRead()
+	self._goDot:SetActive(true)
+end
+
+function M:setClaimed()
+	self._goClaimed:SetActive(true)
+	self._goDot:SetActive(false)
+
+	if self._mail._rewardCids then
+		LuaUnity.setTPSprite(self._imgIcon, "general/g_icon_116")
+	else
+		LuaUnity.setTPSprite(self._imgIcon, "general/g_icon_118")
+	end
+end
+
+return M

@@ -1,0 +1,214 @@
+local M = class("SparkScoutBattleWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutBattleWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	self._cgSelfScore = self._goSelfScoreCg:GetComponent("CanvasGroup")
+	self._cgOtherScore = self._goOtherScoreCg:GetComponent("CanvasGroup")
+
+	self._animScoreChange.gameObject:SetActive(false)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateStop()
+	self:updateFaster()
+end
+
+function M:updateStop()
+	local stop = Time.timeScale == 0
+
+	self._btnPause.transform:GetChild(1):SetActive(not stop)
+	self._btnPause.transform:GetChild(2):SetActive(stop)
+end
+
+function M:updateFaster()
+	self._goSpeedUpVfx:SetActive(BattleManager:isSpeedUp())
+
+	if BattleManager._targetTimeScale == D._battleGlobalConfig._battle_time_scale[3] then
+		self._tmpTimeScale.text = "x2"
+	elseif BattleManager._targetTimeScale == D._battleGlobalConfig._battle_time_scale[2] then
+		self._tmpTimeScale.text = "x1.5"
+	else
+		self._tmpTimeScale.text = "x1"
+	end
+end
+
+function M:updatePlayerInfo(info1, info2)
+	V.loadAvatar(self._tfSelfAvatarWidget, info1.avatar, info1.avatarFrame)
+	V.loadAvatar(self._tfOtherAvatarWidget, info2.avatar, info2.avatarFrame)
+
+	self._txtSelfName.text = info1.name
+	self._txtOtherName.text = info2.name
+end
+
+function M:updateEnemyNum(num1, num2)
+	self._txtSelfEnemyNum.text = num1 or 0
+	self._txtOtherEnemyNum.text = num2 or 0
+end
+
+function M:updateScoreNum(num1, num2)
+	self._selfScore = num1 or 0
+	self._otherScore = num2 or 0
+	self._txtSelfScore.text = self._selfScore
+	self._txtOtherScore.text = self._otherScore
+end
+
+function M:showScoreChange()
+	self._animScoreChange.gameObject:SetActive(true)
+	Client.playSound("ui_Weekmid_round_result_1")
+
+	self._cgSelfScore.alpha = 0
+	self._cgOtherScore.alpha = 0
+	local score1, score2 = BattleManager:getPvpScore()
+	local isWin = self._selfScore ~= score1
+
+	if isWin then
+		self._animScoreChange:Play("anim_sparkscout_battle_scoreMe")
+	else
+		self._animScoreChange:Play("anim_sparkscout_battle_scoreEnemy")
+	end
+
+	self._txtSelfNewScore.text = self._selfScore
+	self._txtOtherNewScore.text = self._otherScore
+
+	lc.setLocalPosition(self._tfNewScoreSelf, 0, 0, 0)
+	lc.setLocalPosition(self._tfNewScoreOther, 0, 0, 0)
+
+	local changeScoreTime = 0.7333333333333333
+
+	lc.delayFunc(changeScoreTime, function ()
+		self._txtSelfNewScore.text = score1
+		self._txtOtherNewScore.text = score2
+
+		self:updateScoreNum(score1, score2)
+	end, self.gameObject)
+	lc.delayFunc(1.5, function ()
+		local x1, y1, z1 = lc.getPosition(self._txtSelfScore.transform.parent)
+		local x2, y2, z2 = lc.getPosition(self._txtOtherScore.transform.parent)
+
+		self._tfNewScoreSelf:DOMove(Vector3.static(x1, y1, z1), 0.3333333333333333)
+		self._tfNewScoreOther:DOMove(Vector3.static(x2, y2, y2), 0.3333333333333333)
+	end, self.gameObject)
+	lc.delayFunc(1.8333333333333333, function ()
+		self._cgSelfScore.alpha = 1
+		self._cgOtherScore.alpha = 1
+	end, self.gameObject)
+end
+
+function M:updateStatus(status)
+	if self._status == status then
+		return
+	end
+
+	if status == 0 then
+		self:showCountdownTitle(SID.SPARK_SCOUT_CRAZY_IN)
+		self._txtCountdownTime.gameObject:SetActive(true)
+
+		self._txtCountdownTime.color = Color.str2Static("8C7988")
+	elseif status == 1 then
+		self:showCountdownTitle(SID.SPARK_SCOUT_DEATH_IN)
+		self:showCrazyBanner()
+		self._txtCountdownTime.gameObject:SetActive(true)
+
+		self._txtCountdownTime.color = Color.str2Static("8C7988")
+	elseif status == 2 then
+		self:showCountdownTitle(SID.SPARK_SCOUT_DEATH_TIME)
+		self:showDeathBanner()
+		self._txtCountdownTime.gameObject:SetActive(false)
+	end
+
+	self._status = status
+end
+
+function M:updateCountdown(elapsedTime)
+	local lastShowStr = self._showTimeStr or 0
+	local status = self._status
+
+	if status == 0 then
+		local showTime = math.floor(D._battleGlobalConfig._battle_pvp_rage_time - elapsedTime)
+		showTime = Mathf.Clamp(showTime, 0, D._battleGlobalConfig._battle_pvp_rage_time)
+		self._showTimeStr = showTime
+		self._txtCountdownTime.text = showTime
+	elseif status == 1 then
+		local showTime = math.floor(D._battleGlobalConfig._battle_pvp_kill_time - elapsedTime)
+		showTime = Mathf.Clamp(showTime, 0, D._battleGlobalConfig._battle_pvp_kill_time)
+		self._showTimeStr = showTime
+		self._txtCountdownTime.text = showTime
+	elseif status == 2 then
+		self._showTimeStr = nil
+		self._txtCountdownTime.text = ""
+	end
+
+	self._atorCountdown:SetInteger("status", status or 0)
+
+	if status < 2 and self._showTimeStr ~= lastShowStr and self._showTimeStr <= 10 then
+		if self._showTimeStr == 10 then
+			if status == 0 then
+				self._txtCountdownTime.color = Color.str2Static("E79ABD")
+			elseif status == 1 then
+				self._txtCountdownTime.color = Color.str2Static("E0A7F8")
+			end
+		end
+
+		self._atorCountdown:SetTrigger("secondChange")
+	end
+end
+
+function M:showCountdownTitle(sid)
+	if self._showCdTitleSid == sid then
+		return
+	end
+
+	self._showCdTitleSid = sid
+
+	self._txtCountdownTitle:SetLocalize(sid)
+end
+
+function M:showCrazyBanner()
+	self._animCrazyBanner.gameObject:SetActive(true)
+	self._txtCrazyTitle:SetLocalize(SID.SPARK_SCOUT_CRAZY_SHOW_TITLE)
+	self._txtCrazyDesc:SetLocalize(SID.SPARK_SCOUT_CRAZY_SHOW_DESC)
+	self._animCrazyBanner:Play()
+end
+
+function M:showDeathBanner()
+	self._animDeathBanner.gameObject:SetActive(true)
+	self._txtDeathTitle:SetLocalize(SID.SPARK_SCOUT_DEATH_SHOW_TITLE)
+	self._txtDeathDesc:SetLocalize(SID.SPARK_SCOUT_DEATH_SHOW_DESC, D._battleGlobalConfig._battle_pvp_kill_time_loss_hp)
+	self._animDeathBanner:Play()
+end
+
+function M:enterCrazyTime()
+	self._goWarning:SetActive(true)
+	self._goWarning:GetComponent("Animation"):Play("anim_battle_warning")
+end
+
+function M:enterDeathTime()
+	self._goWarning:SetActive(true)
+	self._goWarning:GetComponent("Animation"):Play("anim_battle_warning2")
+end
+
+function M:resetBattle()
+	self._goWarning:SetActive(false)
+	self._animCrazyBanner.gameObject:SetActive(false)
+	self._animDeathBanner.gameObject:SetActive(false)
+	self:updateStatus(0)
+end
+
+return M

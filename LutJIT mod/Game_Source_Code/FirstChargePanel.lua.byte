@@ -1,0 +1,117 @@
+local M = class("FirstChargePanel", requireLua("BasePanel"))
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	btnGo = Types.Button,
+	imgGo = Types.Image,
+	imgGoLight = Types.Image,
+	goReward = Types.GameObject,
+	txtGo = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {
+		self._goReward
+	}
+end
+
+function M:addEvents()
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnGo, function ()
+		self:dealGoto()
+	end)
+end
+
+function M:init()
+	local giftType = D.GiftType.FirstCharge
+
+	if P._playerGift:canPopFace(giftType) then
+		P._playerGift:recordPopFace(giftType)
+	end
+
+	self:updateRewards()
+	self:updateClaimBtn()
+	Client.playSound("ui_Open_Gift_1")
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:dealGoto()
+	if P._playerStore:getPayMoney() == 0 then
+		if P._playerGift:isBought(D.GiftId.Newbie1) and P._playerGift:isBought(D.GiftId.Newbie2) then
+			UIManager.getMainPanel():changePage(1)
+		else
+			local canShow = P._playerGift:canShowPanel(D.GiftType.Newbie)
+
+			if canShow then
+				UIManager.openPanel(PrefabDefine.NewbieGiftPanel)
+			else
+				UIManager.getMainPanel():changePage(1)
+			end
+		end
+
+		self:closePanel()
+
+		return
+	end
+
+	local ret, rewards = P._playerGift:tryClaimRewards(D.GiftId.FirstCharge)
+
+	if ret == ResultCode.OK then
+		V.showRewardClaimPanel(rewards)
+		self:updateClaimBtn()
+		self:updateRewards()
+	end
+end
+
+function M:updateRewards()
+	local claimed = P._playerGift:isClaimed(D.GiftId.FirstCharge)
+	local giftId = D.GiftId.FirstCharge
+	local cids, nums = P._playerGift:readRewards(giftId, 1)
+	local rewards = D.formatRewards(cids, nums)
+
+	V.loadFixRewardsWidget(self, self._goRewards, rewards, claimed, P._playerGift:canClaimFirstCharge(giftId))
+end
+
+function M:updateClaimBtn()
+	if P._playerStore:getPayMoney() == 0 then
+		self._imgGo.color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+		self._imgGoLight.color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+
+		self._txtGo:SetLocalize(SID.STR_GOTO)
+		self._btnGo.dot:SetActive(false)
+
+		self._btnGo.enabled = true
+	elseif P._playerGift:isClaimed(D.GiftId.FirstCharge) then
+		self._imgGo.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._imgGoLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+
+		self._txtGo:SetLocalize(SID.STR_CLAIMED)
+		self._btnGo.dot:SetActive(false)
+
+		self._btnGo.enabled = false
+	else
+		self._imgGo.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		self._imgGoLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+
+		self._txtGo:SetLocalize(SID.STR_CLAIM)
+		self._btnGo.dot:SetActive(true)
+
+		self._btnGo.enabled = true
+	end
+end
+
+return M

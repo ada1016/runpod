@@ -1,0 +1,140 @@
+local M = class("UnionSearchCtrl")
+local UnionSearchListWidget = requireLua("UnionSearchListWidget")
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+	self._refreshCd = 0
+	NetPack.UnionSearchReqPack.enable_filter = false
+
+	panel:on("union.hide.sync.wait", function ()
+		UnionWaitingPage:hideSyncWaiting()
+	end)
+	panel:on("union.get.list.resp", function ()
+		UnionWaitingPage:hideSyncWaiting()
+		self._scrollViewEx:reloadData()
+
+		NetPack.UnionSearchReqPack.enable_filter = false
+
+		if self._searchAction then
+			self._searchAction = nil
+
+			self._goBackSearch:SetActive(true)
+		end
+	end)
+	self._panel:setClick(self._btnSearch, function ()
+		if NetPack.UnionSearchReqPack.key:len() == 0 then
+			V.showToast(SID.INPUT_EMPTY_NOT)
+
+			return
+		end
+
+		self._searchAction = true
+
+		UnionWaitingPage:showSyncWaiting()
+		P._playerUnion:trySearchUnion()
+	end)
+	self._panel:setClick(self._btnFilter, function ()
+		local lb = UIManager.openPanel(PrefabDefine.UnionFilterPanel)
+
+		function lb._confirmCallback()
+			self._goBackSearch:SetActive(true)
+			P._playerUnion:tryGetRecmdUnions()
+		end
+	end)
+	self._panel:setClick(self._btnRefresh, function ()
+		if C.getCurTime() < self._refreshCd then
+			return
+		end
+
+		self._refreshCd = C.getCurTime() + 5
+
+		UnionWaitingPage:showSyncWaiting()
+		P._playerUnion:tryGetRecmdUnions()
+		lc.stopTimer(self._refreshTimer)
+		self._textRefresfCD:SetLocalize(SID.STR_REFRESH)
+
+		self._textRefresfCD.text = self._textRefresfCD.text .. "(5)"
+		self._refreshTimer = lc.setInterval(function ()
+			self._textRefresfCD:SetLocalize(SID.STR_REFRESH)
+
+			local dt = math.floor(self._refreshCd - C.getCurTime())
+
+			if dt >= 0 then
+				self._textRefresfCD.text = self._textRefresfCD.text .. "(" .. dt .. ")"
+			end
+		end, 0.5)
+	end)
+	self._panel:setClick(self._btnAutoJoin, function ()
+		if not P._playerUnion:couldJoinUnion() then
+			local h = math.floor((P._playerUnion._meta.join_union_next_timestamp - C.getCurTime()) / 3600)
+			h = math.max(1, h)
+
+			V.showToast({
+				SID.UNION_JOIN_TIPS1,
+				h
+			})
+
+			return
+		end
+
+		UnionWaitingPage:showSyncWaiting()
+		P._playerUnion:tryJoinUnionReq(0)
+	end)
+	self._panel:setClick(self._btnBackSearch, function ()
+		UnionWaitingPage:showSyncWaiting()
+		self._goBackSearch:SetActive(false)
+		P._playerUnion:tryGetRecmdUnions()
+
+		self._textInput.text = ""
+		NetPack.UnionSearchReqPack.key = ""
+	end)
+	self._textInput.onEndEdit:AddListener(function (pt)
+		NetPack.UnionSearchReqPack.key = pt
+	end)
+
+	self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+		cellMargin = 20,
+		cellHeight = 140,
+		cellInitCount = 8
+	})
+
+	P._playerUnion:tryGetRecmdUnions()
+
+	self._textInput.placeholder.text = LcLocalization.getTextStr(SID.UNION_INPUT_TIPS1)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = UnionSearchListWidget.create(self._tfContent)
+
+		goCell:init(self._panel)
+	end
+
+	goCell:update(P._playerUnion._unions[index])
+
+	return goCell
+end
+
+function M:onCellNum()
+	return #P._playerUnion._unions
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._refreshTimer)
+end
+
+return M

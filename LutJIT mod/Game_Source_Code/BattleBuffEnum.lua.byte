@@ -1,0 +1,22 @@
+local M = {
+	Invisibility = 7,
+	Paralysis = 3,
+	ResistInvisibility = 15,
+	Portal = 12,
+	Collapse = 14,
+	VulnerableForPhysics = 13,
+	Vulnerable2 = 17,
+	VulnerableForThunder = 9,
+	SeriousInjury = 16,
+	Vulnerable = 5,
+	DieBrust = 10,
+	SlowDownStack = 11,
+	Ignite = 4,
+	Knockback = 8,
+	SpeedUp = 2,
+	Imprison = 6,
+	SlowDown = 1
+}
+_G.BattleBuffEnum = M
+
+return M

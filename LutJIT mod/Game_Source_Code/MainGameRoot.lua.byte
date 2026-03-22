@@ -1,0 +1,401 @@
+local Types = Types
+local M = class("MainGameRoot", BLB)
+M.args = {
+	tfScene = Types.Transform,
+	goBG = Types.GameObject,
+	currentCanvas = Types.Transform,
+	currentCanvasDontClearBottom = Types.Transform,
+	currentCanvasFit = Types.Transform,
+	currentCanvasFitAnim = Types.Transform,
+	currentCanvasModal = Types.Transform,
+	currentCanvasModalAnim = Types.Transform,
+	currentCanvasTop = Types.Transform,
+	currentCanvasDontClearTop = Types.Transform,
+	currentCanvasGM = Types.Transform,
+	topMask = Types.GameObject,
+	topHideMask = Types.GameObject,
+	globalMask = Types.GameObject,
+	circleMask = Types.Image,
+	btnGM = Types.Button,
+	tmpTime = Types.TMP_Text,
+	tmpTimeScale = Types.TMP_Text,
+	goClickVfx = Types.GameObject,
+	atorClickVfx = Types.Animator,
+	goGuideText = Types.GameObject,
+	goGuideFinger = Types.GameObject
+}
+local HOTFIX_DOC_ID = "all"
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.MainGameRoot = self
+	LCNetworkCheckUtility = self.gameObject:GetComponent("LCNetworkCheckUtility")
+
+	if AppConst.Release then
+		Input.multiTouchEnabled = false
+	end
+
+	local t = requireLua("SafeFit")
+	self._safeFit = t
+
+	t.fitCanvas(self._currentCanvasFit)
+	t.fitCanvas(self._currentCanvasFitAnim)
+	self._goClickVfx:SetActive(false)
+	self:on("iap.waiting", function (show)
+		if show then
+			UIManager.showWaiting()
+		else
+			UIManager.hideWaiting()
+		end
+	end)
+	self:on("cheat.tip", function ()
+		V.showTopMessageBox({
+			_type = 2,
+			_content = SID.FORBID_LOGIN,
+			_txtConfirm = SID.TITLE_CONTACT_US,
+			_confirmCallback = function ()
+				lc.openUrl(D.URL_EMAIL_TO)
+				lc.delayFunc(0.1, function ()
+					Application.Quit()
+				end, self.gameObject)
+			end,
+			_txtCancel = SID.EXIT_APP,
+			_cancelCallback = function ()
+				Application.Quit()
+			end
+		})
+	end)
+	self:on("firebase.store.save.failed.archivetimestamp", function ()
+		Client._forbidSave = true
+
+		V.showTopMessageBox({
+			_type = 1,
+			_content = SID.LOGIN_TIPS_6,
+			_txtConfirm = SID.STR_RESTART,
+			_confirmCallback = function ()
+				lc.setTimer(function ()
+					if lc._isiOS then
+						Application.Quit()
+					else
+						LuaHelper.RestartApp()
+					end
+				end, 0.2)
+			end
+		})
+	end)
+	self:on("firebase.session.changed", function ()
+		Client._forbidSave = true
+
+		V.showTopMessageBox({
+			_type = 1,
+			_content = SID.LOGIN_TIPS_8,
+			_txtConfirm = SID.STR_RESTART,
+			_confirmCallback = function ()
+				lc.setTimer(function ()
+					if lc._isiOS then
+						Application.Quit()
+					else
+						LuaHelper.RestartApp()
+					end
+				end, 0.2)
+			end
+		})
+	end)
+	self:on("firebase.auth.logout", function ()
+		Client._isLogout = true
+		Client._forbidSave = true
+
+		V.showTopMessageBox({
+			_type = 1,
+			_content = SID.LOGOUT_TIPS_1,
+			_txtConfirm = SID.STR_RESTART,
+			_confirmCallback = function ()
+				lc.setTimer(function ()
+					if lc._isiOS then
+						Application.Quit()
+					else
+						LuaHelper.RestartApp()
+					end
+				end, 0.2)
+			end
+		})
+	end)
+	self:on("network.msg.error.status", function (id, msgStatus)
+		if msgStatus == "PB_STATUS_ERROR_DATA_EXPIRED" or msgStatus == "PB_STATUS_ERROR_SERVER_ERROR" then
+			local sid = 0
+
+			if msgStatus == "PB_STATUS_ERROR_DATA_EXPIRED" then
+				sid = SID.LOGIN_TIPS_6
+			elseif msgStatus == "PB_STATUS_ERROR_SERVER_ERROR" then
+				sid = SID.SERVER_ERROR
+			end
+
+			Network._luaSockets[id]:stopAutoReconnect()
+			V.showTopMessageBox({
+				_type = 1,
+				_content = sid,
+				_txtConfirm = SID.STR_RESTART,
+				_confirmCallback = function ()
+					lc.setTimer(function ()
+						if lc._isiOS then
+							Application.Quit()
+						else
+							LuaHelper.RestartApp()
+						end
+					end, 0.2, true)
+				end
+			})
+		end
+	end)
+	self:on("network.error", function (id, msgStatus)
+		if not lc._isCN then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		if BattleManager and not BattleManager:getSession():isSettled() and not UIManager.isTopPanel(PrefabDefine.RightCardPanel.id) then
+			return
+		end
+
+		UIManager.hideWaiting()
+		Network._luaSockets[id]:stopAutoReconnect()
+		V.showTopMessageBox({
+			_type = 1,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_txtConfirm = SID.STR_CONFIRM,
+			_confirmCallback = function ()
+				lc.setTimer(function ()
+					Network._luaSockets[id]:tryRecoverAfterError()
+				end, 0.2, true)
+			end
+		})
+	end)
+	self:on("server.maintain", function (msg, endTime)
+		endTime = math.floor(endTime * 10) / 10
+
+		if lc._isCN then
+			endTime = os.date("%H:%M:%S", endTime / 1000)
+
+			V.showTopMessageBox({
+				_type = 1,
+				_content = SID.MAINTENANCE_NOTICE_1,
+				_cParams = endTime,
+				_txtConfirm = SID.STR_RESTART,
+				_confirmCallback = function ()
+					lc.setTimer(function ()
+						if lc._isiOS then
+							Application.Quit()
+						else
+							LuaHelper.RestartApp()
+						end
+					end, 0.2, true)
+				end
+			})
+		else
+			endTime = os.date("!UTC %H:%M:%S", endTime / 1000)
+
+			Network._gameSocket:disconnect()
+			P._playerUnion:disconnect()
+			V.showTopMessageBox({
+				_type = 1,
+				_content = SID.MAINTENANCE_NOTICE_2,
+				_cParams = endTime
+			})
+		end
+	end)
+end
+
+function M:Start()
+	self:initCircleMask()
+	self:hideGlobalMask()
+	UIManager.initCanvas(self)
+
+	if lc._isCN and C._remoteExt and C._remoteExt.showDataVersion then
+		self._tmpTime.gameObject:SetActive(true)
+	end
+
+	if not Client.isDev() then
+		self._btnGM:SetActive(false)
+		self._tmpTime.gameObject:SetActive(false)
+		self._tmpTimeScale.gameObject:SetActive(false)
+	end
+end
+
+function M:OnDestroy()
+	Network:destroy()
+
+	Time.timeScale = 1
+
+	C.stopMusic()
+	M.super.OnDestroy(self)
+end
+
+function M:showBlackBG()
+	if not self._canShowBlackBg then
+		return
+	end
+
+	self._goBG:SetActive(self._showBg)
+end
+
+function M:hideBlackBG()
+	self._goBG:SetActive(false)
+end
+
+function M:setBlackBG(show)
+	self._canShowBlackBg = show
+
+	self._goBG:SetActive(self._canShowBlackBg)
+end
+
+function M:showGlobalMask()
+	self._globalMask:SetVisible(true)
+end
+
+function M:hideGlobalMask()
+	self._globalMask:SetVisible(false)
+end
+
+function M:showClickVfx()
+end
+
+function M:SetClickVfx(show)
+	self._goClickVfx:SetActive(show)
+
+	if show then
+		self._atorClickVfx:ResetTrigger("Click")
+	end
+end
+
+function M:initCircleMask()
+	self._circleMaskCenterVec4 = Vector4.New(0, 0, 0, 0)
+	self._circleMaskMat = GameObject.Instantiate(self._circleMask.material)
+	self._circleMask.material = self._circleMaskMat
+
+	self._circleMask:SetActive(false)
+
+	self._maxRadius = (lc._screenHeight^2 + lc._screenWidth^2)^0.5
+end
+
+function M:showCircleMask(vec2_pos_start, vec2_pos_end, time, blackCb)
+	if self._circleMaskInterval then
+		Vector2.release(vec2_pos_start)
+		Vector2.release(vec2_pos_end)
+
+		return
+	end
+
+	vec2_pos_start = vec2_pos_start or Vector2.retain(0, 0)
+	vec2_pos_end = vec2_pos_end or Vector2.retain(0, 0)
+	local startRadius = self._maxRadius
+	local endRadius = 0
+
+	self._circleMaskCenterVec4:Set(vec2_pos_start.x, vec2_pos_start.y, startRadius, 0)
+	self._circleMask:SetActive(true)
+
+	local startDuration = time or 1.5
+	local duration = 0
+	local stepTime = 0.01
+	local changToShow = false
+	self._circleMaskInterval = lc.setInterval(function ()
+		local rate = duration / startDuration
+		local delta = math.max(Time.deltaTime + stepTime)
+
+		if not changToShow then
+			duration = math.abs(duration + delta)
+
+			if rate > 1 then
+				changToShow = true
+
+				if blackCb then
+					blackCb()
+				end
+			end
+		else
+			duration = duration - delta
+
+			if duration < 0 then
+				if self._circleMaskInterval then
+					lc.stopTimer(self._circleMaskInterval)
+
+					self._circleMaskInterval = nil
+
+					self._circleMask:SetActive(false)
+					Vector2.release(vec2_pos_start)
+					Vector2.release(vec2_pos_end)
+				end
+
+				return
+			end
+		end
+
+		local currentRadius = lc.numberLerp(startRadius, endRadius, rate)
+		local newX = lc.numberLerp(vec2_pos_start.x, vec2_pos_end.x, rate)
+		local newY = lc.numberLerp(vec2_pos_start.y, vec2_pos_end.y, rate)
+
+		self._circleMaskCenterVec4:Set(newX, newY, currentRadius, 0)
+		self._circleMaskMat:SetVector("_Origin", self._circleMaskCenterVec4)
+	end, stepTime)
+end
+
+function M:hideCircleMask(vec2_pos_start, vec2_pos_end, time, endCb)
+	if self._circleMaskInterval then
+		Vector2.release(vec2_pos_start)
+		Vector2.release(vec2_pos_end)
+
+		return
+	end
+
+	vec2_pos_start = vec2_pos_start or Vector2.retain(0, 0)
+	vec2_pos_end = vec2_pos_end or Vector2.retain(0, 0)
+	local startRadius = self._maxRadius
+	local endRadius = 0
+
+	self._circleMaskCenterVec4:Set(vec2_pos_start.x, vec2_pos_start.y, startRadius, 0)
+	self._circleMask:SetActive(true)
+
+	local startDuration = time or 1.5
+	local duration = startDuration
+	local stepTime = 0.01
+	self._circleMaskInterval = lc.setInterval(function ()
+		local rate = duration / startDuration
+		local delta = math.max(Time.deltaTime + stepTime)
+		duration = duration - delta
+
+		if duration < 0 then
+			if self._circleMaskInterval then
+				lc.stopTimer(self._circleMaskInterval)
+
+				self._circleMaskInterval = nil
+
+				self._circleMask:SetActive(false)
+				Vector2.release(vec2_pos_start)
+				Vector2.release(vec2_pos_end)
+			end
+
+			return
+		end
+
+		local currentRadius = lc.numberLerp(startRadius, endRadius, rate)
+		local newX = lc.numberLerp(vec2_pos_start.x, vec2_pos_end.x, rate)
+		local newY = lc.numberLerp(vec2_pos_start.y, vec2_pos_end.y, rate)
+
+		self._circleMaskCenterVec4:Set(newX, newY, currentRadius, 0)
+		self._circleMaskMat:SetVector("_Origin", self._circleMaskCenterVec4)
+		self._circleMaskMat:SetFloat("_ControlTime", rate * 100)
+	end, stepTime)
+end
+
+function M:Update()
+	if Input.GetMouseButtonDown(0) then
+		self:showClickVfx()
+	end
+
+	if lc._isCN and C._remoteExt and C._remoteExt.showDataVersion then
+		self._tmpTime.text = string.format("%s", C._serverDataVersion or 0)
+	end
+end
+
+return M

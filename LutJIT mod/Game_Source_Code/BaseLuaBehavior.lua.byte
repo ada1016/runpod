@@ -1,0 +1,105 @@
+local UpdateBeat = UpdateBeat
+local Types = Types
+local LuaGO = LuaGO
+local SimpleEvent = SimpleEvent
+local type = type
+local pairs = pairs
+local M = class("BaseLuaBehavior")
+
+declare("BLB", M)
+
+function M:Awake()
+	local args = self.args
+
+	for k, v in pairs(args) do
+		if type(v) == "userdata" or type(v) == "number" then
+			self["_" .. k] = v
+		end
+	end
+
+	self.behaviour = args.behaviour
+	self.gameObject = args.gameObject
+	self.transform = self.gameObject.transform
+end
+
+function M:startUpdater()
+	if not self._updateHandler then
+		self._updateHandler = UpdateBeat:CreateListener(self.Update, self)
+	end
+
+	UpdateBeat:AddListener(self._updateHandler)
+end
+
+function M:stopUpdater()
+	if self._updateHandler then
+		UpdateBeat:RemoveListener(self._updateHandler)
+
+		self._updateHandler = nil
+	end
+end
+
+function M:startFixedUpdater()
+	if not self._fixedUpdateHandler then
+		self._fixedUpdateHandler = FixedUpdateBeat:CreateListener(self.FixedUpdate, self)
+	end
+
+	FixedUpdateBeat:AddListener(self._fixedUpdateHandler)
+end
+
+function M:stopFixedUpdater()
+	if self._fixedUpdateHandler then
+		FixedUpdateBeat:RemoveListener(self._fixedUpdateHandler)
+
+		self._fixedUpdateHandler = nil
+	end
+end
+
+function M:on(key, fc)
+	self._listeners = self._listeners or {}
+	local eventId = SimpleEvent.on(key, function (...)
+		fc(...)
+	end)
+	self._listeners[#self._listeners + 1] = eventId
+end
+
+function M:removeEvents()
+	if self._listeners then
+		for i = 1, #self._listeners do
+			SimpleEvent.remove(self._listeners[i])
+		end
+
+		self._listeners = nil
+	end
+end
+
+function M:OnDestroy()
+	self:stopUpdater()
+	self:removeEvents()
+end
+
+local function forbidGuideClick(button)
+	if GuideManager and GuideManager:isInGuide() and not GuideManager:couldClickUIWidget(button) then
+		return true
+	end
+
+	return false
+end
+
+function M:setClickWithoutAction(btn, callback, clickSound, pressAction)
+	self.behaviour:AddClick(btn, function ()
+		if forbidGuideClick(btn) then
+			return
+		end
+
+		V.__lastClickButton = btn.name
+
+		C.playSound(clickSound and clickSound or "2d_tap")
+		callback(btn)
+	end, pressAction)
+end
+
+function M:setClick(btn, callback, clickSound)
+	self:setClickWithoutAction(btn, callback, clickSound, true)
+end
+
+return M

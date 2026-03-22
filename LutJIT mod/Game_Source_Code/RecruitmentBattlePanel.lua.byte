@@ -1,0 +1,117 @@
+local M = class("RecruitmentBattlePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtInput = Types.TMP_InputField,
+	txtTodayChance = Types.TMP_Text,
+	imgCost1 = Types.Image,
+	txtCost1 = Types.TMP_Text,
+	imgCost2 = Types.Image,
+	txtCost2 = Types.TMP_Text,
+	btnGet = Types.Button,
+	btnPlay = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:setClick(self._btnGet, function ()
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_GD)
+	end)
+	self:setClick(self._btnPlay, function ()
+		self:dealEnterBattle()
+	end)
+	self._txtInput.onEndEdit:AddListener(function (pt)
+		local newText = V.deleteShareContent(self._txtInput.text)
+
+		self._txtInput:SetTextWithoutNotify(newText)
+	end)
+end
+
+function M:init(msId, callback)
+	self._msId = msId
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._txtTodayChance:SetLocalize(SID.TIP_TODAY_CHANCE, 1 - P._playerGlobalDefense:getDailyCoordinateChance(), 1)
+
+	if P._playerGlobalDefense:getDailyCoordinateChance() >= 1 then
+		self._btnPlay:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._btnPlay.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		self._btnPlay.enabled = false
+	end
+
+	local ticketCost, energyCost = P._playerGlobalDefense:getMissionCost(self._msId)
+	ticketCost = ticketCost - 1
+
+	if ticketCost > 0 then
+		LuaUnity.setTPSprite(self._imgCost1, D.toSmallSprite(D.ResType.global_defense_ticket), true)
+
+		self._txtCost1.text = ticketCost
+	else
+		self._imgCost1.transform.parent:SetActive(false)
+	end
+
+	LuaUnity.setTPSprite(self._imgCost2, D.toSmallSprite(D.ResType.energy), true)
+
+	self._txtCost2.text = energyCost
+end
+
+function M:dealEnterBattle()
+	P._playerGlobalDefense:checkCoordinate(self._txtInput.text)
+
+	local ticketCost, energyCost = P._playerGlobalDefense:getMissionCost(self._msId)
+	ticketCost = ticketCost - 1
+
+	if P._playerAsset:isAssetEnough(D.ResType.energy, energyCost) and P._playerAsset:isAssetEnough(D.ResType.global_defense_ticket, ticketCost) then
+		local ret = P._playerGlobalDefense:startBattle(self._txtInput.text)
+
+		if ret then
+			V.showResultCode(ret)
+
+			return
+		end
+
+		InputBattleData = {
+			msType = D.MissionType.GlobalDefense,
+			msId = self._msId
+		}
+
+		P:setMsType(D.MissionType.GlobalDefense)
+		P._playerGlobalDefense:startBattle(self._msId, true)
+		V.switchBetweenMainAndBattleScene("globalDefense", "battle")
+		self:closePanel()
+
+		if self._callback then
+			self._callback(self._txtInput.text)
+		end
+	else
+		local costCid, costNum = nil
+		costCid = D.ResType.global_defense_ticket
+		costNum = ticketCost
+
+		if not P._playerAsset:isAssetEnough(costCid, ticketCost) then
+			UIManager.openPanel(PrefabDefine.RecruitmentCenterPanel)
+
+			return
+		end
+
+		costCid = D.ResType.energy
+		costNum = energyCost
+
+		if not P._playerAsset:isAssetEnough(costCid, energyCost) then
+			V.showItemNotEnough(costCid, P._playerAsset:getAssetNum(costCid), costNum)
+		end
+	end
+end
+
+return M

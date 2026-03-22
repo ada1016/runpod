@@ -1,0 +1,88 @@
+local M = class("UnionOperationWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionOperationWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel, delegate)
+	self._panel = panel
+
+	panel:setClick(self._btnMask, function ()
+		self.gameObject:SetActive(false)
+	end)
+	panel:setClick(self._btnInfo, function ()
+		V.viewOtherInfo({
+			firebaseId = self._data.id
+		})
+		self.gameObject:SetActive(false)
+	end)
+	panel:setClick(self._btnKick, function ()
+		self.gameObject:SetActive(false)
+		V.showMessageBox({
+			_type = 2,
+			_content = SID.UNION_OPERATION_TIPS3,
+			_cParams = {
+				self._data.name
+			},
+			_confirmCallback = function ()
+				P._playerUnion:tryKickMemberReq(self._data)
+			end
+		})
+	end)
+	panel:setClick(self._btnManage, function ()
+		self.gameObject:SetActive(false)
+		UIManager.openPanel(PrefabDefine.UnionTransferPanel, self._data)
+	end)
+end
+
+local SORT_ROLE_KEY = {
+	[0] = 1,
+	4,
+	3,
+	2
+}
+
+function M:update(data, isView)
+	self._data = data
+
+	if isView then
+		self._btnKick:SetActive(false)
+		self._btnManage:SetActive(false)
+	else
+		local selfInfo = P._playerUnion._selfInfo
+
+		if selfInfo.role == D.UnionRole.PRESIDENT or selfInfo.role == D.UnionRole.VICE_PRESIDENT then
+			if SORT_ROLE_KEY[selfInfo.role] <= SORT_ROLE_KEY[data.role] then
+				self._btnManage:SetActive(false)
+				self._btnKick:SetActive(false)
+			else
+				self._btnKick:SetActive(true)
+				self._btnManage:SetActive(true)
+			end
+		else
+			self._btnKick:SetActive(false)
+			self._btnManage:SetActive(false)
+		end
+	end
+end
+
+return M

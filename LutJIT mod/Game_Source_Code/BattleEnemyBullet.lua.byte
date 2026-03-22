@@ -1,0 +1,79 @@
+local M = class("BattleEnemyBullet")
+local BattleDefine = BattleDefine
+local BattleEntityFactory = BattleEntityFactory
+local BULLET_SPEED = 5
+local BattleMathLib = BattleMathLib
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._position = Vector2.retain(0, 0)
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleEnemyBulletView").new(battleSession)
+	end
+end
+
+function M:init(enemy)
+	self._enemy = enemy
+	self._cid = enemy._cid
+	self._bulletSpeed = enemy._bulletSpeed or BULLET_SPEED
+	self._isToBeDestroyed = false
+
+	if self._view then
+		self._view:init(self, enemy)
+	end
+end
+
+function M:setPos(x, y)
+	self._position.x = x
+	self._position.y = y
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._position.y = self._position.y - dt * self._bulletSpeed
+
+	if self._view then
+		self._view:posEvent()
+	end
+
+	if self._position.y <= BattleDefine.DOME_POSY then
+		local x = self._position.x
+		local y = self._position.y
+
+		if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT then
+			self._enemy:takeDamageToPlayer(self)
+			self:markToBeDestroyed()
+
+			if self._view then
+				self._view:hitEvent()
+			end
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._isToBeDestroyed = true
+
+	if self._view then
+		self._view:destroyedEvent()
+	end
+end
+
+function M:destroy()
+	self._battleSession:recycleEnemyBullet(self)
+end
+
+return M

@@ -1,0 +1,495 @@
+local EventName = LCSDKLibrary.EventName
+local Const = LCSDKLibrary.Const
+local Event = {
+	[EventName.ROOT_AWAKE] = function (p1, p2)
+		pcall(function ()
+			IAP = LuaHelper.GetIAPManager()
+		end)
+		pcall(function ()
+			ADManager = LuaHelper.GetADManager()
+		end)
+		pcall(function ()
+			FirebaseManager = LuaHelper.GetFirebaseManager()
+		end)
+		pcall(function ()
+			ChannelManager = LuaHelper.GetChannelManager()
+		end)
+	end,
+	[EventName.PURCHASE_INITED] = function (p1, p2)
+		SimpleEvent.emit("purchase.inited")
+
+		local installer = LuaHelper.GetInstaller()
+
+		Trace.AF_traceEvent("e01_installer", {
+			{
+				_key = "strParam",
+				_value = installer
+			}
+		})
+	end,
+	[EventName.PURCHASE_SUCCEED] = function (p1, p2)
+		local customMsg = string.split(p2, ",")
+
+		if lc._isCN then
+			-- Nothing
+		end
+	end,
+	[EventName.PURCHASE_FAILED] = function (p1, p2)
+		Trace.AF_traceIAP(p1, "failed - " .. p2)
+		P._playerStore:onPurchaseFailed(p1, p2)
+	end
+}
+local handledTransactionIds = {}
+
+local function onVerifyTransactionFinish(isSuccess, productName, customOrErrorMsg)
+	if isSuccess then
+		IAP:CompletePurchase(productName, true)
+		P._playerStore:onPurchaseSucceed(productName, customOrErrorMsg)
+	else
+		IAP:CompletePurchase(productName, false, customOrErrorMsg)
+	end
+end
+
+local function doQueryTransaction(collection, transactionId, productName, customMsg, retryCount)
+	LuaHelper.queryDoc(collection, transactionId, function (jsonStr)
+		if jsonStr == "" then
+			local errorMsg = "failed - transaction info empty " .. retryCount
+
+			Trace.AF_traceIAP(productName, errorMsg)
+
+			if retryCount < 3 then
+				lc.delayFunc(1, function ()
+					doQueryTransaction(collection, transactionId, productName, customMsg, retryCount + 1)
+				end)
+			else
+				P._playerStore:onPurchaseFailed(productName, errorMsg)
+			end
+
+			return
+		end
+
+		local productId = jsonStr:match("%[\"productId\"%]%s*=%s*\"(.-)\"")
+
+		if productId ~= productName then
+			onVerifyTransactionFinish(false, productName, "transaction productId error")
+
+			return
+		end
+
+		local uid = jsonStr:match("%[\"uid\"%]%s*=%s*\"(.-)\"")
+
+		if uid ~= C._firebaseId then
+			onVerifyTransactionFinish(false, productName, "transaction uid error")
+
+			return
+		end
+
+		if handledTransactionIds[transactionId] == nil then
+			handledTransactionIds[transactionId] = true
+
+			onVerifyTransactionFinish(true, productName, customMsg)
+		end
+	end)
+end
+
+function Event.purchase_verify_transaction(p1, p2)
+	Trace.AF_traceIAP(p1, "verify_transaction_" .. p1 .. "_" .. p2)
+
+	local customMsg = string.split(p2, ",")
+	customMsg = customMsg or {}
+	local transactionId = customMsg[3] or ""
+
+	if transactionId == "" then
+		onVerifyTransactionFinish(false, p1, "transaction id empty")
+
+		return
+	end
+
+	local collection = lc._isiOS and "AppleReceipt" or "GoogleReceipt"
+
+	doQueryTransaction(collection, transactionId, p1, customMsg, 0)
+end
+
+Event[EventName.AD_REWARDED] = function (p1, p2)
+	Trace.traceAdRewardReceived(p2)
+	AudioService:SetMusicMute(C._musicFlag == 0)
+	AudioService:SetSoundMute(C._soundFlag == 0)
+	P._playerAd:onFinishRewardAd(tonumber(p2))
+end
+
+Event[EventName.AD_READY_CHANGED] = function (p1, p2)
+end
+
+Event[EventName.AD_REVENUE_PAIDED] = function (p1, p2)
+	local parts = string.split(p2, ",")
+
+	Trace.AF_traceAdRevenue(p1, parts[2], parts[1])
+	LuaHelper.LogFacebookAdImpression(tonumber(parts[2]))
+end
+
+Event[EventName.AD_FAILED_TO_SHOW] = function (p1, p2)
+	AudioService:SetMusicMute(C._musicFlag == 0)
+	AudioService:SetSoundMute(C._soundFlag == 0)
+	SimpleEvent.emit("ad.fail")
+	Trace.traceAdFail(p1, p2)
+end
+
+Event[EventName.AD_OPENING] = function (p1, p2)
+	Trace.traceAdShow(p2)
+end
+
+Event[EventName.AD_CLOSED] = function (p1, p2)
+	Client._watchingAd = false
+
+	if lc._isCN then
+		UIManager.hideWaiting()
+	end
+end
+
+Event[EventName.FACEBOOK_INITED] = function (p1, p2)
+	C._isFacebookInited = true
+
+	Trace.AF_traceEvent("e01_before_auth", {
+		{
+			_key = "strParam",
+			_value = "EventName.FACEBOOK_INITED"
+		}
+	})
+end
+
+Event[EventName.FIREBASE_INITED] = function (p1, p2)
+	C._isFirebaseInited = true
+
+	Trace.AF_traceEvent("e01_before_auth", {
+		{
+			_key = "strParam",
+			_value = "EventName.FIREBASE_INITED"
+		}
+	})
+end
+
+Event[EventName.FIREBASE_AUTHED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		if P then
+			lc.setStringKeyValue("firebase.udid", p2)
+			SimpleEvent.emit("firebase.auth.successful")
+
+			return
+		end
+
+		Trace.AF_traceEvent("e01_auth", {
+			{
+				_key = "strParam",
+				_value = "finish"
+			}
+		})
+
+		C._firebaseId = p2
+
+		lc.setStringKeyValue("firebase.udid", C._firebaseId)
+		C.updateFirebaseEmails()
+	elseif p1 == Const.RESULT_CANCELED then
+		Trace.AF_traceEvent("e01_auth", {
+			{
+				_key = "strParam",
+				_value = "cancel"
+			}
+		})
+		SimpleEvent.emit("firebase.auth.fail")
+	elseif p1 == Const.RESULT_FAILED then
+		Trace.AF_traceEvent("e01_auth", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+		SimpleEvent.emit("firebase.auth.fail")
+	end
+end
+
+Event[EventName.FIREBASE_STORE_SAVED] = function (p1, p2)
+	C._isAutoIncIdSaving = false
+
+	lc.setIntKeyValue(C.PrefKey.is_saving, 0)
+
+	if p1 == Const.RESULT_SUCCEED then
+		SimpleEvent.emit("firebase.store.saved")
+		Trace.AF_traceEvent("e01_savedata_succeed", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+
+		C._lastRemoteSaveTime = C.getCurTime()
+		C._saveData.dataVersion2 = tonumber(p2)
+	elseif p1 == Const.RESULT_FAILED then
+		Trace.AF_traceEvent("e01_savedata_failed", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+
+		if p2 == "PermissionDenied" then
+			SimpleEvent.emit("firebase.store.save.failed.archivetimestamp")
+		else
+			V.showToast(p2)
+		end
+	end
+
+	if C._isNeedAutoIncIdSaveOnceMore then
+		C._isNeedAutoIncIdSaveOnceMore = false
+
+		C.saveGameDataToRemote()
+	end
+end
+
+Event[EventName.FIREBASE_STORE_LOADED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		Trace.AF_traceEvent("e01_syncdata", {
+			{
+				_key = "strParam",
+				_value = "finish"
+			}
+		})
+
+		C._remoteJsonData = p2
+	elseif p1 == Const.RESULT_CANCELED then
+		SimpleEvent.emit("firebase.store.load.fail")
+		Trace.AF_traceEvent("e01_syncdata", {
+			{
+				_key = "strParam",
+				_value = "cancel"
+			}
+		})
+	elseif p1 == Const.RESULT_FAILED then
+		SimpleEvent.emit("firebase.store.load.fail")
+		Trace.AF_traceEvent("e01_syncdata", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+	end
+end
+
+Event[EventName.FIREBASE_STORE_PINGED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		C.onStorePinged(true)
+	else
+		C.onStorePinged(false)
+	end
+end
+
+Event[EventName.FIREBASE_STORE_DEBUG] = function (p1, p2)
+	Trace.AF_traceEvent("e01_savedata_debug", {
+		{
+			_key = "strParam",
+			_value = p2
+		}
+	})
+end
+
+Event[EventName.FIREBASE_LINKED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		Trace.AF_traceEvent("e01_link", {
+			{
+				_key = "strParam",
+				_value = "success"
+			}
+		})
+		C.updateFirebaseEmails()
+		SimpleEvent.emit("link.succeed")
+
+		if P then
+			P:onAccountLinked()
+		end
+	elseif p1 == Const.RESULT_CANCELED then
+		Trace.AF_traceEvent("e01_link", {
+			{
+				_key = "strParam",
+				_value = "cancel"
+			}
+		})
+		SimpleEvent.emit("link.fail")
+	elseif p1 == Const.RESULT_FAILED then
+		if string.find(p2, FirebaseManager.LINK_FAIL_MSG_BY_ALREADY_LINKED) ~= nil then
+			UIManager.hideWaiting()
+			V.showMessageBox({
+				_showClose = false,
+				_content = SID.LINK_ALREADY_LINKED,
+				_confirmCallback = function ()
+					Trace.AF_traceEvent("e01_link", {
+						{
+							_key = "strParam",
+							_value = "success_confirm"
+						}
+					})
+					FirebaseManager:Logout()
+				end,
+				_cancelCallback = function ()
+					SimpleEvent.emit("link.cancel.user")
+				end
+			})
+		else
+			Trace.AF_traceEvent("e01_link", {
+				{
+					_key = "strParam",
+					_value = p2
+				}
+			})
+			SimpleEvent.emit("link.fail")
+		end
+	end
+end
+
+Event[EventName.FIREBASE_UNLINKED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		Trace.AF_traceEvent("e01_unlink", {
+			{
+				_key = "strParam",
+				_value = "success"
+			}
+		})
+		SimpleEvent.emit("unlink.succeed")
+		FirebaseManager:AfterUnlinked()
+		lc.setTimer(function ()
+			if lc._isAndroid then
+				LuaHelper.RestartApp()
+			elseif lc._isiOS then
+				Application.Quit()
+			else
+				LuaHelper.RestartApp()
+			end
+		end, 1)
+	elseif p1 == Const.RESULT_CANCELED then
+		Trace.AF_traceEvent("e01_unlink", {
+			{
+				_key = "strParam",
+				_value = "cancel"
+			}
+		})
+		SimpleEvent.emit("unlink.fail")
+	elseif p1 == Const.RESULT_FAILED then
+		Trace.AF_traceEvent("e01_unlink", {
+			{
+				_key = "strParam",
+				_value = "failed"
+			}
+		})
+		SimpleEvent.emit("unlink.fail")
+	end
+end
+
+Event[EventName.FIREBASE_DELETED] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		FirebaseManager:AfterDeleted()
+		V.showMessageBox({
+			_showClose = false,
+			_content = SID.USER_DELETED_TIP,
+			_confirmCallback = function ()
+				if lc._isAndroid then
+					LuaHelper.RestartApp()
+				elseif lc._isiOS then
+					Application.Quit()
+				else
+					LuaHelper.RestartApp()
+				end
+			end
+		})
+	elseif string.find(p2, FirebaseManager.DELETE_FAIL_MSG_BY_NEED_LOGIN) ~= nil then
+		V.showMessageBox({
+			_content = SID.USER_DELETE_NEED_RESTART,
+			_confirmCallback = function ()
+				FirebaseManager:Logout()
+			end
+		})
+	else
+		V.showToast(SID.USER_DELETE_FAIL_TIP)
+	end
+end
+
+Event[EventName.FIREBASE_LOGGED_OUT] = function (p1, p2)
+	if p1 == Const.RESULT_SUCCEED then
+		if lc._isiOS then
+			lc.setStringKeyValue("ios.auth.type", V._savediOSAuthType)
+			lc.saveSetValues()
+		end
+
+		Trace.AF_traceEvent("e02_logout", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+		lc.setStringKeyValue("firebase.udid", "")
+		SimpleEvent.emit("firebase.auth.logout")
+	end
+end
+
+Event[EventName.FIREBASE_STORE_EXECUTE] = function (p1, p2)
+	local ret = lc.runStringCode(p1)
+end
+
+Event[EventName.FIREBASE_SESSION_SAVED] = function (p1, p2)
+	if p1 == Const.RESULT_FAILED then
+		Trace.AF_traceEvent("e02_session_saved", {
+			{
+				_key = "strParam",
+				_value = p2
+			}
+		})
+	end
+end
+
+Event[EventName.FIREBASE_SESSION_CHANGED] = function (p1, p2)
+	local deviceId = Client.getDeviceId()
+
+	if deviceId ~= p1 then
+		Trace.AF_traceEvent("e02_session_changed", {
+			{
+				_key = "strParam",
+				_value = p1 .. " != " .. deviceId
+			}
+		})
+		SimpleEvent.emit("firebase.session.changed")
+	end
+end
+
+function OnSDKEvent(eventName, p1, p2)
+	if Event[eventName] then
+		Event[eventName](p1, p2)
+	end
+end
+
+function CatchErrorCustomInfo()
+	if P then
+		local ext = {
+			"\n\t=========================== error info"
+		}
+		local top = UIManager.getTopPanel()
+
+		if top and top.__prefabArg then
+			ext[#ext + 1] = string.format("toppanel: %s", top.__prefabArg.id)
+		end
+
+		if V.__lastOpenPanel then
+			ext[#ext + 1] = string.format("openpanel: %s", V.__lastOpenPanel)
+		end
+
+		if V.__lastClosePanel then
+			ext[#ext + 1] = string.format("closepanel: %s", V.__lastClosePanel)
+		end
+
+		if V.__lastClickButton then
+			ext[#ext + 1] = string.format("clickbutton: %s", V.__lastClickButton)
+		end
+
+		ext[#ext + 1] = string.format("gudestep: %s", P._playerGuide:getGuideStep())
+
+		return table.concat(ext, "\n")
+	else
+		return "No Login"
+	end
+end

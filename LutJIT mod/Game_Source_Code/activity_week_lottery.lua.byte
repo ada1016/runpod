@@ -1,0 +1,181 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		10101,
+		1,
+		4004 - lc._encryptOffset,
+		1,
+		-5938 - lc._encryptOffset,
+		-5728 - lc._encryptOffset,
+		101,
+		200,
+		111,
+		nil,
+		nil,
+		dup._1211,
+		{
+			110003,
+			10001,
+			10008,
+			10015,
+			10008
+		},
+		dup._1212,
+		10100
+	},
+	{
+		2,
+		1,
+		10101,
+		1,
+		4004 - lc._encryptOffset,
+		1,
+		-5938 - lc._encryptOffset,
+		-5728 - lc._encryptOffset,
+		102,
+		200,
+		112,
+		nil,
+		nil,
+		dup._1211,
+		{
+			110005,
+			10001,
+			10008,
+			10015,
+			10008
+		},
+		dup._1212,
+		10200
+	},
+	{
+		3,
+		1,
+		10101,
+		1,
+		4004 - lc._encryptOffset,
+		1,
+		-5938 - lc._encryptOffset,
+		-5728 - lc._encryptOffset,
+		103,
+		200,
+		113,
+		nil,
+		nil,
+		dup._1211,
+		{
+			13809,
+			10001,
+			10008,
+			10015,
+			10008
+		},
+		dup._1212,
+		10400
+	}
+}
+local mapKeyIndex = {
+	k2500964 = 14,
+	k2396703 = 15,
+	k3508994 = 7,
+	k12033513 = 4,
+	k4286638 = 6,
+	k14265796 = 17,
+	k9686965 = 12,
+	k3318642 = 5,
+	k8310217 = 13,
+	k13926361 = 10,
+	k10136363 = 11,
+	k11964537 = 3,
+	k1777549 = 9,
+	k15255765 = 2,
+	k6885339 = 8,
+	k1644150 = 1,
+	k10555602 = 16
+}
+local mapKeyDimension = {
+	k3508994 = 0,
+	k3318642 = 0,
+	k6885339 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 5998
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_ACTIVITY_WEEK_LOTTERY_NAMESID_" .. table[2]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 5998
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

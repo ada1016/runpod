@@ -1,0 +1,65 @@
+local M = class("RangerSkillTipPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	txtName = Types.TMP_Text,
+	txtSkillType = Types.TMP_Text,
+	txtSkillDmgType = Types.TMP_Text,
+	txtDesc1 = Types.TMP_Text,
+	txtDesc2 = Types.TMP_Text,
+	goSkillWidget = Types.GameObject,
+	goDesc2 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goSkillWidget)
+end
+
+function M:addClicks()
+end
+
+function M:init(rangerId, id, index, isMain)
+	self._id = id
+	local cfg = D._rangerSkillConfig[self._id]
+
+	if cfg._group + 1 == 3 then
+		self._goSkillWidget._imgWeapon:SetActive(true)
+		self._goSkillWidget._imgIcon:SetActive(false)
+		LuaUnity.setTPSprite(self._goSkillWidget._imgWeapon, "weapon/weapon_" .. cfg._weapon, true, true)
+	else
+		self._goSkillWidget._imgWeapon:SetActive(false)
+		self._goSkillWidget._imgIcon:SetActive(true)
+		LuaUnity.setTPSprite(self._goSkillWidget._imgIcon, string.format("ranger/RangerSkill-%d-%d", rangerId % 100, index), true)
+	end
+
+	if cfg._group == 0 then
+		self._txtSkillDmgType:SetLocalize(SID.TIP_CLASS_ATK_TOTAL, -SID.TITLE_TYPE, -SID["STR_NATURE_" .. D._rangerConfig[rangerId]._dmgType])
+	else
+		self._txtSkillDmgType.transform.parent:SetActive(false)
+	end
+
+	LuaUnity.setTPSprite(self._goSkillWidget._imgType, "ranger/ranger_icon_0" .. cfg._group + 6, true)
+	self._txtName:SetLocalize(SID["STR_RANGER_SKILL_TYPE_" .. cfg._group + 1])
+
+	if cfg._value then
+		if #cfg._value == 1 then
+			self._txtDesc1:SetLocalizeS(cfg._skillDescSid, lc.toStr(cfg._value[1]))
+		elseif #cfg._value == 2 then
+			self._txtDesc1:SetLocalizeS(cfg._skillDescSid, lc.toStr(cfg._value[1]), lc.toStr(cfg._value[2]))
+		elseif #cfg._value == 3 then
+			self._txtDesc1:SetLocalizeS(cfg._skillDescSid, lc.toStr(cfg._value[1]), lc.toStr(cfg._value[2]), lc.toStr(cfg._value[3]))
+		else
+			self._txtDesc1:SetLocalizeS(cfg._skillDescSid, lc.toStr(cfg._value[1]), lc.toStr(cfg._value[2]), lc.toStr(cfg._value[3]), lc.toStr(cfg._value[4]))
+		end
+	else
+		self._txtDesc1:SetLocalize(cfg._skillDescSid)
+	end
+
+	self._goDesc2:SetActive(false)
+	V.setBuffLinkClick(self._txtDesc1)
+end
+
+return M

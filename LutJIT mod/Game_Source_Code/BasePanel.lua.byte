@@ -1,0 +1,153 @@
+local M = class("BasePanel", BLB)
+local typeCG = typeof(UnityEngine.CanvasGroup)
+
+local function addDefaultClicks(self)
+	if self._btnClose then
+		self:setClick(self._btnClose, function ()
+			self:closePanel()
+		end)
+	end
+
+	if self._btnMask then
+		self:setClickWithoutAction(self._btnMask, function ()
+			if self.__prefabArg == nil then
+				local e_debug_values = {
+					{
+						_key = "target",
+						_value = self.__cname
+					}
+				}
+
+				Trace.AF_traceEvent("e_debug", e_debug_values)
+			end
+
+			self:closePanel()
+		end)
+	end
+end
+
+function M:Awake()
+	M.super.Awake(self)
+	addDefaultClicks(self)
+
+	if self.initPrefabVar then
+		self:initPrefabVar()
+	end
+
+	self:addClicks()
+	self:addEvents()
+
+	self.__status = nil
+	self._canvasGroup = self.gameObject:GetOrAddComponent(typeCG)
+	self._ator = self.gameObject:GetComponent("Animator")
+
+	self.behaviour:AddAnimationCompletedEvent(function ()
+		self:onAnimationCompleted()
+	end)
+end
+
+function M:onAnimationCompleted()
+	self._animating = false
+
+	if self.onAnimCompleted then
+		self.onAnimCompleted()
+
+		self.onAnimCompleted = nil
+	end
+
+	if self._onCompleted then
+		self._onCompleted()
+
+		self._onCompleted = nil
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:syncUI()
+end
+
+function M:addEvents()
+end
+
+function M:addClicks()
+end
+
+function M:OnShow()
+	if self.__status then
+		self:showInternal()
+	end
+
+	self.__status = V.PANEL_STATUS_SHOW
+end
+
+function M:OnPop()
+	self:showInternal()
+end
+
+function M:OnFocus()
+	if self.__prefabArg and P and P._playerGuide:isWaitingTrigger() then
+		GuideManager:tryShowAction()
+	end
+end
+
+function M:OnUnfocus()
+end
+
+function M:OnPanelOpened()
+	if self.__prefabArg and P and P._playerGuide:isWaitingTrigger() then
+		GuideManager:tryShowAction()
+	end
+end
+
+function M:OnStash()
+	self:hideInternal()
+end
+
+function M:showInternal()
+	self._canvasGroup.alpha = 1
+	self._canvasGroup.blocksRaycasts = true
+end
+
+function M:hideInternal()
+	self._canvasGroup.alpha = 0
+	self._canvasGroup.blocksRaycasts = false
+end
+
+function M:OnHide()
+	self.__status = V.PANEL_STATUS_HIDE
+
+	self:hideInternal()
+end
+
+function M:playShowAnimation(onCompleted)
+	if self._ator then
+		self._onCompleted = onCompleted
+		self._animating = true
+
+		if self.__isWhite then
+			self._ator:Play("Show")
+		end
+	else
+		onCompleted()
+	end
+end
+
+function M:playHideAnimation(onCompleted)
+	if self._ator then
+		self._onCompleted = onCompleted
+		self._animating = true
+
+		self._ator:Play("Hide")
+	else
+		onCompleted()
+	end
+end
+
+function M:closePanel()
+	UIManager.closePanel(self.__prefabArg)
+end
+
+return M

@@ -1,0 +1,42 @@
+local M = class("EnhanceToastPanel", requireLua("BasePanel"))
+M.args = {
+	tmpDesc = Types.TMP_Text,
+	tfBody = Types.Transform,
+	animVfx = Types.Animation,
+	tmpTitle = Types.TMP_Text,
+	tfRoot = Types.Transform,
+	atorMain = Types.Animator
+}
+local typeCG = typeof(UnityEngine.CanvasGroup)
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(param, offset)
+	self:updateUI()
+	Client.playSound("ui_Toast_1")
+
+	if param then
+		self._tmpTitle:SetLocalize(param)
+	end
+
+	if offset then
+		lc.setLocalPosition(self._tfRoot, offset[1], 493 + offset[2], 0)
+	else
+		lc.setLocalPosition(self._tfRoot, 0, 493, 0)
+	end
+end
+
+function M:updateUI()
+	if self._isAgain == nil then
+		self._isAgain = true
+	else
+		self._atorMain:SetTrigger("show")
+	end
+
+	self._animVfx:Stop()
+	self._animVfx:Play()
+end
+
+return M

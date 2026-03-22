@@ -1,0 +1,114 @@
+local M = class("BattleBullet_Dome_7_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._affectedEnemys = table.new(128, 0)
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._checkStep = 0
+	self._moveT = 1.5
+	self._motionless = false
+	self._speed = self._battleSkill:getProp(BattlePropEnum.BallisticSpeed)
+
+	table.clear(self._affectedEnemys)
+
+	if self._view then
+		self._showObj = self._battleSession._battleView:addVFX("Dome_140007_skill")
+		self._showObjY = -2.4
+
+		self._showObj:SetLocalPosition(0, self._showObjY, 0)
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._moveT then
+		self._moveT = self._moveT - dt
+
+		if self._moveT <= 0 then
+			self._moveT = nil
+			self._motionless = true
+			local cnt = #self._affectedEnemys
+
+			for i = 1, cnt do
+				local enemy = self._affectedEnemys[i]
+				enemy._affectedBySkill10029Param = nil
+			end
+		end
+
+		if self._showObj then
+			self._showObjY = self._showObjY + dt * self._speed
+
+			self._showObj:SetLocalPosition(0, self._showObjY, 0)
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+
+	local cnt = #self._affectedEnemys
+
+	for i = 1, cnt do
+		local enemy = self._affectedEnemys[i]
+		enemy._affectedBySkill10029 = nil
+		enemy._affectedBySkill10029Param = nil
+		enemy._speedFactor = 1
+	end
+
+	if self._showObj then
+		self._battleSession._battleView:removeVFX(self._showObj)
+
+		self._showObj = nil
+	end
+end
+
+function M:checkEnemyCollision(dt)
+	self._checkStep = self._checkStep + 1
+
+	if self._checkStep % 2 == 0 then
+		return
+	end
+
+	local enemys = self._battleSession:getEnemys(self)
+
+	if enemys == nil then
+		return
+	end
+
+	local cnt = #enemys
+	local p = D.getBattleEffectParams(10029)
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and not enemy._affectedBySkill10029 and not enemy._ignoreRegulateBuf and self:couldTakeDamageOnEnemy(enemy) and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+			enemy._speedFactor = 1 - p[1] / 100
+			enemy._affectedBySkill10029 = true
+
+			if self._motionless == false then
+				enemy._affectedBySkill10029Param = self._speed
+			end
+
+			self._affectedEnemys[#self._affectedEnemys + 1] = enemy
+		end
+	end
+end
+
+return M

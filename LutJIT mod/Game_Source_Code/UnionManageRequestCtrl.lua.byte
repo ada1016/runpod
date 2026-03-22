@@ -1,0 +1,64 @@
+local M = class("UnionManageRequestCtrl")
+local UnionMemberApplyWidget = requireLua("UnionMemberApplyWidget")
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+	self._listData = P._playerUnion._union.appliers
+	self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+		cellInitCount = 8,
+		cellHeight = 120
+	})
+
+	self._scrollViewEx:reloadData(0)
+	panel:setClick(self._btnBatchReject, function ()
+		if #self._listData > 0 then
+			P._playerUnion:tryDealBatchApplyReq(false)
+			self:refreshList()
+		end
+	end)
+	panel:setClick(self._btnBatchAgree, function ()
+		if #self._listData > 0 then
+			P._playerUnion:tryDealBatchApplyReq(true)
+			self:refreshList()
+		end
+	end)
+end
+
+function M:update()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = UnionMemberApplyWidget.create(self._tfContent)
+
+		goCell:init(self._panel, self)
+	end
+
+	goCell:update(self._listData[index])
+
+	return goCell
+end
+
+function M:onCellNum()
+	return #self._listData
+end
+
+function M:refreshList()
+	self._scrollViewEx:reloadData(0)
+end
+
+return M

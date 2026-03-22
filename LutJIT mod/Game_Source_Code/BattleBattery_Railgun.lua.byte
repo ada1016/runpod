@@ -1,0 +1,192 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_Railgun", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:step(dt, elapsedTime)
+	SUPER.step(self, dt, elapsedTime)
+
+	if self._isChanneling then
+		self:towardTargetEnemy(self._targetEnemy)
+		self:updateAngle(dt)
+		self:updateBulletAngle()
+
+		self._chargeDuration = self._chargeDuration - dt
+
+		if self._chargeDuration <= 0 then
+			self._isChanneling = nil
+
+			if self._view then
+				self._view._speed = 1
+
+				self._view._psCharge:SetActive(false)
+			end
+		end
+	end
+end
+
+function M:updateBulletAngle()
+	local bullet = self._bullet
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	bullet:setDirByAngle(self._angle)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+end
+
+function M:castSkill()
+	self._isChanneling = true
+	self._chargeDuration = (self._mainSkill:getProp(BattlePropEnum.ChargeDuration) + self._mainSkill:getProp(BattlePropEnum.ChargeDurationAdd, 0)) * (1 + self._mainSkill:getProp(BattlePropEnum.ChargeDurationAddPer, 0) / 100)
+	self._chargeAddDuration = self._chargeDuration - self._mainSkill:getProp(BattlePropEnum.ChargeDuration)
+	self._chargeDurationOrigin = self._chargeDuration
+	local bullet = self:createBullet()
+	self._bullet = bullet
+
+	bullet:lockEnemy(self._targetEnemy)
+
+	if self._view then
+		self._view._ator.speed = 0.5 / self._chargeDuration
+
+		self._view._ator:SetTrigger("attack")
+		self._view._psCharge:SetActive(true)
+	end
+end
+
+function M:createBullet(angle, x, y)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(x or self._shootPos.x, y or self._shootPos.y)
+	bullet:setDirByAngle(angle or self._angle)
+	bullet:initExtends(self._chargeAddDuration, self._chargeDuration)
+
+	if bullet._view then
+		bullet._view:scaleEvent()
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	return bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if self._bullet == bullet then
+		-- Nothing
+	end
+end
+
+function M:castSkill1006(castSkill)
+	local targetEnemy = self._battleSession:randomOneEnemy(nil, self)
+
+	if targetEnemy == nil then
+		return
+	end
+
+	if self._shootCtrlPos == nil then
+		self._shootCtrlPos = Vector3.retain(0, 0, 0)
+	end
+
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	self._shootCtrlPos:Set(self._towardDir):Mul(self._muzzleDistance + 1):Add(self._rotatePos)
+	bullet:setLineBegan(self._shootPos.x, self._shootPos.y, self._shootCtrlPos.x, self._shootCtrlPos.y)
+
+	bullet._isMain = false
+	bullet._childType = 2
+
+	bullet:setTargetEnemy(targetEnemy)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	return bullet
+end
+
+function M:onSubEnemyKilled(bullet, oldSubEnemy)
+	if bullet._childType == 2 then
+		local newSubEnemy = self._battleSession:randomOneEnemy()
+
+		if newSubEnemy == nil then
+			return
+		end
+
+		bullet:setTargetEnemy(newSubEnemy)
+
+		return newSubEnemy
+	end
+end
+
+function M:onEnemyKilled(battleBullet)
+	SUPER.onEnemyKilled(self)
+
+	if battleBullet._battleSkill._cid == 1001 then
+		local effPar = self:getEffect(1051)
+
+		if effPar then
+			local slotWeapons = self._battleSession._slotWeapons
+
+			for i = 2, 5 do
+				local weapon = slotWeapons[i]
+
+				if weapon then
+					weapon._roundSkillCdSpeedAddPer = effPar
+				end
+			end
+		end
+	end
+end
+
+function M:castSkin62Effect(bullet, enemy)
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(enemy._position.x, enemy._position.y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	count = count - 1
+
+	for i = 1, count do
+		local bullet = castSkill:createBullet()
+		local x, y = BattleMathLib.random_along_circle(2)
+		x, y = self._battleSession:limitEnemyPosition(enemy._position.x + x, enemy._position.y + y)
+
+		bullet:setPos(x, y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+end
+
+function M:pvpEndRound()
+	if self._view then
+		self._view._obj:GetChild(0):GetChild(1):SetActive(false)
+	end
+end
+
+function M:pvpBeganRound()
+end
+
+function M:pvpBeganRoundReady()
+end
+
+return M

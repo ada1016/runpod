@@ -1,0 +1,194 @@
+local M = class("MissionOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+local MissionCellWidget = requireLua("MissionCellWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnChoose = Types.Button,
+	txtChoose = Types.TMP_Text,
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goUnPerfect = Types.GameObject,
+	textLastUnPerfectMission = Types.TMP_Text,
+	btnCheckLastUnPerfect = Types.Button,
+	btnClaimAll = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._firstGuideReward = nil
+	local cellNum = P._playerMission:getMissionId() - 10000
+	local cellHeight = 275
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 100,
+		cellMargin = 20,
+		cellHeight = cellHeight,
+		cellInitCount = math.min(showCount + 1, cellNum)
+	})
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnChoose, function ()
+		if self._homePage._msId ~= self._selectMsId then
+			self._homePage:changeMission(self._selectMsId)
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnCheckLastUnPerfect, function ()
+		local newMsId = P._playerMission:getFirstUnPerfectMissionId(self._msType)
+		local delta = math.abs(self._selectMsId - newMsId)
+		local moveTime = Mathf.Clamp((delta - 3) / self._showCellCount * 0.5, 0.1, 0.5)
+
+		self._scrollViewEx:moveToItemByIndex(newMsId - 10000, moveTime, nil, , function ()
+			if newMsId ~= self._selectMsId then
+				self:resetChoosedCell(false)
+
+				self._selectMsId = newMsId
+
+				self:resetChoosedCell(true)
+			end
+		end)
+	end)
+end
+
+function M:init(homePage, msId, msType)
+	self._homePage = homePage
+	self._selectMsId = msId
+	local msId = P._playerMission:getMissionIdByType(msType)
+	self._isMaxLevel = not P._playerMission:isMissionExist(msId, msType)
+	self._msType = msType or D.MissionType.Common
+
+	self._scrollViewEx:reloadData(true)
+	self._scrollViewEx:moveToItemByIndex(self._selectMsId - 10000, nil, true)
+	self:resetChoosedCell(true)
+	self:updateUI()
+end
+
+function M:onCellNum()
+	if self._isMaxLevel then
+		return P._playerMission:getMissionIdByType(self._msType) - 10001
+	else
+		return P._playerMission:getMissionIdByType(self._msType) - 10000
+	end
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = MissionCellWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+
+		if not self._firstGuideReward then
+			self._firstGuideReward = goCell._perfectRewardWidget._goBox1._btnClick
+		end
+
+		for i = 1, 3 do
+			self:setClick(goCell:getClickBtn(i), function ()
+				local ret = goCell._perfectRewardWidget:clickCallback(i)
+			end)
+		end
+
+		self:setClick(goCell:getIssueButton(), function ()
+			UIManager.openPanel(PrefabDefine.MissionInfoPanel, goCell:getMissionIdType())
+		end)
+		self:setClickWithoutAction(goCell._btnClick, function ()
+			if self._selectMsId == goCell._missionId then
+				return
+			end
+
+			self:resetChoosedCell(false)
+
+			self._selectMsId = goCell._missionId
+
+			self:resetChoosedCell(true)
+		end)
+	end
+
+	local msId = index + 10000
+	local msType = self._msType
+
+	goCell:updateUI(msId, msType)
+	goCell:setChoosed(msId == self._selectMsId)
+
+	if msId == self._selectMsId then
+		lc.setLocalScale(goCell.transform, 1.05, 1.05, 1.05)
+	else
+		lc.setLocalScale(goCell.transform, 1, 1, 1)
+	end
+
+	return goCell
+end
+
+function M:updateUI()
+	self:updateFirstUnPerfectMS()
+end
+
+function M:updateFirstUnPerfectMS()
+	local msId = P._playerMission:getFirstUnPerfectMissionId(self._msType)
+	local show = msId ~= P._playerMission:getMissionIdByType(self._msType)
+
+	self._goUnPerfect:SetActive(show)
+
+	if show then
+		self._textLastUnPerfectMission:SetLocalize(SID.LAST_NOT_PERFECT_MISSION, msId - 10000, -P._playerMission:readMissionName(msId, self._msType))
+
+		self._textLastUnPerfectMission.text = string.gsub(self._textLastUnPerfectMission.text, "{0}", msId % 10000)
+	end
+end
+
+function M:getMsCell(msId)
+	return self._scrollViewEx:getShowCellObjByFunc(function (cell, param)
+		return cell._missionId == param
+	end, msId)
+end
+
+function M:reloadChoosedCell(goCell)
+	if self._selectMsId == goCell._missionId then
+		return
+	end
+
+	self._selectMsId = goCell._missionId
+	local cell = self:getMsCell(self._selectMsId)
+
+	cell:setChoosed(true)
+end
+
+function M:resetChoosedCell(show)
+	self._txtChoose:SetLocalize(SID.BTN_CHOOSE_MISSION, self._selectMsId - 10000)
+
+	local cell = self:getMsCell(self._selectMsId)
+
+	if cell then
+		cell:setChoosed(show)
+
+		if show then
+			cell.transform:DOKill()
+			cell.transform:DOScale(Vector3.static(1.05, 1.05, 1.05), 0.1):SetLink(self.gameObject)
+		else
+			cell.transform:DOKill()
+			cell.transform:DOScale(Vector3.static(1, 1, 1), 0.1):SetLink(self.gameObject)
+		end
+	end
+end
+
+function M:claimAllRewards()
+	local rewards = P._playerMission:tryClaimAllPerfectReward(self._msType)
+
+	if not rewards or #rewards == 0 then
+		V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+
+		return
+	end
+
+	V.showRewardClaimPanel(rewards)
+	self:updateUI()
+end
+
+return M

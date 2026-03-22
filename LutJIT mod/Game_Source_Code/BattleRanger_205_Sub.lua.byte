@@ -1,0 +1,130 @@
+local M = class("BattleRanger_205_Sub")
+local math = math
+local STAGE_IDLE = 1
+local STAGE_READY = 4
+local STAGE_MOVE = 2
+local STAGE_ATTACK = 3
+local MOVE_SPEED = 1
+
+function M:ctor(ranger)
+	self._ranger = ranger
+	self._mainSkill = ranger._mainSkill
+	self._stage = STAGE_IDLE
+	self._battleSession = ranger._battleSession
+	self._angle = 90
+	self._position = Vector2.retain(0, 0)
+	self._pBegan = Vector2.retain(0, 0)
+	self._pEnd = Vector2.retain(0, 0)
+	self._pCtrl = Vector2.retain(0, 0)
+	self._dir = {
+		0,
+		1
+	}
+
+	if self._ranger._view then
+		self._view = self._battleSession._sessionView:createRanger("Ranger_150005_Sub")
+
+		self._view:SetLocalScale(0)
+
+		self._ator = self._view:GetChild(0):GetComponent("Animator")
+	end
+end
+
+function M:step(dt)
+	if self._stage == STAGE_READY then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE_MOVE
+		end
+	elseif self._stage == STAGE_MOVE then
+		self._runTime = self._runTime + dt * MOVE_SPEED
+		local x, y = BattleMathLib.calculate_bezier_point_2(self._runTime, self._pBegan, self._pCtrl, self._pEnd)
+		self._position.x = x
+		self._position.y = y
+		local x1, y1 = BattleMathLib.calculate_second_bezier_tangent(self._runTime, self._pBegan, self._pCtrl, self._pEnd)
+		local v1 = Vector2.static(x1, y1):SetNormalize()
+		self._dir[1] = v1.x
+		self._dir[2] = v1.y
+		self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+
+		if self._view then
+			self._view:SetLocalRotation(0, 0, self._angle - 90)
+			self._view:SetPosition(x, y, 0)
+		end
+
+		if self._isLeft and x <= self._pEnd.x then
+			self:doAttack()
+		elseif not self._isLeft and self._pEnd.x <= x then
+			self:doAttack()
+		end
+	elseif self._stage == STAGE_ATTACK and self._view then
+		self._view:SetPosition(self._bullet._position.x, self._bullet._position.y, 0)
+		self._view:SetLocalRotation(0, 0, self._bullet._angle - 90)
+	end
+end
+
+function M:doStart()
+	self._stage = STAGE_READY
+	self._stageCD = 0.3
+	self._position.x = self._ranger._position.x
+	self._position.y = self._ranger._position.y + 0.45
+	self._angle = 90
+
+	if self._view then
+		self._view:SetLocalScale(1)
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+		self._view:SetLocalRotation(0, 0, self._angle - 90)
+		self._ator:SetTrigger("fly")
+	end
+
+	self._runTime = 0
+
+	self._pBegan:Set(self._position.x, self._position.y)
+
+	local pEndX = 0
+	local pEndY = 0
+
+	if self._position.x < 0 then
+		self._isLeft = true
+		pEndX = self._battleSession._screenEdgeX1 - 1
+		pEndY = BattleDefine.DOME_POSY + 1
+	else
+		self._isLeft = false
+		pEndX = self._battleSession._screenEdgeX2 + 1
+		pEndY = BattleDefine.DOME_POSY + 1
+	end
+
+	self._pEnd:Set(pEndX, pEndY)
+	self._pCtrl:Set(self._position.x, pEndY)
+end
+
+function M:doAttack()
+	self._stage = STAGE_ATTACK
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(self._position.x, self._position.y)
+
+	self._bullet = bullet
+
+	if self._pEnd.x < 0 then
+		bullet:startClip(true)
+	else
+		bullet:startClip(false)
+	end
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+end
+
+function M:doEnd()
+	self._stage = STAGE_IDLE
+
+	if self._view then
+		self._ator:SetTrigger("end")
+		self._view:SetLocalScale(0)
+	end
+end
+
+return M

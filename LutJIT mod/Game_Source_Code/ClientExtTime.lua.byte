@@ -1,0 +1,268 @@
+local M = Client
+local C = M
+local lc = lc
+local ServerTimestamp = ServerTimestamp
+local math = math
+local CN_ZeroTimeOffset = 0
+
+if lc._isCN then
+	CN_ZeroTimeOffset = -28800
+end
+
+function M.getCurTime()
+	return M.getTimestamp()
+end
+
+function M.getRealtimeSinceStartup()
+	return Time.realtimeSinceStartup
+end
+
+function M.getTimestamp()
+	return ServerTimestamp.GetServerTimestamp()
+end
+
+function M.getTimezoneOffset()
+	return ServerTimestamp.GetTimezoneOffset()
+end
+
+function M.getLuaRealTimezoneOffset()
+	local now = os.time()
+	local convert = os.time(os.date("!*t", now))
+
+	return os.difftime(now, convert)
+end
+
+function M.getNativeTimestamp()
+	if lc._isMobile then
+		return ServerTimestamp.GetServerTimestamp() - M._timezoneOffset
+	else
+		return ServerTimestamp.GetServerTimestamp()
+	end
+end
+
+function M.getServerTimestamp()
+	return ServerTimestamp.GetServerTimestamp()
+end
+
+function M.getTodayZeroTimestamp(offsetDay)
+	return M.getZeroTimestamp(M.getCurTime(), offsetDay)
+end
+
+function M.getZeroTimestamp(timestamp, offsetDay)
+	timestamp = timestamp - CN_ZeroTimeOffset
+	timestamp = timestamp - timestamp % 86400 + (offsetDay or 0) * 86400 + CN_ZeroTimeOffset
+
+	return timestamp
+end
+
+function M.getNativeTodayZeroTimestamp()
+	local tbl = os.date("*t", M.getNativeTimestamp())
+	tbl.hour = 0
+	tbl.min = 0
+	tbl.sec = 0
+	local timestamp = os.time(tbl)
+
+	return timestamp
+end
+
+function M.getMondayTimestamp(timestamp, offsetWeek)
+	offsetWeek = offsetWeek or 0
+	local now = timestamp or M.getCurTime()
+	local wday = tonumber(os.date("!%w", now - CN_ZeroTimeOffset))
+
+	if wday < 1 then
+		return now + 86400 * (7 * (offsetWeek - 1) + 1)
+	else
+		return now + 86400 * (7 * offsetWeek - (wday - 1))
+	end
+end
+
+function M.getNativeMondayTimestamp()
+	return M.getMondayTimestamp(M.getNativeTodayZeroTimestamp())
+end
+
+function M.getMonthFirstDayTimestamp(timestamp, offset)
+	local now = timestamp or M.getCurTime()
+	now = now - CN_ZeroTimeOffset
+	local date = os.date("!*t", now)
+	date.day = 1
+	date.month = date.month + (offset or 0)
+
+	return os.time(date) + M.getLuaRealTimezoneOffset() + CN_ZeroTimeOffset
+end
+
+function M.getDayIdx(dt)
+	return math.ceil(dt / D.DAY_SECONDS)
+end
+
+function M.getDayOffset(t)
+	t = t or M.getCurTime()
+
+	return math.floor(t / 86400)
+end
+
+function M.getTimeAgoArgs(dt, maxDay)
+	local dt = dt
+
+	if dt <= 1 then
+		return 0, 0
+	end
+
+	local day = math.floor(dt / 24 / 3600)
+
+	if day > 0 then
+		if maxDay and maxDay < day then
+			return 1, maxDay
+		else
+			return 1, day
+		end
+	end
+
+	local hour = math.floor(dt / 3600)
+
+	if hour > 0 then
+		return 2, hour
+	end
+
+	local minute = math.floor(dt / 60)
+
+	if minute > 0 then
+		return 3, minute
+	end
+
+	return 4, dt
+end
+
+function M.getTimeEndArgs(dt)
+	if dt < 0 then
+		return 0, 0, 0, 0
+	end
+
+	local hour = math.floor(dt / 3600)
+	local day = math.floor(hour / 24)
+	hour = hour - day * 24
+	local minute = math.floor(dt % 3600 / 60)
+	local second = math.floor(dt % 3600 % 60)
+
+	return day, hour, minute, second
+end
+
+function M.formatPeriod(dt, isShort)
+	local day, hour, minute, second = M.getTimeEndArgs(dt, true)
+	local str = ""
+
+	if day > 0 then
+		str = string.formatOrder(STR.PERIOD_DAY, day)
+
+		if hour > 0 then
+			str = str .. string.formatOrder(STR.PERIOD_HOUR, hour)
+		end
+	else
+		if hour > 0 then
+			str = str .. string.formatOrder(STR.PERIOD_HOUR, hour)
+		end
+
+		if minute > 0 then
+			str = str .. string.formatOrder(STR.PERIOD_MINUTE, minute)
+		end
+
+		if (not isShort or hour == 0 or minute == 0) and second > 0 then
+			str = str .. string.formatOrder(STR.PERIOD_SECOND, second)
+		end
+	end
+
+	return str
+end
+
+function M.formatTime(dt, isShort)
+	local day, hour, minute, second = M.getTimeEndArgs(dt, true)
+	local str = ""
+
+	if day > 0 then
+		hour = hour + day * 24
+	end
+
+	if hour > 0 then
+		if isShort then
+			str = string.format("%02d:%02d", hour, minute)
+		else
+			str = string.format("%02d:%02d:%02d", hour, minute, second)
+		end
+	else
+		str = string.format("%02d:%02d", minute, second)
+	end
+
+	return str
+end
+
+function M.formatReadableDayTime(t)
+	local standardFormat = "%A, %B %d, %Y %H:%M:%S"
+
+	return os.date(standardFormat, t)
+end
+
+function M.formatReadableDay(t)
+	local standardFormat = "%A, %B %d, %Y"
+
+	return os.date(standardFormat, t)
+end
+
+function M.getTimeCountDownArgs(endTimestamp, isNative)
+	local dt = endTimestamp - (isNative and Client.getNativeTimestamp() or Client.getCurTime())
+	local d, h, m, s = M.getTimeEndArgs(dt)
+
+	if d > 0 then
+		return SID.PERIOD_DAY, d
+	elseif h > 0 then
+		return SID.PERIOD_HOUR, h
+	else
+		return SID.PERIOD_MINUTE, m
+	end
+end
+
+function M.getTimeCountDownArgs2(endTimestamp, isNative)
+	local dt = endTimestamp - (isNative and Client.getNativeTimestamp() or Client.getCurTime())
+	local d, h, m, s = M.getTimeEndArgs(dt)
+
+	if d > 0 then
+		return SID.TIMER_D_H, d, h
+	elseif h > 0 then
+		return SID.TIMER_H_M, h, m
+	else
+		return SID.TIMER_M_S, m, s
+	end
+end
+
+function M.getTimeCountDownArgs3(endTimestamp, isNative)
+	local dt = endTimestamp - (isNative and Client.getNativeTimestamp() or Client.getCurTime())
+	local d, h, m, s = M.getTimeEndArgs(dt)
+	local w = 0
+
+	if d >= 7 then
+		w = math.floor(d / 7)
+		d = d % 7
+	end
+
+	if w > 0 then
+		return SID.TIMER_W_D_H, w, d, h
+	elseif d > 0 then
+		return SID.TIMER_D_H_M, d, h, m
+	else
+		return SID.TIMER_H_M_S, h, m, s
+	end
+end
+
+function M.getDateTimestamp(year, month, day, timezone)
+	local rawOffset = os.time({
+		month = 1,
+		year = 1970,
+		day = 1
+	})
+	local time = os.time({
+		year = year,
+		month = month,
+		day = day
+	}) - rawOffset
+
+	return time + (timezone or 0) * 3600 + CN_ZeroTimeOffset
+end

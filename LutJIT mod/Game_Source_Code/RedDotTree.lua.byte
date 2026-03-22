@@ -1,0 +1,248 @@
+local M = {
+	city = {
+		home = {
+			common = function ()
+				return P._playerMission:getFirstUnClaimPerfectReward(D.MissionType.Common) ~= nil
+			end,
+			elite = function ()
+				return P._playerRecord:getEliteRedDot() or P._playerMission:getFirstUnClaimPerfectReward(D.MissionType.Elite) ~= nil
+			end,
+			player = function ()
+				return false
+			end,
+			task = function ()
+				return false
+			end,
+			task2 = function ()
+				return false
+			end,
+			offline = function ()
+				return P._playerMission:getMissionId() > 10001 and P._playerOffline:isOfflineTimeFull()
+			end,
+			reward = function ()
+				return false
+			end,
+			sevenday = function ()
+				return P._playerSevenDay:isExpired() and P._playerSevenDay:haveCachedRewards() or P._playerSevenDay:haveRewards() or P._playerTask:haveRewards(D.TaskClass.SevenDay)
+			end,
+			weeklottery = function ()
+				if P._playerActivity:getActivityNum(D.ActivityType.WeekLottery) > 0 and P._playerWeekLottery:haveDot() then
+					return true
+				end
+
+				if P._playerActivity:getActivityNum(D.ActivityType.WeekLottery2) > 0 and P._playerWeekLottery2:haveFree() then
+					return true
+				end
+
+				if P._playerActivity:getActivityNum(D.ActivityType.Monopoly) > 0 and P._playerActivityMonopoly:haveDot() then
+					return true
+				end
+
+				return false
+			end,
+			special = {
+				battlepassnew = function ()
+					return P._playerBPNew:isStatusOpen() and P._playerBPNew:haveUnclaimRewards() or P._playerBPNew:isStatusExpired() and not P._playerBPNew:lastPeriodRewardsClaimed()
+				end,
+				battlepassskin = function ()
+					return P._playerBPSkin:isStatusOpen() and P._playerBPSkin:haveUnclaimRewards() or P._playerBPSkin:isStatusExpired() and not P._playerBPSkin:lastPeriodRewardsClaimed()
+				end,
+				domebattlepass = function ()
+					return P._playerDomeBP:isStatusOpen() and P._playerDomeBP:haveUnclaimRewards() or P._playerDomeBP:isStatusExpired() and not P._playerDomeBP:lastPeriodRewardsClaimed()
+				end,
+				levelfund = function ()
+					return P._playerLevelFund:isStatusOpen() and P._playerLevelFund:haveUnclaimRewards()
+				end,
+				battlepassranger = function ()
+					return P._playerBPRanger:isStatusOpen() and P._playerBPRanger:haveUnclaimRewards() or P._playerBPRanger:isStatusExpired() and not P._playerBPRanger:lastPeriodRewardsClaimed()
+				end
+			},
+			rightcard = {
+				svipclaim = function ()
+					return P._playerRight:isInDuration(D.RightCardType.SVIP) and not P._playerRight:isDailyRewardClaimed(D.RightCardType.SVIP)
+				end,
+				vipclaim = function ()
+					return P._playerRight:isInDuration(D.RightCardType.VIP) and not P._playerRight:isDailyRewardClaimed(D.RightCardType.VIP)
+				end,
+				svipclaim_dot = function ()
+					return P._playerRight:isInDuration(D.RightCardType.SVIP) and not P._playerRight:isDailyRewardClaimed(D.RightCardType.SVIP)
+				end,
+				vipclaim_dot = function ()
+					return P._playerRight:isInDuration(D.RightCardType.VIP) and not P._playerRight:isDailyRewardClaimed(D.RightCardType.VIP)
+				end
+			},
+			firstcharge = function ()
+				return P._playerGift:haveReddotByType(D.GiftType.FirstCharge)
+			end,
+			newbie = function ()
+				return P._playerGift:haveReddotByType(D.GiftType.Newbie)
+			end,
+			limittime = function ()
+				return P._playerGift:haveReddotByType(D.GiftType.LimitTime)
+			end,
+			arkProj = function ()
+				if not D.isSystemUnlocked(D.SystemType.ArkRebuild_Entrance) then
+					return false
+				end
+
+				if P._playerActivity:isArkRebuildOpening() then
+					return not P._playerActivityArkRebuild:isEntered()
+				else
+					local hasSettleRewards = P._playerActivityArkRebuild:hasSettleRewards()
+
+					return hasSettleRewards
+				end
+			end,
+			sparkScout = function ()
+				if not D.isSystemUnlocked(D.SystemType.SparkScout_Entrance) then
+					return false
+				end
+
+				if P._playerActivity:isSparkScoutOpening() then
+					return not P._playerActivitySparkScout:isEntered()
+				end
+
+				local hasSettleRewards = P._playerActivitySparkScout:hasSettleRewards()
+
+				return hasSettleRewards
+			end,
+			mainrank = function ()
+				return #P._playerRanker:getMainMissionDailyVoteList() == 0
+			end,
+			monthlyCheckin = function ()
+				return P._playerMonthlyCheckin:isUnlock() and not P._playerMonthlyCheckin:isTodayCheckedIn()
+			end,
+			playerReturn = function ()
+				return P._playerReturn:haveDot()
+			end,
+			anniversary = function ()
+				return P._playerActivity:isAnniversaryOpening() and P._playerActivityAnniversary:haveDot() or P._playerActivityAnniversary:hasSettleRewards()
+			end,
+			anniversaryInvite = function ()
+				return P._playerActivity:isAnniversaryOpening() and P._playerActivityAnniversary:haveInviteDot()
+			end
+		},
+		role = {
+			chip = {
+				merge = function ()
+					return P._playerRole:canMergeGems()
+				end,
+				equip = function ()
+					return P._playerRole:canEquiqGem()
+				end
+			},
+			dome = {
+				upgrade = function ()
+					return D.isSystemUnlocked(D.SystemType.Dome) and (P._playerArmory:canUpgradeDome() or P._playerArmory:hasNewDomeTech())
+				end,
+				skin = function ()
+					return D.isSystemUnlocked(D.SystemType.Dome) and P._playerSkin:canUpgradeSkinByType(D.SkinType.Dome) or P._playerSkin:canEquipSkinByType(D.SkinType.Dome) or P._playerSkin:hasNewSkillFlag(D.SkinType.Dome)
+				end
+			},
+			equip = {
+				upgrade = function ()
+					return P._playerRole:canUpgradeEquip()
+				end,
+				equip = function ()
+					return P._playerRole:canReplaceEquip()
+				end,
+				refine = function ()
+					return P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine) and P._playerRole:hasRefineFlagEquip()
+				end
+			},
+			system = {
+				research = function ()
+					return P._playerArmory:canUpgradeGatlin()
+				end,
+				warehouse = function ()
+					return P._playerSkin:canUpgradeSkinByType(D.SkinType.Gatlin) or P._playerSkin:canEquipSkinByType(D.SkinType.Gatlin, D.WEAPON_GATLIN)
+				end,
+				skin = function ()
+					return P._playerSkin:canUpgradeSkinByType(D.SkinType.Role) or P._playerSkin:canEquipSkinByType(D.SkinType.Role) or P._playerSkin:hasNewSkillFlag(D.SkinType.Role)
+				end
+			},
+			ranger = {
+				base = function ()
+					if not D.isSystemUnlocked(D.SystemType.Ranger) then
+						return false
+					end
+
+					return P._playerRanger:canUpgradeDock() or P._playerRanger:canUpgradeAnyRanger() or P._playerRanger:hasDockRangerEquipDot()
+				end,
+				foundry = function ()
+					if not D.isSystemUnlocked(D.SystemType.Ranger) then
+						return false
+					end
+
+					local bpRed = RedDotManager.getPathFlag("city.home.special.battlepassranger")
+
+					return bpRed or P._playerRanger:getFoundryDot()
+				end
+			}
+		},
+		challenge = {
+			dome = function ()
+				return D.isSystemUnlocked(D.SystemType.DomeMission) and (P._playerDome:getDailyBattleChance() == 0 or P._playerDome:needNextDifficulty())
+			end,
+			globalDefense = function ()
+				return P._playerExchange:getLeftExchangeCount(D.ExchangeId.ExchangeGlobalDefenseTicketFree) > 0
+			end,
+			arkRebuild = function ()
+				return D.isSystemUnlocked(D.SystemType.ArkRebuild_Entrance) and not P._playerRecord:hasChallengeEnterArkRebuildFlag()
+			end,
+			crisisZone = function ()
+				if not D.isSystemUnlocked(D.SystemType.Ranger) then
+					return false
+				end
+
+				return P._playerTask:haveRewards(D.TaskClass.CrisisZone) or P._playerCrisisZone:getCircleBattleChance() == 0
+			end
+		},
+		weapon = {
+			upgrade = function ()
+				return P._playerArmory:canUpgradeWeapon()
+			end,
+			skin = function ()
+				return P._playerSkin:canUpgradeSkinByType(D.SkinType.Weapon) or P._playerSkin:canEquipSkinByType(D.SkinType.Weapon) or P._playerSkin:hasNewSkillFlag(D.SkinType.Weapon)
+			end
+		},
+		task = {
+			daily = function ()
+				return P._playerTask:haveRewards(D.TaskClass.Daily)
+			end
+		},
+		shop = {
+			resource = function ()
+				return P._playerExchange:getLeftExchangeCount(D.ExchangeId.FreeCoin) > 0
+			end,
+			dayweekmonth = function ()
+				return P._playerExchange:haveFreeSpecialOfferGift()
+			end,
+			activityexchange = function ()
+				local skin = P._playerBPSkin:isStatusOpen() and P._playerExchange:haveExchangeGroupDot(D.ExchangeId.BP_Skin_Group)
+
+				if skin then
+					return true
+				end
+
+				local datas = P._playerActivity:getExchangeShopPageDataJustRead()
+
+				if not datas then
+					return false
+				end
+
+				for i = 1, #datas do
+					local data = datas[i]
+
+					if P._playerExchange:haveExchangeGroupDot(data.exchangeGroup) then
+						return true
+					end
+				end
+
+				return false
+			end
+		}
+	}
+}
+
+return M

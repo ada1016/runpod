@@ -1,0 +1,92 @@
+local M = class("ArkRebuildLoadoutPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goLoadout1 = Types.GameObject,
+	goLoadout2 = Types.GameObject,
+	goLoadout3 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goLoadouts = {
+		self._goLoadout1,
+		self._goLoadout2,
+		self._goLoadout3
+	}
+
+	for i = 1, #self._goLoadouts do
+		lc.prefabVarPeer(self._goLoadouts[i])
+	end
+end
+
+function M:addClicks()
+	for i = 1, #self._goLoadouts do
+		local goLoadout = self._goLoadouts[i]
+
+		self:setClick(goLoadout._btnClick, function ()
+			if self._callback then
+				self._callback(i)
+			end
+
+			self:closePanel()
+		end)
+		self:setClick(goLoadout._btnEdit, function ()
+			UIManager.openPanel(PrefabDefine.CommonEditPanel, SID.TITLE_CHANGE_NAME, SID.TIP_EDIT_LOADOUT_NAME, goLoadout._txtDesc.text, 22, function (text)
+				self:setLoadoutName(i, text)
+				self:updateUI()
+				V.showToast(SID.TIP_EDIT_SUCCESS)
+			end)
+		end)
+	end
+end
+
+function M:init(callback)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local num = #self._goLoadouts
+
+	for i = 1, num do
+		local loadoutName = self:getLoadoutName(i)
+		local goLoadout = self._goLoadouts[i]
+		goLoadout._txtId.text = i
+
+		goLoadout._goLock:SetActive(false)
+
+		goLoadout._btnClick.enabled = true
+
+		goLoadout:SetActive(true)
+
+		if loadoutName then
+			goLoadout._txtDesc.text = loadoutName
+		else
+			goLoadout._txtDesc:SetLocalize(SID.STR_LOADOUT_X, i)
+		end
+	end
+end
+
+function M:getLoadoutName(i)
+	return P._playerActivityArkRebuild:getLoadoutName(i)
+end
+
+function M:setLoadoutName(i, text)
+	P._playerActivityArkRebuild:setLoadoutName(i, text)
+end
+
+function M:getLoadoutId()
+	return P._playerActivityArkRebuild:getCurLoadout()
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+return M

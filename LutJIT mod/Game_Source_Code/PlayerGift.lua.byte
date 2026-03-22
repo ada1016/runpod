@@ -1,0 +1,991 @@
+local M = class("PlayerGift")
+
+local function generateGiftData()
+	return {
+		buyTime = -1,
+		id = 0,
+		reddot = true,
+		triggerTime = -1,
+		expireTime = -1,
+		claimTime = {}
+	}
+end
+
+function M:ctor()
+	self._gifts = {}
+	self._countdownGifts = {}
+	self._unlockTypeGifts = {}
+	self._dailyTriggerGifts = {}
+	self._iapId2GiftId = {}
+	self._triggeredCountdownGifts = {}
+	self._waitIapTriggerGift = {}
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._data = lc.assignTable(meta, "data")
+	self._pop = lc.assignTable(meta, "type_pop")
+	self._dots = lc.assignTable(meta, "dots")
+	self._meta.failureNumAfterPurchase = meta.failureNumAfterPurchase or 0
+	self._showMsGiftIds = {}
+	self._msGiftDirty = true
+
+	self:processConfig()
+end
+
+function M:processConfig()
+	local ignoreTrigger = {}
+
+	if not lc._isiOS then
+		if C._installVersion < 502 then
+			ignoreTrigger = {}
+
+			if self:isBought(D.GiftId.Newbie1_origin) then
+				D.GiftId.Newbie1 = D.GiftId.Newbie1_origin
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie1_forever)
+			else
+				D.GiftId.Newbie1 = D.GiftId.Newbie1_forever
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie1_origin)
+			end
+
+			if self:isBought(D.GiftId.Newbie2a) and self:isBought(D.GiftId.Newbie2b) then
+				D.GiftId.Newbie2 = D.GiftId.Newbie2b
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie2c)
+			elseif self:isBought(D.GiftId.Newbie2a) then
+				D.GiftId.Newbie2 = D.GiftId.Newbie2c
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie2b)
+			elseif self:isBought(D.GiftId.Newbie2b) then
+				D.GiftId.Newbie2 = D.GiftId.Newbie2b
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie2a)
+				table.insert(ignoreTrigger, D.GiftId.Newbie2c)
+			else
+				D.GiftId.Newbie2 = D.GiftId.Newbie2c
+
+				table.insert(ignoreTrigger, D.GiftId.Newbie2a)
+				table.insert(ignoreTrigger, D.GiftId.Newbie2b)
+			end
+		else
+			ignoreTrigger = {
+				D.GiftId.Newbie1_origin,
+				D.GiftId.Newbie2a,
+				D.GiftId.Newbie2b
+			}
+			D.GiftId.Newbie1 = D.GiftId.Newbie1_forever
+			D.GiftId.Newbie2 = D.GiftId.Newbie2c
+		end
+	else
+		ignoreTrigger = {
+			D.GiftId.Newbie1_origin,
+			D.GiftId.Newbie2a,
+			D.GiftId.Newbie2b
+		}
+		D.GiftId.Newbie1 = D.GiftId.Newbie1_forever
+		D.GiftId.Newbie2 = D.GiftId.Newbie2c
+	end
+
+	if lc._isCN then
+		if C._installPatchVersion > 57 then
+			if P:isATest() then
+				ignoreTrigger[#ignoreTrigger + 1] = 1111
+			else
+				ignoreTrigger[#ignoreTrigger + 1] = D.GiftId.Newbie1_forever
+			end
+		else
+			ignoreTrigger[#ignoreTrigger + 1] = 1111
+		end
+	end
+
+	for giftId, data in pairs(D._giftConfig) do
+		local needContinue = false
+
+		if table.findArray(ignoreTrigger, giftId) then
+			needContinue = true
+		end
+
+		if not needContinue then
+			local unlockType = data._unlockParams[1]
+			local unlockTypeGifts = self._unlockTypeGifts[unlockType]
+
+			if unlockTypeGifts == nil then
+				unlockTypeGifts = {}
+				self._unlockTypeGifts[unlockType] = unlockTypeGifts
+			end
+
+			unlockTypeGifts[#unlockTypeGifts + 1] = giftId
+			local type = data._type
+			local typeGifts = self._gifts[type]
+
+			if typeGifts == nil then
+				typeGifts = {}
+				self._gifts[type] = typeGifts
+			end
+
+			typeGifts[#typeGifts + 1] = giftId
+
+			if data._triggerDay > 0 then
+				self._dailyTriggerGifts[#self._dailyTriggerGifts + 1] = giftId
+			end
+
+			if self:isCountdownGift(giftId) then
+				self._countdownGifts[#self._countdownGifts + 1] = giftId
+			end
+
+			if data._buyType == D.GiftBuyType.Purchase then
+				self._iapId2GiftId[data._buyValue] = giftId
+			end
+
+			local triggerIapType = data._triggerIap[1]
+			local waitIapGifts = self._waitIapTriggerGift[triggerIapType]
+
+			if waitIapGifts == nil then
+				waitIapGifts = {}
+				self._waitIapTriggerGift[triggerIapType] = waitIapGifts
+			end
+
+			waitIapGifts[#waitIapGifts + 1] = giftId
+		end
+	end
+
+	for k, gifts in pairs(self._gifts) do
+		table.sort(gifts, function (a, b)
+			return a < b
+		end)
+	end
+end
+
+function M:start()
+	self:dailyLoginReset()
+	self:triggerGiftsByPurchase()
+	self:triggerGiftsByMission()
+	self:triggerGiftsByFailure()
+	self:triggerGiftsByDaily()
+	self:tryTriggerNewbie3()
+	self:updateTriggeredCountdownGifts()
+end
+
+function M:dailyReset()
+	table.clear(self._dots)
+
+	for idx, giftId in pairs(self._countdownGifts) do
+		self:resetDailyReddot(giftId)
+	end
+
+	self:triggerGiftsByDaily()
+end
+
+function M:dailyLoginReset()
+	for giftType, popNum in pairs(self._pop) do
+		self:resetPopFace(giftType)
+	end
+end
+
+function M:getGiftsByType(giftType)
+	return self._gifts[giftType] or {}
+end
+
+function M:getGiftIdByIapId(iapId)
+	return self._iapId2GiftId[iapId]
+end
+
+function M:canPushPanel(giftType)
+	local gifts = self._gifts[giftType]
+
+	if not gifts then
+		return false
+	end
+
+	local canPush = false
+
+	if self:canPopFace(giftType) then
+		canPush = true
+	end
+
+	if not canPush then
+		return false
+	end
+
+	return self:canShowPanel(giftType)
+end
+
+function M:getPushGiftId(giftType)
+	local gifts = self._gifts[giftType]
+
+	for k, giftId in ipairs(gifts) do
+		if self:canShowGift(giftId) then
+			return giftId
+		end
+	end
+end
+
+function M:canShowPanel(giftType)
+	if giftType == D.GiftType.FirstCharge then
+		return self:isTrigger(D.GiftId.FirstCharge) and not self:isClaimed(D.GiftId.FirstCharge)
+	elseif giftType == D.GiftType.LimitTime then
+		local showId = self:getBtnShowLimitGiftId()
+
+		return showId ~= nil
+	elseif giftType == D.GiftType.Newbie then
+		local showId = self:getBtnShowNewbieGiftId()
+
+		return showId ~= nil
+	end
+
+	return false
+end
+
+function M:canShowGift(giftId)
+	if self:isBought(giftId) then
+		return not self:isClaimed(giftId)
+	elseif self:isTrigger(giftId) then
+		return not self:isExpired(giftId)
+	end
+
+	return false
+end
+
+function M:recordPopFace(giftType)
+	self._pop[giftType] = (self._pop[giftType] or 0) + 1
+end
+
+function M:resetPopFace(giftType)
+	self._pop[giftType] = nil
+end
+
+function M:isPopFaceBefore(giftType)
+	return self._pop[giftType] and self._pop[giftType] > 0
+end
+
+function M:canPopFace(giftType)
+	return not self._pop[giftType] or self._pop[giftType] == 0
+end
+
+function M:recordDailyReddot(giftId)
+	self._dots[giftId] = nil
+end
+
+function M:resetDailyReddot(giftId)
+	if self:canShowDailyDot(giftId) then
+		self._dots[giftId] = true
+	end
+end
+
+function M:haveDailyReddot(giftId)
+	if self:canShowDailyDot(giftId) then
+		return self._dots[giftId] == true
+	end
+
+	return false
+end
+
+function M:haveFirstReddot(giftId)
+	local data = self:getData(giftId)
+
+	return data and data.reddot == true
+end
+
+function M:removeFirstReddot(giftId)
+	if not self:haveFirstReddot(giftId) then
+		return
+	end
+
+	local data = self:getData(giftId)
+
+	if not data then
+		return
+	end
+
+	data.reddot = nil
+end
+
+function M:haveReddot(giftId)
+	local giftType = self:readType(giftId)
+
+	if giftType == D.GiftType.FirstCharge then
+		return self:canClaimFirstCharge(giftId)
+	elseif giftType == D.GiftType.LimitTime then
+		return (self:haveDailyReddot(giftId) or self:haveFirstReddot(giftId)) and self:canShowGift(giftId)
+	elseif giftType == D.GiftType.Newbie then
+		return self:isBought(giftId) and not self:isNewbieTodayClaimed(giftId) or self:isTrigger(giftId) and not self:isExpired(giftId) and (self:haveDailyReddot(giftId) or self:haveFirstReddot(giftId))
+	end
+end
+
+function M:haveReddotByType(giftType)
+	if giftType == D.GiftType.FirstCharge then
+		return self:haveReddot(D.GiftId.FirstCharge)
+	else
+		local haveRed = false
+
+		for i, giftId in ipairs(self._gifts[giftType]) do
+			haveRed = self:haveReddot(giftId)
+
+			if haveRed then
+				break
+			end
+		end
+
+		return haveRed
+	end
+
+	return false
+end
+
+function M:getBtnShowLimitGiftId()
+	return self:getBtnShowGiftIdByType(D.GiftType.LimitTime)
+end
+
+function M:getBtnShowNewbieGiftId()
+	local showGiftId = nil
+	local leftTime = -1
+	local ct = Client.getCurTime()
+
+	for k, giftId in ipairs(self._gifts[D.GiftType.Newbie]) do
+		if not self:isBought(giftId) then
+			local epTime = self:getExpireTime(giftId)
+			local notCountdown = not self:isCountdownGift(giftId)
+
+			if epTime == -1 or notCountdown then
+				if notCountdown and self:isTrigger(giftId) then
+					showGiftId = giftId
+				end
+			else
+				local dt = epTime - ct
+
+				if dt > 0 then
+					if leftTime == -1 then
+						showGiftId = giftId
+						leftTime = dt
+
+						break
+					elseif dt < leftTime then
+						leftTime = dt
+						showGiftId = giftId
+
+						break
+					end
+				end
+			end
+		end
+	end
+
+	if showGiftId then
+		return showGiftId
+	end
+
+	for k, giftId in ipairs(self._gifts[D.GiftType.Newbie]) do
+		if self:isBought(giftId) and not self:isClaimed(giftId) then
+			local epTime = Client.getTodayZeroTimestamp(1)
+
+			if epTime ~= -1 then
+				local dt = epTime - ct
+
+				if dt > 0 then
+					if leftTime == -1 then
+						showGiftId = giftId
+						leftTime = dt
+
+						break
+					elseif dt < leftTime then
+						leftTime = dt
+						showGiftId = giftId
+					end
+				end
+			end
+		end
+	end
+
+	return showGiftId
+end
+
+function M:getBtnShowGiftIdByType(giftType)
+	local showGiftId = nil
+	local leftTime = -1
+	local ct = Client.getCurTime()
+
+	for k, giftId in pairs(self._triggeredCountdownGifts) do
+		if self:readType(giftId) == giftType then
+			local epTime = self:getExpireTime(giftId)
+
+			if epTime ~= -1 then
+				local dt = epTime - ct
+
+				if dt > 0 then
+					if leftTime == -1 then
+						showGiftId = giftId
+						leftTime = dt
+					elseif dt < leftTime then
+						leftTime = dt
+						showGiftId = giftId
+					end
+				end
+			end
+		end
+	end
+
+	return showGiftId
+end
+
+function M:updateCountdownTime()
+	self:updateLimitCD()
+	self:updateNewbieCD()
+end
+
+function M:updateLimitCD()
+	local showLimitGiftId = self:getBtnShowLimitGiftId()
+
+	GameClock:removeTimeCallback("gift.limit.expire")
+
+	if showLimitGiftId then
+		GameClock:registerTimeCallback("gift.limit.expire", self:getExpireTime(showLimitGiftId), function ()
+			SimpleEvent.emit("gift.limit.update")
+			self:updateLimitCD()
+		end)
+	end
+end
+
+function M:updateNewbieCD()
+	local showNewbieGiftId = self:getBtnShowNewbieGiftId()
+
+	GameClock:removeTimeCallback("gift.newbie.expire")
+
+	if showNewbieGiftId and self:isCountdownGift(showNewbieGiftId) and not self:isBought(showNewbieGiftId) then
+		GameClock:registerTimeCallback("gift.newbie.expire", self:getExpireTime(showNewbieGiftId), function ()
+			SimpleEvent.emit("gift.newbie.update")
+			self:tryTriggerNewbie3()
+			self:updateNewbieCD()
+		end)
+	end
+end
+
+function M:updateTriggeredCountdownGifts()
+	table.clear(self._triggeredCountdownGifts)
+
+	local data = self._countdownGifts
+
+	for k, giftId in pairs(data) do
+		if not self:isBought(giftId) and self:isTrigger(giftId) and not self:isExpired(giftId) then
+			table.insert(self._triggeredCountdownGifts, giftId)
+		end
+	end
+
+	self:updateCountdownTime()
+end
+
+function M:trigger(giftId)
+	local data = self:getDataWithGen(giftId)
+	data.triggerTime = Client.getCurTime()
+	local giftType = self:readType(giftId)
+
+	if self:isCountdownGift(giftId) then
+		data.expireTime = data.triggerTime + self:readCountdown(giftId) * 3600
+
+		self:updateTriggeredCountdownGifts()
+	end
+
+	self:resetPopFace(giftType)
+	SimpleEvent.emit("gift.trigger", giftType)
+end
+
+function M:triggerGiftsByMission()
+	self:triggerGiftsByType(D.GiftUnlockType.Mission)
+end
+
+function M:triggerGiftsByPlayer()
+	self:triggerGiftsByType(D.GiftUnlockType.PlayerLevel)
+end
+
+function M:triggerGiftsByFailure()
+	self:triggerGiftsByType(D.GiftUnlockType.FailureNum)
+end
+
+function M:triggerGiftsByDaily()
+	local gifts = self._dailyTriggerGifts
+	local createTime = P:getCreateTime()
+	local createDay = C.getZeroTimestamp(createTime)
+	local today = C.getZeroTimestamp(C.getCurTime())
+	local current = math.ceil((today - createDay) / D.DAY_SECONDS)
+
+	for k, giftId in pairs(gifts) do
+		if not self:isBought(giftId) and not self:isTrigger(giftId) then
+			local target = self:readTriggerDay(giftId)
+
+			if target <= current then
+				self:trigger(giftId)
+			end
+		end
+	end
+end
+
+function M:triggerGiftsByPurchase()
+	local payCount = P._playerStore:getPayCount()
+	local payMoney = P._playerStore:getPayMoney()
+
+	self:triggerGiftsByPurchaseUnlock(1, payCount)
+	self:triggerGiftsByPurchaseUnlock(2, payMoney)
+end
+
+function M:triggerGiftsByPurchaseUnlock(unlockType)
+	if not unlockType then
+		return true
+	end
+
+	local gifts = self._waitIapTriggerGift[unlockType] or {}
+
+	for k, giftId in pairs(gifts) do
+		if not self:isBought(giftId) and not self:isTrigger(giftId) and self:isUnlock(giftId) then
+			self:trigger(giftId)
+		end
+	end
+end
+
+function M:triggerGiftsByType(unlockType)
+	if not unlockType then
+		return true
+	end
+
+	local gifts = self._unlockTypeGifts[unlockType] or {}
+
+	for k, giftId in pairs(gifts) do
+		if not self:isBought(giftId) and not self:isTrigger(giftId) and self:isUnlock(giftId) then
+			self:trigger(giftId)
+		end
+	end
+end
+
+function M:tryTriggerNewbie3()
+	local giftId = D.GiftId.Newbie3
+
+	if self:isBought(giftId) or self:isTrigger(giftId) then
+		return
+	end
+
+	if self:isClosed(D.GiftId.Newbie1) or self:isClosed(D.GiftId.Newbie2) then
+		self:trigger(giftId)
+	end
+end
+
+function M:isBought(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and giftData.buyTime ~= -1
+end
+
+function M:recordBuy(giftId)
+	local giftData = self:getDataWithGen(giftId)
+	giftData.buyTime = Client.getCurTime()
+	giftData.expireTime = -1
+	local type = self:readType(giftId)
+
+	if self:isCountdownGift(giftId) then
+		if type == D.GiftType.LimitTime then
+			self:updateLimitCD()
+			SimpleEvent.emit("gift.limit.update")
+		elseif type == D.GiftType.Newbie then
+			self:updateNewbieCD()
+			SimpleEvent.emit("gift.newbie.update")
+		end
+	end
+
+	if type == D.GiftType.Mission then
+		self:setShowMsGiftsDirty()
+	end
+
+	if table.contains(self:getGiftsByType(D.GiftType.Mission), giftId) then
+		Trace.traceDesign("LevelPack:%d", giftId)
+	end
+end
+
+function M:resetBuy(giftId)
+	local giftData = self:getDataWithGen(giftId)
+	giftData.buyTime = -1
+	giftData.claimTime = {}
+end
+
+function M:resetTypeBuy(giftType)
+	local gifts = self:getGiftsByType(giftType)
+
+	for k, giftId in pairs(gifts) do
+		self._data[giftId] = nil
+	end
+end
+
+function M:isUnlock(giftId)
+	return self:isBaseCondUnlock(giftId) and self:isPurcahseCondUnlock(giftId)
+end
+
+function M:isBaseCondUnlock(giftId)
+	local unlockType, p2 = self:readUnlockParams(giftId)
+
+	if unlockType == 0 then
+		return false
+	elseif unlockType == 1 then
+		return true
+	elseif unlockType == 2 then
+		return P._playerMission:isMissionReach(p2)
+	elseif unlockType == 3 then
+		return p2 <= P._playerProfile:getLevel()
+	elseif unlockType == 4 then
+		return p2 <= self:getFailureNumAfterPuchase()
+	end
+
+	return false
+end
+
+function M:isPurcahseCondUnlock(giftId)
+	local unlockType, p2 = self:readTriggerIap(giftId)
+
+	if unlockType == 1 then
+		return p2 <= P._playerStore:getPayCount()
+	elseif unlockType == 2 then
+		return p2 <= P._playerStore:getPayMoney()
+	end
+
+	return true
+end
+
+function M:isClosed(giftId)
+	if not self:isTrigger(giftId) then
+		return false
+	end
+
+	if self:isBought(giftId) then
+		local type = self:readType(giftId)
+
+		if type == D.GiftType.FirstCharge then
+			return self:isClaimed(giftId)
+		elseif type == D.GiftType.Common then
+			return self:isClaimed(giftId)
+		elseif type == D.GiftType.LimitTime then
+			return self:isClaimed(giftId) or self:isExpired(giftId)
+		elseif type == D.GiftType.Newbie then
+			return self:isClaimed(giftId)
+		end
+	elseif self:isCountdownGift(giftId) then
+		if not self:isExpired(giftId) then
+			return false
+		end
+	else
+		return false
+	end
+
+	return true
+end
+
+function M:canClaimFirstCharge(giftId)
+	return self:isUnlock(giftId) and P._playerStore:getPayMoney() > 0
+end
+
+function M:isClaimed(giftId)
+	local giftType = self:readType(giftId)
+
+	if giftType == D.GiftType.Newbie then
+		return self:isNewbieTotalClaimed(giftId)
+	else
+		return self:isClaimedBefore(giftId)
+	end
+end
+
+function M:isClaimedBefore(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and #giftData.claimTime > 0
+end
+
+function M:isExpired(giftId)
+	if not self:isCountdownGift(giftId) then
+		return false
+	end
+
+	local giftData = self:getData(giftId)
+
+	return giftData and giftData.expireTime < Client.getCurTime()
+end
+
+function M:isTrigger(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and giftData.triggerTime ~= -1
+end
+
+function M:isTriggerPop(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and giftData.triggerPop ~= nil
+end
+
+function M:setTriggerPop(giftId)
+	local giftData = self:getDataWithGen(giftId)
+	giftData.triggerPop = true
+end
+
+function M:getData(giftId)
+	return self._data[giftId]
+end
+
+function M:removeTriggerData(giftId)
+	self._data[giftId] = nil
+end
+
+function M:getDataWithGen(giftId)
+	if not self._data[giftId] then
+		self._data[giftId] = generateGiftData()
+	end
+
+	return self._data[giftId]
+end
+
+function M:tryClaimRewards(giftId)
+	local giftData = self:getDataWithGen(giftId)
+
+	if giftData.expireTime ~= -1 and giftData.expireTime < Client.getCurTime() then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isClaimed(giftId) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local type = self:readType(giftId)
+
+	if type == D.GiftType.Newbie then
+		return self:tryClaimNewbieRewards(giftId)
+	else
+		local cids, nums = self:readRewards(giftId, 1)
+		local rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.package)
+
+		self:recordClaimRewardByIdx(giftId, 1)
+
+		return ResultCode.OK, rewards
+	end
+end
+
+function M:getExpireTime(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and giftData.expireTime or -1
+end
+
+function M:recordClaimRewardByIdx(giftId, rewardIdx)
+	local giftData = self:getDataWithGen(giftId)
+	giftData.claimTime[rewardIdx] = Client.getCurTime()
+	local giftType = self:readType(giftId)
+
+	SimpleEvent.emit("gift.claim", giftType)
+end
+
+function M:isNewbieTotalClaimed(giftId)
+	local giftData = self:getData(giftId)
+
+	return giftData and #giftData.claimTime == self:readTypeParam(giftId)
+end
+
+function M:isNewbieTodayClaimed(giftId)
+	local giftData = self:getData(giftId)
+
+	if not giftData then
+		return false
+	end
+
+	local times = giftData.claimTime
+	local bt = giftData.buyTime
+	local buyDayZeroTime = Client.getZeroTimestamp(bt)
+	local ct = Client.getCurTime()
+	local toadyZero = Client.getZeroTimestamp(ct)
+	local dayIdx = Mathf.Clamp((toadyZero - buyDayZeroTime) / D.DAY_SECONDS + 1, 1, 3)
+
+	return times[dayIdx] ~= nil
+end
+
+function M:isNewbieClaimed(giftId, day)
+	local giftData = self:getData(giftId)
+
+	if not giftData then
+		return false
+	end
+
+	local times = giftData.claimTime
+
+	return times[day] ~= nil
+end
+
+function M:isNewbieCanClaim(giftId, day)
+	local giftData = self:getData(giftId)
+
+	if not giftData then
+		return false
+	end
+
+	local times = giftData.claimTime
+	local bt = giftData.buyTime
+	local buyDayZeroTime = Client.getZeroTimestamp(bt)
+	local dayZeroTime = buyDayZeroTime + D.DAY_SECONDS * (day - 1)
+	local ct = Client.getCurTime()
+
+	return dayZeroTime <= ct and times[bt] == nil
+end
+
+function M:tryClaimNewbieRewards(giftId)
+	local totalDay = self:readTypeParam(giftId)
+	local claimed = ResultCode.NOT_MEET_CONDITION
+	local rewards = {}
+
+	for i = 1, totalDay do
+		if not self:isNewbieClaimed(giftId, i) then
+			if not self:isNewbieCanClaim(giftId, i) then
+				break
+			end
+
+			claimed = ResultCode.OK
+			local cids, nums = self:readRewards(giftId, i)
+			local resultRewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.package)
+
+			D.foldRewards(rewards, resultRewards)
+			self:recordClaimRewardByIdx(giftId, i)
+		end
+	end
+
+	self:tryTriggerNewbie3()
+
+	return claimed, rewards
+end
+
+function M:getFailureNumAfterPuchase()
+	return self._meta.failureNumAfterPurchase
+end
+
+function M:addFailureNum()
+	if P._playerStore:getPayCount() < 1 then
+		return
+	end
+
+	self._meta.failureNumAfterPurchase = self._meta.failureNumAfterPurchase + 1
+
+	self:triggerGiftsByFailure()
+end
+
+function M:getShowMSGifts()
+	local gifts = self:getGiftsByType(D.GiftType.Mission)
+
+	if not self._msGiftDirty then
+		return self._showMsGiftIds
+	end
+
+	table.clear(self._showMsGiftIds)
+
+	for idx, giftId in ipairs(gifts) do
+		if giftId ~= 2035 then
+			if self:isUnlock(giftId) then
+				if not self:isBought(giftId) then
+					self._showMsGiftIds[#self._showMsGiftIds + 1] = giftId
+				end
+			else
+				self._showMsGiftIds[#self._showMsGiftIds + 1] = giftId
+
+				break
+			end
+		end
+	end
+
+	return self._showMsGiftIds
+end
+
+function M:setShowMsGiftsDirty()
+	self._msGiftDirty = true
+end
+
+function M:getPopMissionGiftId()
+	local giftIds = self:getShowMSGifts()
+	local msId = P._playerMission:getMissionId()
+
+	for idx, giftId in ipairs(giftIds) do
+		local type, param = self:readUnlockParams(giftId)
+
+		if param == msId then
+			if self:isTriggerPop(giftId) then
+				return
+			else
+				return giftId
+			end
+		end
+	end
+end
+
+function M:readRewards(giftId, rewardIdx)
+	rewardIdx = rewardIdx or 1
+
+	return D._giftConfig[giftId]._cids[rewardIdx], D._giftConfig[giftId]._nums[rewardIdx]
+end
+
+function M:readUnlockParams(giftId)
+	local params = D._giftConfig[giftId]._unlockParams
+
+	return params[1], params[2]
+end
+
+function M:readType(giftId)
+	return D._giftConfig[giftId]._type
+end
+
+function M:readTypeParam(giftId)
+	return D._giftConfig[giftId]._param
+end
+
+function M:readCountdown(giftId)
+	return D._giftConfig[giftId]._countdown
+end
+
+function M:readTriggerDay(giftId)
+	return D._giftConfig[giftId]._triggerDay
+end
+
+function M:readTriggerIap(giftId)
+	local params = D._giftConfig[giftId]._triggerIap
+
+	return unpack(params)
+end
+
+function M:isIapBuy(giftId)
+	return self:readBuyType(giftId) == D.GiftBuyType.Purchase
+end
+
+function M:isDiamondBuy(giftId)
+	return self:readBuyType(giftId) == D.GiftBuyType.Diamond
+end
+
+function M:readIapId(giftId)
+	if self:isIapBuy(giftId) then
+		return self:readBuyValue(giftId)
+	end
+end
+
+function M:readBuyType(giftId)
+	return D._giftConfig[giftId]._buyType
+end
+
+function M:readBuyValue(giftId)
+	return D._giftConfig[giftId]._buyValue
+end
+
+function M:readValue(giftId)
+	return D._giftConfig[giftId]._value
+end
+
+function M:canLoginPop(giftId)
+	return D._giftConfig[giftId]._dailyLoginPopFace == 1
+end
+
+function M:canShowDailyDot(giftId)
+	return D._giftConfig[giftId]._dailyReddot == 1
+end
+
+function M:isCountdownGift(giftId)
+	local t = self:readCountdown(giftId)
+
+	return t and t > 0
+end
+
+return M

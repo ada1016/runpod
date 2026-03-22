@@ -1,0 +1,130 @@
+local M = class("BattleBullet_GravityVortex_Container", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+local math = math
+local ROTATE_SPEED = 100
+local DISTANCE = 0.6
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	local battleWeapon = self._battleSession:getWeapon(11)
+	self._left = -1
+
+	if battleWeapon._index == 2 or battleWeapon._index == 4 then
+		self._left = 1
+	end
+
+	self._mainSkill = battleWeapon._mainSkill
+	self._finalScale = 3
+end
+
+function M:init(id, battleSkill)
+	battleSkill._viewScript = nil
+
+	SUPER.init(self, id, battleSkill)
+
+	self._bullet1 = nil
+	self._bullet2 = nil
+	self._scale = 0.3
+	self._finalScale = 1
+	self._stage = 1
+
+	if self._view then
+		self._view:scaleEvent()
+	end
+
+	self._rangeAddPer = self._mainSkill:getProp(BattlePropEnum.BulletDmgRangeAddAfterStep)
+	self._distance = DISTANCE
+	self._wallBounceNum = self._mainSkill:getProp(BattlePropEnum.BulletWallBounceNum, 0)
+	self._bounceFlag = self._wallBounceNum > 0
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._angle1 = self._angle1 + ROTATE_SPEED * dt * self._left
+
+	self:updateSubBullet(dt, self._angle1, self._bullet1)
+
+	self._angle2 = self._angle2 + ROTATE_SPEED * dt * self._left
+
+	self:updateSubBullet(dt, self._angle2, self._bullet2)
+
+	if self._stage == 1 then
+		self._scale = self._scale + dt * 3
+
+		if self._finalScale <= self._scale then
+			self._scale = self._finalScale
+			self._stage = 2
+		end
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	elseif self._stage == 2 then
+		if self._rangeAddPer then
+			self:addScale(self._rangeAddPer / 1000)
+
+			if self._view then
+				self._view:scaleEvent()
+			end
+		end
+	elseif self._stage == 3 then
+		-- Nothing
+	end
+end
+
+function M:updateSubBullet(dt, angle, bullet)
+	self._distance = self._distance + (self._rangeAddPer or 0) / 1000 / 4
+	local newRad = math.rad(angle)
+	local x = self._position.x + self._distance * math.sin(newRad)
+	local y = self._position.y + self._distance * math.cos(newRad)
+
+	bullet:setPos(x, y)
+
+	bullet._angle = angle + self._angle
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+end
+
+function M:setBullet1(b)
+	self._angle1 = 0
+	self._bullet1 = b
+
+	self:setBullet(b)
+
+	self._duration = b._releaseAtkNum * b._atkInterval + 1
+end
+
+function M:setBullet2(b)
+	self._angle2 = 180
+	self._bullet2 = b
+
+	self:setBullet(b)
+end
+
+function M:setBullet(b)
+	b._motionless = true
+	b._finalScale = 0.8
+
+	b:setScale(b._scale / 2)
+
+	if b._view then
+		b._view:scaleEvent()
+	end
+end
+
+return M

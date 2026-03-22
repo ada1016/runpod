@@ -1,0 +1,862 @@
+local math = math
+local Mathf = Mathf
+local M = class("FlyBee")
+local BEE_STATUS = {
+	cd = 1,
+	idle = 2,
+	wait = 8,
+	destroy = 9,
+	up_level = 10,
+	back = 7,
+	hunting = 5,
+	attacking = 6,
+	down_level = 11,
+	trans = 3,
+	stay = 4
+}
+local RADUIS = 0.35
+local CENTER_OFFSETY = 0.5
+local ROUND_SPEED = 20
+local FLY_SPEED = 4
+local TRANS_TIME = 0.7181
+local STAY_TIME = 0.1
+local ORIGIN_TOAWRD_OFFSET_Y = 5
+local SpriteAnimation_0To1 = 1
+local SpriteAnimation_1To2 = 2
+local SpriteAnimation_2To3 = 3
+local SpriteAnimation_3To2 = 4
+local SpriteAnimation_2To1 = 5
+local SpriteAnimation_0To4 = 6
+
+function M:ctor(weapon)
+	self._weapon = weapon
+	self._angle = 0
+	self._position = Vector2.retain(0, 0)
+	self._endPosition = Vector2.retain(0, 0)
+	self._towardDir = Vector2.retain(0, 0)
+	self._flyDir = Vector2.retain(0, 0)
+	self._flyEndOffsetPosition = Vector2.retain(0, 0)
+	self._status = BEE_STATUS.cd
+	self._lastStatus = BEE_STATUS.cd
+	self._battleSession = weapon._battleSession
+	self._sessionView = self._battleSession._sessionView
+	self._battleRandomLib = self._battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = {}
+		local skinId = self._battleSession:getEquipedSkin(BattleSkillGroupEnum.BeeColony)
+
+		if skinId == nil then
+			self._view._obj = self._sessionView:createWeapon("Weapon_12_sub")
+		else
+			self._view._obj = self._sessionView:createWeapon(string.format("Weapon_12_sub_skin_%d", skinId))
+		end
+
+		self._view._tf = self._view._obj.transform
+		self._view._spAnimation = self._view._obj:GetComponent("SpriteAnimationEx")
+
+		self._view._obj:SetActive(false)
+
+		self._view._vfxFire = self._view._obj:GetChild(0):GetChild(1):GetComponent("ParticleSystem")
+	end
+end
+
+function M:playAnimation(index)
+	if index == SpriteAnimation_1To2 or index == SpriteAnimation_2To3 then
+		Client.playBattleSound("se_Bullet_12_evolve")
+	end
+
+	if self._view then
+		self._view._spAnimation:SetBehavior(index)
+		self:addSuperVFX()
+	end
+end
+
+function M:sync(fixBee)
+	self._angle = fixBee._angle
+	self._position.x = fixBee._localPosition.x + self._weapon._position.x
+	self._position.y = fixBee._localPosition.y + CENTER_OFFSETY
+
+	if self._view then
+		self._view._obj:SetActive(true)
+		self._view._obj:SetLocalPosition(self._position.x, self._position.y, 0)
+		self._view._obj:SetLocalRotation(0, 0, self._angle - 90)
+	end
+end
+
+function M:sync0()
+	self._angle = 90
+	self._position.x = self._weapon._position.x
+	self._position.y = self._weapon._position.y + CENTER_OFFSETY + RADUIS
+
+	if self._view then
+		self._view._obj:SetActive(true)
+		self._view._obj:SetLocalPosition(self._position.x, self._position.y, 0)
+		self._view._obj:SetLocalRotation(0, 0, self._angle - 90)
+	end
+end
+
+function M:init(level, isClone, castWeapon)
+	self._busy = true
+
+	self._position:Set(0, 0)
+	self._endPosition:Set(0, 0)
+	self._towardDir:Set(0, 0)
+	self._flyDir:Set(0, 0)
+	self._flyEndOffsetPosition:Set(0, 0)
+
+	self._status = BEE_STATUS.cd
+	self._lastStatus = BEE_STATUS.cd
+	self._level = level or 1
+	self._totalAtkNum = 0
+	self._atkNumThisStage = 0
+	self._isClone = isClone
+	self._isClone2 = nil
+	self._cloneChildNum = 0
+	self._firstAtk = true
+	self._lockEnemy = nil
+	self._castWeapon = castWeapon or self._weapon
+
+	if isClone then
+		self._beganSkillId = 1206
+	else
+		self._beganSkillId = 1200
+	end
+
+	if level == 4 then
+		self._mainSkill = self._weapon:getSkill(1221)
+	else
+		self._mainSkill = self._weapon:getSkill(self._beganSkillId + self._level)
+	end
+
+	self._leftAtkCount = self._mainSkill:getProp(BattlePropEnum.DamageNum) + math.floor(self._weapon._mainSkill:getProp(BattlePropEnum.DamageNum, 0))
+	self._mainSkill._castWeapon = self._castWeapon
+
+	if self._view then
+		self._view._obj:SetLocalScale(1)
+	end
+end
+
+function M:updateAngle(dt)
+	self:updateToawrdOffsetY()
+
+	local enemyPos = self._lockEnemy._position
+	local towardPosX = enemyPos.x
+	local towardPosY = enemyPos.y + self._towardOffsetY
+	local pos = self._position
+	self._towardDir.x = towardPosX - pos.x
+	self._towardDir.y = towardPosY - pos.y
+
+	self._towardDir:SetNormalize()
+
+	self._angle = math.deg(math.atan2(self._towardDir.y, self._towardDir.x))
+	self._relativeAngle = self._angle - 180
+
+	if self._view then
+		self._view._obj:SetLocalRotation(0, 0, self._angle - 90)
+	end
+end
+
+function M:updatePositioOnHunting(dt)
+	local enemyPos = self._lockEnemy._position
+	local flyEndOffsetPosition = self._flyEndOffsetPosition
+	local targetPosX = enemyPos.x + flyEndOffsetPosition.x
+	local targetPosY = enemyPos.y + flyEndOffsetPosition.y
+	local pos = self._position
+	self._flyDir.x = targetPosX - pos.x
+	self._flyDir.y = targetPosY - pos.y
+
+	self._flyDir:SetNormalize()
+
+	self._position.x = self._position.x + self._flyDir.x * FLY_SPEED * dt
+	self._position.y = self._position.y + self._flyDir.y * FLY_SPEED * dt
+
+	if math.abs(self._position.x - targetPosX) < 0.1 and math.abs(self._position.y - targetPosY) < 0.1 then
+		flyEndOffsetPosition.x = flyEndOffsetPosition.x + self._position.x - targetPosX
+		flyEndOffsetPosition.y = flyEndOffsetPosition.y + self._position.y - targetPosY
+
+		self:startAttackStage()
+	end
+
+	if self._view then
+		self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:updatePositionOnAttacking()
+	local enemyPos = self._lockEnemy._position
+	local flyEndOffsetPosition = self._flyEndOffsetPosition
+	local targetPosX = enemyPos.x + flyEndOffsetPosition.x
+	local targetPosY = enemyPos.y + flyEndOffsetPosition.y
+	self._position.x = targetPosX
+	self._position.y = targetPosY
+
+	if self._view then
+		self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:updatePositionOnAround(dt)
+	local dtAngle = math.abs(self._relativeAngle - self._targetRelativeAngle)
+	self._relativeAngle = Mathf.MoveTowardsAngle(self._relativeAngle, self._targetRelativeAngle, dtAngle / 0.8 * dt)
+	self._angle = self._relativeAngle + 180
+	local rad = math.rad(self._relativeAngle)
+	local x = self._roundRadius * math.cos(rad)
+	local y = self._roundRadius * math.sin(rad)
+	self._flyEndOffsetPosition.x = x
+	self._flyEndOffsetPosition.y = y
+	local enemyPos = self._lockEnemy._position
+	self._position.x = enemyPos.x + x
+	self._position.y = enemyPos.y + y
+
+	if self._view then
+		self._view._obj:SetLocalRotation(0, 0, self._angle - 90)
+		self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:updatePositionOnTrans(dt)
+	self._flyTime = self._flyTime + dt
+	local startPos = self._position
+	local endPos = self._endPosition
+	self._position.x = BattleMathLib.ease_out_sine(self._flyTime, startPos.x, endPos.x, TRANS_TIME)
+	self._position.y = BattleMathLib.ease_out_sine(self._flyTime, startPos.y, endPos.y, TRANS_TIME)
+
+	if TRANS_TIME <= self._flyTime then
+		self._lastStatus = self._status
+
+		if self._directUpLevelDitry then
+			self._directUpLevelDitry = nil
+
+			if self._directNextLevel == 2 then
+				self:startUpLevelStage(SpriteAnimation_1To2)
+			elseif self._directNextLevel == 3 then
+				self:upLevel()
+				self:startUpLevelStage(SpriteAnimation_2To3)
+			end
+		else
+			self._status = BEE_STATUS.stay
+			self._countdown = STAY_TIME
+
+			self:addSuperVFX()
+		end
+	end
+
+	if self._view then
+		self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:updatePositionOnBack(dt)
+	self._position.x = self._position.x + self._flyDir.x * FLY_SPEED * dt
+	self._position.y = self._position.y + self._flyDir.y * FLY_SPEED * dt
+
+	if math.abs(self._position.x - self._endPosition.x) < 0.05 and math.abs(self._position.y - self._endPosition.y) < 0.05 then
+		self:onBackFinished()
+	end
+
+	if self._view then
+		self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:updateAngleOnBack(dt)
+	self._angle = Mathf.MoveTowardsAngle(self._angle, self._targetAngle, 100 * dt)
+
+	if self._view then
+		self._view._obj:SetLocalRotation(0, 0, self._angle - 90)
+	end
+end
+
+function M:step(dt)
+	if self._status == BEE_STATUS.wait then
+		return
+	end
+
+	if self._lockEnemy and (not self._lockEnemy:canBeChoseAsTarget() or self._lockEnemy._invisibility) then
+		self._lockEnemy = nil
+	end
+
+	if self._lockEnemy == nil then
+		if self._status == BEE_STATUS.hunting then
+			self:seekEnemy()
+
+			if self._lockEnemy == nil then
+				return
+			end
+		elseif self._status == BEE_STATUS.attacking then
+			self:seekEnemy()
+			self:startHuntStage()
+
+			return
+		end
+	end
+
+	if self._lockEnemy and self._status == BEE_STATUS.attacking then
+		if self._lockEnemy._knockbackStatus then
+			if self._lockEnemy:hasBuff(22) then
+				self._status = BEE_STATUS.hunting
+			end
+		elseif self._lockEnemy:hasBuffType(BattleBuffEnum.Portal) then
+			self._status = BEE_STATUS.hunting
+		end
+	end
+
+	if self._status == BEE_STATUS.trans then
+		self:updatePositionOnTrans(dt)
+	elseif self._status == BEE_STATUS.stay then
+		self._countdown = self._countdown - dt
+
+		if self._countdown <= 0 then
+			self._countdown = 0
+
+			self:startFirstHuntStage()
+		end
+	elseif self._status == BEE_STATUS.hunting then
+		self:updatePositioOnHunting(dt)
+		self:updateAngle(dt)
+	elseif self._status == BEE_STATUS.attacking then
+		if self._isaround then
+			self:updatePositionOnAround(dt)
+		else
+			self:updatePositionOnAttacking(dt)
+			self:updateAngle(dt)
+		end
+
+		self._atkCD = self._atkCD - dt
+
+		if self._atkCD <= 0 then
+			if self._leftAtkCount == 0 then
+				self:destroy()
+
+				return
+			end
+
+			if self._level == 4 then
+				local a = 1
+			end
+
+			self._atkCD = self._atkInterval
+
+			self:startAttack()
+
+			self._leftAtkCount = self._leftAtkCount - 1
+
+			if self._leftAtkCount == 0 then
+				self._isaround = false
+			else
+				self._isaround = true
+				local enemyPos = self._lockEnemy._position
+				self._targetRelativeAngle = -self._battleRandomLib:randomMN(30, 150)
+				self._roundRadius = math.sqrt((enemyPos.x - self._position.x)^2 + (enemyPos.y - self._position.y)^2)
+			end
+		end
+	elseif self._status == BEE_STATUS.back then
+		self:updatePositionOnBack(dt)
+		self:updateAngleOnBack(dt)
+	elseif self._status == BEE_STATUS.destroy then
+		-- Nothing
+	elseif self._status == BEE_STATUS.up_level then
+		self._countdown = self._countdown - dt
+
+		if self._countdown <= 0 then
+			self._countdown = 0
+
+			if self._lastStatus == BEE_STATUS.trans then
+				self._status = BEE_STATUS.stay
+				self._countdown = STAY_TIME
+			elseif self._lockEnemy == nil or self._lockEnemy._isToBeDestroyed then
+				self:seekEnemy()
+				self:startHuntStage()
+			else
+				self:startAttackStage()
+			end
+		end
+	end
+end
+
+function M:createBullet(pos, angle, dtOffSetX)
+	dtOffSetX = dtOffSetX or 0
+	local bullet = self._mainSkill:createBullet(self._castWeapon)
+
+	bullet:setPos(pos.x + dtOffSetX, pos.y)
+	bullet:setDirByAngle(angle)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	bullet._belongBee = self
+
+	return bullet
+end
+
+function M:startAttack()
+	local dtOffSetX = 0
+
+	if not self._isClone and self._weapon:getEffect(1201) then
+		dtOffSetX = 0.1
+		local bullet = self:createBullet(self._position, self._angle, -dtOffSetX)
+		bullet._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+	end
+
+	local bullet = self:createBullet(self._position, self._angle, dtOffSetX)
+
+	if not self._isClone then
+		bullet._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+	end
+
+	if self._level == 3 then
+		local b1 = self:createBullet(opt.vec2_1:Set(self._position.x - 0.136, self._position.y), self._angle - 45)
+		local b2 = self:createBullet(opt.vec2_1:Set(self._position.x + 0.136, self._position.y), self._angle + 45)
+
+		if not self._isClone then
+			b1._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+			b2._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+		end
+	elseif self._level == 4 then
+		local b1 = self:createBullet(opt.vec2_1:Set(self._position.x, self._position.y), self._angle - 45)
+		local b2 = self:createBullet(opt.vec2_1:Set(self._position.x, self._position.y), self._angle + 45)
+		local b3 = self:createBullet(opt.vec2_1:Set(self._position.x, self._position.y), self._angle - 45 + 22)
+		local b4 = self:createBullet(opt.vec2_1:Set(self._position.x, self._position.y), self._angle + 45 - 22)
+		b1._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+		b2._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+		b3._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+		b4._damageAddPer = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam7, 0) * self._totalAtkNum
+	end
+
+	self._totalAtkNum = self._totalAtkNum + 1
+	self._atkNumThisStage = self._atkNumThisStage + 1
+
+	self:castSkillWhenAttack()
+
+	if self._level == 4 then
+		self:castSkill1205or1222(1222)
+	end
+
+	if self._weapon._skinEffect62Actived and not self._isClone and self._castWeapon == self._weapon and (self._level == 1 or self._level == 2 or self._level == 3) then
+		self._weapon._skinEffect62Params.count = self._weapon._skinEffect62Params.count + 1
+
+		if self._weapon._skinEffect62Params.count == self._weapon._skinEffect62Params.effect_param then
+			self._weapon._skinEffect62Params.count = 0
+
+			self._weapon:castSkin62Effect(self._position)
+		end
+	end
+
+	if self._view then
+		Client.playBattleSound("se_Bullet_12")
+		self._view._vfxFire:Play()
+	end
+end
+
+function M:castSkillWhenAttack()
+	if self._isClone then
+		return
+	end
+
+	if self._level == 1 then
+		local flag = false
+
+		if self._weapon:getEffect(1203) and self._atkNumThisStage == self._mainSkill:getProp(BattlePropEnum.BattlePropParam1) then
+			self:startUpLevelStage(SpriteAnimation_1To2)
+
+			flag = true
+		end
+
+		if flag == false then
+			local rate = self._mainSkill:getProp(BattlePropEnum.FlyBeeEvolutionProbability)
+
+			if rate and self._battleRandomLib:randomTrue(rate) then
+				self:startUpLevelStage(SpriteAnimation_1To2)
+
+				flag = true
+			end
+		end
+	elseif self._level == 2 and self._weapon:getEffect(1205) and self._atkNumThisStage == self._mainSkill:getProp(BattlePropEnum.BattlePropParam3) then
+		self:startUpLevelStage(SpriteAnimation_2To3)
+	end
+
+	local castSkill = self._weapon:getSkill(1206)
+
+	if castSkill then
+		local rate = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam6, 0)
+
+		if self._battleRandomLib:randomTrue(rate) then
+			local range = castSkill:getProp(BattlePropEnum.AtkRange, 3)
+			local targetEnemy = self._battleSession:randomOneEnemyInRange(self._position, range, opt.dict_arg32, self._weapon)
+
+			if targetEnemy then
+				local bu = castSkill:createBullet()
+
+				bu:setTargetPosition(self._position, targetEnemy._position)
+			end
+		end
+	end
+
+	local flag = false
+
+	if self._totalAtkNum == 1 then
+		if self._weapon:getEffect(1208) then
+			flag = true
+
+			self:castSkill1205or1222()
+		end
+	elseif self._leftAtkCount == 1 and self._weapon:getEffect(1209) then
+		flag = true
+
+		self:castSkill1205or1222()
+	end
+
+	if flag == false and self._weapon:getEffect(1214) then
+		local rate = self._weapon._mainSkill:getProp(BattlePropEnum.TriggerProbabilityPer)
+
+		if rate and self._battleRandomLib:randomTrue(rate) then
+			self:castSkill1205or1222()
+		end
+	end
+end
+
+function M:castSkill1205or1222(skillid)
+	skillid = skillid or 1205
+	local castSkill = self._weapon:getSkill(skillid)
+
+	if castSkill then
+		local bullet = castSkill:createBullet()
+
+		bullet:setPos(self._position.x, self._position.y)
+		bullet:setDirByAngle(self._angle)
+		bullet:updateTriangleArea()
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+end
+
+function M:updateToawrdOffsetY()
+	local enemy = self._lockEnemy
+	local flyEndOffsetPosition = self._flyEndOffsetPosition
+	local endPosX = enemy._position.x + flyEndOffsetPosition.x
+	local endPosY = enemy._position.y + flyEndOffsetPosition.y
+	local distance = math.sqrt((self._position.x - endPosX)^2 + (self._position.y - endPosY)^2)
+	self._towardOffsetY = ORIGIN_TOAWRD_OFFSET_Y / self._originDistance * distance
+end
+
+function M:upLevel(dt)
+	dt = dt or 1
+	self._level = self._level + 1
+	self._mainSkill = self._weapon:getSkill(self._beganSkillId + self._level)
+	self._atkNumThisStage = 0
+end
+
+function M:downLevel()
+	self._level = self._level - 1
+	self._mainSkill = self._weapon:getSkill(self._beganSkillId + self._level)
+	self._atkNumThisStage = 0
+end
+
+function M:lockEnemy(enemy)
+	self._lockEnemy = enemy
+	local angle = self._battleRandomLib:randomMN(30, 150)
+	local rad = math.rad(-angle)
+	local dis = enemy._radius + 1
+	local x = dis * math.cos(rad)
+	local y = dis * math.sin(rad)
+	self._flyEndOffsetPosition.x = x
+	self._flyEndOffsetPosition.y = y
+end
+
+function M:startTransStage()
+	self._flyTime = 0
+	self._endPosition.x = self._position.x
+	self._endPosition.y = self._position.y + 1
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.trans
+
+	if self._view then
+		self._view._tf:DOScale(1.5, TRANS_TIME)
+		Client.playBattleSound("se_Bullet_12_open")
+	end
+
+	if self._level == 1 then
+		self:playAnimation(SpriteAnimation_0To1)
+	elseif self._level == 2 then
+		self:playAnimation(SpriteAnimation_1To2)
+	elseif self._level == 3 then
+		self:playAnimation(SpriteAnimation_2To3)
+	end
+end
+
+function M:addSuperVFX()
+	if self._status == BEE_STATUS.trans then
+		return
+	end
+
+	if self._view then
+		if self._view._vfxSuper then
+			self._battleSession._battleView:removeVFX(self._view._vfxSuper)
+
+			self._view._vfxSuper = nil
+		end
+
+		if self._weapon._isSuper then
+			self._view._vfxSuper = self._battleSession._battleView:addVFX(string.format("Weapon_12_%d_super", self._level), self._view._tf)
+		end
+	end
+end
+
+function M:removeSuperVFX()
+	if self._view and self._view._vfxSuper then
+		self._battleSession._battleView:removeVFX(self._view._vfxSuper)
+
+		self._view._vfxSuper = nil
+	end
+end
+
+function M:startFirstHuntStage()
+	if self._lockEnemy == nil then
+		self:seekEnemy(true)
+	end
+
+	if self._lockEnemy == nil then
+		self._countdown = STAY_TIME
+
+		return
+	end
+
+	local enemy = self._lockEnemy
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.hunting
+	local endPosX = enemy._position.x + self._flyEndOffsetPosition.x
+	local endPosY = enemy._position.y + self._flyEndOffsetPosition.y
+	local distance = math.sqrt((self._position.x - endPosX)^2 + (self._position.y - endPosY)^2)
+	self._originDistance = distance
+	self._towardOffsetY = ORIGIN_TOAWRD_OFFSET_Y
+end
+
+function M:startHuntStage()
+	local enemy = self._lockEnemy
+	self._lastStatus = self._status
+
+	if enemy == nil then
+		self:destroy()
+
+		return
+	end
+
+	self._status = BEE_STATUS.hunting
+	local endPosX = enemy._position.x + self._flyEndOffsetPosition.x
+	local endPosY = enemy._position.y + self._flyEndOffsetPosition.y
+	local distance = math.sqrt((self._position.x - endPosX)^2 + (self._position.y - endPosY)^2)
+	self._originDistance = distance
+	self._towardOffsetY = ORIGIN_TOAWRD_OFFSET_Y
+end
+
+function M:startAttackStage()
+	self._isaround = false
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.attacking
+	self._atkInterval = self._mainSkill:getProp(BattlePropEnum.AtkInterval)
+
+	if self._totalAtkNum == 0 then
+		self._atkCD = 0.2
+	elseif self._atkCD < 0.1 then
+		self._atkCD = 0.1
+	else
+		self._isaround = true
+	end
+end
+
+function M:startAroundStage()
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.around
+end
+
+function M:startBackStage()
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.back
+	local towardPosX = self._weapon._position.x
+	local towardPosY = self._weapon._position.y + CENTER_OFFSETY
+	self._endPosition.x = towardPosX
+	self._endPosition.y = towardPosY
+	local pos = self._position
+	self._flyDir.x = self._endPosition.x - pos.x
+	self._flyDir.y = self._endPosition.y - pos.y
+
+	self._flyDir:SetNormalize()
+
+	self._towardDir.x = towardPosX - pos.x
+	self._towardDir.y = towardPosY - pos.y
+
+	self._towardDir:SetNormalize()
+
+	self._targetAngle = math.deg(math.atan2(self._towardDir.y, self._towardDir.x))
+end
+
+function M:destroy()
+	if self._lockEnemy then
+		self._weapon._targetEnemys[self._lockEnemy._id] = nil
+	end
+
+	if self._lifeCycleHitEnemyRecords then
+		TablePool.release32(self._lifeCycleHitEnemyRecords)
+
+		self._lifeCycleHitEnemyRecords = nil
+	end
+
+	if self._level == 3 and self._weapon:getEffect(1202) then
+		self:startUpLevelStage(SpriteAnimation_3To2, 1, true)
+
+		return
+	end
+
+	if self._weapon:getEffect(1207) and not self._isClone2 then
+		local num = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam9, 0)
+
+		if self._weapon:getBackBeeNum() < num then
+			local rate = self._weapon._mainSkill:getProp(BattlePropEnum.BattlePropParam5, 0)
+
+			if self._battleRandomLib:randomTrue(rate) then
+				self:startBackStage()
+
+				return
+			end
+		end
+	end
+
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.destroy
+
+	self._weapon:putBee(self)
+
+	if self._view then
+		local vfx = self._battleSession._battleView:createAndPlayVFX("Weapon_12_boom", 0.5)
+
+		if vfx then
+			vfx:SetLocalPosition(self._position.x, self._position.y, 0)
+		end
+
+		self:removeSuperVFX()
+	end
+end
+
+function M:onBackFinished()
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.wait
+
+	self._weapon:putBee(self, true)
+end
+
+function M:seekEnemy(firstHunt)
+	local targetEnemy = nil
+
+	if firstHunt then
+		targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery3(self._weapon, self._weapon._targetEnemys)
+
+		if targetEnemy then
+			self._weapon._targetEnemys[targetEnemy._id] = true
+		end
+	else
+		targetEnemy = self._battleSession:randomOneEnemyInRange(self._position, 3, nil, self._weapon)
+
+		if targetEnemy == nil then
+			targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery3(self._weapon)
+		end
+	end
+
+	if targetEnemy == nil then
+		targetEnemy = self._battleSession:randomOneEnemy(nil, self._weapon)
+	end
+
+	if targetEnemy == nil then
+		return
+	end
+
+	self._isaround = false
+
+	self:lockEnemy(targetEnemy)
+end
+
+function M:startUpLevelStage(spriteAnimation, t, down)
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.up_level
+	self._countdown = t or TRANS_TIME
+
+	if down then
+		self:downLevel()
+	else
+		self:upLevel()
+	end
+
+	if self._view then
+		self:playAnimation(spriteAnimation)
+	end
+end
+
+function M:onKillEnemy(enemy)
+	if self._lockEnemy and enemy and self._lockEnemy._id == enemy._id then
+		self._lockEnemy = nil
+		self._isaround = false
+
+		if not self._isClone then
+			self:triggerWhenSkillEnemy()
+		end
+	end
+end
+
+function M:triggerWhenSkillEnemy()
+	local newLv = 0
+	local maxNum = 0
+
+	if self._weapon:getEffect(1213) then
+		newLv = 3
+		local params = D.getBattleEffectParams(1213)
+		maxNum = params[1]
+	elseif self._weapon:getEffect(1212) then
+		newLv = 2
+		local params = D.getBattleEffectParams(1212)
+		maxNum = params[1]
+	elseif self._weapon:getEffect(1211) then
+		newLv = 1
+		local params = D.getBattleEffectParams(1211)
+		maxNum = params[1]
+	end
+
+	if newLv == 0 then
+		return
+	end
+
+	if maxNum <= self._cloneChildNum then
+		return
+	end
+
+	self._cloneChildNum = self._cloneChildNum + 1
+
+	self._weapon:createCloneBeeByBee(newLv, self)
+end
+
+function M:startUpLevelStage2(toLv)
+	self._lastStatus = self._status
+	self._status = BEE_STATUS.up_level
+	self._countdown = TRANS_TIME
+
+	if toLv == 1 then
+		if self._view then
+			self:playAnimation(SpriteAnimation_0To1)
+		end
+	elseif toLv == 2 then
+		if self._view then
+			self:playAnimation(SpriteAnimation_1To2)
+		end
+	elseif toLv == 3 then
+		if self._view then
+			self:playAnimation(SpriteAnimation_2To3)
+		end
+	elseif toLv == 4 and self._view then
+		self:playAnimation(SpriteAnimation_0To4)
+	end
+end
+
+return M

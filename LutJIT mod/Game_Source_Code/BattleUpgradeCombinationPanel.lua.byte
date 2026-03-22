@@ -1,0 +1,183 @@
+local M = class("BattleUpgradeCombinationPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfTabs = Types.Transform,
+	goTemp = Types.GameObject,
+	goWeapon1 = Types.GameObject,
+	goWeapon2 = Types.GameObject,
+	goRogueCard = Types.GameObject,
+	tmpWeapon1 = Types.TMP_Text,
+	tmpWeapon2 = Types.TMP_Text,
+	tmpStatus = Types.TMP_Text,
+	goLv1 = Types.GameObject,
+	goLv2 = Types.GameObject,
+	goGet1 = Types.GameObject,
+	goGet2 = Types.GameObject
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	WeaponCardWidget.noCreate(self._goWeapon1)
+	WeaponCardWidget.noCreate(self._goWeapon2)
+	self._goWeapon1:hideStarArea()
+	self._goWeapon2:hideStarArea()
+	RogueCardInfoWidget.noCreate(self._goRogueCard)
+	self._goRogueCard:setFront()
+
+	self._goTabWidgets = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(weaponId)
+	self._battleSession = BattleManager._mainSession
+	self._weaponId = weaponId
+	local combos = D._weaponCardComboConfig[weaponId]
+	self._combos = {}
+
+	for index, combo in ipairs(combos) do
+		local comboWeaponId = combo[4]
+		local haveCard = self._battleSession._battleRouge._pool:haveCard(comboWeaponId)
+
+		if haveCard then
+			table.insert(self._combos, combo)
+		end
+	end
+
+	local stage, star = self._battleSession._battleRouge:getWeaponStage(weaponId)
+
+	self._goWeapon1:updateUI(weaponId, self._battleSession._battleRouge:getStarNum(weaponId))
+	self._goWeapon1:hideStarArea()
+
+	self._tmpWeapon1.text = stage
+
+	self._goGet1:SetActive(true)
+	self._goLv1:SetActive(false)
+	self:updateTabs()
+	self:updateSelect(1)
+	self:updateCombo()
+end
+
+function M:updateUI()
+end
+
+function M:updateTabs()
+	local combos = self._combos
+	local widgets = self._goTabWidgets
+
+	for i = 1, math.max(#combos, #widgets) do
+		local widget = widgets[i]
+
+		if i <= #combos then
+			local data = combos[i]
+
+			if widget == nil then
+				if i == 1 then
+					widget = self._goTemp
+				else
+					widget = GameObject.Instantiate(self._goTemp, self._tfTabs)
+				end
+
+				lc.prefabVarPeer(widget)
+
+				widgets[i] = widget
+
+				self:setClick(widget._btnClick, function ()
+					self:updateSelect(i)
+					self:updateCombo()
+				end)
+			end
+
+			widget._goChoose:SetActive(false)
+			V.loadWeaponIcon(widget._imgIcon, data[4])
+			widget:SetActive(true)
+		else
+			widget:SetActive(false)
+		end
+	end
+end
+
+function M:updateCombo()
+	local combos = self._combos
+	local data = combos[self._showComboIdx]
+	local weapon1Id = data[1]
+	local weapon1Stage = data[2]
+	local weapon1Star = data[3]
+	local weapon2Id = data[4]
+	local weapon2Stage = data[5]
+	local weapon2Star = data[6]
+	local rogueId = data[7]
+
+	self._goWeapon1:updateUI(weapon1Id, self._battleSession._battleRouge:getWeaponTotalStar(weapon1Id), true)
+	self._goWeapon2:updateUI(weapon2Id, self._battleSession._battleRouge:getWeaponTotalStar(weapon2Id), true)
+	self._goWeapon1:hideStarArea()
+	self._goWeapon2:hideStarArea()
+
+	if not self._battleSession._battleRouge._pool:isWeaponActive(weapon2Id) then
+		self._goWeapon2:updateStage(0)
+	end
+
+	self._goRogueCard:updateUI(rogueId)
+
+	local level = P._playerArmory:getWeaponLevel(D._battleRougeCardConfig[rogueId]._belongWeapon)
+	local unlockLv = D._rougeUnlock[rogueId] or 0
+
+	if self._battleSession and self._battleSession._msType == D.MissionType.ArkRebuild then
+		unlockLv = 0
+	end
+
+	if level < unlockLv then
+		self._goRogueCard:showLock(unlockLv)
+	else
+		self._goRogueCard:showLock(false)
+	end
+
+	local cStage1, cStar1 = self._battleSession._battleRouge:getWeaponStage(weapon1Id)
+	local cStage2, cStar2 = self._battleSession._battleRouge:getWeaponStage(weapon2Id)
+	self._tmpWeapon1.text = weapon1Stage
+	self._tmpWeapon2.text = weapon2Stage
+	local haveCard = self._battleSession._battleRouge:isWeaponActive(weapon2Id)
+	local weapon1Reach = weapon1Stage <= cStage1 and weapon1Star <= cStar1
+	local weapon2Reach = haveCard and weapon2Stage <= cStage2 and weapon2Star <= cStar2
+	local reachCond = weapon1Reach and weapon2Reach
+
+	self._goGet1:SetActive(weapon1Reach)
+	self._goLv1:SetActive(not weapon1Reach)
+	self._goGet2:SetActive(weapon2Reach)
+	self._goLv2:SetActive(not weapon2Reach)
+
+	if reachCond then
+		local getIt = self._battleSession._battleRouge:getRogueSelectNum(rogueId) > 0
+
+		if getIt then
+			self._tmpStatus:SetLocalize(SID.ROGUE_OBTAINED)
+		else
+			self._tmpStatus:SetLocalize(SID.ROGUE_AVAILABLE)
+		end
+
+		self._tmpStatus.color = Color.str2Static(V.COLOR_DEFINE.get_tip)
+	else
+		self._tmpStatus:SetLocalize(SID.ROGUE_UNAVAILABLE)
+
+		self._tmpStatus.color = Color.str2Static("6FB2C0")
+	end
+end
+
+function M:updateSelect(newSelect)
+	if self._showComboIdx and self._goTabWidgets[self._showComboIdx] then
+		self._goTabWidgets[self._showComboIdx]._goChoose:SetActive(false)
+	end
+
+	self._showComboIdx = newSelect
+
+	self._goTabWidgets[self._showComboIdx]._goChoose:SetActive(true)
+end
+
+return M

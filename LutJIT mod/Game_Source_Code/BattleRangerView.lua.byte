@@ -1,0 +1,164 @@
+local M = class("BattleRangerView")
+local Animator = UnityEngine.Animator
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(ranger)
+	self._ranger = ranger
+	self._rangerId = ranger._id
+	self._obj = self._sessionView:createRanger(ranger._cfg._prefab)
+	self._ID_BoolRunning = Animator.StringToHash("IsRunning")
+	self._ID_BoolAttacking = Animator.StringToHash("Attacking")
+	self._ID_TriggerAttackHelper = Animator.StringToHash("AttackHelper")
+	self._ID_FloatMoveSpeed = Animator.StringToHash("MoveSpeed")
+	self._ID_FloatMoveDir = Animator.StringToHash("MoveDir")
+	self._ID_TriggerAttack = Animator.StringToHash("Attack")
+	local skeletonRoot = self._obj.transform:GetChild(0)
+	self._animator = skeletonRoot:GetComponent("Animator")
+	self._IKPoint = skeletonRoot:Find("IKPoint")
+	self._skeletonMecanim = skeletonRoot:GetComponent(typeof(Spine.Unity.SkeletonMecanim))
+	self._cfg_body_mirror = BattleDefine.RANGER_BODY_MIRROR[self._rangerId]
+	self._cfg_ik_aim = BattleDefine.RANGER_IK_AIM[self._rangerId]
+	self._cfg_trigger_attack = BattleDefine.RANGER_TRIGGER_ATTACK[self._rangerId]
+	self._isRuning = false
+	self._isFiring = false
+	self._flipped = false
+	self._facingRight = true
+
+	if self._rangerId == 203 then
+		self._goShootVfx = self._obj.transform:GetChild(0):Find("Weapon"):GetChild(0):GetChild(0):GetChild(0)
+	elseif self._rangerId == 208 then
+		self._followVFX = self._obj:GetChild(0):GetChild(1)
+	end
+end
+
+local MoveAnimSpeedFactor = {
+	[209.0] = 2,
+	[202.0] = 2,
+	[201.0] = 0.5
+}
+
+function M:stepEvent()
+	self:posEvent()
+	self:setMoveFlip(not self._ranger._facingRight)
+
+	local deltaX = self._ranger._cachedDeltaMoveX
+	local currentMoveSpeed = self._ranger._currentMoveSpeed
+	local moveSpeed = self._ranger._moveSpeed
+	local running = deltaX > 0.001
+
+	self:setRunning(running)
+
+	local speedSign = self._flipped and -1 or 1
+	local speedFactor = MoveAnimSpeedFactor[self._rangerId] or 1
+
+	self:setMoveSpeedX(math.min(1, deltaX * 50) * speedSign * speedFactor)
+	self:setMoveDir(speedSign)
+
+	if self._cfg_ik_aim then
+		self:updateIKHand()
+	end
+
+	if self._cfg_body_mirror then
+		self:syncBodyFlip()
+	end
+end
+
+function M:posEvent()
+	local position = self._ranger._position
+
+	self._obj:SetPosition(position.x, position.y, 0)
+end
+
+function M:rotationEvent()
+	local angle = self._ranger._angle
+
+	self._obj:SetLocalRotation(0, 0, angle)
+end
+
+function M:shootEvent()
+	if self._goShootVfx then
+		V.playChildEffectsFast(self._goShootVfx)
+	end
+end
+
+function M:skillStartEvent()
+	if self._ranger._isChannelSkill then
+		self:setAttack(true)
+	else
+		self:setAttackShort()
+	end
+end
+
+function M:skillEndEvent()
+	self:setAttack(false)
+end
+
+function M:setMoveFlip(flipX)
+	if self._flipped == flipX then
+		return
+	end
+
+	self._flipped = flipX
+end
+
+function M:syncMoveDir()
+	self._animator:SetFloat(self._ID_FloatMoveDir, self._flipped and -1 or 1)
+end
+
+function M:syncBodyFlip()
+	local targetValue = self._flipped and -1 or 1
+
+	if targetValue == self._cachedBodyFlipValue then
+		return
+	end
+
+	self._cachedBodyFlipValue = targetValue
+	self._skeletonMecanim.skeleton.ScaleX = self._flipped and -1 or 1
+end
+
+function M:setAttack(attacking)
+	self._isFiring = attacking
+
+	self._animator:SetBool(self._ID_BoolAttacking, attacking)
+
+	if self._cfg_trigger_attack then
+		self._animator:SetTrigger(self._ID_TriggerAttackHelper)
+	end
+end
+
+function M:setAttackShort()
+	self._animator:SetTrigger(self._ID_TriggerAttack)
+end
+
+function M:setRunning(running)
+	if running == self._isRuning then
+		return
+	end
+
+	self._isRuning = running
+
+	self._animator:SetBool(self._ID_BoolRunning, running)
+end
+
+function M:setMoveSpeedX(speed)
+	self._animator:SetFloat(self._ID_FloatMoveSpeed, speed)
+end
+
+function M:setMoveDir(dir)
+	self._animator:SetFloat(self._ID_FloatMoveDir, dir)
+end
+
+function M:updateIKHand()
+	if self._IKPoint then
+		local ikPosition = self._ranger._ikPosition
+
+		self._IKPoint:SetPosition(ikPosition.x, ikPosition.y, 0)
+	end
+end
+
+return M

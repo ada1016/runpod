@@ -1,0 +1,67 @@
+local M = class("UnionLogWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionLogWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+end
+
+function M:update(data)
+	local p1 = string.split(data.name1, ":")
+	local str1 = V.getPlayerNameStr(p1[1], tonumber(p1[2]), "6BD4B4")
+	local str2 = ""
+
+	if data.name2:len() > 0 then
+		local p2 = string.split(data.name2, ":")
+		str2 = V.getPlayerNameStr(p2[1], tonumber(p2[2]), "6BD4B4")
+	end
+
+	V.setTextTimeAgo(self._tmpTime, math.floor(data.timestamp / 1000))
+
+	if data.type == D.UnionLogType.CREATE then
+		self._tmpContent:SetLocalizeS(SID.UNION_LOG_CREATE, str1)
+	elseif data.type == D.UnionLogType.JOIN then
+		self._tmpContent:SetLocalizeS(SID.UNION_LOG_JOIN, str1)
+	elseif data.type == D.UnionLogType.LEAVE then
+		self._tmpContent:SetLocalizeS(SID.UNION_LOG_LEAVE, str1)
+	elseif data.type == D.UnionLogType.ACCEPT then
+		self._tmpContent:SetLocalizeS(SID.UNION_LOG_ACCEPT, str1, str2)
+	elseif data.type == D.UnionLogType.KICK then
+		self._tmpContent:SetLocalizeS(SID.UNION_LOG_KICK, str1, str2)
+	elseif data.type == D.UnionLogType.ROLE then
+		local role = tonumber(data.param1)
+
+		if role == D.UnionRole.NONE then
+			self._tmpContent:SetLocalizeS(SID.UNION_LOG_ROLE, str1, str2, LcLocalization.getTextStr(SID.UNION_ROLE_0))
+		elseif role == D.UnionRole.PRESIDENT then
+			self._tmpContent:SetLocalizeS(SID.UNION_LOG_ROLE, str1, str2, LcLocalization.getTextStr(SID.UNION_ROLE_1))
+		elseif role == D.UnionRole.VICE_PRESIDENT then
+			self._tmpContent:SetLocalizeS(SID.UNION_LOG_ROLE, str1, str2, LcLocalization.getTextStr(SID.UNION_ROLE_2))
+		elseif role == D.UnionRole.COORDINATOR then
+			self._tmpContent:SetLocalizeS(SID.UNION_LOG_ROLE, str1, str2, LcLocalization.getTextStr(SID.UNION_ROLE_3))
+		end
+	end
+end
+
+return M

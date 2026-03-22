@@ -1,0 +1,193 @@
+local M = class("SparkScoutStatsWidget_Settle")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StatsWidgetOfSparkScoutSettle.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(weaponData)
+	lc.prefabVarPeer(self._goMe)
+	lc.prefabVarPeer(self._goOpponent)
+	lc.prefabVarPeer(self._goMe._goGradeWidget)
+	lc.prefabVarPeer(self._goOpponent._goGradeWidget)
+
+	self._goGroups = {}
+
+	for i = 1, 3 do
+		self._goGroups[i] = self._tfGroups:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goGroups[i])
+	end
+end
+
+function M:updateUI(weaponData1, weaponData2, panel)
+	local selfMatchData = BattleManager:getSession(1):getMatchData()
+	local opponentMatchData = BattleManager:getSession(2):getMatchData()
+
+	self:loadWeaponDamages(weaponData1, 1, panel, 1)
+	self:loadWeaponDamages(weaponData1, 2, panel, 1)
+	self:loadWeaponDamages(weaponData1, 3, panel, 1)
+	self:loadWeaponDamages(weaponData2, 1, panel, 2)
+	self:loadWeaponDamages(weaponData2, 2, panel, 2)
+	self:loadWeaponDamages(weaponData2, 3, panel, 2)
+
+	local showOppGroup = P._playerActivitySparkScout:canShowSparkScoutRankGroup(opponentMatchData, selfMatchData.gradeId)
+
+	V.loadSparkScoutGrades(self._goMe, selfMatchData)
+	V.loadSparkScoutGrades(self._goOpponent, opponentMatchData, showOppGroup)
+
+	local gradeId1 = selfMatchData.gradeId or 110
+	local gradeId2 = opponentMatchData.gradeId or 110
+
+	V.loadSparkGradeWidget(self._goMe._goGradeWidget, gradeId1)
+	V.loadSparkGradeWidget(self._goOpponent._goGradeWidget, gradeId2)
+	panel:setClick(self._goMe._btnChipOverview, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutChipAttributePanel, selfMatchData.gemEffects)
+	end)
+	panel:setClick(self._goOpponent._btnChipOverview, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutChipAttributePanel, opponentMatchData.gemEffects)
+	end)
+end
+
+function M:loadWeaponDamages(weaponDatas, group, panel, sessionId)
+	local goGroup = self._goGroups[group]
+	local tfContainer = goGroup["_tfCells" .. sessionId]
+	local tmpTitle = goGroup["_txtTotalDamage" .. sessionId]
+
+	if sessionId == 1 then
+		goGroup._tmpLv.text = group
+		local pvpResults = BattleManager:getSession(sessionId)._pvpResults
+		local win = pvpResults[group] and pvpResults[group] == D.BattleResult.Win or false
+
+		goGroup._tfResults:GetChild(0):SetActive(win)
+		goGroup._tfResults:GetChild(1):SetActive(not win)
+	end
+
+	for i = 1, tfContainer.childCount do
+		local weapon = tfContainer:GetChild(i - 1).gameObject
+
+		weapon:SetActive(false)
+	end
+
+	local pvpWeaponQueue = BattleManager:getSession(sessionId)._pvpWeaponQueue
+
+	for i = 1, #weaponDatas do
+		local weaponData = weaponDatas[i]
+
+		if not weaponData.group then
+			local weaponGroupId = 1
+			local id = weaponData.id
+
+			for j = 1, 3 do
+				local weapons = pvpWeaponQueue[j]
+				local breakAll = false
+
+				for k, v in pairs(weapons) do
+					if v == id then
+						weaponGroupId = j
+						breakAll = true
+
+						break
+					end
+				end
+
+				if breakAll then
+					break
+				end
+			end
+
+			weaponData.group = weaponGroupId
+		end
+	end
+
+	table.sort(weaponDatas, function (a, b)
+		if a.group ~= b.group then
+			return a.group < b.group
+		end
+
+		if a.dmg ~= b.dmg then
+			return b.dmg < a.dmg
+		end
+
+		return b.id < a.id
+	end)
+
+	local cnt = #weaponDatas
+
+	for i = 1, cnt do
+		if weaponDatas[i].id == 100 then
+			weaponDatas[i] = nil
+
+			break
+		end
+	end
+
+	table.removeNilValues(weaponDatas, cnt)
+
+	local showWeaponDatas = {}
+	local totalKill = 0
+
+	for i = 1, #weaponDatas do
+		local data = weaponDatas[i]
+
+		if data.group == group then
+			showWeaponDatas[#showWeaponDatas + 1] = data
+			totalKill = totalKill + data.kill
+		end
+	end
+
+	goGroup._tfWeaponsTitle:SetActive(#showWeaponDatas > 0)
+
+	tmpTitle.text = string.formatNumber(totalKill)
+
+	for i = 1, #showWeaponDatas do
+		if tfContainer.childCount < i then
+			GameObject.Instantiate(tfContainer:GetChild(0).gameObject, tfContainer)
+		end
+
+		local weapon = tfContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(weapon)
+		weapon:SetActive(true)
+
+		local weaponData = showWeaponDatas[i]
+		local id = weaponData.id
+
+		weapon._imgIcon:SetActive(true)
+		LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. id, true)
+
+		weapon._txtDamage.text = string.formatNumber(math.ceil(weaponData.dmg))
+
+		panel:setClickWithoutAction(weapon._btnIcon, function ()
+			UIManager.openPanel(PrefabDefine.BattleSkillDmgRecordPanel, id, sessionId)
+		end)
+
+		if id == D.WEAPON_DOME then
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. D.DEFAULT_DOME_SKIN, true)
+
+			weapon._tmpLv.text = 0
+
+			weapon._tmpLv.transform.parent:SetActive(false)
+		else
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. id, true)
+
+			weapon._tmpLv.text = weaponData.group
+		end
+	end
+end
+
+return M

@@ -1,0 +1,51 @@
+local M = class("SparkScoutQuickEditWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutQuickEditWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+	go._anim.enabled = false
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._anim = go:GetComponent("Animation")
+	go._anim.enabled = false
+
+	return go
+end
+
+function M:init(weapon, index)
+	if weapon then
+		LuaUnity.setTPSprite(self._imgWeapon, "weapon/weapon_" .. weapon, true, true)
+		self._goLockArea:SetActive(false)
+		self._goEmptyArea:SetActive(false)
+		self._imgWeapon:SetActive(true)
+	else
+		self._imgWeapon:SetActive(false)
+
+		if P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(index) then
+			self._goLockArea:SetActive(false)
+			self._goEmptyArea:SetActive(true)
+		else
+			self._goLockArea:SetActive(true)
+			self._goEmptyArea:SetActive(false)
+		end
+	end
+end
+
+function M:shake()
+end
+
+function M:stopShake()
+end
+
+return M

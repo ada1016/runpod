@@ -1,0 +1,341 @@
+local M = {}
+
+declare("ResAnimHelper", M)
+
+local DOTween = DOTween
+local OutCubic = DG.Tweening.Ease.OutCubic
+local InCubic = DG.Tweening.Ease.InCubic
+local InOutCubic = DG.Tweening.Ease.InOutCubic
+local LINEAR = DG.Tweening.Ease.Linear
+local K_RESOURCES_FLYSPEED = 1100
+local PATH_FLY = "Assets/FW/Prefabs/UI/element/fly_icon.prefab"
+local PATH_FLY_WITH_TRAIL = "Assets/FW/Prefabs/UI/element/fly_icon_trail.prefab"
+local VFX_PREFAB_PATH = "Assets/FW/Prefabs/UI_vfx/%s.prefab"
+
+local function getIconPath(resType)
+	return string.format("item/item_%d", resType)
+end
+
+local function calFlyTime(startPos, targetPos, flySpeed)
+	return math.sqrt((targetPos.y - startPos.y) * (targetPos.y - startPos.y) + (targetPos.x - startPos.x) * (targetPos.x - startPos.x)) / flySpeed
+end
+
+local __pool = table.new(64, 0)
+local __modal_pool = table.new(64, 0)
+
+local function resetObjPop(objPop)
+	objPop:SetActive(true)
+end
+
+local function recycleObjPop(isModal, type, objPop)
+	local pool = nil
+
+	if isModal then
+		pool = __modal_pool[type]
+
+		if not pool then
+			pool = {}
+			__modal_pool[type] = pool
+		end
+	else
+		pool = __pool[type]
+
+		if not pool then
+			pool = {}
+			__pool[type] = pool
+		end
+	end
+
+	pool[#pool + 1] = objPop
+
+	objPop:SetActive(false)
+end
+
+local function getOrCreateObjPop(isModal, path)
+	local pool = isModal and __modal_pool[path] or __pool[path]
+	local objPop = pool and pool[#pool] or nil
+
+	if objPop == nil then
+		if isModal then
+			objPop = LuaUnity.createGameObject(path, MainGameRoot._currentCanvasModalAnim)
+		else
+			objPop = LuaUnity.createGameObject(path, MainGameRoot._currentCanvasFitAnim)
+		end
+	else
+		resetObjPop(objPop)
+
+		pool[#pool] = nil
+	end
+
+	return objPop
+end
+
+local S_flySpeed = Screen.height / 2
+
+local function playCollectSound(resType)
+	if resType == D.ResType.dollar then
+		Client.playSound("2d_Money_cashier")
+	elseif resType == D.ResType.diamond then
+		Client.playSound("2d_Gem_get")
+	else
+		Client.playSound("2d_Claim_reward_1")
+	end
+end
+
+local function getRandomPos(startPos, aroundRandom)
+	local xOffset = math.random(-aroundRandom, aroundRandom)
+	local yOffset = math.random(-aroundRandom, aroundRandom)
+
+	return Vector3.new(startPos.x + xOffset, startPos.y + yOffset, 0)
+end
+
+local function calTf2Position(startTf, targetTf, offsetY)
+	local startPos = nil
+
+	if startTf == nil then
+		startPos = Vector3.new(lc._screenWidth / 2, lc._screenHeight / 2, 0)
+	elseif type(startTf) == "table" then
+		startPos = Vector3.new(startTf.x, startTf.y, 0)
+	else
+		offsetY = offsetY or 0
+		local x, y, z = lc.getPosition(startTf)
+		y = y + offsetY
+		startPos = Vector3.new(x, y, z)
+	end
+
+	local targetPos = Vector3.new(lc.getPosition(targetTf))
+
+	return startPos, targetPos
+end
+
+local function popFlyObj(params)
+	local prefabPath = params.prefabPath
+	local iconPath = params.iconPath or 0
+	local iconParam = params.iconParam
+	local startTf = params.startTf
+	local targetTf = params.targetTf
+	local flyNum = params.flyNum or 8
+	local flyDuration = params.flyDuration or 0.5
+	local scale = params.scale or 1
+	local fixFlyTime = params.fixFlyTime or nil
+	local flySpeedMultipiler = params.flySpeedMultipiler or 1
+	local scaleMode = params.scaleMode
+	local randomStartMode = params.randomStartMode
+	local onObjCreate = params.onObjCreate
+	local onComplete = params.onComplete
+	local onEachComplete = params.onEachComplete
+	local onRecycle_Internal = params.onRecycle_Internal
+	local startPos, targetPos = calTf2Position(startTf, targetTf)
+
+	if flyNum > 8 then
+		flyNum = 8
+	end
+
+	local isModal = true
+
+	for i = 1, flyNum do
+		local objPop = getOrCreateObjPop(isModal, prefabPath)
+		local tfPop = objPop.transform
+		local tfIcon = tfPop:Find("icon")
+
+		if iconPath then
+			if iconParam then
+				LuaUnity.setTPSpriteWithDefault(tfIcon:GetComponent("Image"), string.format(iconPath, iconParam), true, false, "item/item_10001")
+			else
+				LuaUnity.setTPSprite(tfIcon:GetComponent("Image"), iconPath, true, false)
+			end
+		end
+
+		local ct = 0
+
+		tfPop:SetLocalScale(scale, scale, scale)
+		tfPop:SetPosition(startPos.x, startPos.y, 0)
+
+		local sequence = DOTween.Sequence()
+
+		sequence:SetUpdate(0, true)
+		tfIcon:SetLocalScale(1, 1, 1)
+
+		if onObjCreate then
+			onObjCreate(objPop)
+		end
+
+		fixFlyTime = fixFlyTime or calFlyTime(startPos, targetPos, S_flySpeed * flySpeedMultipiler)
+		local moveTime = fixFlyTime - 0.1
+
+		if flyNum > 1 then
+			ct = ct + 0.2
+
+			if randomStartMode == 1 then
+				sequence:Append(tfPop:DOMove(getRandomPos(startPos, 100), 0.2):SetEase(InOutCubic))
+			end
+		end
+
+		if flyNum > 1 then
+			local thisInterval = flyDuration * i / flyNum
+
+			sequence:AppendInterval(thisInterval)
+
+			ct = ct + thisInterval
+		end
+
+		sequence:Append(tfPop:DOMove(targetPos, moveTime):SetEase(InOutCubic))
+
+		if scaleMode == 1 then
+			sequence:Append(tfIcon:DOScale(0, moveTime):SetEase(OutCubic))
+		else
+			sequence:Insert(ct, tfIcon:DOScale(0, moveTime):SetEase(LINEAR))
+		end
+
+		sequence:AppendInterval(0.1)
+
+		ct = ct + moveTime
+		local compelteFunc = nil
+
+		if i == flyNum then
+			function compelteFunc()
+				if onEachComplete then
+					onEachComplete(objPop)
+				end
+
+				if onComplete then
+					onComplete()
+				end
+
+				onRecycle_Internal()
+				recycleObjPop(isModal, prefabPath, objPop)
+			end
+		else
+			function compelteFunc()
+				if onEachComplete then
+					onEachComplete()
+				end
+
+				recycleObjPop(isModal, prefabPath, objPop)
+			end
+		end
+
+		sequence:OnComplete(compelteFunc)
+		sequence:SetId("PopResource")
+	end
+end
+
+function M.Clean()
+	table.clear(__pool)
+	table.clear(__modal_pool)
+end
+
+local params = {}
+
+function M.genParam()
+	local param = params[#params]
+
+	if not param then
+		param = {}
+		params[#params] = param
+
+		function param.onRecycle_Internal()
+			M.recycleParam(param)
+		end
+	end
+
+	return param
+end
+
+function M.recycleParam(param)
+	M.resetParam(param)
+
+	params[#params + 1] = param
+end
+
+function M.resetParam(param)
+	param.prefabPath = nil
+	param.iconPath = nil
+	param.iconParam = nil
+	param.startTf = nil
+	param.targetTf = nil
+	param.flyNum = 8
+	param.flyDuration = 0.5
+	param.scale = 1
+	param.fixFlyTime = nil
+	param.flySpeedMultipiler = 1
+	param.scaleMode = 1
+	param.randomStartMode = 0
+	param.onObjCreate = nil
+	param.onComplete = nil
+	param.onEachComplete = nil
+end
+
+function M.fly(param)
+	param = param or M.genParam()
+
+	popFlyObj(param)
+end
+
+local ITEM_ICON = "item/item_%d"
+
+function M.flyItem(resType, startTf, targetTf, resNum, trailColor, flyTime)
+	local params = M.genParam()
+	params.prefabPath = PATH_FLY_WITH_TRAIL
+	params.iconPath = ITEM_ICON
+	params.iconParam = resType
+	params.startTf = startTf
+	params.targetTf = targetTf
+	params.flyNum = resNum
+
+	if flyTime then
+		params.fixFlyTime = flyTime
+	end
+
+	function params.onObjCreate(popObj)
+		local ps = popObj:GetChild(0):GetChild(0):GetComponent("ParticleSystem")
+
+		LuaHelper.ParticleSystemSetStartColor(ps, trailColor)
+	end
+
+	M.fly(params)
+end
+
+local CHIP_ICON = "general/chip_%02d"
+
+function M.flyChip(quality, startTf, targetTf, trailColor)
+	local params = M.genParam()
+	params.prefabPath = PATH_FLY_WITH_TRAIL
+	params.iconPath = CHIP_ICON
+	params.iconParam = quality
+	params.startTf = startTf
+	params.targetTf = targetTf
+	params.flyNum = 1
+	params.fixFlyTime = 0.8
+	params.scaleMode = 2
+
+	function params.onObjCreate(popObj)
+		local ps = popObj:GetChild(0):GetChild(0):GetComponent("ParticleSystem")
+
+		LuaHelper.ParticleSystemSetStartColor(ps, trailColor)
+	end
+
+	M.fly(params)
+end
+
+local EQUIP_ICON = "general/equip1_%d"
+
+function M.flyEquip(part, startTf, targetTf, trailColor)
+	local params = M.genParam()
+	params.prefabPath = PATH_FLY_WITH_TRAIL
+	params.iconPath = EQUIP_ICON
+	params.iconParam = part
+	params.startTf = startTf
+	params.targetTf = targetTf
+	params.flyNum = 1
+	params.fixFlyTime = 0.8
+	params.scaleMode = 2
+
+	function params.onObjCreate(popObj)
+		local ps = popObj:GetChild(0):GetChild(0):GetComponent("ParticleSystem")
+
+		LuaHelper.ParticleSystemSetStartColor(ps, trailColor)
+	end
+
+	M.fly(params)
+end

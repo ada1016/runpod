@@ -1,0 +1,53 @@
+local M = class("MissionGuideTipPanel", requireLua("BasePanel"))
+M.args = {
+	btnBg = Types.Button,
+	btnClose = Types.Button,
+	btnDiscord = Types.Button,
+	btnViewRecords = Types.Button,
+	goDiscord = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnDiscord, function ()
+		self:closePanel()
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_FAIL)
+
+		local lb = UIManager.getPanel(PrefabDefine.BattleSettlementPanel.id)
+
+		if not lb then
+			return
+		end
+
+		lb:dealClaimBtn()
+	end)
+	self:setClick(self._btnViewRecords, function ()
+		self:closePanel()
+
+		V._openMissionRecord = true
+		local lb = UIManager.getPanel(PrefabDefine.BattleSettlementPanel.id)
+
+		if not lb then
+			return
+		end
+
+		lb:dealClaimBtn()
+	end)
+end
+
+function M:init(msId, msType)
+	self._msId = msId
+	self._msType = msType or D.MissionType.Common
+
+	if lc._isCN then
+		self._goDiscord:SetActive(false)
+	end
+end
+
+return M

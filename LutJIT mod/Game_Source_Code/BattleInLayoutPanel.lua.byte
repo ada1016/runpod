@@ -1,0 +1,748 @@
+local M = class("BattleInLayoutPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tmpInputLogName = Types.TMP_InputField,
+	tmpInputSeed = Types.TMP_InputField,
+	btnRandomSeed = Types.Button,
+	tmpInputRunStep = Types.TMP_InputField,
+	tmpInputBattery = Types.TMP_InputField,
+	tmpInputRouge = Types.TMP_InputField,
+	tmpInitEnemyId = Types.TMP_InputField,
+	tmpInitEnemyCount = Types.TMP_InputField,
+	tmpEnemySpeed = Types.TMP_InputField,
+	tmpEnemyHp = Types.TMP_InputField,
+	tmpEnemyAtk = Types.TMP_InputField,
+	tmpEnemyId = Types.TMP_InputField,
+	tmpEnemyCount = Types.TMP_InputField,
+	tmpEnemyBuffs = Types.TMP_InputField,
+	tmpRangerIds = Types.TMP_InputField,
+	tmpSkinRoleIds = Types.TMP_InputField,
+	tmpSkinDomeIds = Types.TMP_InputField,
+	tmpInputRoleShoot = Types.TMP_InputField,
+	tmpInputBatteryAtk = Types.TMP_InputField,
+	tmpInputCritRate = Types.TMP_InputField,
+	tmpInputDomeHp = Types.TMP_InputField,
+	tmpInputBatteryCD = Types.TMP_InputField,
+	tmpInputMission = Types.TMP_InputField,
+	tmpDomeBuffs = Types.TMP_InputField,
+	tmpWave = Types.TMP_InputField,
+	tmpProgress = Types.TMP_Text,
+	btnRun = Types.Button,
+	btnTest = Types.Button,
+	btnBatchTest = Types.Button,
+	btnRun2 = Types.Button,
+	btnSaveEnv = Types.Button,
+	btnLoadEnv = Types.Button,
+	btnLoadOutEnv = Types.Button,
+	btnFastPlay = Types.Button,
+	btnFastPlay2 = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.BattleTestor = self
+end
+
+function M:Start()
+	self:startUpdater()
+	self._tmpInputLogName.onEndEdit:RemoveAllListeners()
+	self._tmpInputLogName.onEndEdit:AddListener(function (pt)
+		self._logName = pt
+	end)
+	self:setClick(self._btnRandomSeed, function ()
+		self._env.seed = math.random(1, 999999)
+		self._tmpInputSeed.text = self._env.seed
+	end)
+	self._tmpInputSeed.onEndEdit:RemoveAllListeners()
+	self._tmpInputSeed.onEndEdit:AddListener(function (pt)
+		self._env.seed = math.abs(tonumber(pt) or math.random(1, 999999))
+		self._tmpInputSeed.text = self._env.seed
+	end)
+	self._tmpInputRunStep.onEndEdit:RemoveAllListeners()
+	self._tmpInputRunStep.onEndEdit:AddListener(function (pt)
+		if tonumber(pt) == -1 then
+			self._env.run_step = -1
+			self._tmpInputRunStep.text = self._env.run_step
+		else
+			self._env.run_step = math.abs(tonumber(pt) or 999)
+			self._tmpInputRunStep.text = self._env.run_step
+		end
+	end)
+	self._tmpInputBattery.onEndEdit:RemoveAllListeners()
+	self._tmpInputBattery.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.weapons)
+
+		if pt == "" then
+			return
+		end
+
+		local args = string.split(pt, ",")
+
+		for i = 1, #args do
+			local weaponId = tonumber(args[i])
+
+			if weaponId == nil then
+				self._tmpInputBattery.text = ""
+
+				V.showToast("不存在炮台：" .. args[i])
+
+				return
+			end
+
+			if D._weaponConfig[weaponId] == nil then
+				self._tmpInputBattery.text = ""
+
+				V.showToast("不存在炮台：" .. weaponId)
+
+				return
+			end
+
+			if weaponId ~= 1 then
+				self._env.weapons[#self._env.weapons + 1] = weaponId
+			end
+		end
+	end)
+	self._tmpInitEnemyId.onEndEdit:RemoveAllListeners()
+	self._tmpInitEnemyId.onEndEdit:AddListener(function (pt)
+		self._env.init_enemy_id = pt
+	end)
+	self._tmpInitEnemyCount.onEndEdit:RemoveAllListeners()
+	self._tmpInitEnemyCount.onEndEdit:AddListener(function (pt)
+		self._env.init_enemy_count = pt
+	end)
+	self._tmpEnemySpeed.onEndEdit:RemoveAllListeners()
+	self._tmpEnemySpeed.onEndEdit:AddListener(function (pt)
+		self._env.enemy_speed = tonumber(pt) or -1
+	end)
+	self._tmpEnemyHp.onEndEdit:RemoveAllListeners()
+	self._tmpEnemyHp.onEndEdit:AddListener(function (pt)
+		self._env.enemy_hp = tonumber(pt) or -1
+	end)
+	self._tmpEnemyAtk.onEndEdit:RemoveAllListeners()
+	self._tmpEnemyAtk.onEndEdit:AddListener(function (pt)
+		self._env.enemy_atk = tonumber(pt) or -1
+	end)
+	self._tmpEnemyId.onEndEdit:RemoveAllListeners()
+	self._tmpEnemyId.onEndEdit:AddListener(function (pt)
+		self._env.enemy_id = tonumber(pt) or -1
+	end)
+	self._tmpEnemyCount.onEndEdit:RemoveAllListeners()
+	self._tmpEnemyCount.onEndEdit:AddListener(function (pt)
+		self._env.enemy_count = tonumber(pt) or -1
+	end)
+	self._tmpEnemyBuffs.onEndEdit:RemoveAllListeners()
+	self._tmpEnemyBuffs.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.init_enemy_bufs)
+
+		local bufs = string.split(pt, ",")
+
+		for i = 1, #bufs do
+			self._env.init_enemy_bufs[i] = tonumber(bufs[i])
+		end
+	end)
+	self._tmpRangerIds.onEndEdit:RemoveAllListeners()
+	self._tmpRangerIds.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.init_ranger_ids)
+
+		local bufs = string.split(pt, ",")
+
+		for i = 1, #bufs do
+			self._env.init_ranger_ids[i] = tonumber(bufs[i])
+		end
+	end)
+	self._tmpSkinRoleIds.onEndEdit:RemoveAllListeners()
+	self._tmpSkinRoleIds.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.init_skin_role_ids)
+
+		local bufs = string.split(pt, ",")
+
+		for i = 1, #bufs do
+			self._env.init_skin_role_ids[i] = tonumber(bufs[i])
+		end
+	end)
+	self._tmpSkinDomeIds.onEndEdit:RemoveAllListeners()
+	self._tmpSkinDomeIds.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.init_skin_dome_ids)
+
+		local bufs = string.split(pt, ",")
+
+		for i = 1, #bufs do
+			self._env.init_skin_dome_ids[i] = tonumber(bufs[i])
+		end
+	end)
+	self._tmpInputRoleShoot.onEndEdit:RemoveAllListeners()
+	self._tmpInputRoleShoot.onEndEdit:AddListener(function (pt)
+		self._env.role_shoot = tonumber(pt) or 1
+	end)
+	self._tmpInputBatteryAtk.onEndEdit:RemoveAllListeners()
+	self._tmpInputBatteryAtk.onEndEdit:AddListener(function (pt)
+		self._env.battery_atk = tonumber(pt) or -1
+	end)
+	self._tmpInputCritRate.onEndEdit:RemoveAllListeners()
+	self._tmpInputCritRate.onEndEdit:AddListener(function (pt)
+		self._env.crit_rate = tonumber(pt) or -1
+	end)
+	self._tmpInputDomeHp.onEndEdit:RemoveAllListeners()
+	self._tmpInputDomeHp.onEndEdit:AddListener(function (pt)
+		self._env.dome_hp = tonumber(pt) or -1
+	end)
+	self._tmpInputBatteryCD.onEndEdit:RemoveAllListeners()
+	self._tmpInputBatteryCD.onEndEdit:AddListener(function (pt)
+		self._env.battery_cd = tonumber(pt) or -1
+	end)
+	self._tmpInputRouge.onEndEdit:RemoveAllListeners()
+	self._tmpInputRouge.onEndEdit:AddListener(function (pt)
+		table.clear(self._env.rouges)
+
+		if pt == "" then
+			return
+		end
+
+		local args = string.split(pt, ",")
+
+		for i = 1, #args do
+			local rougeId = tonumber(args[i])
+
+			if rougeId == nil then
+				self._tmpInputRouge.text = ""
+
+				V.showToast("不存在词条：" .. args[i])
+
+				return
+			end
+
+			if D._battleRougeConfig[rougeId] == nil then
+				self._tmpInputRouge.text = ""
+
+				V.showToast("不存在词条：" .. rougeId)
+
+				return
+			end
+
+			self._env.rouges[#self._env.rouges + 1] = rougeId
+		end
+	end)
+	self._tmpInputMission.onEndEdit:RemoveAllListeners()
+	self._tmpInputMission.onEndEdit:AddListener(function (pt)
+		local val = tonumber(pt) or 10001
+		local exist = false
+
+		for _, v in pairs(D._missionConfigs) do
+			if v[val] then
+				exist = true
+
+				break
+			end
+		end
+
+		if not exist then
+			V.showToast("关卡不存在：" .. val)
+
+			return
+		end
+
+		self._env.missionId = val
+	end)
+	self._tmpDomeBuffs.onEndEdit:RemoveAllListeners()
+	self._tmpDomeBuffs.onEndEdit:AddListener(function (pt)
+		local args = string.split(pt, ",")
+		self._env.dome_buffs[1] = args[1]
+		self._env.dome_buffs[2] = args[2]
+		self._env.dome_buffs[3] = args[3]
+	end)
+	self._tmpWave.onEndEdit:RemoveAllListeners()
+	self._tmpWave.onEndEdit:AddListener(function (pt)
+		self._env.initial_wave = tonumber(pt) or 1
+	end)
+	self:setClick(self._btnRun, function ()
+		Client._config.stopFire = nil
+		Client._config.no_rouge = true
+
+		self:startRun()
+	end)
+	self:setClick(self._btnRun2, function ()
+		Client._config.no_rouge = false
+
+		self:startRun()
+	end)
+	self:setClick(self._btnTest, function ()
+		Client._config.no_rouge = true
+
+		self:startTestOne()
+	end)
+	self:setClick(self._btnFastPlay, function ()
+		self._isAutoAction = false
+		Client._config.no_rouge = false
+
+		self:startTestOne()
+	end)
+	self:setClick(self._btnFastPlay2, function ()
+		self._isAutoAction = true
+		Client._config.no_rouge = false
+		self._battleCount = 1
+
+		self:startTestOne()
+	end)
+	self:setClick(self._btnBatchTest, function ()
+	end)
+	self:setClick(self._btnSaveEnv, function ()
+		if GMTools._cacheBattleEnv then
+			self._env.out_env_name = GMTools._cacheBattleEnv.name
+		end
+
+		GMTools.saveBattleEnv(self._env, function ()
+			V.showToast("导出成功")
+		end, D.BATTLE_UNIT_TEST_DIR .. "in_layout/")
+	end)
+	self:setClick(self._btnLoadEnv, function ()
+		GMTools.loadBattleEnv(function (battleEnv)
+			GMTools._battleInEnv = GMTools.fillBattleInEnv(battleEnv)
+			GMTools._cacheBattleInEnv = clone(battleEnv)
+			self._env = GMTools._battleInEnv
+
+			self:loadUI()
+
+			if battleEnv.out_env_name then
+				local outEnv = GMTools.loadLuaContent(D.BATTLE_UNIT_TEST_DIR .. "out_layout/" .. battleEnv.out_env_name)
+
+				if outEnv then
+					GMTools._cacheBattleEnv = clone(outEnv)
+
+					P:loadBattleEnv(outEnv)
+
+					self._btnLoadOutEnv.transform:GetChild(0):GetComponent("TMP_Text").text = "导入局外布局-已导入"
+					self._btnLoadOutEnv.transform:GetChild(1):GetComponent("TMP_Text").text = outEnv.name
+				end
+			end
+		end, D.BATTLE_UNIT_TEST_DIR .. "in_layout/")
+	end)
+	self:setClick(self._btnLoadOutEnv, function ()
+		GMTools.loadBattleEnv(function (battleEnv)
+			GMTools._cacheBattleEnv = clone(battleEnv)
+
+			P:loadBattleEnv(battleEnv)
+
+			self._btnLoadOutEnv.transform:GetChild(0):GetComponent("TMP_Text").text = "导入局外布局-已导入"
+			self._btnLoadOutEnv.transform:GetChild(1):GetComponent("TMP_Text").text = battleEnv.name
+		end, D.BATTLE_UNIT_TEST_DIR .. "out_layout/")
+	end)
+end
+
+function M:Update()
+	if self._waitingInput then
+		if Input.GetKeyDown("1") then
+			self:actionSelectRouge(1)
+		elseif Input.GetKeyDown("2") then
+			self:actionSelectRouge(2)
+		elseif Input.GetKeyDown("3") then
+			self:actionSelectRouge(3)
+		elseif Input.GetKeyDown("9") then
+			self._actionList[#self._actionList + 1] = 99
+
+			self:continue()
+		end
+	end
+end
+
+function M:actionSelectRouge(index)
+	self._actionList[#self._actionList + 1] = index
+	self._actionList[#self._actionList + 1] = 0
+
+	self:continue()
+end
+
+function M:init()
+	GMTools.clearBattleInEnv()
+
+	if Client._config.defaultEnv then
+		local path = D.BATTLE_UNIT_TEST_DIR .. "in_layout/" .. Client._config.defaultEnv
+		GMTools._battleInEnv = GMTools.loadLuaContent(path)
+		GMTools._battleInEnv = GMTools.fillBattleInEnv(GMTools._battleInEnv)
+	end
+
+	if GMTools._cacheBattleInEnv then
+		table.copy(GMTools._cacheBattleInEnv, GMTools._battleInEnv)
+	end
+
+	self._env = GMTools._battleInEnv
+
+	if self._env.seed == 0 then
+		self._env.seed = math.random(1, 999999)
+	end
+
+	self._tmpProgress.text = ""
+	self._tmpInputLogName.text = ""
+	self._btnLoadOutEnv.transform:GetChild(0):GetComponent("TMP_Text").text = "导入局外布局-未导入"
+	self._btnLoadOutEnv.transform:GetChild(1):GetComponent("TMP_Text").text = ""
+
+	if GMTools._cacheBattleEnv then
+		P:loadBattleEnv(GMTools._cacheBattleEnv)
+
+		self._btnLoadOutEnv.transform:GetChild(0):GetComponent("TMP_Text").text = "导入局外布局-已导入"
+		self._btnLoadOutEnv.transform:GetChild(1):GetComponent("TMP_Text").text = GMTools._cacheBattleEnv.name
+	end
+
+	self:loadUI()
+end
+
+function M:loadUI()
+	self._env.enemy_hp = self._env.enemy_hp or GMTools._initialEnv.enemy_hp
+	self._env.enemy_atk = self._env.enemy_atk or GMTools._initialEnv.enemy_atk
+	self._env.role_shoot = self._env.role_shoot or GMTools._initialEnv.role_shoot
+	self._env.battery_atk = self._env.battery_atk or GMTools._initialEnv.battery_atk
+	self._env.battery_cd = self._env.battery_cd or GMTools._initialEnv.battery_cd
+	self._env.crit_rate = self._env.crit_rate or GMTools._initialEnv.crit_rate
+	self._env.dome_hp = self._env.dome_hp or GMTools._initialEnv.dome_hp
+	self._env.initial_wave = self._env.initial_wave or 1
+	self._tmpInputSeed.text = self._env.seed
+	self._tmpInputBattery.text = table.concat(self._env.weapons, ",")
+	self._tmpInputRouge.text = table.concat(self._env.rouges, ",")
+	self._tmpEnemyBuffs.text = table.concat(self._env.init_enemy_bufs, ",")
+	self._tmpDomeBuffs.text = table.concat(self._env.dome_buffs, ",")
+	self._tmpRangerIds.text = table.concat(self._env.init_ranger_ids, ",")
+	self._tmpSkinRoleIds.text = table.concat(self._env.init_skin_role_ids, ",")
+	self._tmpSkinDomeIds.text = table.concat(self._env.init_skin_dome_ids, ",")
+	self._tmpInitEnemyCount.text = self._env.init_enemy_count
+	self._tmpInitEnemyId.text = self._env.init_enemy_id
+	self._tmpEnemySpeed.text = self._env.enemy_speed
+	self._tmpInputMission.text = self._env.missionId
+	self._tmpWave.text = self._env.initial_wave
+	self._tmpInputRunStep.text = GMTools._battleInEnv.run_step
+	self._tmpEnemyId.text = self._env.enemy_id
+	self._tmpEnemyCount.text = self._env.enemy_count
+	self._tmpEnemyHp.text = self._env.enemy_hp
+	self._tmpEnemyAtk.text = self._env.enemy_atk
+	self._tmpInputRoleShoot.text = self._env.role_shoot
+	self._tmpInputBatteryAtk.text = self._env.battery_atk
+	self._tmpInputCritRate.text = self._env.crit_rate
+	self._tmpInputDomeHp.text = self._env.dome_hp
+	self._tmpInputBatteryCD.text = self._env.battery_cd
+	self._actionList = {}
+end
+
+function M:startRun()
+	if C._appConfig.battleParams and C._appConfig.battleParams.rouges then
+		self._env.seed = C._appConfig.battleParams.seed or 100
+		self._env.init_enemy_count = C._appConfig.battleParams.init_enemy_count or 100
+		self._env.init_enemy_id = C._appConfig.battleParams.init_enemy_id or 1201
+		self._env.enemy_speed = 0
+		self._env.rouges = C._appConfig.battleParams.rouges
+		self._env.enemy_hp = 10000
+		self._env.battery_atk = 1
+		self._env.enemy_count = 0
+		self._env.enemy_id = 0
+	end
+
+	GMTools._cacheBattleInEnv = {}
+
+	table.copy(self._env, GMTools._cacheBattleInEnv)
+	BattleLogger:clearLogs()
+
+	GMTools._runBattleTest = true
+	GMTools._runBattleTestWithView = true
+	local msType = nil
+
+	if self._env.missionId < 10999 then
+		msType = D.MissionType.Common
+	elseif self._env.missionId < 20999 then
+		msType = D.MissionType.Elite
+	elseif self._env.missionId < 30000 then
+		msType = D.MissionType.Dome
+	elseif self._env.missionId < 40000 then
+		msType = D.MissionType.GlobalDefense
+	end
+
+	InputBattleData = {
+		msType = msType,
+		msId = self._env.missionId
+	}
+
+	BattleEntityFactory:clearPools()
+
+	GMTools._battleLogName = self._logName
+
+	self:closePanel()
+	UIManager.openPanel(PrefabDefine.CrossScreenPanel, "city", "battle")
+end
+
+local CAMERA_DEFAULT_Y = 8.2
+local CAMERA_ZOOM_TIME = 3
+
+function M:initBattleTestConfig()
+	self._scaleIndex = 1
+	self._fieldScales = {
+		1,
+		1.1,
+		1.2,
+		1.3,
+		1.4,
+		1.5
+	}
+	self._tmpProgress.text = "运行中..."
+
+	BattleLogger:clearLogs()
+
+	GMTools._runBattleTestWithView = false
+	self._testing = true
+	local battleSession = requireLua("BattleSession").create()
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	local aspectRatio = Screen.width / Screen.height
+
+	if aspectRatio > 0.5625 then
+		aspectRatio = 0.5625
+	end
+
+	self._battleSession:initBattleFieldSize(aspectRatio)
+
+	self._lastSkillDmgs = {}
+	self._time = 0
+	self._dpsText = ""
+
+	function battleSession.__stepOverCallback()
+		self._remainHp = self._battleSession._blood
+		self._testing = false
+
+		if not Client._config.ignoreBattleLog then
+			BattleLogger:exportLogs(self._logName)
+		end
+
+		self._tmpProgress.text = "运行完毕"
+
+		if Client._config.batchBattleCount then
+			self._battleCount = (self._battleCount or 0) + 1
+
+			if self._battleCount < Client._config.batchBattleCount then
+				lc.delayFunc(0.2, function ()
+					self:startTestOne()
+				end)
+			end
+		end
+	end
+
+	function battleSession.__zoomField(index)
+	end
+
+	function battleSession.__roguePopCallback()
+		self:printDeltaDamages()
+	end
+end
+
+function M:startTestOne()
+	if self._testing then
+		V.showToast("请稍等")
+
+		return
+	end
+
+	if Client._config.batchBattleCount then
+		self._env.seed = math.random(1, 999999)
+		self._tmpInputSeed.text = self._env.seed
+	end
+
+	self:initBattleTestConfig()
+	lc.setTimer(function ()
+		self:initBattle()
+		self:doBattle()
+	end, 1)
+end
+
+function M:printDeltaDamages()
+end
+
+function M:printDamages()
+end
+
+function M:doBattle()
+	while true do
+		if self._testing == false then
+			break
+		end
+
+		if self._battleSession._stop and self:waitInput() then
+			if self._isAutoAction then
+				local starList = {}
+
+				for i = 1, #self._battleSession._rougeIds do
+					local id = self._battleSession._rougeIds[i] > 100 and math.floor(self._battleSession._rougeIds[i] / 100) or self._battleSession._rougeIds[i]
+					starList[i] = self._battleSession._battleRouge:getWeaponTotalStar(id) or -1
+					starList[i] = starList[i] + 1
+				end
+
+				local max = -1
+				local index = 0
+
+				for i = 1, #starList do
+					if max < starList[i] then
+						index = i
+						max = starList[i]
+					end
+				end
+
+				lc.setTimer(function ()
+					self:actionSelectRouge(index)
+				end, 0.1)
+			end
+
+			break
+		end
+
+		self._battleSession:Update(0.0167)
+	end
+end
+
+function M:continue()
+	self:doBattle()
+end
+
+function M:waitInput()
+	if #self._actionList > 0 then
+		self:acceptInput(self._actionList[1])
+		table.remove(self._actionList, 1)
+
+		return false
+	else
+		if #self._battleSession._rougeIds == 1 then
+			self:acceptInput(1)
+
+			self._battleSession._stop = false
+
+			table.clear(self._battleSession._rougeIds)
+
+			self._waitingInput = false
+
+			return false
+		end
+
+		local str = ""
+
+		for i = 1, #self._battleSession._rougeIds do
+			str = str .. LcLocalization.getTextStr(D._battleRougeCardConfig[self._battleSession._rougeIds[i]]._nameSid) .. "--"
+		end
+
+		self._waitingInput = true
+
+		return true
+	end
+end
+
+function M:acceptInput(option)
+	if option == 0 then
+		self._battleSession._stop = false
+
+		table.clear(self._battleSession._rougeIds)
+
+		self._waitingInput = false
+
+		return
+	end
+
+	if option == 99 then
+		self._battleSession:recordRogueOptions(99)
+
+		return
+	end
+
+	local rouge = self._battleSession._rougeIds[option]
+
+	if D._battleRougeCardConfig[rouge] then
+		self._dpsText = self._dpsText .. "选卡," .. LcLocalization.getTextStr(D._battleRougeCardConfig[rouge]._nameSid) .. "\n"
+	end
+
+	self._battleSession:selectRogueCard(rouge)
+end
+
+function M:initBattle()
+	GMTools._runBattleTest = true
+	local msType = nil
+
+	if self._env.missionId < 10999 then
+		msType = D.MissionType.Common
+	elseif self._env.missionId < 20999 then
+		msType = D.MissionType.Elite
+	elseif self._env.missionId < 30000 then
+		msType = D.MissionType.Dome
+	end
+
+	local input = {
+		seed = self._env.seed,
+		msType = msType,
+		msId = self._env.missionId
+	}
+
+	P._playerRole:genBattleGemInput(input)
+	P._playerRole:genBattleEquipInput(input)
+	P._playerArmory:genBattleWeaponInput(input)
+	P._playerSkin:genBattleSkinInput(input)
+
+	if msType == D.MissionType.Dome then
+		P._playerDome:genBattleEnemeyProps(input)
+	end
+
+	self._battleSession:initBattle(input)
+	self._battleSession:pauseBattle(false)
+end
+
+function M:aiBattle()
+	while true do
+		if self._testing == false then
+			return self._remainHp
+		end
+
+		if self._battleSession._stop and self:waitInput() then
+			return "select:" .. table.concat(self._battleSession._rougeIds, ",")
+		end
+
+		self._battleSession:Update(0.0167)
+	end
+end
+
+function M:startTestOneSync()
+	if self._testing then
+		return self:aiBattle()
+	end
+
+	self._env.seed = math.random(1, 999999)
+	self._tmpInputSeed.text = self._env.seed
+
+	self:initBattleTestConfig()
+
+	Client._config.no_rouge = false
+
+	self:initBattle()
+	BattleAi:init(self._battleSession)
+
+	return self:aiBattle()
+end
+
+function M:startAiTest()
+	return BattleTestor:startTestOneSync()
+end
+
+function M:startAiPlay()
+	if not self._battleSession then
+		self._env.seed = math.random(1, 999999)
+		Client._config.no_rouge = false
+
+		self:startRun()
+	end
+
+	return "pending"
+end
+
+function M:inputAiRouge(index)
+	self._actionList[#self._actionList + 1] = index
+	self._actionList[#self._actionList + 1] = 0
+
+	return self:aiBattle()
+end
+
+function M:OnDestroy()
+	_G.BattleTestor = nil
+
+	M.super.OnDestroy(self)
+end
+
+return M

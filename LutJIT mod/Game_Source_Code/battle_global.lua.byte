@@ -1,0 +1,129 @@
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local SID = SID
+local M = {
+	_ator_slanting_angle = 20,
+	_ator_move_speed = 50,
+	_drag_speed = 0.01,
+	_booster_move_speed_add_per = 50,
+	_battery_slowfielddrone_range_fix = 1.2,
+	_battery_slowfielddrone_fly_time = 2,
+	_booster_energy = 400,
+	_battle_player_initial_hp = 3000,
+	_battle_range_nearby_dome = 3,
+	_battery_slowfielddrone_range = 3,
+	_battle_pvp_kill_time = 120,
+	_battle_min_speed_percent = 10,
+	_battle_pvp_kill_time_loss_hp = 1000,
+	_running_fire_interval = 0.2,
+	_battle_pvp_hp_inc = 130,
+	_battle_pvp_rage_time = 60,
+	_battery_thunderball_move_speed = 4,
+	_battle_pvp_portal_wait_time = 1,
+	_rogue_new_card_percent = 30,
+	_booster_duration = 66,
+	_battle_pvp_atk_inc = 40,
+	_ator_bullet_distance = {
+		0,
+		0.2,
+		0.15,
+		0.1,
+		0.05
+	},
+	_battle_time_scale = {
+		1,
+		1.2,
+		1.5
+	},
+	_battle_draw_fix_group = {
+		1,
+		2,
+		1,
+		3
+	},
+	_battle_draw_weight = {
+		8800,
+		1000,
+		200
+	},
+	_new_enemy_delay = {
+		5,
+		60
+	},
+	_battle_rogue_config10001 = {
+		121,
+		126,
+		123,
+		50
+	},
+	_battle_mission_config10001 = {
+		160,
+		15
+	},
+	_battle_rogue_god_weapon_weight = {
+		1
+	},
+	_battle_explosion_enemy_dmg_factor = {
+		30,
+		30,
+		30,
+		60,
+		60,
+		60,
+		100,
+		100,
+		100,
+		100
+	},
+	_battle_pvp_bp_effect_parmas = {
+		20,
+		40,
+		60
+	}
+}
+local mapKeyIndex = {}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		local val = rawget(table, -key)
+
+		if val then
+			return table[-key] + lc._encryptOffset + 4081
+		end
+	end
+}
+local mt = {
+	__index = function (table, key)
+		if mapKeyIndex[key] == nil then
+			return nil
+		end
+
+		local v = table[mapKeyIndex[key]]
+		local d = mapKeyDimension[key]
+
+		if d == 0 then
+			return v + lc._encryptOffset + 4081
+		elseif d == 1 and getmetatable(v) == nil then
+			setmetatable(v, arrayMt)
+		end
+
+		return v
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+setmetatable(M, mt)
+
+return M

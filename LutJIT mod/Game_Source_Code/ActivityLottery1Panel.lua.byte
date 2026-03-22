@@ -1,0 +1,1042 @@
+local M = class("ActivityLottery1Panel", requireLua("BasePanel"))
+local RollState = {
+	SpeedStay = 2,
+	End = 4,
+	ShowResult = 6,
+	Ending = 5,
+	Prepare = 0.5,
+	Waiting = 3.5,
+	Idle = -1,
+	SpeedUp = 1,
+	SpeedDown = 3,
+	Init = 0
+}
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	btnActivityIssue = Types.Button,
+	txtActivityCountdown = Types.TMP_Text,
+	btnExchange = Types.Button,
+	tfLuckyDrawRewards = Types.Transform,
+	tfSelected = Types.Transform,
+	btnLuckyIssue = Types.Button,
+	txtLuckyValue = Types.TMP_Text,
+	atorBg = Types.Animator,
+	btnDrawOne = Types.Button,
+	txtOneCostNum = Types.TMP_Text,
+	imgIconOne = Types.Image,
+	txtRecoverTime = Types.TMP_Text,
+	txtDrawOne = Types.TMP_Text,
+	btnDrawMulti = Types.Button,
+	imgIconMulti = Types.Image,
+	txtMultiCostNum = Types.TMP_Text,
+	txtDiscountMultiCostNum = Types.TMP_Text,
+	imgDiscountIconMulti = Types.Image,
+	txtDrawMulti = Types.TMP_Text,
+	btnSkipAnim = Types.Button,
+	btnSpineDetail = Types.Button,
+	animChangeSpine = Types.Animation,
+	goSpineWidget = Types.GameObject,
+	goSpineWidgetNext = Types.GameObject,
+	goDrawNumExchangeArea = Types.GameObject,
+	imgDrawClaimBar = Types.SlicedFilledImage,
+	txtCurrentNum = Types.TMP_Text,
+	goAnnounce = Types.GameObject
+}
+local ActivityItemWidget = requireLua("ActivityItemWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goItems = {}
+	self._curState = RollState.Init
+	local tf = self._tfLuckyDrawRewards.transform
+	local allNum = tf.childCount
+
+	for i = 1, allNum do
+		local tfItem = tf:GetChild(i - 1)
+		self._goItems[i] = ActivityItemWidget.noCreate(tfItem.gameObject)
+
+		self:setClick(self._goItems[i]._btnClick, function ()
+			self._goItems[i]:rewardclickCallback()
+		end)
+	end
+
+	local tfClaimList = self._goDrawNumExchangeArea.transform
+	self._claimItems = {}
+
+	for i = 1, 5 do
+		local go = tfClaimList:GetChild(i - 1)
+		self._claimItems[i] = go:GetChild(0).gameObject
+
+		SimpleItemWidget.noCreate(self._claimItems[i])
+		self:setClick(self._claimItems[i]._btnClick, function ()
+			local idx = self._module:getClaimIdx(self._auid)
+
+			if i <= idx then
+				self._claimItems[i]:rewardclickCallback()
+
+				return
+			end
+
+			local result, rewards = self._module:tryClaimRewards(self._auid)
+
+			if result ~= ResultCode.OK then
+				self._claimItems[i]:rewardclickCallback()
+
+				return
+			end
+
+			self:updateDot()
+			V.showRewardClaimPanel(rewards)
+			self:updateClaimArea()
+		end)
+	end
+
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+	SpineGraphicWidget.noCreate(self._goSpineWidgetNext)
+end
+
+function M:Start()
+	self:startUpdater()
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._refreshTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClickWithoutAction(self._btnSpineDetail, function ()
+		local skinId = self._showSpineCids[self._showSpineIdx]
+
+		if skinId then
+			UIManager.openPanel(PrefabDefine.SkinInfoPanel, skinId)
+		end
+	end)
+	self:setClick(self._btnDrawOne, function ()
+		if self._rolling then
+			return
+		end
+
+		self:tryDealDraw(1)
+	end)
+	self:setClick(self._btnDrawMulti, function ()
+		if self._rolling then
+			return
+		end
+
+		self:tryDealDraw(5)
+	end)
+	self:setClick(self._btnSkipAnim, function ()
+		if self._rolling then
+			return
+		end
+
+		self:dealSkipAnimBtn()
+	end)
+	self:setClick(self._btnLuckyIssue, function ()
+		if self._rolling then
+			return
+		end
+
+		V.showBubbleTips({
+			desc = SID.ACTIVITY_LUCKYVALUE_TIPS1,
+			descParam = {
+				{
+					type = "int",
+					value = self._module:readMaxLucky(self._subType)
+				},
+				{
+					type = "sid",
+					value = D.toNameSid(self._module:readSpeicalCid(self._subType))
+				}
+			}
+		}, {
+			target = self._btnLuckyIssue.transform
+		})
+	end)
+	self:setClick(self._btnActivityIssue, function ()
+		if self._rolling then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.ActivityDescPanel, self._module, self._auid)
+	end)
+	self:setClick(self._btnExchange, function ()
+		if self._rolling then
+			return
+		end
+
+		local exchangeGroup = self._module:readExchangeGroup(self._subType)
+
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.lottery1_exchange_item, exchangeGroup, function (originRewards)
+			RedDotManager.update("city.home.weeklottery")
+
+			local data = P._playerActivity:getDataByUid(self._auid)
+
+			if data then
+				Trace.traceDesign_Activity("EventWeekExchange:%s:%d", data.id, data.type, data.subType, originRewards[1] or 0)
+			end
+		end, function ()
+			P._playerActivity:ignoreExchangeDot(self._type)
+			RedDotManager.update("city.home.weeklottery")
+		end)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		if not self._activityData then
+			return
+		end
+
+		if self:tryExpire() then
+			return
+		end
+
+		self:updateTimer()
+		self:updateCostBtns()
+		self:updateDot()
+	end)
+end
+
+function M:init(parent, pageIdx, auid)
+	self._parent = parent
+	self._pageIdx = pageIdx
+
+	self:updateShowActivity(auid)
+
+	self._idleInterval = 0.5
+	self._rewardNum = 8
+	self._waitingNextTime = 0.5
+	self._speedUpTime = 1
+	self._maxSpeedRemainTime = 0.5
+	local speedFactor = 1
+	self._speedUpFactor = 2
+	self._speedDownFactor = 0.5
+	self._speedTime = {
+		0.5 / speedFactor,
+		0.35 / speedFactor,
+		0.2 / speedFactor,
+		0.15 / speedFactor,
+		0.05 / speedFactor
+	}
+	self._availableRewardsIdx = nil
+	self._rewardData = nil
+	self._curState = RollState.Init
+	self._allTime = 0
+	self._stepTime = 0
+	self._curSelected = 1
+	self._curSpeedTimeIndex = 1
+	self._selectedRewardIdxs = {}
+
+	self:updateAvailableRewards()
+	self:setCurrentSelected(1)
+	self:updateUI()
+end
+
+function M:openPanelTrace()
+	local day = Client.getDayIdx(Client.getCurTime() - self._activityData.startTime)
+
+	Trace.traceDesign_Activity("EventWeekDay:%s:%d", self._id, self._type, self._subType, Mathf.Clamp(day, -1, 31))
+end
+
+function M:showInternal(uid)
+	M.super.showInternal(self)
+	self:updateShowActivity(uid)
+	self:startUpdater()
+	self:addEvents()
+	self:updateUI()
+end
+
+function M:hideInternal()
+	self:stopUpdater()
+	self._goSpineWidgetNext:clearSpine()
+	self._goSpineWidget:clearSpine()
+	lc.stopTimer(self._refreshTimer)
+
+	self._refreshTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	self:updateDot()
+end
+
+function M:updateShowActivity(uid)
+	self._module = P._playerWeekLottery
+	self._rolling = false
+	self._expireDealed = false
+	self._lastDrawNum = 1
+	self._activityData = P._playerActivity:getDataByUid(uid)
+
+	if not self._activityData then
+		return
+	end
+
+	self._auid = self._activityData.uid
+	self._id = self._activityData.id
+	self._subType = self._activityData.subType
+	self._type = self._activityData.type
+	local lb = LuaHelper.GetLuaBehaviour(self._goAnnounce)
+
+	lb:init(self._id)
+	self:initRewardData()
+
+	self._lotteryData = self._module:getData(self._auid)
+	self._showRandomSpineCids = self._rewardData[7][1] or 13702
+	local cids, nums = P._playerAsset:getInsideAssets(self._showRandomSpineCids)
+	self._showSpineCids = cids
+
+	self._goSpineWidgetNext:updateUI(self._showSpineCids[1], self._showSpineCids[1] - 10000)
+
+	self._showSpineIdx = 1
+
+	self:openPanelTrace()
+end
+
+function M:isExpired()
+	return self._activityData.endTime < C.getCurTime()
+end
+
+function M:initRewardData()
+	local drops = DropHelper.readDropsById(self._module:readDrop(self._subType))
+	self._rewardData = {}
+
+	for i = 1, 10 do
+		local cid = drops[i]._itemId
+		local num = drops[i]._minNum
+		self._rewardData[i] = {
+			cid,
+			num
+		}
+
+		self._goItems[i]:init(cid, num)
+	end
+end
+
+function M:updateUI()
+	self._txtTitle:SetLocalize(self._module:readNameSid(self._subType))
+	self:updateTimer()
+	self:updateSkip()
+	self:updateLuckyValue()
+	self:updateCostBtns()
+	self:updateDot()
+	self:updateClaimArea()
+end
+
+function M:updateTimeText()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		V.formatLeftTime(self._txtActivityCountdown, 0, 2)
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(0))
+
+		return
+	end
+
+	local haveFree = self._module:haveFree(self._auid)
+	local ct = Client.getCurTime()
+
+	if not haveFree then
+		local dt = math.max(0, self._dayEndTime - ct)
+
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(dt))
+	end
+
+	local endTime = self._activityData.endTime
+	local d, h, m, s = C.getTimeEndArgs(endTime - ct)
+
+	if d >= 2 then
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:updateTimer()
+	lc.stopTimer(self._refreshTimer)
+
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local endTime = self._activityData.endTime
+	local leftTime = endTime - C.getCurTime()
+	local haveFree = self._module:haveFree(self._auid)
+
+	self._txtRecoverTime.gameObject:SetActive(D.DAY_SECONDS < leftTime and not haveFree)
+
+	self._dayEndTime = Client.getZeroTimestamp(C.getCurTime(), 1)
+
+	self:updateTimeText()
+
+	self._refreshTimer = lc.setInterval(function ()
+		self:updateTimeText()
+	end, 1)
+end
+
+function M:addLuckyValue(withAnim)
+	self._oldLuckyValue = self._showLuckyValue
+	self._showLuckyValue = self._showLuckyValue + 1
+	self._txtLuckyValue.text = self._showLuckyValue
+end
+
+function M:updateLuckyValue(value)
+	self._showLuckyValue = value or self._module:getLuckyValue(self._auid)
+	self._txtLuckyValue.text = self._showLuckyValue
+end
+
+function M:updateSkip()
+	local isSkip = self:getSkipAnim()
+
+	self._btnSkipAnim.transform:GetChild(1):SetActive(isSkip)
+end
+
+function M:updateCostBtns()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	self._txtDrawOne:SetLocalize(SID.DRAW_NUM, 1)
+	self._txtDrawMulti:SetLocalize(SID.DRAW_NUM, 5)
+
+	local tmpDiamondStr = D.getTMPSpriteRichText("item_small_10002")
+	local costCid, costNum = self._module:readOneCost(self._subType)
+	self._txtOneCostNum.text = tmpDiamondStr .. costNum
+	self._txtMultiCostNum.text = tmpDiamondStr .. costNum * 5
+	local haveFree = self._module:haveFree(self._auid)
+
+	self._imgIconOne.gameObject:SetActive(not haveFree)
+
+	if haveFree then
+		self._txtOneCostNum:SetLocalize(SID.STR_FREE)
+	else
+		self._txtOneCostNum.text = tmpDiamondStr .. costNum
+	end
+
+	self._btnDrawOne.dot:SetActive(haveFree)
+
+	local costCid, costNum = self._module:readMoreCost(self._subType)
+	self._txtDiscountMultiCostNum.text = tmpDiamondStr .. costNum
+
+	V.setBtnStyle(self._btnDrawOne, haveFree and V.BTN_STYLE.blue or V.BTN_STYLE.green)
+end
+
+local itemDelta = 0.15000000000000002
+local barDelta = 0.063
+local claimBarFillAmout = {
+	{
+		0.015,
+		0.042
+	},
+	{
+		0.189,
+		0.254
+	},
+	{
+		0.4,
+		0.467
+	},
+	{
+		0.617,
+		0.685
+	},
+	{
+		0.83,
+		0.888
+	}
+}
+
+function M:updateClaimArea()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local cids = self._module:readClaimCids(self._subType)
+	local nums = self._module:readClaimNums(self._subType)
+	local conds = self._module:readClaimConds(self._subType)
+	local idx = self._module:getClaimIdx(self._auid)
+	local curNUm = self._module:getCurrentNum(self._auid)
+
+	for i, goItem in ipairs(self._claimItems) do
+		goItem:init(cids[i], nums[i])
+
+		goItem.transform.parent:GetChild(1):GetChild(0):GetComponent("TMP_Text").text = conds[i]
+		local isClaimed = i <= idx
+
+		goItem:setClaimed(isClaimed)
+		goItem:setCanClaim(not isClaimed and conds[i] <= curNUm)
+	end
+
+	self._txtCurrentNum.text = self._module:getCurrentNum(self._auid)
+	local idx = 5
+
+	for i = 1, #conds do
+		if curNUm < conds[i] then
+			idx = i
+
+			break
+		end
+	end
+
+	if idx == 0 or curNUm == 0 then
+		self._imgDrawClaimBar.fillAmount = 0
+	elseif idx == 1 then
+		local barrrr = claimBarFillAmout[idx]
+		local deltaBart = barrrr[2] - barrrr[1]
+		local percent = curNUm / conds[1]
+		self._imgDrawClaimBar.fillAmount = barrrr[1] + deltaBart * percent
+	else
+		local barrrr = claimBarFillAmout[idx]
+		local deltaBart = barrrr[2] - barrrr[1]
+		local percent = (curNUm - conds[idx - 1]) / (conds[idx] - conds[idx - 1])
+		self._imgDrawClaimBar.fillAmount = barrrr[1] + deltaBart * percent
+	end
+end
+
+function M:dealSkipAnimBtn()
+	local newValue = self:getSkipAnim() and 0 or 1
+
+	lc.setIntKeyValue("activity_lottery_1_skip_anim_" .. self._auid, newValue)
+	self:updateSkip()
+end
+
+function M:getSkipAnim()
+	return lc.getIntKeyValue("activity_lottery_1_skip_anim_" .. self._auid, 0) == 1
+end
+
+function M:tryDealDraw(drawNum, forceDiamond)
+	Client.checkNetworkAsync(function ()
+		self:dealDraw(drawNum, forceDiamond)
+	end)
+end
+
+function M:dealDraw(drawNum, forceDiamond)
+	self:changeRollState(RollState.Prepare)
+
+	if self._rolling then
+		return
+	end
+
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local result, rewards, resultIdxs = nil
+	local costCid, costNum = self._module:readOneCost(self._subType)
+
+	if drawNum then
+		self._lastDrawNum = drawNum
+	else
+		drawNum = self._lastDrawNum or 1
+	end
+
+	if drawNum > 1 then
+		costCid, costNum = self._module:readMoreCost(self._subType)
+	end
+
+	local haveFree = self._module:haveFree(self._auid)
+
+	if not forceDiamond and drawNum == 1 and haveFree then
+		result, rewards, resultIdxs = self._module:tryFreeLottery(self._auid, drawNum > 1)
+
+		self:updateTimer()
+
+		if result == ResultCode.OK then
+			self:dealDrawAnimLogic(drawNum, rewards, resultIdxs)
+
+			return
+		end
+	end
+
+	if result ~= ResultCode.OK then
+		local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+			self:dealDrawCheck(drawNum)
+		end)
+
+		if not ret then
+			self:dealDrawCheck(drawNum)
+		end
+	end
+end
+
+function M:dealDrawCheck(drawNum)
+	local result, rewards, resultIdxs = self._module:tryLottery(self._auid, drawNum > 1)
+
+	if result ~= ResultCode.OK then
+		local costCid, _ = self._module:readOneCost(self._subType)
+
+		if result == ResultCode.RESOURCE_NOT_ENOUGH and costCid == D.ResType.diamond then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, nil, D.PurchaseChannel.Activity)
+
+			return
+		end
+
+		V.showResultCode(result)
+
+		return
+	end
+
+	self:dealDrawAnimLogic(drawNum, rewards, resultIdxs)
+end
+
+function M:dealDrawAnimLogic(drawNum, rewards, resultIdxs)
+	self._resultRewards = rewards
+	self._currentIdx = 1
+	self._resultAvailableIdx = resultIdxs
+	self._targetAvailableIndex = self._resultAvailableIdx[self._currentIdx]
+	self._targetAvailableIndex = Mathf.Clamp(self._targetAvailableIndex, 1, 10)
+
+	self:resetLuckyDraw()
+
+	if self:getSkipAnim() then
+		self:dealRollEnd()
+	else
+		self:startRoll(drawNum)
+	end
+
+	self:updateCostBtns()
+	self:updateDot()
+end
+
+function M:Update()
+	self:updateSpine()
+	self:updateLuckyDraw()
+end
+
+function M:updateSpine()
+	if not self._spineShowElapsed then
+		self._spineShowElapsed = 0
+	end
+
+	self._spineShowElapsed = self._spineShowElapsed + Time.deltaTime
+
+	if self._spineShowElapsed > 5 then
+		self._spineShowElapsed = 0
+
+		self:changeSpine()
+	end
+end
+
+function M:changeSpine()
+	if #self._showSpineCids <= 1 then
+		return
+	end
+
+	local oldSkinId = self._showSpineCids[self._showSpineIdx] or self._showSpineCids[1]
+	self._showSpineIdx = self._showSpineIdx + 1
+
+	if self._showSpineIdx > #self._showSpineCids then
+		self._showSpineIdx = 1
+	end
+
+	local skinId = self._showSpineCids[self._showSpineIdx]
+
+	self._goSpineWidgetNext:updateUI(skinId, skinId - 10000)
+	self._goSpineWidget:updateUI(oldSkinId, skinId - 10000)
+	self._animChangeSpine:Play("anim_RoleSwitch1")
+end
+
+function M:updateRewards()
+	for i = 1, #self._rewardData do
+		self:updateReward(i)
+	end
+end
+
+function M:isLastResultReward()
+	return self._currentIdx == #self._resultAvailableIdx
+end
+
+function M:nextAvailableIdx()
+	self._currentIdx = self._currentIdx + 1
+	self._targetAvailableIndex = self._resultAvailableIdx[self._currentIdx]
+end
+
+function M:updateAvailableRewards()
+	self._availableRewardsIdx = {
+		1,
+		2,
+		3,
+		4,
+		5,
+		6,
+		7,
+		8,
+		9,
+		10
+	}
+	self._rewardNum = #self._availableRewardsIdx
+end
+
+function M:dealRollEnd()
+	self:changeRollState(RollState.ShowResult)
+	MainGameRoot:hideGlobalMask()
+
+	local costCid, costNum = nil
+
+	if self._lastDrawNum == 1 then
+		costCid, costNum = self._module:readOneCost(self._subType)
+	else
+		costCid, costNum = self._module:readMoreCost(self._subType)
+	end
+
+	UIManager.openPanel(PrefabDefine.LotteryRewardPanel, self._resultRewards, {
+		activityType = self._type,
+		moreCostCid = costCid,
+		moreCostNum = costNum,
+		moreDrawNum = self._lastDrawNum,
+		extendBtnCallback = function ()
+			self:tryDealDraw(nil, true)
+		end
+	}, function ()
+		self:changeRollState(RollState.Init)
+		self:updateLuckyValue()
+		self:updateClaimArea()
+
+		if self:tryExpire() then
+			return
+		end
+	end)
+	self:updateDot()
+
+	self._rolling = false
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return true
+	end
+
+	if not self:isExpired() then
+		return false
+	end
+
+	if self._curState == RollState.ShowResult then
+		return
+	end
+
+	if self._rolling then
+		return
+	end
+
+	self._expireDealed = true
+
+	V.showMessageBox({
+		_type = 1,
+		_content = SID.TIP_EVENT_END,
+		_confirmCallback = function ()
+			UIManager.closeToPanelOrMain()
+		end
+	})
+
+	return true
+end
+
+function M:resetAllItemsAnim()
+	for k, goItem in pairs(self._goItems) do
+		goItem._atorSelect:SetBool("choosed", false)
+		goItem._atorSelect:ResetTrigger("chooseAnim")
+		goItem._atorResultChoose:SetBool("get", false)
+		goItem._atorResultChoose:ResetTrigger("chooseAnim")
+	end
+end
+
+function M:syncSelectUI(index)
+	self._goItems[index]._atorSelect:SetTrigger("chooseAnim")
+end
+
+function M:syncBgSpeed()
+	local bgSpeed = self._curSpeedTimeIndex / #self._speedTime * 10
+
+	self._atorBg:SetInteger("Speed", bgSpeed)
+end
+
+function M:getCurrentSelected()
+	return self._curSelected
+end
+
+function M:setCurrentSelected(index)
+	self._curSelected = index
+end
+
+function M:nextSelected()
+	local index = self:getCurrentSelected()
+	index = index + 1
+
+	Client.playSound("ui_Draw_process_1")
+
+	if self._rewardNum > 0 then
+		if index / self._rewardNum > 1 then
+			index = index % self._rewardNum
+		end
+	else
+		index = 1
+	end
+
+	self:setCurrentSelected(index)
+
+	if self._availableRewardsIdx[index] then
+		local rewardIdx = self._availableRewardsIdx[index]
+
+		if self._curState == RollState.Init then
+			-- Nothing
+		end
+
+		self:syncSelectUI(rewardIdx)
+
+		return rewardIdx
+	elseif #self._availableRewardsIdx == 0 then
+		self:syncSelectUI(1)
+	end
+end
+
+function M:getSpeedTime(index)
+	local speedTimeIndex = index or self._curSpeedTimeIndex
+	local len = #self._speedTime
+
+	if speedTimeIndex > len then
+		speedTimeIndex = len
+	elseif speedTimeIndex < 1 then
+		speedTimeIndex = 1
+	end
+
+	return self._speedTime[speedTimeIndex]
+end
+
+function M:setSpeedTime(isAccelerate, index)
+	if index then
+		self._curSpeedTimeIndex = index
+
+		return
+	end
+
+	local speedTimeIndex = self._curSpeedTimeIndex
+
+	if index then
+		self._curSpeedTimeIndex = index
+	else
+		if isAccelerate then
+			speedTimeIndex = speedTimeIndex + 1
+		else
+			speedTimeIndex = speedTimeIndex - 1
+		end
+
+		self._curSpeedTimeIndex = speedTimeIndex
+	end
+end
+
+function M:changeRollState(state)
+	self._curState = state
+end
+
+function M:isInit()
+	return self._curState == RollState.Init
+end
+
+function M:startRoll(drawNum)
+	if not self:isInit() then
+		return
+	end
+
+	self._rolling = true
+
+	if self._rewardNum == 0 then
+		return
+	end
+
+	self:syncSelectUI(self._curSelected)
+	MainGameRoot:showGlobalMask()
+
+	if drawNum == 1 then
+		self:changeRollState(RollState.SpeedUp)
+
+		self._speedUpFactor = 2
+		self._speedDownFactor = math.random(40, 60) / 80
+		self._maxSpeedRemainTime = 0.5
+	else
+		self._speedUpFactor = 2
+		self._speedDownFactor = math.random(40, 60) / 50
+		self._maxSpeedRemainTime = 0
+
+		self:changeRollState(RollState.SpeedUp)
+	end
+end
+
+function M:resetLuckyDraw()
+	self:resetAllItemsAnim()
+	self:changeRollState(RollState.Init)
+
+	self._allTime = 0
+	self._stepTime = 0
+	self._curSpeedTimeIndex = 1
+end
+
+function M:setStopSpeedTime()
+	local curSelect = self:getCurrentSelected()
+	local diff = 0
+
+	if self._targetAvailableIndex <= curSelect then
+		diff = self._rewardNum - math.abs(curSelect - self._targetAvailableIndex)
+	else
+		diff = math.abs(curSelect - self._targetAvailableIndex)
+	end
+
+	local len = #self._speedTime
+
+	if diff < len then
+		self:setSpeedTime(false, diff + self._rewardNum)
+	else
+		self:setSpeedTime(false, diff)
+	end
+end
+
+function M:updateLuckyDraw()
+	if self._curState == RollState.Init and self._curState == RollState.Prepare or self._curState == RollState.Ending or self._curState == RollState.ShowResult then
+		return
+	end
+
+	local deltaTime = Time.deltaTime
+	self._allTime = self._allTime + deltaTime
+	self._stepTime = self._stepTime + deltaTime
+
+	if self._curState == RollState.Idle then
+		local st = self._idleInterval
+
+		if st <= self._stepTime then
+			self._stepTime = self._stepTime - st
+
+			self:nextSelected(true)
+		end
+
+		return
+	end
+
+	if self._curState == RollState.Waiting then
+		local st = self._waitingNextTime
+
+		if st <= self._stepTime then
+			self._stepTime = self._stepTime - st
+			local lastIdx = self._resultAvailableIdx[self._currentIdx - 1]
+
+			if lastIdx then
+				-- Nothing
+			end
+
+			self._curState = RollState.Init
+
+			self:changeRollState(RollState.SpeedStay)
+		end
+
+		return
+	end
+
+	if self._curState == RollState.SpeedUp then
+		local st = self:getSpeedTime() / self._speedUpFactor
+
+		if st <= self._stepTime then
+			self._stepTime = self._stepTime - st
+
+			self:nextSelected()
+
+			if self._speedUpTime <= self._allTime then
+				self:changeRollState(RollState.SpeedStay)
+			else
+				self:setSpeedTime(true)
+				self:syncBgSpeed()
+			end
+		end
+	end
+
+	if self._curState == RollState.SpeedStay then
+		local st = self:getSpeedTime() / self._speedUpFactor
+
+		if st <= self._stepTime then
+			self._stepTime = self._stepTime - st
+
+			self:nextSelected()
+
+			if self._allTime > self._speedUpTime + self._maxSpeedRemainTime then
+				self:changeRollState(RollState.SpeedDown)
+				self:setStopSpeedTime()
+			else
+				self:syncBgSpeed()
+				self:setSpeedTime(true)
+			end
+		end
+	end
+
+	if self._curState == RollState.SpeedDown then
+		local st = self:getSpeedTime() / self._speedDownFactor
+
+		if st <= self._stepTime then
+			self._stepTime = self._stepTime - st
+
+			self:nextSelected()
+
+			if self:getCurrentSelected() == self._targetAvailableIndex and self._curSpeedTimeIndex <= 1 then
+				self:changeRollState(RollState.End)
+			else
+				self:setSpeedTime(false)
+				self:syncBgSpeed()
+			end
+		end
+	end
+
+	if self._curState == RollState.End then
+		local index = self._availableRewardsIdx[self._targetAvailableIndex]
+
+		if index == 4 or index == 7 then
+			Client.playSound("ui_Draw_resultwin_1")
+		else
+			Client.playSound("ui_Draw_result_1")
+		end
+
+		if index == 4 then
+			self:updateLuckyValue(0)
+		else
+			self:addLuckyValue(true)
+		end
+
+		self._goItems[index]._atorResultChoose:SetBool("get", true)
+		self._goItems[index]._atorResultChoose:SetTrigger("chooseAnim")
+
+		if self:isLastResultReward() then
+			self:syncBgSpeed()
+			self:changeRollState(RollState.Ending)
+
+			local delayTime = 1
+
+			self:syncSelectUI(index)
+
+			self._showResultDelay = lc.delayFunc(delayTime, function ()
+				if index == 1 then
+					-- Nothing
+				end
+
+				self:dealRollEnd()
+			end, self.gameObject)
+		else
+			self._speedDownFactor = math.random(40, 60) / 50
+			local index = self._availableRewardsIdx[self._targetAvailableIndex]
+			self._stepTime = 0
+			self._allTime = 0
+
+			self:setSpeedTime(false, 5)
+			self:changeRollState(RollState.Waiting)
+			self:nextAvailableIdx()
+		end
+	end
+end
+
+function M:updateDot()
+	self._btnExchange.dot:SetActive(P._playerActivity:hasExchangeDot(D.ActivityType.WeekLottery))
+	RedDotManager.update("city.home.weeklottery")
+end
+
+return M

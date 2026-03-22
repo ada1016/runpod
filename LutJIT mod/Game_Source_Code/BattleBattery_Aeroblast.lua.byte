@@ -1,0 +1,162 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_Aeroblast", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+local BattlePropEnum = BattlePropEnum
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._fireNum = 0
+	self._enemyExcludes = table.new(0, 4)
+	self._targetTowardOffset = true
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+	table.clear(self._enemyExcludes)
+end
+
+function M:extraCastSkill()
+	self:castSkill()
+end
+
+function M:castSkill()
+	self:createMainBullet()
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		local count = self._skinSkillParam1
+		local l = math.floor(count / 2)
+		local r = count - l
+
+		for i = 1, l do
+			local bullet = self:createMainBullet()
+
+			bullet:setDirByAngle(self._angle + 10 * i)
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+
+		for i = 1, r do
+			local bullet = self:createMainBullet()
+
+			bullet:setDirByAngle(self._angle - 10 * i)
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+	end
+end
+
+function M:firstFireInTurn()
+	table.clear(self._enemyExcludes)
+
+	local effPar = self:getEffect(653)
+
+	if effPar then
+		local param = D.getBattleEffectParams(653)
+
+		if self._skillCastedCount % (effPar + 1) == 0 then
+			self._runingFireCount = self._runingFireCount + param[1]
+		end
+	end
+end
+
+function M:launchShot()
+	SUPER.launchShot(self)
+
+	if self._targetEnemy then
+		self._enemyExcludes[self._targetEnemy._id] = true
+	end
+end
+
+function M:seekingEnemy()
+	if self._fireNumInTurn == 0 then
+		if self._lockTargetEnemy == nil or not self._battleSession:enemyCanBeChoseAsTarget(self._lockTargetEnemy, self) then
+			self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange + 0.2)
+			self._lockTargetEnemy = self._targetEnemy
+		else
+			self._targetEnemy = self._lockTargetEnemy
+		end
+	else
+		local enemy = self._battleSession._battleEnemyFinder:findNearestToEnemyFromEnemy(self._targetEnemy, self._enemyExcludes)
+
+		if enemy then
+			self._targetEnemy = enemy
+		end
+	end
+
+	self:towardTargetEnemy(self._targetEnemy)
+end
+
+function M:castSkill607()
+	local param = D.getBattleEffectParams(605)
+	local castSkill = self:getSkill(param[2])
+	local l_angle = self._angle + param[3]
+	local r_angle = self._angle - param[3]
+	local extraBulletNum = 0
+
+	if self:getEffect(606) then
+		local p606 = D.getBattleEffectParams(606)
+		extraBulletNum = math.min(self._killEnemyCountInTurn, p606[1])
+	end
+
+	local atkRange = castSkill:getProp(BattlePropEnum.AtkRange, 0)
+	atkRange = atkRange + atkRange * castSkill:getProp(BattlePropEnum.AtkRangeAddPer, 0) / 100
+	local liveTime = atkRange / castSkill:getProp(BattlePropEnum.BallisticSpeed)
+	local speedFloat = param[5]
+	local num = param[1] + extraBulletNum
+
+	for i = 1, num do
+		local bullet = castSkill:createBullet()
+		local angle = self._battleRandomLib:randomMN(r_angle, l_angle)
+
+		bullet:setDirByAngle(angle)
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+		bullet._duration = liveTime
+		bullet._floatSpeedPer = self._battleRandomLib:randomMN(-speedFloat, speedFloat)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+end
+
+function M:castSkin62Effect(bullet, enemy)
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(enemy._position.x, enemy._position.y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	count = count - 1
+
+	for i = 1, count do
+		local bullet = castSkill:createBullet()
+		local x, y = BattleMathLib.random_along_circle(2)
+		x, y = self._battleSession:limitEnemyPosition(enemy._position.x + x, enemy._position.y + y)
+
+		bullet:setPos(x, y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+end
+
+return M

@@ -1,0 +1,15 @@
+local M = class("BattleOperation")
+
+function M:init(tick, opType, p1, p2)
+	self._tick = tick
+	self._opType = opType
+	self._p1 = p1
+	self._p2 = p2
+end
+
+function M:update(p1, p2)
+	self._p1 = p1
+	self._p2 = p2
+end
+
+return M

@@ -1,0 +1,73 @@
+local M = class("BattleBullet_FollowMissile", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._startRotateSpeed = 180
+	self._maxRotateSpeed = 1080
+	self._rotateAddSpeed = 180
+	self._currentRotateSpeed = self._maxRotateSpeed
+	self._angle = 0
+	self._defaultAngle = 0
+	self._minPridictDistance = 1
+	self._maxPridictDistance = 3
+	self._maxPredictTime = 3
+	self._noRotationTime = 0.3
+	self._rotationTimeElapsed = 0
+end
+
+function M:stepMove(dt)
+	SUPER.stepMove(self, dt)
+
+	self._rotationTimeElapsed = self._rotationTimeElapsed + dt
+	local targetEnemy = self._lockEnemy
+
+	if targetEnemy == nil or targetEnemy._invisibility or targetEnemy._isToBeDestroyed or targetEnemy._conceal then
+		targetEnemy = self._battleSession:randomOneEnemy()
+
+		self:lockEnemy(targetEnemy)
+	end
+
+	local targetAngle = 90
+
+	if targetEnemy then
+		local targetPosition = targetEnemy._position
+		local headingNormal = Vector3.static(0, 1, 0)
+
+		headingNormal:SetXYZ(targetPosition.x - self._position.x, targetPosition.y - self._position.y, 0):SetNormalize()
+
+		targetAngle = math.deg(math.atan2(headingNormal.y, headingNormal.x))
+	else
+		targetAngle = self._defaultAngle
+
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	local sign = math.sign(targetAngle - self._angle)
+
+	if sign * (targetAngle - self._angle) > 180 then
+		targetAngle = targetAngle + 360 * sign * -1
+	end
+
+	if self._noRotationTime <= self._rotationTimeElapsed then
+		self._angle = Mathf.MoveTowardsAngle(self._angle, targetAngle, self._currentRotateSpeed * dt)
+		self._rotation = self._angle
+	end
+
+	self._currentRotateSpeed = Mathf.Clamp(self._startRotateSpeed + (self._rotationTimeElapsed - self._noRotationTime) * self._rotateAddSpeed, self._startRotateSpeed, self._maxRotateSpeed)
+	local newRad = math.rad(self._angle)
+	self._dir[1] = math.cos(newRad)
+	self._dir[2] = math.sin(newRad)
+
+	if self._view then
+		self._view:posEvent()
+		self._view:rotationEvent()
+	end
+end
+
+return M

@@ -1,0 +1,195 @@
+local M = class("UnionInfoFullPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnLeaveUnion = Types.Button,
+	goFlagWidget = Types.GameObject,
+	textUnionName = Types.Text,
+	textUnionDesc = Types.Text,
+	tmpId = Types.TMP_Text,
+	tmpTotalAtk = Types.TMP_Text,
+	tmpMemberCount = Types.TMP_Text,
+	svContent = Types.ScrollRect,
+	tfContent = Types.Transform,
+	btnLog = Types.Button,
+	btnManage = Types.Button,
+	btnCopyId = Types.Button,
+	goSyncWaiting = Types.GameObject,
+	btnHelp = Types.Button,
+	goManagerRedDot = Types.GameObject
+}
+local UnionMemberListWidget = requireLua("UnionMemberListWidget")
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+end
+
+function M:addClicks()
+	self:on("network.error", function ()
+		self:closePanel()
+	end)
+	self:on("union.not.in", function ()
+		self:closePanel()
+	end)
+	self:on("union.appoint.resp", function ()
+		local role = P._playerUnion._selfInfo.role
+
+		if role == D.UnionRole.NONE or role == D.UnionRole.COORDINATOR then
+			self._btnManage:SetActive(false)
+		end
+	end)
+	self:on("union.leave.resp", function ()
+		self:closePanel()
+	end)
+	self:on("union.get.detail.resp.refresh", function ()
+		self._union = P._playerUnion._union
+
+		self._goSyncWaiting:SetActive(false)
+		self:updateListView()
+
+		if self._union.appliers and #self._union.appliers > 0 then
+			self._goManagerRedDot:SetActive(true)
+		else
+			self._goManagerRedDot:SetActive(false)
+		end
+	end)
+	self:on("union.deal.apply.req", function ()
+		local union = P._playerUnion._union
+
+		if union.appliers and #union.appliers > 0 then
+			self._goManagerRedDot:SetActive(true)
+		else
+			self._goManagerRedDot:SetActive(false)
+		end
+	end)
+	self:setClick(self._btnLeaveUnion, function ()
+		if P._playerUnion._selfInfo.role == D.UnionRole.PRESIDENT then
+			local count = #P._playerUnion:getUnionMembers()
+
+			if count == 1 then
+				V.showMessageBox({
+					_type = 2,
+					_content = SID.UNION_LEAVE_TIPS1,
+					_confirmCallback = function ()
+						self._goSyncWaiting:SetActive(true)
+						P._playerUnion:tryLeaveUnionReq()
+					end
+				})
+
+				return
+			else
+				V.showToast(SID.UNION_LEAVE_TIPS2)
+			end
+		else
+			V.showMessageBox({
+				_type = 2,
+				_content = SID.UNION_UNION_LEAVE_UNION,
+				_confirmCallback = function ()
+					self._goSyncWaiting:SetActive(true)
+					P._playerUnion:tryLeaveUnionReq()
+				end
+			})
+		end
+	end)
+	self:setClick(self._btnLog, function ()
+		UIManager.openPanel(PrefabDefine.UnionLogPanel)
+	end)
+	self:setClick(self._btnHelp, function ()
+		UIManager.openPanel(PrefabDefine.UnionRulePanel)
+	end)
+	self:setClick(self._btnManage, function ()
+		UIManager.openPanel(PrefabDefine.UnionManagePanel)
+	end)
+	self:on("union.member.ditry", function ()
+		self:updateListView()
+	end)
+	self:on("union.edit.resp", function ()
+		self:updateUnionInfo()
+	end)
+	self:setClickWithoutAction(self._btnCopyId, function ()
+		UniClipboard.SetText("#" .. math.intToHex(self._union.id))
+		V.showToast(SID.CONT_COPY_SUCCEED)
+	end)
+end
+
+function M:init()
+	local union = P._playerUnion._union
+	self._union = union
+	self._tmpTotalAtk.text = union.atk
+	self._tmpId.text = string.format("ID:#%s", math.intToHex(union.id))
+
+	self:updateUnionInfo()
+
+	self._listData = P._playerUnion:getUnionMembers()
+	self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+		cellMargin = 10,
+		cellHeight = 120,
+		cellInitCount = 10,
+		topPadding = 10
+	})
+
+	self._scrollViewEx:reloadData(0)
+	self._tmpMemberCount:SetLocalize(SID.UNION_MEMBER_COUNT, #self._listData, self._union.max_member_num)
+
+	local role = P._playerUnion._selfInfo.role
+
+	if role == D.UnionRole.NONE or role == D.UnionRole.COORDINATOR then
+		self._btnManage:SetActive(false)
+	end
+
+	self._goManagerRedDot:SetActive(false)
+	self._goSyncWaiting:SetActive(true)
+	MainGameRoot:showGlobalMask()
+
+	self._timer = lc.setTimer(function ()
+		MainGameRoot:hideGlobalMask()
+		P._playerUnion:tryGetUnionDetailReq()
+	end, 0.5, true)
+end
+
+function M:updateListView()
+	self._listData = P._playerUnion:getUnionMembers()
+
+	self._scrollViewEx:reloadData(0)
+	self._tmpMemberCount:SetLocalize(SID.UNION_MEMBER_COUNT, #self._listData, self._union.max_member_num)
+end
+
+function M:updateUnionInfo()
+	local union = self._union
+
+	self._goFlagWidget:init(union.avatar_base, union.avatar_badge)
+
+	self._textUnionName.text = union.name
+
+	if union.desc:len() == 0 then
+		self._textUnionDesc.text = LcLocalization.getTextStr(SID.UNION_DESC_EMPTY)
+	else
+		self._textUnionDesc.text = union.desc
+	end
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = UnionMemberListWidget.create(self._tfContent, 2)
+
+		goCell:init(self)
+	end
+
+	goCell:update(self._listData[index])
+
+	return goCell
+end
+
+function M:onCellNum()
+	return #self._listData
+end
+
+return M

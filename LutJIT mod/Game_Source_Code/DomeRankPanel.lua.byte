@@ -1,0 +1,405 @@
+local M = class("DomeRankPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("DomeRankWidget")
+local RankRewardWidget = requireLua("RankRewardWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	btnTabRank = Types.Button,
+	btnTabReward = Types.Button,
+	txtTabRank = Types.TMP_Text,
+	txtTabReward = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	scroll2 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	tfScrollContainer2 = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	txtSubTitle = Types.TMP_Text,
+	textExpireTime = Types.TMP_Text,
+	imgGrade = Types.Image,
+	animGrade = Types.Animation,
+	txtGradeName = Types.TMP_Text,
+	txtPromoteHint = Types.TMP_Text,
+	tfGradeWidgetContainer = Types.Transform,
+	goLoading = Types.GameObject,
+	btnHistoryInfo = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTabRank,
+		self._btnTabReward
+	}
+	self._imgTabs = {
+		self._btnTabRank:GetComponent("Image"),
+		self._btnTabReward:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTabRank,
+		self._txtTabReward
+	}
+	self._goTabContents = {
+		self._goContent1,
+		self._goContent2
+	}
+	self._goGradeWidgets = {}
+	self._gradeRankRewards = {}
+	self._gradeRankBegins = {}
+
+	for i = 1, #D._rankDomeConfig do
+		local conf = D._rankDomeConfig[i]
+		self._gradeRankRewards[conf._grade] = (self._gradeRankRewards[conf._grade] or 0) + 1
+		self._gradeRankBegins[conf._grade] = self._gradeRankBegins[conf._grade] or i
+	end
+
+	local gradeNum = #D._domeGradeConfig
+
+	for i = 1, gradeNum do
+		self._goGradeWidgets[i] = self._tfGradeWidgetContainer:GetChild(2 * (i - 1)).gameObject
+
+		lc.prefabVarPeer(self._goGradeWidgets[i])
+
+		self._goGradeWidgets[i]._anim = self._goGradeWidgets[i]:GetComponent("Animation")
+
+		LuaUnity.setTPSprite(self._goGradeWidgets[i]._imgIcon, "general/domeRank_" .. i, true)
+		self._goGradeWidgets[i]._txtName:SetLocalize(D._domeGradeConfig[i]._nameSid)
+	end
+
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		cellMargin = 5,
+		topPadding = 20,
+		cellInitCount = 10
+	})
+	self._goRewardCells = {}
+	local delegate = {
+		onAddCell = function (delegate, goCell, index)
+			if goCell == nil then
+				goCell = RankRewardWidget.create(self._tfScrollContainer2)
+			end
+
+			self._goRewardCells[self._gradeRankBegins[self._grade] + index - 1] = goCell
+
+			goCell:init(D._rankDomeConfig[self._gradeRankBegins[self._grade] + index - 1])
+			goCell:initClicks(self)
+
+			return goCell
+		end,
+		onCellNum = function (delegate)
+			return self._gradeRankRewards[self._grade]
+		end
+	}
+	self._scrollViewEx2 = ScrollViewEx.create(self._scroll2, delegate, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 20,
+		cellHeight = 116,
+		cellInitCount = 10
+	})
+
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+
+	for i = 1, #self._goGradeWidgets do
+		self:setClick(self._goGradeWidgets[i]._btnClick, function ()
+			if self._grade ~= i then
+				self._goGradeWidgets[self._grade]._anim:Play("ani_rankIconCancel")
+
+				self._grade = i
+
+				self._goGradeWidgets[self._grade]._anim:Play("ani_rankIconChoose")
+				self._scrollViewEx2:reloadData()
+				self:updateMyRankRewardArea(self._selfRank)
+			end
+		end)
+	end
+
+	self:setClick(self._btnHistoryInfo, function ()
+		local params = {}
+		local historyScore = P._playerDome:getHistoryScore()
+		local circleStartTime = P._playerDome:getCircleStartTime()
+		local now = C.getCurTime()
+
+		for i = 1, 7 do
+			if i <= math.ceil((now - circleStartTime) / 86400) then
+				params[i] = {
+					type = "int",
+					value = historyScore[i] or 0
+				}
+			else
+				params[i] = {
+					type = "sid",
+					value = SID.TIP_DOME_TRIAL_SCORE_HISTORY_UNOPEN
+				}
+			end
+		end
+
+		V.showBubbleTips({
+			desc = SID.TIP_DOME_TRIAL_SCORE_HISTORY,
+			descParam = params
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnHistoryInfo
+		})
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(rankGroupId, grade)
+	self._rankList = {}
+	self._rankData = P._playerDome:getSelfRankData()
+	self._rankData.rank = 9999
+	self._grade = grade or P._playerDome:getGrade()
+
+	self._goSelfRankWidget:init(self._rankData)
+	self:updateUI()
+	self:changeTab(1)
+
+	self._scroll1.enabled = false
+
+	self._goLoading:SetActive(true)
+
+	self._conf = D._domeGradeConfig[self._grade]
+
+	local function callback(data, selfRank, selfIndex)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._btnTabReward.enabled = true
+		self._scroll1.enabled = true
+
+		self._goLoading:SetActive(false)
+
+		self._rankList = data
+
+		if selfRank and data[selfIndex] then
+			self._rankData = data[selfIndex]
+
+			self._goSelfRankWidget:init(self._rankData)
+		end
+
+		self:loadRankData()
+		self._txtSubTitle:SetLocalizeS(SID.TITLE_RANK_ID, rankGroupId or P._playerDome:getDisplayRankGroupId(P._playerRanker:getGroup(D.RankType.DomeRank)))
+		self:updateExpireTime()
+
+		self._selfRank = selfRank
+
+		self:updateMyRankRewardArea(selfRank)
+	end
+
+	local function failCallback()
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._btnTabReward.enabled = true
+		self._scroll1.enabled = true
+
+		self._goLoading:SetActive(false)
+		self._txtSubTitle:SetLocalizeS(SID.TITLE_RANK_ID, rankGroupId or P._playerDome:getDisplayRankGroupId(P._playerRanker:getGroup(D.RankType.DomeRank)))
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+	end
+
+	if P._playerDome._tmpSettleRankData then
+		callback(unpack(P._playerDome._tmpSettleRankData))
+	else
+		self._btnTabReward.enabled = false
+
+		P._playerDome:getRankData(callback, failCallback)
+	end
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		LuaUnity.setTPSprite(self._imgTabs[1], tab == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		LuaUnity.setTPSprite(self._imgTabs[2], tab == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+		self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+		self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+		self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+
+		self._goTabContents[self._tab]:SetActive(false)
+		self._goTabContents[tab]:SetActive(true)
+
+		self._tab = tab
+	end
+end
+
+function M:updateUI()
+	local conf = D._domeGradeConfig[self._grade]
+
+	LuaUnity.setTPSprite(self._imgGrade, "general/domeRank_" .. self._grade, true)
+	self._txtGradeName:SetLocalize(conf._nameSid)
+	self._animGrade:Play("ani_rankColor_" .. self._grade)
+
+	if conf._upRank then
+		self._txtPromoteHint:SetLocalize(SID.TIP_DOME_TRIAL_PROMOTE_RANK_REQUIREMENT, conf._upRank)
+	elseif conf._downRank then
+		self._txtPromoteHint:SetLocalize(SID.TIP_DOME_TRIAL_FALLDOWN_RANK_REQUIREMENT, conf._downRank)
+	end
+
+	for i = 1, #self._goGradeWidgets do
+		self._goGradeWidgets[i]._anim:Play(i == self._grade and "ani_rankIconChoose" or "ani_rankIconCancel")
+		self._goGradeWidgets[i]._goCurrent:SetActive(i == self._grade)
+	end
+
+	lc.setLocalPosition(self._tfGradeWidgetContainer, -160 * (self._grade - 1), -19.5, 0)
+	self._scrollViewEx1:reloadData()
+	self._scrollViewEx2:reloadData()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRankCell()
+	end
+
+	self:loadRankCell(goCell, self._rankList[index], index)
+
+	return goCell
+end
+
+function M:createRankCell()
+	local itemCell = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DomeRankListWidget.prefab", self._tfScrollContainer1)
+
+	lc.prefabVarPeer(itemCell)
+	RankWidget.noCreate(itemCell._goRankWidget)
+
+	return itemCell
+end
+
+function M:onCellHeight(index)
+	if type(self._rankList[index]) == "number" then
+		return 84
+	else
+		return 125
+	end
+end
+
+function M:onCellNum()
+	return #self._rankList
+end
+
+function M:loadRankData()
+	local target = {}
+
+	for i = 1, #self._rankList do
+		target[i] = self._rankList[i]
+	end
+
+	self._rankList = target
+	local nextTitleIndex = 2
+	local len = #self._rankList
+
+	if self._conf._limitRank then
+		table.insert(self._rankList, 1, 1)
+
+		for i = 1, len + #self._conf._limitRank do
+			if self._rankList[i] and type(self._rankList[i]) ~= "number" then
+				while self._conf._limitRank[nextTitleIndex - 1] and self._conf._limitRank[nextTitleIndex - 1] < self._rankList[i].rank do
+					table.insert(self._rankList, i, nextTitleIndex)
+
+					i = i + 1
+					nextTitleIndex = nextTitleIndex + 1
+				end
+			end
+		end
+
+		for i = nextTitleIndex, #self._conf._limitRank + 1 do
+			table.insert(self._rankList, i)
+		end
+	end
+
+	self._scrollViewEx1:reloadData()
+end
+
+function M:loadRankCell(itemCell, rankData, index)
+	if type(rankData) == "number" then
+		itemCell._goRankTitle:SetActive(true)
+		itemCell._goRankWidget:SetActive(false)
+
+		local val = rankData
+
+		if val <= #self._conf._limitRank then
+			itemCell._txtRankName:SetLocalize(SID.STR_RANK_RANGE, (self._conf._limitRank[val - 1] or 0) + 1, self._conf._limitRank[val])
+		else
+			itemCell._txtRankName:SetLocalize(SID.STR_RANK_RANGE_EX, self._conf._limitRank[val - 1] + 1)
+		end
+
+		if self._conf._limitScore[val] then
+			itemCell._txtRankRequirement:SetLocalize(SID.ACTIVITY_POINT_REQUIRE, self._conf._limitScore[val])
+		else
+			itemCell._txtRankRequirement.text = ""
+		end
+	else
+		itemCell._goRankTitle:SetActive(false)
+		itemCell._goRankWidget:SetActive(true)
+		itemCell._goRankWidget:init(rankData)
+		self:setClick(itemCell._goRankWidget._btnViewInfo, function ()
+			V.viewOtherInfo(rankData)
+		end)
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local targetTime = P._playerDome:getCircleStartTime() + 604800
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds)
+end
+
+function M:updateMyRankRewardArea(rank)
+	if self._grade == P._playerDome:getGrade() and rank then
+		for i = 1, self._gradeRankRewards[self._grade] do
+			local conf = D._rankDomeConfig[self._gradeRankBegins[self._grade] + i - 1]
+
+			if rank <= conf._max then
+				local go = self._goRewardCells[conf._id]
+
+				go:showHighlight()
+
+				break
+			end
+		end
+	else
+		for i = 1, self._tfScrollContainer2.childCount do
+			local go = self._tfScrollContainer2:GetChild(i - 1).gameObject
+
+			go:hideHighlight()
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._secondTimer)
+end
+
+return M

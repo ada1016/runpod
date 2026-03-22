@@ -1,0 +1,358 @@
+local M = class("SpecialRewardsPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	tfTabs = Types.Transform,
+	scroll = Types.ScrollRect,
+	tfPageContainer = Types.Transform,
+	btnPageBP = Types.Button,
+	btnPageBPNew = Types.Button,
+	btnPageBPSkin = Types.Button,
+	btnPageFund = Types.Button,
+	btnPageDomeBP = Types.Button,
+	btnPageDaily = Types.Button,
+	imgArrow = Types.Image,
+	imgBottomBg = Types.Image
+}
+local PAGE_PREFAB_PATH_HOLDER = "Assets/FW/Prefabs/UI/page/%s.prefab"
+local BottomColors = {
+	cyan = {
+		IconBg = "397667",
+		TitleUnselect = "2f736c",
+		ReturnBg = "162121",
+		IconBottom = "6BFFD9",
+		ReturnArrow = "52978A",
+		IconTop = "4ECCAC",
+		Title = "7CFFF1"
+	},
+	purple = {
+		IconBg = "4d2c8e",
+		TitleUnselect = "7a4f99",
+		ReturnBg = "190D22",
+		IconBottom = "C488FF",
+		ReturnArrow = "704480",
+		IconTop = "975DFF",
+		Title = "c17cff"
+	},
+	red = {
+		IconBg = "572B33",
+		TitleUnselect = "905368",
+		ReturnBg = "211515",
+		IconBottom = "EC98BB",
+		ReturnArrow = "954D58",
+		IconTop = "CA6084",
+		Title = "EE88AA"
+	},
+	blue = {
+		IconBg = "3F4DA1",
+		TitleUnselect = "406198",
+		ReturnBg = "141823",
+		IconBottom = "73AAFF",
+		ReturnArrow = "5E7CF1",
+		IconTop = "4F94FF",
+		Title = "83B2FF"
+	}
+}
+local PageCfg = {
+	{
+		PanelName = "BattlePassNewPanel",
+		RedPath = "city.home.special.battlepassnew",
+		SystemId = D.SystemType.BPNew,
+		BtnTitle = D._systemUnlockConfig[D.SystemType.BPNew]._nameSid,
+		Color = BottomColors.cyan,
+		BtnShowCond = function ()
+			return P._playerBPNew:isStatusOpen() or P._playerBPNew:isStatusExpired()
+		end,
+		RedCond = function ()
+			return P._playerBPNew:isStatusOpen() and P._playerBPNew:haveUnclaimRewards() or P._playerBPNew:isStatusExpired() and not P._playerBPNew:lastPeriodRewardsClaimed()
+		end
+	},
+	{
+		PanelName = "BattlePassSkinPanel",
+		RedPath = "city.home.special.battlepassskin",
+		SystemId = D.SystemType.BPSkin,
+		BtnTitle = D._systemUnlockConfig[D.SystemType.BPSkin]._nameSid,
+		Color = BottomColors.blue,
+		BtnShowCond = function ()
+			return P._playerBPSkin:isStatusOpen() or P._playerBPSkin:isStatusExpired()
+		end,
+		RedCond = function ()
+			return P._playerBPSkin:isStatusOpen() and P._playerBPSkin:haveUnclaimRewards() or P._playerBPSkin:isStatusExpired() and not P._playerBPSkin:lastPeriodRewardsClaimed()
+		end
+	},
+	{
+		PanelName = "LevelFundPanel",
+		RedPath = "city.home.special.levelfund",
+		SystemId = D.SystemType.LevelFund,
+		BtnTitle = SID.STR_LEVEL_FUND or SID.STR_EMPTY,
+		Color = BottomColors.purple,
+		BtnShowCond = function ()
+			return P._playerLevelFund:isStatusOpen() and not P._playerLevelFund:isAllRewardsClaimed()
+		end,
+		RedCond = function ()
+			return P._playerLevelFund:isStatusOpen() and P._playerLevelFund:haveUnclaimRewards()
+		end
+	},
+	{
+		PanelName = "DomeBattlePassPanel",
+		RedPath = "city.home.special.domebattlepass",
+		SystemId = D.SystemType.DomeMission,
+		BtnTitle = SID.STR_VALOR_PASS or SID.STR_EMPTY,
+		Color = BottomColors.red,
+		RedCond = function ()
+			return P._playerDomeBP:isStatusOpen() and P._playerDomeBP:haveUnclaimRewards() or P._playerDomeBP:isStatusExpired() and not P._playerDomeBP:lastPeriodRewardsClaimed()
+		end
+	},
+	{
+		PanelName = "BattlePassRangerPanel",
+		RedPath = "city.home.special.battlepassranger",
+		SystemId = D.SystemType.BPRanger,
+		BtnTitle = D._systemUnlockConfig[D.SystemType.BPRanger]._nameSid,
+		Color = BottomColors.blue,
+		BtnShowCond = function ()
+			return P._playerBPRanger:isStatusOpen() or P._playerBPRanger:isStatusExpired()
+		end,
+		RedCond = function ()
+			return P._playerBPRanger:isStatusOpen() and P._playerBPRanger:haveUnclaimRewards() or P._playerBPRanger:isStatusExpired() and not P._playerBPRanger:lastPeriodRewardsClaimed()
+		end
+	}
+}
+local PageNum = #PageCfg
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._pages = {}
+
+	for i = 1, PageNum do
+		RedDotManager.add(self._btnPages[i], PageCfg[i].RedPath, true)
+	end
+end
+
+function M:OnDestroy()
+	for i = 1, PageNum do
+		RedDotManager.remove(PageCfg[i].RedPath)
+	end
+
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	self._btnPages = {
+		self._btnPageBP,
+		self._btnPageBPNew,
+		self._btnPageBPSkin,
+		self._btnPageFund,
+		self._btnPageDomeBP,
+		self._btnPageDaily
+	}
+
+	for i = 1, PageNum do
+		self:setClick(self._btnPages[i], function ()
+			self:changePage(i)
+		end)
+	end
+end
+
+function M:init(showPage)
+	self._pageIdx = 0
+	showPage = showPage or 1
+
+	if not showPage or not self:canShowPage(showPage) then
+		showPage = self:getFirstShowPageIdx()
+	end
+
+	if not showPage then
+		self:updateBottomArea()
+
+		return
+	end
+
+	self:changePage(showPage, true)
+end
+
+function M:getRecommendPageIdx()
+	for i = 1, PageNum do
+		if PageCfg[i].RedCond() then
+			return i
+		end
+	end
+
+	return 1
+end
+
+function M:getFirstShowPageIdx()
+	for i = 1, PageNum do
+		if self:canShowPage(i) then
+			return i
+		end
+	end
+end
+
+function M:closePanel()
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnPanelOpened()
+	local lb = self._pages[self._pageIdx]
+
+	if lb and lb.OnPageOpened then
+		lb:OnPageOpened()
+	end
+end
+
+function M:updateUI()
+end
+
+function M:canShowPage(pageIdx)
+	if not PageCfg[pageIdx] or not D.isSystemUnlocked(PageCfg[pageIdx].SystemId) then
+		return false
+	end
+
+	if PageCfg[pageIdx].BtnShowCond and not PageCfg[pageIdx].BtnShowCond() then
+		return false
+	end
+
+	return true
+end
+
+function M:changePage(pageIdx, isStartPage)
+	if pageIdx == self._pageIdx then
+		return
+	end
+
+	if not self:canShowPage(pageIdx) then
+		return
+	end
+
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	self._pageIdx = pageIdx
+	local lb = self:getOrCreatePage(pageIdx)
+	self._lastPage = lb
+
+	Client.playSound("ui_Open_Gift_1")
+
+	if not isStartPage then
+		self:OnPanelOpened()
+	end
+
+	self:updateBottomArea()
+
+	if isStartPage then
+		LuaUnity.forceRebuildLayoutImmediate(self._scroll.transform:GetChild(0):GetChild(0))
+	end
+
+	self:focusTab(isStartPage)
+end
+
+function M:getOrCreatePage(index)
+	local lb = self._pages[index]
+
+	if lb == nil then
+		local go = LuaUnity.createGameObject(string.format(PAGE_PREFAB_PATH_HOLDER, PageCfg[index].PanelName), self._tfPageContainer)
+		lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self)
+
+		self._pages[index] = lb
+	else
+		lb:showInternal()
+	end
+
+	return lb
+end
+
+function M:updateBottomArea()
+	local colors = self._pageIdx and self._pageIdx > 0 and PageCfg[self._pageIdx].Color or BottomColors.cyan
+
+	for i = 1, PageNum do
+		local canShow = self:canShowPage(i)
+		local btn = self._btnPages[i]
+
+		btn.transform:Find("ImgLock"):SetActive(self._pageIdx ~= i)
+
+		local tmp = btn.transform:Find("tmp"):GetComponent("TMP_Text")
+		local gradient = btn.transform:Find("ImgIcon"):GetComponent("UIGradient")
+		local imgBtnBg = btn.transform:GetComponent("Image")
+		imgBtnBg.color = Color.str2Static(colors.IconBg)
+		gradient.m_color1 = Color.str2Static(colors.IconTop)
+		gradient.m_color2 = Color.str2Static(colors.IconBottom)
+		gradient.enabled = false
+		gradient.enabled = true
+
+		tmp:SetLocalize(PageCfg[i].BtnTitle)
+
+		tmp.color = self._pageIdx == i and Color.str2Static(colors.Title) or Color.str2Static(colors.TitleUnselect)
+		btn.interactable = canShow
+
+		if PageCfg[i].BtnShowCond then
+			btn.transform:SetActive(canShow and PageCfg[i].BtnShowCond())
+		else
+			btn.transform:SetActive(canShow)
+		end
+	end
+
+	self._imgArrow.color = Color.str2Static(colors.ReturnArrow)
+	self._imgBottomBg.color = Color.str2Static(colors.ReturnBg)
+end
+
+function M:focusTab(ignoreAnim)
+	local btn = self._btnPages[self._pageIdx]
+	local tf = btn.transform
+	local tfContainer = tf.parent
+	local tfViewport = tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tf)
+	local w1 = tfContainer.rect.width
+	local w2 = tfViewport.rect.width
+	local x2, y2, z2 = lc.getAnchoredPosition(tfContainer)
+	local halfBtn = 65
+	local distanceToLeft = w1 - x2 - w2 - x1
+	local notInRange = w2 < w1 and (distanceToLeft + halfBtn >= 0 or distanceToLeft + w2 - halfBtn <= 0)
+
+	if notInRange then
+		local moveSpeed = 400
+		local moveDistance, targetX = nil
+
+		if distanceToLeft + halfBtn >= 0 then
+			moveDistance = math.abs(distanceToLeft + halfBtn)
+			targetX = Mathf.Clamp(x2 + distanceToLeft + halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+
+				return
+			end
+
+			tfContainer:DOAnchorPosX(targetX, moveDistance / moveSpeed):SetLink(self.gameObject)
+		else
+			moveDistance = math.abs(distanceToLeft + w2 - halfBtn)
+			targetX = Mathf.Clamp(x2 + distanceToLeft + w2 - halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+
+				return
+			end
+
+			tfContainer:DOAnchorPosX(targetX, moveDistance / moveSpeed):SetLink(self.gameObject)
+		end
+	end
+end
+
+return M

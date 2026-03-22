@@ -1,0 +1,961 @@
+local M = class("BattleRougePool")
+local DropHelper = DropHelper
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._msType = BattleManager:getMissionType()
+	self._stageStarNum = D._globalConfig._rogue_upgrade_star_num
+	self._weaponLastCard = {
+		102,
+		201,
+		303,
+		403,
+		501,
+		601,
+		701,
+		801,
+		901,
+		1001,
+		1101,
+		1201
+	}
+	self._defaultWeaponStar = 0
+	self._weaponSlotNum = 5
+	self._superStar = self._stageStarNum * (D.MAX_SUPER_WEAPON_STAGE - 1)
+	self._superRogueIds = {}
+	self._superRogueIdsMap = {}
+
+	self:initConfig()
+
+	self._weaponCardsOriginPool = table.new(0, 8)
+	self._rogueCardsOriginPool = table.new(0, 64)
+	self._weaponSelectOrderList = table.new(8, 0)
+	self._rogueSelectOrderList = table.new(64, 0)
+	self._weaponCardsMaxPool = table.new(0, 8)
+	self._weaponCardsPool = table.new(0, 8)
+	self._rogueCardsPool = table.new(0, 64)
+	self._weaponRougeMap = table.new(0, 8)
+	self._selectedRougesMap = table.new(0, 32)
+	self._superRogueSelected = {}
+	self._godWeaponId = nil
+	self._weaponWeightMultiplier = {}
+end
+
+function M:init()
+	self:initOriginPool()
+	self:initPool()
+
+	if self._msType ~= D.MissionType.SparkScout then
+		self:recordRouge(1)
+	end
+end
+
+function M:outputInitParams()
+end
+
+function M:initConfig()
+	for cardId, config in pairs(D._battleRougeCardConfig) do
+		if config._type == 4 then
+			self._superRogueIds[config._belongWeapon] = cardId
+			self._superRogueIdsMap[cardId] = true
+		end
+	end
+end
+
+function M:clearPools(isPvp)
+	table.clear(self._weaponCardsOriginPool)
+	table.clear(self._rogueCardsOriginPool)
+	table.clear(self._weaponSelectOrderList)
+
+	if not isPvp then
+		table.clear(self._rogueSelectOrderList)
+	end
+
+	table.clear(self._weaponCardsPool)
+	table.clear(self._rogueCardsPool)
+	table.clear(self._weaponRougeMap)
+	table.clear(self._selectedRougesMap)
+	table.clear(self._superRogueSelected)
+	table.clear(self._weaponWeightMultiplier)
+
+	self._godWeaponId = nil
+
+	if self._domeCards then
+		table.clear(self._domeCards)
+	end
+end
+
+function M:getWeaponStartStar(weaponId)
+	return self._defaultWeaponStar + (weaponId and self._battleSession:getEffect(weaponId * 100 + 90) or 0)
+end
+
+function M:isWeaponCard(cardId)
+	return cardId < 100
+end
+
+function M:isRougeCard(cardId)
+	return cardId > 100
+end
+
+function M:isChainCard(cardId)
+	return D._rougePrevUnlockCards[cardId] ~= nil or D._battleRougeCardConfig[cardId]._prevRougeCards ~= nil
+end
+
+function M:initOriginPool()
+	local banWeapons = {}
+
+	if self._battleSession._msType == D.MissionType.ArkRebuild then
+		banWeapons = P._playerActivityArkRebuild:getCurrentData().weaponBanList
+	elseif self._battleSession._msType == D.MissionType.SparkScout then
+		banWeapons = P._playerActivitySparkScout:getCurrentData().weaponBanList
+	end
+
+	for weaponId, stageCards in pairs(D._weaponCardConfig) do
+		local isUnlock = P._playerArmory:isWeaponUnlocked(weaponId) and not table.findArray(banWeapons, weaponId)
+
+		if self._battleSession._msType == D.MissionType.ArkRebuild or self._battleSession._msType == D.MissionType.SparkScout then
+			isUnlock = true
+		end
+
+		if isUnlock then
+			self._weaponCardsOriginPool[weaponId] = 1
+			local level = P._playerArmory:getWeaponLevel(weaponId)
+
+			if weaponId == 1 then
+				level = level - 1
+			end
+
+			if self._battleSession._msType == D.MissionType.ArkRebuild then
+				level = 9999999
+			end
+
+			if self._battleSession._msType == D.MissionType.SparkScout then
+				level = 9999999
+			end
+
+			for stage, cards in pairs(stageCards) do
+				for idx, cfg in pairs(cards) do
+					local cardId = cfg._id
+
+					if D._rougeUnlock[cardId] and level < D._rougeUnlock[cardId] then
+						-- Nothing
+					elseif not D._rougeExpire[cardId] or D._rougeExpire[cardId] > level then
+						self._rogueCardsOriginPool[cardId] = cfg._selectMax
+					end
+				end
+			end
+
+			if self._battleSession._msType == D.MissionType.ArkRebuild or self._battleSession._msType == D.MissionType.SparkScout then
+				self._rogueCardsOriginPool[107] = nil
+			end
+		end
+	end
+end
+
+function M:haveCard(rougeId)
+	return self._rogueCardsOriginPool[rougeId] ~= nil
+end
+
+function M:initGodWeapon(weaponId)
+	if weaponId then
+		self._godWeaponId = weaponId
+	else
+		local groupList1, mapWeights1 = self:createWeaponDropGroup()
+		local weaponCardId = self:dropFromGroup(groupList1, mapWeights1)
+		self._godWeaponId = weaponCardId
+	end
+
+	self:changeWeaponMultiply(self._godWeaponId, D._battleGlobalConfig._battle_rogue_god_weapon_weight[1])
+end
+
+function M:isGodWeapon(weaponId)
+	if not self._godWeaponId then
+		return false
+	end
+
+	return weaponId == self._godWeaponId
+end
+
+function M:getWeaponMultiply(weaponId)
+	return self._weaponWeightMultiplier[weaponId] or 1
+end
+
+function M:changeWeaponMultiply(weaponId, weight)
+	self._weaponWeightMultiplier[weaponId] = self:getWeaponMultiply(weaponId) * weight
+end
+
+function M:initPool()
+	for k, v in pairs(self._weaponCardsOriginPool) do
+		self._weaponCardsPool[k] = true
+	end
+
+	self:unlockNewStageCards(1, 1)
+
+	if self._battleSession._msType == D.MissionType.Dome then
+		self._domeCards = clone(P._playerDome:getDomeCards())
+	end
+end
+
+function M:isCardInPool(cardId)
+	return self._rogueCardsPool[cardId] ~= nil
+end
+
+function M:isWeaponActive(weaponId)
+	if self._battleSession._msType == D.MissionType.SparkScout then
+		return self._battleSession._battleWeapons[weaponId] ~= nil
+	end
+
+	return self._weaponRougeMap[weaponId] ~= nil
+end
+
+function M:haveSuperCard(weaponId)
+	return self._superRogueIds[weaponId] ~= nil
+end
+
+function M:getSuperCardId(weaponId)
+	return self._superRogueIds[weaponId]
+end
+
+function M:isSuperStar(star)
+	return self._superStar <= star
+end
+
+function M:forbidWeaponCardDrop(weaponId)
+	return self:isMaxStar(weaponId)
+end
+
+function M:isMaxStar(weaponId)
+	if BattleManager:isMissionArkRebuild() then
+		return false
+	end
+
+	return self:haveSuperCard(weaponId) and self:isSuperStar(self:getWeaponTotalStar(weaponId))
+end
+
+function M:isSuperSelected(weaponId)
+	return self._superRogueSelected[weaponId] ~= nil
+end
+
+function M:isSuperCardId(rougeId)
+	return self._superRogueIdsMap[rougeId]
+end
+
+function M:recordRouge(rougeId)
+	local rougeConfig = D._battleRougeCardConfig[rougeId]
+
+	if rougeConfig == nil then
+		return
+	end
+
+	local belongWeapon = rougeConfig._belongWeapon
+
+	if self:isSuperCardId(rougeId) then
+		self._superRogueSelected[belongWeapon] = 1
+
+		return
+	end
+
+	local oldStage = self:getWeaponStage(belongWeapon)
+
+	if self._selectedRougesMap[rougeId] == nil then
+		self._selectedRougesMap[rougeId] = 1
+
+		self:checkPrevCardNewUnlock(rougeId)
+	else
+		self._selectedRougesMap[rougeId] = self._selectedRougesMap[rougeId] + 1
+	end
+
+	if self._weaponRougeMap[belongWeapon] == nil then
+		self._weaponRougeMap[belongWeapon] = self:getWeaponStartStar(belongWeapon)
+		self._weaponSelectOrderList[#self._weaponSelectOrderList + 1] = belongWeapon
+		self._rogueSelectOrderList[#self._rogueSelectOrderList + 1] = rougeId
+	else
+		self._weaponRougeMap[belongWeapon] = self._weaponRougeMap[belongWeapon] + 1
+		self._rogueSelectOrderList[#self._rogueSelectOrderList + 1] = rougeId
+	end
+
+	local newStage = self:getWeaponStage(belongWeapon)
+
+	if oldStage ~= newStage then
+		for stage = oldStage + 1, newStage do
+			self:unlockNewStageCards(belongWeapon, stage)
+		end
+
+		self:tryUnlockComboCards(belongWeapon)
+	end
+
+	self:checkRemoveCardFromPool(rougeId)
+
+	if self:isMaxStar(belongWeapon) then
+		self._weaponCardsMaxPool[belongWeapon] = true
+	end
+
+	local msId = self._battleSession._msId
+
+	if self._battleSession._msType == D.MissionType.Elite then
+		msId = msId + 10000
+	end
+end
+
+function M:checkCardUnlock(cardId)
+	local cfg = D._battleRougeCardConfig[cardId]
+
+	if not self:haveCard(cardId) then
+		return false
+	end
+
+	local stage, star = self:getWeaponStage(cfg._belongWeapon)
+
+	if stage < cfg._stage then
+		return false
+	end
+
+	if cfg._unlockWeaponCards then
+		local weapon1 = cfg._unlockWeaponCards[1]
+		local weaponStage1 = cfg._unlockWeaponCards[2]
+		local weaponStar1 = cfg._unlockWeaponCards[3]
+		local weapon2 = cfg._unlockWeaponCards[4]
+		local weaponStage2 = cfg._unlockWeaponCards[5]
+		local weaponStar2 = cfg._unlockWeaponCards[6]
+
+		if not self:isWeaponActive(weapon1) then
+			return false
+		end
+
+		if not self:isWeaponActive(weapon2) then
+			return false
+		end
+
+		local stage, star = self:getWeaponStage(weapon1)
+
+		if stage == weaponStage1 then
+			if star < weaponStar1 then
+				return false
+			end
+		elseif stage < weaponStage1 then
+			return false
+		end
+
+		local stage, star = self:getWeaponStage(weapon2)
+
+		if stage == weaponStage2 then
+			if star < weaponStar2 then
+				return false
+			end
+		elseif stage < weaponStage2 then
+			return false
+		end
+	end
+
+	local preCardIds = cfg._prevRougeCards
+
+	if preCardIds then
+		for i = 1, #preCardIds do
+			local pId = preCardIds[i]
+
+			if self:getRogueSelectNum(pId) > 0 then
+				return true
+			end
+		end
+
+		return false
+	end
+
+	return true
+end
+
+function M:unlockNewStageCards(weaponId, stage)
+	if stage > 4 then
+		return
+	end
+
+	if not D._weaponCardConfig[weaponId][stage] then
+		return
+	end
+
+	for index, conf in ipairs(D._weaponCardConfig[weaponId][stage]) do
+		local cardId = conf._id
+
+		if self:isRougeCard(cardId) and self:haveCard(cardId) and not self:isCardInPool(cardId) then
+			self:addNewCardsToPool(cardId)
+		end
+	end
+end
+
+function M:tryUnlockComboCards(weaponId)
+	local cfgs = D._weaponAllCardComboConfig[weaponId]
+
+	if not cfgs then
+		return
+	end
+
+	for i = 1, #cfgs do
+		local cfg = cfgs[i]
+		local cardId = cfg[7]
+
+		if not self:isCardInPool(cardId) and self:checkCardUnlock(cardId) then
+			self:addNewCardsToPool(cardId)
+		end
+	end
+end
+
+function M:addNewCardsToPool(cardsId)
+	if type(cardsId) == "table" then
+		for key, value in pairs(cardsId) do
+			if self:checkCardUnlock(value) then
+				self._rogueCardsPool[value] = true
+			end
+		end
+	elseif self:checkCardUnlock(cardsId) then
+		self._rogueCardsPool[cardsId] = true
+	end
+end
+
+function M:checkRemoveWeaponCards()
+	if self._weaponSlotNum > #self._weaponSelectOrderList then
+		return
+	end
+
+	table.clear(self._weaponCardsPool)
+end
+
+function M:checkRemoveCardFromPool(cardId)
+	if self:isWeaponCard(cardId) then
+		if not self._weaponCardsPool[cardId] then
+			return
+		end
+
+		if self:getRogueSelectNum(cardId) == 1 then
+			self._weaponCardsPool[cardId] = nil
+		end
+	else
+		if not self._rogueCardsPool[cardId] then
+			return
+		end
+
+		if self:getRogueSelectNum(cardId) == self._rogueCardsOriginPool[cardId] then
+			self._rogueCardsPool[cardId] = nil
+		end
+	end
+end
+
+function M:checkPrevCardNewUnlock(cardId)
+	local isPrevCard = D._rougePrevUnlockCards[cardId] ~= nil
+
+	if isPrevCard then
+		self:addNewCardsToPool(D._rougePrevUnlockCards[cardId])
+	end
+end
+
+function M:isWeaponWaitForNewStage(weaponId)
+	return (self:getStarNum(weaponId) + 1) % self._stageStarNum == 0
+end
+
+function M:getNewStageCard(weaponId, stage)
+	local cardsId = {}
+
+	if not D._weaponCardConfig[weaponId][stage] then
+		return cardsId
+	end
+
+	for index, conf in ipairs(D._weaponCardConfig[weaponId][stage]) do
+		local cardId = conf._id
+
+		if self:haveCard(cardId) then
+			local ret = self:checkCardUnlock(cardId)
+
+			table.insert(cardsId, cardId)
+		end
+	end
+
+	return cardsId
+end
+
+function M:getWeaponIdByRogueId(rougeId)
+	local rougeConfig = D._battleRougeCardConfig[rougeId]
+
+	return rougeConfig._belongWeapon
+end
+
+function M:getWeaponTotalStar(id)
+	return self._weaponRougeMap[id] or 0
+end
+
+function M:getWeaponsStar()
+	return self._weaponRougeMap
+end
+
+function M:getSelectWeapons()
+	return self._weaponSelectOrderList
+end
+
+function M:getWeaponIdByIdx(weaponIdx)
+	return self._weaponSelectOrderList[weaponIdx]
+end
+
+function M:getRougeSelectList()
+	return self._rogueSelectOrderList
+end
+
+function M:getStarNum(weaponId)
+	if self._weaponRougeMap[weaponId] then
+		return self._weaponRougeMap[weaponId] % self._stageStarNum
+	end
+
+	return 0
+end
+
+function M:getWeaponStage(weaponId)
+	if not self._weaponRougeMap[weaponId] then
+		return 0, 0
+	end
+
+	local selectNum = self._weaponRougeMap[weaponId]
+	local stage = math.ceil((selectNum + 1) / self._stageStarNum)
+	local num = selectNum % self._stageStarNum
+
+	return stage, num
+end
+
+function M:getRogueSelectNum(rougeId)
+	return self._selectedRougesMap[rougeId] or 0
+end
+
+function M:createWeaponDropGroup(activedWeapon)
+	if self._dropGroup1 == nil then
+		self._dropGroup1 = table.new(16, 0)
+	end
+
+	if self._dropGroupWeight1 == nil then
+		self._dropGroupWeight1 = table.new(0, 16)
+	end
+
+	local group = self._dropGroup1
+	local weightGroup = self._dropGroupWeight1
+
+	table.clear(group)
+	table.clear(weightGroup)
+
+	if activedWeapon then
+		for i, weaponId in pairs(self._weaponSelectOrderList) do
+			group[#group + 1] = weaponId
+			weightGroup[weaponId] = D._battleRougeCardConfig[weaponId]._weight * 1
+		end
+	else
+		for weaponId, v in pairs(self._weaponCardsPool) do
+			group[#group + 1] = weaponId
+			weightGroup[weaponId] = D._battleRougeCardConfig[weaponId]._weight * 1
+		end
+	end
+
+	lc.stableQuickSort(group, 1, #group, function (a, b)
+		return a < b
+	end)
+
+	return group, weightGroup
+end
+
+function M:createMaxWeaponDropGroup()
+	if self._dropGroup1 == nil then
+		self._dropGroup1 = table.new(16, 0)
+	end
+
+	if self._dropGroupWeight1 == nil then
+		self._dropGroupWeight1 = table.new(0, 16)
+	end
+
+	local group = self._dropGroup1
+	local weightGroup = self._dropGroupWeight1
+
+	table.clear(group)
+	table.clear(weightGroup)
+
+	for weaponId, v in pairs(self._weaponCardsMaxPool) do
+		group[#group + 1] = weaponId
+		weightGroup[weaponId] = D._battleRougeCardConfig[weaponId]._weight * 1
+	end
+
+	lc.stableQuickSort(group, 1, #group, function (a, b)
+		return a < b
+	end)
+
+	return group, weightGroup
+end
+
+function M:createRougeDropGroup(useOld, weightProcessor)
+	if self._dropGroup2 == nil then
+		self._dropGroup2 = table.new(64, 0)
+	end
+
+	if self._dropGroupWeight2 == nil then
+		self._dropGroupWeight2 = table.new(0, 64)
+	end
+
+	local group = self._dropGroup2
+	local weightGroup = self._dropGroupWeight2
+
+	if useOld then
+		return self._dropGroup2, self._dropGroupWeight2
+	end
+
+	table.clear(group)
+	table.clear(weightGroup)
+
+	for weaponId, value in pairs(self._weaponCardsPool) do
+		group[#group + 1] = weaponId
+		weightGroup[weaponId] = D._battleRougeCardConfig[weaponId]._weight * 1
+
+		if weightProcessor then
+			weightGroup[weaponId] = weightProcessor(weaponId, weightGroup[weaponId])
+		end
+	end
+
+	for rougeId, value in pairs(self._rogueCardsPool) do
+		group[#group + 1] = rougeId
+		local belong = D._battleRougeCardConfig[rougeId]._belongWeapon
+		local isActive = self:isWeaponActive(belong)
+		local weightParam = 1
+
+		if isActive then
+			if self:isGodWeapon(belong) then
+				weightParam = self:getWeaponMultiply(belong)
+			else
+				weightParam = self:getWeaponMultiply(belong) * 1 / (self:getWeaponStage(belong) + 1)
+			end
+		else
+			weightParam = 0
+		end
+
+		local leftCardNum = self._rogueCardsOriginPool[rougeId] - self:getRogueSelectNum(rougeId)
+		weightGroup[rougeId] = math.ceil(D._battleRougeCardConfig[rougeId]._weight * leftCardNum * weightParam)
+
+		if weightProcessor then
+			weightGroup[rougeId] = weightProcessor(rougeId, weightGroup[rougeId])
+		end
+	end
+
+	lc.stableQuickSort(group, 1, #group, function (a, b)
+		return a < b
+	end)
+
+	return group, weightGroup
+end
+
+function M:setCommonDrop()
+	if self._battleSession:getEffect(37) then
+		function self._cardWeightFunc(id, weight)
+			if D._battleRougeCardConfig[id]._type == 2 then
+				return weight + weight * self._battleSession:getEffect(37) / 100
+			else
+				return weight
+			end
+		end
+	else
+		self._cardWeightFunc = nil
+	end
+
+	self._fixStageCardOrderFunc = nil
+end
+
+function M:setSparkScoutDrop()
+	local rate1, rate2 = P._playerActivitySparkScout:readRogueCardDropRates()
+	local extraEffect = self._battleSession:getEffect(37) or 0
+
+	function self._cardWeightFunc(id, weight)
+		if extraEffect then
+			weight = weight + weight * extraEffect / 100
+		end
+
+		local cfg = D._battleRougeCardConfig[id]
+
+		if self:isChainCard(id) and (cfg._stage == 3 or cfg._stage == 2) then
+			return weight * rate2
+		elseif cfg._type == 3 then
+			return weight * rate1
+		elseif cfg._type == 2 then
+			return weight
+		else
+			return 0
+		end
+	end
+
+	self._fixStageCardOrderFunc = nil
+end
+
+function M:setNewbieDrop()
+	local superCardId = self._superRogueIds[1]
+
+	if superCardId then
+		self._superRogueIdsMap[superCardId] = nil
+		self._superRogueIds[1] = nil
+	end
+
+	local cfg10001 = D._battleGlobalConfig._battle_rogue_config10001
+	local multiWeight = cfg10001[#cfg10001]
+
+	function self._cardWeightFunc(id, weight)
+		local belongWeapon = D._battleRougeCardConfig[id]._belongWeapon
+
+		if belongWeapon == 1 or belongWeapon == id then
+			return weight * multiWeight
+		elseif self._battleSession:getEffect(37) then
+			if D._battleRougeCardConfig[id]._type == 2 then
+				return weight + weight * self._battleSession:getEffect(37) / 100
+			else
+				return weight
+			end
+		else
+			return weight
+		end
+	end
+
+	function self._fixStageCardOrderFunc(cardId)
+		local belongWeapon = D._battleRougeCardConfig[cardId]._belongWeapon
+
+		if belongWeapon == 1 then
+			if D._battleRougeCardConfig[cardId]._type == 2 then
+				local cfg10001 = D._battleGlobalConfig._battle_rogue_config10001
+
+				for i = 1, #cfg10001 - 1 do
+					local iiiid = cfg10001[i]
+
+					if self:getRogueSelectNum(iiiid) == 0 then
+						if iiiid == cardId then
+							return true
+						else
+							return false
+						end
+					end
+				end
+
+				return true
+			else
+				return false
+			end
+		end
+	end
+end
+
+local weaponCanDropNum = {}
+local newStageCardCache = {}
+local weaponDropNum = {}
+
+function M:randomCardsInPool(cardNum, selectNum, dontDropNewWeapon, useOldDrop)
+	table.clear(weaponCanDropNum)
+	table.clear(newStageCardCache)
+	table.clear(weaponDropNum)
+
+	dontDropNewWeapon = dontDropNewWeapon or false
+	selectNum = selectNum or 1
+	local result = {}
+	local groupList2, mapWeights2 = self:createRougeDropGroup(useOldDrop, self._cardWeightFunc)
+	local currentWeaponNum = #self._weaponSelectOrderList
+	local dropWeaponNum = 0
+
+	for k, weaponId in pairs(self._weaponSelectOrderList) do
+		if self:forbidWeaponCardDrop(weaponId) then
+			weaponCanDropNum[weaponId] = 0
+		else
+			local stage, star = self:getWeaponStage(weaponId)
+			weaponCanDropNum[weaponId] = self._stageStarNum - star
+		end
+	end
+
+	if self._domeCards then
+		for i = 1, #self._domeCards do
+			local cardId = self._domeCards[i]
+			mapWeights2[cardId] = 0
+		end
+	end
+
+	for i = 1, cardNum do
+		local dropCardId = self:dropFromGroup(groupList2, mapWeights2, function (id)
+			local belongWeapon = D._battleRougeCardConfig[id]._belongWeapon
+
+			if self:isWeaponCard(id) then
+				if dontDropNewWeapon then
+					return false
+				end
+
+				local leftSelectWeapon = self._weaponSlotNum - currentWeaponNum
+
+				if leftSelectWeapon == 0 then
+					return false
+				end
+
+				if leftSelectWeapon < selectNum and leftSelectWeapon <= dropWeaponNum then
+					return false
+				end
+
+				return true
+			end
+
+			local belongWeaponDropNum = weaponDropNum[belongWeapon] or 0
+			local belongWeaponCanDropNum = weaponCanDropNum[belongWeapon] or 0
+			local leftDropNum = belongWeaponCanDropNum - belongWeaponDropNum
+
+			if leftDropNum == 0 then
+				return false
+			end
+
+			local cantDrop = selectNum > 1 and belongWeaponDropNum > 0 and (leftDropNum == 1 or leftDropNum == 0)
+
+			if cantDrop then
+				return false
+			end
+
+			local dropNewStage = selectNum == 1 and belongWeaponCanDropNum == 1 or selectNum > 1 and belongWeaponDropNum == 0 and leftDropNum == 1
+
+			if dropNewStage then
+				if self._fixStageCardOrderFunc then
+					local funcRet = self._fixStageCardOrderFunc(id)
+
+					if funcRet ~= nil then
+						return funcRet
+					end
+				end
+
+				local totalStar = self:getWeaponTotalStar(belongWeapon)
+
+				if self:isSuperStar(totalStar) and self:haveSuperCard(belongWeapon) then
+					return false
+				end
+
+				return D._battleRougeCardConfig[id]._type == 2
+			else
+				return D._battleRougeCardConfig[id]._type ~= 2 and D._battleRougeCardConfig[id]._type ~= 4
+			end
+		end)
+
+		if dropCardId then
+			if self:isWeaponCard(dropCardId) then
+				dropWeaponNum = dropWeaponNum + 1
+			end
+
+			local belong = D._battleRougeCardConfig[dropCardId]._belongWeapon
+			weaponDropNum[belong] = (weaponDropNum[belong] or 0) + 1
+			mapWeights2[dropCardId] = 0
+			result[#result + 1] = dropCardId
+		else
+			assert(true, "rogue pool not enough--")
+
+			dropCardId = self:randomFinalCards()
+			result[#result + 1] = dropCardId
+		end
+	end
+
+	if result and #result > 1 then
+		self:shuffle(result)
+	end
+
+	return result
+end
+
+function M:shuffle(list)
+	for i = #list, 1, -1 do
+		local j = self._battleRandomLib:randomMN(1, i)
+		local tmp = list[i]
+		list[i] = list[j]
+		list[j] = tmp
+	end
+end
+
+function M:randomFinalCards()
+	local groupList1, mapWeights1 = self:createMaxWeaponDropGroup()
+	local weaponCardId = self:dropFromGroup(groupList1, mapWeights1, function (id)
+		return self:isWeaponActive(id)
+	end)
+
+	if not weaponCardId then
+		groupList1, mapWeights1 = self:createWeaponDropGroup(true)
+		weaponCardId = self:dropFromGroup(groupList1, mapWeights1)
+	end
+
+	return weaponCardId and self._weaponLastCard[weaponCardId] or self._weaponLastCard[1]
+end
+
+function M:randomDeathDraw(test)
+	local group = {
+		1,
+		2,
+		3
+	}
+	local fixNum = 0
+	local weight = clone(D._battleGlobalConfig._battle_draw_weight)
+	local types = {}
+
+	if not test then
+		local fixGroup = D._battleGlobalConfig._battle_draw_fix_group
+		local totalDrawNum = P._playerRecord:getEliteDrawNum()
+
+		if totalDrawNum < #fixGroup then
+			fixNum = #fixGroup - totalDrawNum
+		end
+
+		for i = 1, fixNum do
+			types[i] = fixGroup[totalDrawNum + i]
+		end
+	end
+
+	for i = fixNum + 1, 5 do
+		local idx = self:dropFromGroup(group, weight)
+
+		if idx == 3 then
+			weight[idx] = 0
+			types[i] = idx
+		elseif idx == 2 then
+			weight[idx] = 0
+			types[i] = idx
+		elseif idx == 1 then
+			types[i] = idx
+		end
+	end
+
+	return types
+end
+
+function M:dropFromGroup(drops, mapWeights, predicate)
+	local weights = {}
+
+	for i = 1, #drops do
+		if not predicate or predicate and predicate(drops[i]) then
+			weights[i] = mapWeights[drops[i]]
+		else
+			weights[i] = 0
+		end
+	end
+
+	local idx = self:randomIndexByWeights(weights)
+
+	if idx == -1 then
+		return nil
+	end
+
+	return drops[idx]
+end
+
+function M:randomIndexByWeights(weights)
+	local sum = 0
+	local weights_total = {}
+
+	for i = 1, #weights do
+		sum = sum + weights[i]
+		weights_total[#weights_total + 1] = sum
+	end
+
+	local val = self._battleRandomLib:randomMN(1, sum)
+	local index = -1
+
+	for i = 1, #weights_total do
+		if val <= weights_total[i] then
+			index = i
+
+			break
+		end
+	end
+
+	return index
+end
+
+return M

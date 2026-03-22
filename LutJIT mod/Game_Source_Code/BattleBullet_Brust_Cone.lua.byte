@@ -1,0 +1,38 @@
+local M = class("BattleBullet_Burst_Cone", requireLua("BattleBullet_Burst"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._triangleArea = {
+		A = Vector2.retain(0, 0),
+		B = Vector2.retain(0, 0),
+		C = Vector2.retain(0, 0)
+	}
+end
+
+function M:updateTriangleArea()
+	local triangleArea = self._triangleArea
+	triangleArea.A.x = self._position.x
+	triangleArea.A.y = self._position.y
+	local length = self._size[1]
+	local dtY = self._size[2] / 2
+	local quat = Quaternion.static(0, 0, 0, 0)
+
+	quat:SetEuler(0, 0, self._angle)
+
+	local x1, y1 = quat:MulVec3XYZ(length, dtY, 0)
+	triangleArea.B.x = self._position.x + x1
+	triangleArea.B.y = self._position.y + y1
+	local quat = Quaternion.static(0, 0, 0, 0)
+
+	quat:SetEuler(0, 0, self._angle)
+
+	local x1, y1 = quat:MulVec3XYZ(length, -dtY, 0)
+	triangleArea.C.x = self._position.x + x1
+	triangleArea.C.y = self._position.y + y1
+end
+
+return M

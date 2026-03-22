@@ -1,0 +1,163 @@
+local M = class("BattleBullet_Burst", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill, castWeapon)
+	SUPER.init(self, id, battleSkill, castWeapon)
+
+	self._brust = true
+
+	if self._battleSkill._cid == 601 then
+		self._607Effected = false
+
+		if self._battleWeapon:getEffect(607) then
+			local params = D.getBattleEffectParams(607)
+			self._dmgDelay = params[1] + 0.0167
+		end
+	end
+end
+
+function M:checkEnemyCollision(dt)
+	if not self._607Effected then
+		self._607Effected = true
+
+		if self._battleWeapon:getEffect(607) then
+			local params = D.getBattleEffectParams(607)
+			local enemys = self._battleSession:getEnemys(self)
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) and not enemy._beDraging then
+					enemy:beDraged(self._position, params[1], params[2])
+				end
+			end
+		end
+	end
+
+	if self._dmgDelay then
+		self._dmgDelay = self._dmgDelay - dt
+
+		if self._dmgDelay > 0 then
+			return
+		end
+
+		self._dmgDelay = nil
+	end
+
+	local enemys = self._battleSession:getEnemys(self)
+	local cnt = #enemys
+
+	if self._battleWeapon:getEffect(601) then
+		opt.array_arg32:clear()
+
+		local cnt2 = 0
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+				opt.array_arg32[#opt.array_arg32 + 1] = enemy
+				cnt2 = cnt2 + 1
+
+				if cnt2 == 32 then
+					break
+				end
+			end
+		end
+
+		local params = D.getBattleEffectParams(601)
+		self._damageAddPer = self._damageAddPer + math.min(params[1] * cnt2, params[2])
+
+		for i = 1, cnt2 do
+			local enemy = opt.array_arg32[i]
+
+			enemy:onHit(self)
+			self:hitEnemy(enemy)
+			self:tryTriggerWhenFirstHitEnemy(enemy)
+		end
+	else
+		local hitEnemyCount = 0
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+				hitEnemyCount = hitEnemyCount + 1
+
+				enemy:onHit(self)
+				self:hitEnemy(enemy)
+				self:tryTriggerWhenFirstHitEnemy(enemy)
+			end
+		end
+
+		if self._cid == 1001 and hitEnemyCount > 0 then
+			local effPar = self._battleWeapon:getEffect(1053)
+
+			if effPar then
+				local params = D.getBattleEffectParams(1053)
+
+				if self._hitIndex == 1 and hitEnemyCount < params[1] then
+					self._battleWeapon._roundSkillCdSpeedAddPer = effPar
+				end
+			end
+		end
+	end
+
+	self:markToBeDestroyed()
+end
+
+function M:hitEnemy(enemy)
+	self._hitEnemysMap[enemy._id] = enemy
+
+	self._battleSkill:appendBuffsToEnemy(enemy, self)
+	self._battleWeapon:bulletHitEnemy(self, enemy)
+
+	if not enemy._isToBeDestroyed then
+		if self._cid == 20800 and self._battleWeapon:getEffect(20801) then
+			if enemy:isParalysis() then
+				local duration = self._battleSkill:getProp(BattlePropEnum.AtkInterval)
+				local speed = self._battleSkill:getProp(BattlePropEnum.DragIntensity, 0) / 100
+				local addPer = self._battleSkill:getProp(BattlePropEnum.DragIntensityAddPer, 0)
+				speed = speed + speed * addPer / 100
+
+				enemy:beDraged(self._position, duration, speed, 0.8)
+			end
+		elseif self._cid == 1121 then
+			local duration = self._battleSkill:getProp(BattlePropEnum.AtkInterval)
+			local speed = self._battleSkill:getProp(BattlePropEnum.DragIntensity, 0) / 100
+			local addPer = self._battleSkill:getProp(BattlePropEnum.DragIntensityAddPer, 0)
+			speed = speed + speed * addPer / 100
+
+			enemy:beDraged(self._position, duration, speed, 0.8)
+		end
+	end
+
+	if self._cid == 20502 and self._view then
+		Client.playBattleSound("se_Ranger_150005_bullet")
+	end
+end
+
+function M:markToBeDestroyed(reason)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.markToBeDestroyed(self, reason)
+
+	if self._cid == 20800 and self._battleWeapon:getEffect(20802) then
+		local sub = self._battleWeapon._subFly
+
+		if sub._advance then
+			-- Nothing
+		elseif self._view then
+			self._view:explodeEvent()
+		end
+	elseif self._view then
+		self._view:explodeEvent()
+	end
+end
+
+return M

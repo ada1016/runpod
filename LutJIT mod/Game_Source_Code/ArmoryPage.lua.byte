@@ -1,0 +1,109 @@
+local M = class("ArmoryPage", requireLua("BasePanel"))
+local Types = Types
+local WeaponWidget = requireLua("WeaponWidget")
+M.args = {
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	txtCritValue = Types.TMP_Text,
+	tfPages = Types.Transform,
+	btnSkill = Types.Button
+}
+local ROW_CELL = 4
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goWeapons = {}
+	self._firstEnhanceWidget = nil
+
+	for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		local id = D.WEAPON_ORDER[i]
+		local conf = D._weaponConfig[id]
+
+		if conf then
+			self._goWeapons[i] = WeaponWidget.create(self._tfScrollContainer)
+
+			self:setClick(self._goWeapons[i]._btnClick, function ()
+				if P._playerArmory:isWeaponUnlocked(id) then
+					UIManager.openPanel(PrefabDefine.WeaponSystemPanel, id, function ()
+						self:updateUI()
+					end)
+				else
+					V.showToast({
+						SID.TIP_UNLOCK_LEVEL,
+						conf._unlockLevel
+					})
+				end
+			end)
+		end
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnSkill, function ()
+		UIManager.openPanel(PrefabDefine.WeaponSelectSkillPanel, D.SkinType.Weapon)
+		self._btnSkill.dot:SetActive(false)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		local id = D.WEAPON_ORDER[i]
+		local conf = D._weaponConfig[id]
+
+		if conf then
+			self:updateWeaponUI(self._goWeapons[i], id)
+		end
+	end
+
+	self._txtCritValue.text = string.formatNumber(P._playerArmory:getWeaponCritValue()) .. "%"
+
+	self._btnSkill:SetActive(#P._playerSkin:getAvailableSkills(D.SkinType.Weapon) > 0)
+	self._btnSkill.dot:SetActive(P._playerSkin:hasNewSkillFlag(D.SkinType.Weapon))
+end
+
+function M:updateWeaponUI(go, id)
+	local conf = D._weaponConfig[id]
+	local level = P._playerArmory:getWeaponLevel(id)
+
+	go:init(id, level)
+
+	local shardNum = P._playerAsset:getAssetNum(conf._shardId)
+
+	if P._playerArmory:isMaxLevel(id) then
+		go:setProgress(1, 1)
+		go._txtProgress:SetLocalize(SID.TIP_MAX_LEVEL)
+	else
+		go:setProgress(shardNum, P._playerArmory:getUpgradeShardCost(id, level))
+	end
+
+	local canUpgrade = P._playerArmory:canUpgradeWeapon(id)
+
+	if canUpgrade and not self._firstEnhanceWidget then
+		self._firstEnhanceWidget = go._btnClick
+	end
+
+	local skinDot = P._playerSkin:canUpgradeSkinByType(D.SkinType.Weapon, id) or P._playerSkin:canEquipSkinByType(D.SkinType.Weapon, id) or P._playerSkin:hasNewSkillFlag(D.SkinType.Weapon, id)
+
+	go:setDot(P._playerArmory:isWeaponUnlocked(id) and (P._playerArmory:canUpgradeWeapon(id) or skinDot))
+	go:setLock(not P._playerArmory:isWeaponUnlocked(id))
+	go:setLockLevel(conf._unlockLevel)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:OnFocus()
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+return M

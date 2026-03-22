@@ -1,0 +1,820 @@
+local M = class("ActivityLottery2Panel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	btnActivityIssue = Types.Button,
+	tfDownRewardContainer = Types.Transform,
+	tfDownRewardContainer2 = Types.Transform,
+	tfUpRewardContainer = Types.Transform,
+	tfDownRewardContainerAnim = Types.Transform,
+	tfDownRewardContainer2Anim = Types.Transform,
+	tfUpRewardContainerAnim = Types.Transform,
+	txtActivityCountdown = Types.TMP_Text,
+	btnDrawOne = Types.Button,
+	btnDrawMulti = Types.Button,
+	imgIconOne = Types.Image,
+	txtRecoverTime = Types.TMP_Text,
+	txtDrawOne = Types.TMP_Text,
+	txtOneCostNum = Types.TMP_Text,
+	txtDrawMulti = Types.TMP_Text,
+	txtMultiCostNum = Types.TMP_Text,
+	btnSkipAnim = Types.Button,
+	btnSpineDetail = Types.Button,
+	animChangeSpine = Types.Animation,
+	goSpineWidget = Types.GameObject,
+	goSpineWidgetNext = Types.GameObject,
+	goChooseVfx = Types.GameObject,
+	upRewardsAnim = Types.Animation,
+	downRewardsAnim = Types.Animation,
+	goResetRewards = Types.GameObject,
+	btnResetRewards = Types.Button,
+	goAnnounce = Types.GameObject,
+	tfTitleShortScreen = Types.Transform,
+	tfTitleLongScreen = Types.Transform
+}
+local Activity2ItemWidget = requireLua("Activity2ItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+	local x1, y1 = lc.getPosition(self._goAnnounce)
+	local x2, y2 = lc.getPosition(self._tfTitleLongScreen)
+	local showShort = math.abs(y1 - y2) < 50
+
+	self._tfTitleLongScreen:SetActive(not showShort)
+	self._tfTitleShortScreen:SetActive(showShort)
+end
+
+function M:initPrefabVar()
+	self._goDownRewards = {}
+	self._goDownRewardsAnim = {}
+	self._downRewardsOriPositions = {}
+	self._downRewardsOriPositionsAnim = {}
+
+	for i = 1, 5 do
+		self._goDownRewards[#self._goDownRewards + 1] = self._tfDownRewardContainer:GetChild(i - 1).gameObject
+		self._goDownRewardsAnim[#self._goDownRewardsAnim + 1] = self._tfDownRewardContainerAnim:GetChild(i - 1).gameObject
+	end
+
+	for i = 1, 5 do
+		self._goDownRewards[#self._goDownRewards + 1] = self._tfDownRewardContainer2:GetChild(i - 1).gameObject
+		self._goDownRewardsAnim[#self._goDownRewardsAnim + 1] = self._tfDownRewardContainer2Anim:GetChild(i - 1).gameObject
+	end
+
+	self._goUpRewards = {}
+	self._goUpRewardsAnim = {}
+	self._upRewardsOriPositions = {}
+	self._upRewardsOriPositionsAnim = {}
+
+	for i = 1, 7 do
+		self._goUpRewards[#self._goUpRewards + 1] = self._tfUpRewardContainer:GetChild(i - 1).gameObject
+		self._goUpRewardsAnim[#self._goUpRewardsAnim + 1] = self._tfUpRewardContainerAnim:GetChild(i - 1).gameObject
+	end
+
+	for i = 1, #self._goDownRewards do
+		Activity2ItemWidget.noCreate(self._goDownRewards[i])
+		Activity2ItemWidget.noCreate(self._goDownRewardsAnim[i])
+	end
+
+	for i = 1, #self._goUpRewards do
+		Activity2ItemWidget.noCreate(self._goUpRewards[i])
+		Activity2ItemWidget.noCreate(self._goUpRewardsAnim[i])
+	end
+
+	self._goSpecialReward = self._goUpRewards[4]
+	self._goKeyReward = self._goDownRewards[3]
+
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+	SpineGraphicWidget.noCreate(self._goSpineWidgetNext)
+
+	self._goChooseVfxPool = {}
+	self._usingChooseVfxs = {}
+end
+
+function M:addClicks()
+	M.super.addClicks()
+	self:setClickWithoutAction(self._btnSpineDetail, function ()
+		local skinId = self._showSpineCids[self._showSpineIdx]
+
+		if skinId then
+			UIManager.openPanel(PrefabDefine.SkinInfoPanel, skinId)
+		end
+	end)
+	self:setClick(self._btnDrawOne, function ()
+		if self._rolling then
+			return
+		end
+
+		self:tryDealDraw(1)
+	end)
+	self:setClick(self._btnDrawMulti, function ()
+		if self._rolling then
+			return
+		end
+
+		self:tryDealDraw(10)
+	end)
+	self:setClick(self._btnSkipAnim, function ()
+		if self._rolling then
+			return
+		end
+
+		self:dealSkipAnimBtn()
+	end)
+	self:setClick(self._btnActivityIssue, function ()
+		if self._rolling then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.Activity2DescPanel, self._module, self._auid)
+	end)
+	self:setClick(self._btnResetRewards, function ()
+		self._module:tryResetRewards(self._auid)
+		self._upRewardsAnim:Play()
+		self:updateRewards()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self._upRewardsAnim.gameObject:GetComponent("AnimationEventCallback"):AddAnimationEvent(function ()
+		V.resetAnimToStartFrame(self._upRewardsAnim, "anim_ActivityItemRefresh_1")
+	end)
+	self._downRewardsAnim.gameObject:GetComponent("AnimationEventCallback"):AddAnimationEvent(function ()
+		V.resetAnimToStartFrame(self._downRewardsAnim, "anim_ActivityItemRefresh_2")
+	end)
+	self:on("day.cross", function ()
+		if not self._activityData then
+			return
+		end
+
+		if self:tryExpire() then
+			return
+		end
+
+		self:updateTimer()
+		self:updateCostUI()
+	end)
+end
+
+function M:init(parent, pageIdx, auid)
+	self:startUpdater()
+
+	self._parent = parent
+	self._pageIdx = pageIdx
+	self._module = P._playerWeekLottery2
+	self._auid = auid
+	self._activityData = P._playerActivity:getDataByUid(auid)
+	self._id = self._activityData.id
+	self._subType = self._activityData.subType
+	self._type = self._activityData.type
+
+	self._txtTitle:SetLocalize(self._module:readNameSid(self._subType))
+
+	local lb = LuaHelper.GetLuaBehaviour(self._goAnnounce)
+
+	lb:init(self._id)
+
+	local dropId = self._module:getDrawDropId(self._subType)
+	self._drops = DropHelper.readDropsById(dropId)
+	self._keyCid = self._module:readKeyCid(self._subType)
+
+	self:initDownDrops(self._drops, self._keyCid)
+
+	local upDropId = self._module:getUpDrawDropId(self._subType)
+	self._upDrops = DropHelper.readDropsById(upDropId)
+	self._specialCids = self._module:readSpeicalCids(self._subType)
+
+	self:initUpDrops(self._upDrops, self._specialCids)
+	self:updateCostUI()
+	self:updateUI()
+	self:openPanelTrace()
+end
+
+function M:openPanelTrace()
+	local day = Client.getDayIdx(Client.getCurTime() - self._activityData.startTime)
+
+	Trace.traceDesign_Activity("EventWeekDay:%s:%d", self._id, self._type, self._subType, Mathf.Clamp(day, -1, 31))
+end
+
+function M:showInternal(uid)
+	M.super.showInternal(self)
+	self:openPanelTrace()
+	self:startUpdater()
+	self:addEvents()
+	self:updateCostUI()
+	self:updateUI()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._refreshTimer)
+
+	self._refreshTimer = nil
+
+	self:removeEvents()
+	self._goSpineWidget:clearSpine()
+	self:stopUpdater()
+	M.super.hideInternal(self)
+end
+
+function M:initDownDrops(drops, keyId)
+	local downPoolGots = self._module:getDownPoolGots(self._auid)
+	self._downRemainIndexes = {}
+
+	for i = 1, #drops do
+		self._goDownRewards[i]:init(drops[i]._itemId, drops[i]._minNum)
+		self._goDownRewards[i]:showVfx(false)
+		self._goDownRewardsAnim[i]:init(drops[i]._itemId, drops[i]._minNum)
+		self._goDownRewardsAnim[i]:showVfx(false)
+		self._goDownRewardsAnim[i]:setClaimed(false)
+		self:setClick(self._goDownRewards[i]._btnClick, function ()
+			self._goDownRewards[i]:rewardclickCallback()
+		end)
+
+		local index = table.findArray(downPoolGots, function (e)
+			return e[1] == drops[i]._itemId and e[2] == drops[i]._minNum
+		end)
+
+		if not index then
+			self._goDownRewards[i]:setClaimed(false)
+
+			self._downRemainIndexes[#self._downRemainIndexes + 1] = i
+		else
+			self._goDownRewards[i]:setClaimed(true)
+		end
+	end
+end
+
+function M:initUpDrops(drops, specialCids)
+	local upPoolGots = self._module:getUpPoolGots(self._auid)
+	self._upRemainIndexes = {}
+
+	for i = 1, #drops do
+		self._goUpRewards[i]:init(drops[i]._itemId, drops[i]._minNum)
+		self._goUpRewardsAnim[i]:init(drops[i]._itemId, drops[i]._minNum)
+		self._goUpRewardsAnim[i]:showVfx(true)
+		self._goUpRewardsAnim[i]:setClaimed(false)
+		self:setClick(self._goUpRewards[i]._btnClick, function ()
+			self._goUpRewards[i]:rewardclickCallback()
+		end)
+
+		local index = table.findArray(upPoolGots, function (e)
+			return e[1] == drops[i]._itemId and e[2] == drops[i]._minNum
+		end)
+
+		if not index then
+			self._goUpRewards[i]:setClaimed(false)
+			self._goUpRewards[i]:showVfx(true)
+			self._goUpRewards[i]._goVfx:GetComponent("Animation"):Play("anim_ActivityVfx_1")
+
+			self._upRemainIndexes[#self._upRemainIndexes + 1] = i
+		else
+			self._goUpRewards[i]:setClaimed(true)
+			self._goUpRewards[i]:showVfx(false)
+		end
+	end
+
+	self._showRandomSpineCids = specialCids[1]
+	local cids, nums = P._playerAsset:getInsideAssets(self._showRandomSpineCids)
+	self._showSpineCids = cids
+
+	self._goSpineWidgetNext:updateUI(self._showSpineCids[1], self._showSpineCids[1] - 10000)
+
+	self._showSpineIdx = 1
+end
+
+function M:updateCostUI()
+	self._txtDrawOne:SetLocalize(SID.DRAW_NUM, 1)
+	self._txtDrawMulti:SetLocalize(SID.DRAW_NUM, 10)
+
+	local costCid, costNum = self._module:readOneCost(self._subType)
+	self._txtMultiCostNum.text = costNum * 10
+	local haveFree = self._module:haveFree(self._auid)
+
+	self._imgIconOne.gameObject:SetActive(not haveFree)
+	self._btnDrawOne.dot:SetActive(haveFree)
+
+	if haveFree then
+		self._txtOneCostNum:SetLocalize(SID.STR_FREE)
+	else
+		self._txtOneCostNum.text = costNum
+	end
+end
+
+function M:updateUI()
+	self:updateRewards()
+	self:updateSkip()
+	self:updateTimer()
+end
+
+function M:updateRewards()
+	local downPoolGots = self._module:getDownPoolGots(self._auid)
+	self._downRemainIndexes = {}
+
+	for i = 1, #self._drops do
+		local index = table.findArray(downPoolGots, function (e)
+			return e[1] == self._drops[i]._itemId and e[2] == self._drops[i]._minNum
+		end)
+
+		if not index then
+			self._goDownRewards[i]:setClaimed(false)
+
+			self._downRemainIndexes[#self._downRemainIndexes + 1] = i
+		else
+			self._goDownRewards[i]:setClaimed(true)
+		end
+	end
+
+	self._upRemainIndexes = {}
+	local upPoolGots = self._module:getUpPoolGots(self._auid)
+
+	for i = 1, #self._upDrops do
+		local index = table.findArray(upPoolGots, function (e)
+			return e[1] == self._upDrops[i]._itemId and e[2] == self._upDrops[i]._minNum
+		end)
+
+		if not index then
+			self._goUpRewards[i]:setClaimed(false)
+			self._goUpRewards[i]:showVfx(true)
+			self._goUpRewards[i]._goVfx:GetComponent("Animation"):Play("anim_ActivityVfx_1")
+
+			self._upRemainIndexes[#self._upRemainIndexes + 1] = i
+		else
+			self._goUpRewards[i]:setClaimed(true)
+			self._goUpRewards[i]:showVfx(false)
+		end
+	end
+
+	self._goResetRewards:SetActive(self._module:canRefreshUpPool(self._auid))
+end
+
+function M:updateTimer()
+	lc.stopTimer(self._refreshTimer)
+
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		return
+	end
+
+	local endTime = self._activityData.endTime
+	local leftTime = endTime - C.getCurTime()
+	local haveFree = self._module:haveFree(self._auid)
+
+	self._txtRecoverTime.gameObject:SetActive(D.DAY_SECONDS < leftTime and not haveFree)
+
+	self._dayEndTime = Client.getZeroTimestamp(C.getCurTime(), 1)
+
+	self:updateTimeText()
+
+	self._refreshTimer = lc.setInterval(function ()
+		self:updateTimeText()
+	end, 1)
+end
+
+function M:updateSkip()
+	local isSkip = self:getSkipAnim()
+
+	self._btnSkipAnim.transform:GetChild(1):SetActive(isSkip)
+end
+
+function M:Update()
+	self:updateSpine()
+end
+
+function M:updateDot()
+	RedDotManager.update("city.home.weeklottery")
+	self._parent:updateDot(self._pageIdx)
+end
+
+function M:updateSpine()
+	if not self._spineShowElapsed then
+		self._spineShowElapsed = 0
+	end
+
+	self._spineShowElapsed = self._spineShowElapsed + Time.deltaTime
+
+	if self._spineShowElapsed > 5 then
+		self._spineShowElapsed = 0
+
+		self:changeSpine()
+	end
+end
+
+function M:changeSpine()
+	if #self._showSpineCids <= 1 then
+		return
+	end
+
+	local oldSkinId = self._showSpineCids[self._showSpineIdx] or self._showSpineCids[1]
+	self._showSpineIdx = self._showSpineIdx + 1
+
+	if self._showSpineIdx > #self._showSpineCids then
+		self._showSpineIdx = 1
+	end
+
+	local skinId = self._showSpineCids[self._showSpineIdx]
+
+	self._goSpineWidgetNext:updateUI(skinId, skinId - 10000)
+	self._goSpineWidget:updateUI(oldSkinId, skinId - 10000)
+	self._animChangeSpine:Play("anim_RoleSwitch1")
+end
+
+function M:updateTimeText()
+	if not P._playerActivity:isOpeningByUid(self._auid) then
+		V.formatLeftTime(self._txtActivityCountdown, 0, 2)
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(0))
+
+		return
+	end
+
+	local haveFree = self._module:haveFree(self._auid)
+	local ct = Client.getCurTime()
+
+	if not haveFree then
+		local dt = math.max(0, self._dayEndTime - ct)
+
+		self._txtRecoverTime:SetLocalizeS(SID.FREE_IN, V.formatTimeS2HMS(dt))
+	end
+
+	local endTime = self._activityData.endTime
+	local d, h, m, s = C.getTimeEndArgs(endTime - ct)
+
+	if d >= 2 then
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._txtActivityCountdown:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:dealSkipAnimBtn()
+	local newValue = self:getSkipAnim() and 0 or 1
+
+	lc.setIntKeyValue("activity_lottery_2_skip_anim_" .. self._auid, newValue)
+	self:updateSkip()
+end
+
+function M:getSkipAnim()
+	return lc.getIntKeyValue("activity_lottery_2_skip_anim_" .. self._auid, 0) == 1
+end
+
+function M:tryDealDraw(drawNum, forceDiamond)
+	Client.checkNetworkAsync(function ()
+		self:dealDraw(drawNum, forceDiamond)
+	end)
+end
+
+function M:dealDraw(drawNum, forceDiamond)
+	if self:tryExpire() then
+		return
+	end
+
+	local result, rewards, resultIdxs = nil
+	local haveFree = self._module:haveFree(self._auid)
+
+	if not forceDiamond and drawNum == 1 and haveFree then
+		result, rewards, resultIdxs = self._module:tryFreeLottery(self._auid, drawNum > 1)
+
+		self:updateTimer()
+		self:updateCostUI()
+		self:updateDot()
+	end
+
+	if result == ResultCode.OK then
+		self:playLotteryAnim(rewards, resultIdxs, drawNum)
+
+		return
+	end
+
+	self:dealDiamondDrawLogicCheck(drawNum)
+end
+
+function M:dealDiamondDrawLogicCheck(drawNum)
+	local promptKey = "diamond_use"
+	local costCid, costNum = self._module:readOneCost(self._subType)
+	costNum = costNum * drawNum
+	local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+		self:dealDiamondDrawLogic(drawNum)
+	end)
+
+	if not ret then
+		self:dealDiamondDrawLogic(drawNum)
+	end
+end
+
+function M:dealDiamondDrawLogic(drawNum)
+	local result, rewards, resultIdxs = self._module:tryLottery(self._auid, drawNum or 1)
+
+	if result ~= ResultCode.OK then
+		local costCid, _ = self._module:readOneCost(self._subType)
+
+		if result == ResultCode.RESOURCE_NOT_ENOUGH and costCid == D.ResType.diamond then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, nil, D.PurchaseChannel.Activity)
+
+			return
+		end
+
+		V.showResultCode(result)
+
+		return
+	end
+
+	self:playLotteryAnim(rewards, resultIdxs, drawNum)
+end
+
+function M:playLotteryAnim(rewards, resultIdxs, drawNum)
+	MainGameRoot:showGlobalMask()
+
+	self._downRewardsChanged = false
+	self._upRewardsChanged = false
+
+	self:recycleAllUsingChooseVfx()
+
+	local seq = DOTween.Sequence()
+
+	seq:SetLink(self.gameObject)
+
+	local selectedIndexes = {}
+	local isDown = true
+	local gotKey = false
+	self._rolling = true
+
+	if not self:getSkipAnim() then
+		for i = 1, #resultIdxs do
+			if isDown then
+				local id = resultIdxs[i]
+
+				if id == 3 then
+					selectedIndexes[#selectedIndexes + 1] = 3
+
+					self:playDownRewardAnim(seq, self._downRemainIndexes, selectedIndexes)
+					self:playKeyAnim(seq, resultIdxs[i + 1])
+					self:playUpRewardAnim(seq, resultIdxs[i + 1])
+
+					selectedIndexes = {}
+					gotKey = true
+					isDown = false
+				else
+					selectedIndexes[#selectedIndexes + 1] = id
+				end
+			else
+				isDown = true
+			end
+		end
+
+		if #selectedIndexes > 0 then
+			if gotKey then
+				local remainIndexs = {}
+
+				for i = 1, #self._goDownRewards do
+					remainIndexs[#remainIndexs + 1] = i
+				end
+
+				self:playDownRewardAnim(seq, remainIndexs, selectedIndexes)
+			else
+				self:playDownRewardAnim(seq, self._downRemainIndexes, selectedIndexes)
+			end
+		end
+	else
+		self:updateRewards()
+	end
+
+	seq:AppendCallback(function ()
+		MainGameRoot:hideGlobalMask()
+		self._goResetRewards:SetActive(self._module:canRefreshUpPool(self._auid))
+
+		local costCid, num = self._module:readOneCost(self._subType)
+
+		UIManager.openPanel(PrefabDefine.LotteryRewardPanel, rewards, {
+			activityType = self._type,
+			moreCostCid = costCid,
+			moreCostNum = num * drawNum,
+			moreDrawNum = drawNum,
+			extendBtnCallback = function ()
+				self._rolling = false
+
+				self:tryDealDraw(drawNum, true)
+			end
+		}, function ()
+			self._rolling = false
+
+			if self:tryExpire() then
+				return
+			end
+		end)
+	end)
+end
+
+function M:playKeyAnim(seq, upIndex)
+	local t = 1
+
+	seq:AppendCallback(function ()
+		V.playWeekActivityKeyFlyVfx(self._goKeyReward.transform, self._goUpRewards[upIndex].transform, V.QUALITY_TRIANGLE[D.Quality.Blue], t)
+	end)
+	seq:AppendInterval(t)
+end
+
+function M:playUpRewardAnim(seq, index)
+	seq:AppendCallback(function ()
+		self._goUpRewards[index]._atorSelect:SetTrigger("chooseAnim")
+
+		local vfx = self:getChooseVfx()
+		self._usingChooseVfxs[#self._usingChooseVfxs + 1] = vfx
+
+		vfx:SetPosition(self._goUpRewards[index].transform:GetPosition())
+		vfx:SetActive(true)
+	end)
+	seq:AppendInterval(0.4)
+	seq:AppendCallback(function ()
+		table.clear(self._downRemainIndexes)
+		table.erase(self._upRemainIndexes, index)
+
+		for i = 1, #self._goDownRewards do
+			self._goDownRewards[i]:setClaimed(false)
+
+			self._downRemainIndexes[#self._downRemainIndexes + 1] = i
+		end
+
+		self._goUpRewards[index]._goVfx:GetComponent("Animation"):Play("anim_ActivityVfx_2")
+		self._downRewardsAnim:Play()
+
+		if index == 3 or index == 4 then
+			Client.playSound("ui_Draw_resultwin_1")
+		else
+			Client.playSound("ui_Draw_result_1")
+		end
+	end)
+
+	if index == 3 or index == 4 then
+		seq:AppendInterval(0.2)
+		seq:AppendCallback(function ()
+			Client.playSound("ui_Draw_unlock")
+		end)
+		seq:AppendInterval(0.4)
+		seq:AppendCallback(function ()
+			Client.playSound("ui_Draw_glassbroken_loud")
+		end)
+		seq:AppendInterval(1.4)
+	else
+		seq:AppendInterval(0.2)
+		seq:AppendCallback(function ()
+			Client.playSound("ui_Draw_unlock")
+		end)
+		seq:AppendInterval(0.4)
+		seq:AppendCallback(function ()
+			Client.playSound("ui_Draw_glassbroken")
+		end)
+		seq:AppendInterval(1.4)
+	end
+
+	seq:AppendCallback(function ()
+		self._goUpRewards[index]:setClaimed(true)
+
+		if #self._upRemainIndexes == 0 then
+			for i = 1, #self._goUpRewards do
+				self._goUpRewards[i]:setClaimed(false)
+				self._goUpRewards[i]:showVfx(true)
+				self._goUpRewards[i]._goVfx:GetComponent("Animation"):Play("anim_ActivityVfx_1")
+
+				self._upRemainIndexes[#self._upRemainIndexes + 1] = i
+
+				self._upRewardsAnim:Play()
+			end
+		end
+	end)
+	seq:AppendInterval(1)
+end
+
+function M:playDownRewardAnim(seq, remainIndexes, selectedIndexes)
+	local remainLen = #remainIndexes
+
+	if remainLen > 1 then
+		for i = 1, 20 do
+			if i % remainLen == 1 then
+				table.shuffle(remainIndexes, math.randomer())
+			end
+
+			local index = remainIndexes[i % remainLen] or remainIndexes[#remainIndexes]
+
+			seq:AppendCallback(function ()
+				self._goDownRewards[index]._atorSelect.speed = 1
+
+				self._goDownRewards[index]._atorSelect:SetTrigger("chooseAnim")
+				Client.playSound("ui_Draw_process_1")
+			end)
+			seq:AppendInterval(i <= 16 and 0.15 or 0.15 + ((i == 20 and 21 or i) - 16) * 0.1)
+		end
+	end
+
+	seq:AppendCallback(function ()
+		for i = 1, #selectedIndexes do
+			local index = selectedIndexes[i]
+			self._goDownRewards[index]._atorSelect.speed = 0.7
+
+			self._goDownRewards[index]._atorSelect:SetTrigger("chooseAnim")
+			Client.playSound("ui_Draw_process_1")
+			table.erase(self._downRemainIndexes, index)
+		end
+	end)
+	seq:AppendInterval(0.1)
+	seq:AppendCallback(function ()
+		local hasKey = false
+
+		for i = 1, #selectedIndexes do
+			local index = selectedIndexes[i]
+
+			self._goDownRewards[index]._atorResultChoose:SetBool("get", true)
+			self._goDownRewards[index]._atorResultChoose:SetTrigger("chooseAnim")
+
+			if index == 3 then
+				hasKey = true
+			end
+
+			local vfx = self:getChooseVfx()
+			self._usingChooseVfxs[#self._usingChooseVfxs + 1] = vfx
+
+			vfx:SetPosition(self._goDownRewards[index].transform:GetPosition())
+			vfx:SetActive(true)
+		end
+
+		if hasKey then
+			Client.playSound("ui_Draw_resultwin_1")
+		else
+			Client.playSound("ui_Draw_result_1")
+		end
+	end)
+	seq:AppendInterval(1)
+	seq:AppendCallback(function ()
+		for i = 1, #selectedIndexes do
+			local index = selectedIndexes[i]
+
+			self._goDownRewards[index]:setClaimed(true)
+			self._goDownRewards[index]._atorResultChoose:SetBool("get", false)
+			self._goDownRewards[index]._atorResultChoose:ResetTrigger("chooseAnim")
+		end
+	end)
+end
+
+function M:isExpired()
+	return self._activityData.endTime < C.getCurTime()
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return true
+	end
+
+	if not self:isExpired() then
+		return false
+	end
+
+	if self._rolling then
+		return
+	end
+
+	self._expireDealed = true
+
+	V.showMessageBox({
+		_type = 1,
+		_content = SID.TIP_EVENT_END,
+		_confirmCallback = function ()
+			UIManager.closeToPanelOrMain()
+		end
+	})
+
+	return true
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._refreshTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:getChooseVfx()
+	if #self._goChooseVfxPool > 0 then
+		local vfx = self._goChooseVfxPool[1]
+
+		table.remove(self._goChooseVfxPool, 1)
+
+		return vfx
+	end
+
+	return GameObject.Instantiate(self._goChooseVfx, self.gameObject.transform)
+end
+
+function M:recycleChooseVfx(vfx)
+	vfx:SetActive(false)
+
+	self._goChooseVfxPool[#self._goChooseVfxPool + 1] = vfx
+end
+
+function M:recycleAllUsingChooseVfx()
+	for i = 1, #self._usingChooseVfxs do
+		self:recycleChooseVfx(self._usingChooseVfxs[i])
+	end
+
+	table.clear(self._usingChooseVfxs)
+end
+
+return M

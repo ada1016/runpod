@@ -1,0 +1,302 @@
+local M = class("PlayerLevelFund")
+local Cfg = {
+	LevelEvent = "fund.level.change",
+	Reddot = "city.home.special.levelfund",
+	PeriodTime = 999,
+	LogWay = D.LogWay.level_fund,
+	DataCfg = D._levelFundConfig
+}
+
+function M:init(meta)
+	self._meta = meta
+	meta.unlock = meta.unlock or false
+	meta.level = meta.level or 1
+	meta.exp = meta.exp or 0
+	meta.period = meta.period or 0
+	meta.readPeriod = meta.readPeriod or 1
+	meta.beginTime = meta.beginTime or 0
+	meta.endTime = meta.endTime or 0
+	meta.claimData = meta.claimData or {}
+	self._claimData = meta.claimData
+	self._meta.unlockSteps = meta.unlockSteps or {
+		true
+	}
+	self._step = 2
+
+	self:processConfig()
+
+	self._rewardCfg = self._allCfg[self._meta.readPeriod]
+	self._addExpIgnoreLock = true
+	self._claimAllDirty = true
+	self._claimNum = 0
+
+	for k, v in pairs(self._claimData) do
+		for k, v in pairs(v) do
+			self._claimNum = self._claimNum + 1
+		end
+	end
+
+	self._rewardDirty = true
+	self._firstUnclaimRewardLevel = 1
+	self._firstUnclaimRewardStep = 1
+	self._rewardLevel = 1
+end
+
+function M:processConfig()
+	self._allCfg = {}
+
+	for id, data in ipairs(Cfg.DataCfg) do
+		if not self._allCfg[data._period] then
+			self._allCfg[data._period] = {}
+		end
+
+		self._allCfg[data._period][data._level] = data
+	end
+end
+
+function M:start()
+	if not self:isUnlock() then
+		self:unlockSystem()
+	end
+
+	if self:isUnlock() then
+		self:updateRewardLevel()
+	end
+end
+
+function M:dailyReset()
+end
+
+function M:unlockSystem()
+	if self._meta.unlock then
+		return
+	end
+
+	self._meta.unlock = true
+
+	self:initData(true)
+end
+
+function M:initData()
+	self._claimAllDirty = true
+	self._rewardDirty = true
+	self._claimNum = 0
+
+	table.clear(self._meta.unlockSteps)
+
+	self._meta.unlockSteps[1] = true
+	self._meta.beginTime = C.getTodayZeroTimestamp()
+	self._meta.endTime = self._meta.beginTime + D.DAY_SECONDS * Cfg.PeriodTime
+	self._meta.period = 1
+	self._meta.readPeriod = 1
+
+	table.clear(self._claimData)
+
+	self._rewardCfg = self._allCfg[self._meta.readPeriod]
+end
+
+function M:updateRewardLevel()
+	local curExp = self:getCurExp()
+
+	for i, cfg in ipairs(self._rewardCfg) do
+		if cfg._exp <= curExp then
+			self._rewardLevel = cfg._level
+		else
+			break
+		end
+	end
+end
+
+function M:isUnlock()
+	return self._meta.unlock
+end
+
+function M:isStepUnlock(step)
+	return self._meta.unlockSteps[step] == true
+end
+
+function M:isClaimed(level, step)
+	return self._claimData[step] and self._claimData[step][level] == true
+end
+
+function M:canClaim(level, step)
+	return self:readUpLevelExp(level) <= self:getCurExp() and self:isStepUnlock(step)
+end
+
+function M:claimAll(cache)
+	if not self._claimAllDirty then
+		return
+	end
+
+	local clevel = self:getCurRewardLevel()
+	local total = nil
+
+	for step = 1, self._step do
+		if self:isStepUnlock(step) then
+			for lv = self:getFirstRewardLevel(), clevel do
+				if not self:isClaimed(lv, step) then
+					self:setClaimed(lv, step)
+
+					local cids, nums = self:readRewards(lv, step)
+					total = total or {}
+
+					D.foldCidsAndNums2Rewards(total, cids, nums)
+				end
+			end
+		end
+	end
+
+	self._firstUnclaimRewardLevel = clevel
+	self._firstUnclaimRewardStep = 1
+	self._claimAllDirty = false
+	self._rewardDirty = false
+
+	if not cache and total and #total > 0 then
+		total = P._playerAsset:increaseAssetNumsByList(total, Cfg.LogWay)
+	end
+
+	RedDotManager.update(Cfg.Reddot)
+
+	return total
+end
+
+function M:claimReward(level, step)
+	self:setClaimed(level, step)
+
+	local cids, nums = self:readRewards(level, step)
+	local rewards = P._playerAsset:increaseAssetNums(cids, nums, Cfg.LogWay)
+	self._rewardDirty = true
+
+	RedDotManager.update(Cfg.Reddot)
+
+	return rewards
+end
+
+function M:readReward(level, step)
+	local cids, nums = nil
+
+	if step == 1 then
+		cids, nums = self:readRewardsStep1(level)
+	elseif step == 2 then
+		cids, nums = self:readRewardsStep2(level)
+	end
+
+	return cids[1], nums[1]
+end
+
+function M:readRewards(level, step)
+	if step == 1 then
+		return self:readRewardsStep1(level)
+	elseif step == 2 then
+		return self:readRewardsStep2(level)
+	end
+end
+
+function M:readRewardsStep1(level)
+	local cfg = self._rewardCfg[level]
+
+	return cfg._cids1, cfg._nums1
+end
+
+function M:readRewardsStep2(level)
+	local cfg = self._rewardCfg[level]
+
+	return cfg._cids2, cfg._nums2
+end
+
+function M:setClaimed(level, step)
+	if self._claimData[step] == nil then
+		self._claimData[step] = {}
+	end
+
+	self._claimData[step][level] = true
+	self._claimNum = self._claimNum + 1
+end
+
+function M:getFirstRewardLevel()
+	if self._rewardDirty then
+		local clevel = self:getCurRewardLevel()
+		local breakAll = false
+		self._firstUnclaimRewardLevel = clevel
+		self._firstUnclaimRewardStep = 1
+
+		for lv = 1, clevel do
+			for step = 1, self._step do
+				if self:isStepUnlock(step) and not self:isClaimed(lv, step) then
+					self._firstUnclaimRewardLevel = lv
+					self._firstUnclaimRewardStep = step
+					breakAll = true
+
+					break
+				end
+			end
+
+			if breakAll then
+				break
+			end
+		end
+
+		self._rewardDirty = false
+	end
+
+	return self._firstUnclaimRewardLevel, self._firstUnclaimRewardStep
+end
+
+function M:haveUnclaimRewards()
+	local lv, step = self:getFirstRewardLevel()
+
+	if lv < self:getCurRewardLevel() then
+		return true
+	elseif self:isStepUnlock(step) and not self:isClaimed(lv, step) then
+		return true
+	end
+
+	return false
+end
+
+function M:isAllRewardsClaimed()
+	return self._claimNum >= self._step * self:readMaxLevel()
+end
+
+function M:updateLevel()
+	local oldLv = self:getCurRewardLevel()
+
+	self:updateRewardLevel()
+
+	local level = self:getCurRewardLevel()
+
+	if oldLv ~= level then
+		self._rewardLevel = level
+		self._claimAllDirty = true
+		self._rewardDirty = true
+
+		RedDotManager.update(Cfg.Reddot)
+		SimpleEvent.emit(Cfg.LevelEvent)
+	end
+end
+
+function M:getCurRewardLevel()
+	return self._rewardLevel
+end
+
+function M:getCurExp()
+	return P:getLevel()
+end
+
+function M:readMaxLevel()
+	return #self._rewardCfg
+end
+
+function M:readUpLevelExp(level)
+	return self._rewardCfg[level] and self._rewardCfg[level]._exp or 0
+end
+
+function M:unlockStep(step)
+	self._meta.unlockSteps[step] = true
+	self._claimAllDirty = true
+	self._rewardDirty = true
+
+	RedDotManager.update(Cfg.Reddot)
+end
+
+return M

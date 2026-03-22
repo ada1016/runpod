@@ -1,0 +1,37 @@
+local M = class("BattleView", BLB)
+_G.BattleView = M
+local TablePool = TablePool
+M.args = {
+	pA = Types.Transform,
+	pB = Types.Transform,
+	pC = Types.Transform,
+	P = Types.Transform,
+	tfA = Types.Transform,
+	circlrA = Types.Transform
+}
+local requireLua = requireLua
+local math = math
+local BattleDefine = BattleDefine
+local DamageReason = BattleDefine.DamageReason
+local DestroyReason = BattleDefine.DestroyReason
+local BATTLE_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/%s.prefab"
+local BULLET_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/bullet/%s.prefab"
+local ENEMY_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/enemy/%s.prefab"
+local WEAPON_PREFAB_PATH_HOLDER = "Assets/Battle/Prefabs/Weapon/%s.prefab"
+local VFX_PREFAB_PATH_HOLDER = "Assets/LCVfx/Prefabs/Battle/%s.prefab"
+local BattleMathLib = BattleMathLib
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+	self:startUpdater()
+end
+
+function M:Update()
+	local pAx, pAy = self._tfA:GetPosition()
+	local pAx, pAy = self._circlrA:GetPosition()
+end
+
+return M

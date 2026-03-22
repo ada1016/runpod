@@ -1,0 +1,336 @@
+local M = class("UnionJoinPage", requireLua("BasePanel"))
+local Types = Types
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+local LangChooseArea = requireLua("LangChooseArea")
+local UnionSearchCtrl = requireLua("UnionSearchCtrl")
+M.args = {
+	btnTabJoin = Types.Button,
+	btnTabCreate = Types.Button,
+	goTabContentJoin = Types.GameObject,
+	goTabContentCreate = Types.GameObject,
+	imgTabJoin = Types.Image,
+	imgTabCreate = Types.Image,
+	textTabJoin = Types.TMP_Text,
+	textTabCreate = Types.TMP_Text,
+	goTabSelectJoin = Types.GameObject,
+	goTabSelectCreate = Types.GameObject,
+	btnEditFlag = Types.Button,
+	inputName = Types.InputField,
+	inputDesc = Types.InputField,
+	tmpNameCount = Types.TMP_Text,
+	tmpDescCount = Types.TMP_Text,
+	goFlagWidget = Types.GameObject,
+	goFlagSwitch = Types.GameObject,
+	tmpInputLevel = Types.TMP_InputField,
+	btnMiusLevel = Types.Button,
+	btnAddLevel = Types.Button,
+	tmpInputAtk = Types.TMP_InputField,
+	btnMiusAtk = Types.Button,
+	btnAddAtk = Types.Button,
+	btnStateClose = Types.Button,
+	btnStateOpen = Types.Button,
+	btnLanguage = Types.Button,
+	textLanguage = Types.Text,
+	tmpLanguage = Types.TMP_Text,
+	goLanguageChoose = Types.GameObject,
+	btnCreate = Types.Button,
+	textCreateCost = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goTabContents = {
+		self._goTabContentJoin,
+		self._goTabContentCreate
+	}
+	self._imgTabs = {
+		self._imgTabJoin,
+		self._imgTabCreate
+	}
+	self._txtTabs = {
+		self._textTabJoin,
+		self._textTabCreate
+	}
+	self._goSelectedTabs = {
+		self._goTabSelectJoin,
+		self._goTabSelectCreate
+	}
+
+	self._goTabContentJoin:SetActive(true)
+	self._goTabContentCreate:SetActive(false)
+
+	self._tabIndex = 1
+
+	self:showPage(1)
+end
+
+function M:addClicks()
+	self:setClick(self._btnTabJoin, function ()
+		self:showPage(1)
+	end)
+	self:setClick(self._btnTabCreate, function ()
+		self:showPage(2)
+	end)
+	self:setClick(self._btnEditFlag, function ()
+		local lb = UIManager.openPanel(PrefabDefine.UnionFlagEditPanel, NetPack.UnionCreateReqPack)
+
+		function lb._confirmCallback()
+			self._flagSelected = true
+
+			self._goFlagWidget:SetActive(true)
+			self._goFlagSwitch:SetActive(true)
+			self:updateFlag()
+		end
+	end)
+	self:setClick(self._btnMiusLevel, function ()
+		self:doChangeLevelStep(-10)
+	end)
+	self:setClick(self._btnAddLevel, function ()
+		self:doChangeLevelStep(10)
+	end)
+	self:setClick(self._btnMiusAtk, function ()
+		self:doChangeAtkStep(-1000)
+	end)
+	self:setClick(self._btnAddAtk, function ()
+		self:doChangeAtkStep(1000)
+	end)
+	self:setClick(self._btnStateClose, function ()
+		self._netUnionCreateReqPack.need_apply = false
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(true)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(false)
+	end)
+	self:setClick(self._btnStateOpen, function ()
+		self._netUnionCreateReqPack.need_apply = true
+
+		self._btnStateClose:GetComponent("TabSelector"):SetSelected(false)
+		self._btnStateOpen:GetComponent("TabSelector"):SetSelected(true)
+	end)
+	self:setClick(self._btnLanguage, function ()
+		self._goLanguageChoose:doAction(self._netUnionCreateReqPack.language)
+	end)
+	self:setClick(self._btnCreate, function ()
+		self:onClickCreateUnion()
+	end)
+end
+
+function M:addEvents()
+	self._inputName.onEndEdit:AddListener(function (pt)
+		self._netUnionCreateReqPack.name = pt
+	end)
+	self._inputName.onValueChanged:AddListener(function (pt)
+		local is_valid, weighted_length = string.checkInputLength(pt, D.UnionNameMaxLength)
+
+		if not is_valid then
+			local truncated = string.truncateToMaxLength(pt, D.UnionNameMaxLength)
+			self._inputName.text = truncated
+		end
+
+		self._tmpNameCount.text = string.format("%d/%d", math.min(D.UnionNameMaxLength, weighted_length), D.UnionNameMaxLength)
+	end)
+	self._inputDesc.onEndEdit:AddListener(function (pt)
+		self._netUnionCreateReqPack.desc = pt
+	end)
+	self._inputDesc.onValueChanged:AddListener(function (pt)
+		local is_valid, weighted_length = string.checkInputLength(pt, D.UnionDescMaxLength)
+
+		if not is_valid then
+			local truncated = string.truncateToMaxLength(pt, D.UnionDescMaxLength)
+			self._inputDesc.text = truncated
+		end
+
+		self._tmpDescCount.text = string.format("%d/%d", math.min(D.UnionDescMaxLength, weighted_length), D.UnionDescMaxLength)
+	end)
+
+	self._tmpNameCount.text = string.format("%d/%d", 0, D.UnionNameMaxLength)
+	self._tmpDescCount.text = string.format("%d/%d", 0, D.UnionDescMaxLength)
+
+	self._tmpInputLevel.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 1
+
+		self:doChangeLevel(pt)
+	end)
+	self._tmpInputAtk.onEndEdit:AddListener(function (pt)
+		pt = tonumber(pt) or 0
+
+		self:doChangeAtk(pt)
+	end)
+end
+
+function M:init(unionWaitingPage)
+	self._unionWaitingPage = unionWaitingPage
+	self._netUnionCreateReqPack = NetPack.UnionCreateReqPack
+
+	self:updateFlag()
+
+	self._textCreateCost.text = D._globalConfig._union_create_cost
+
+	self:updateLanguage()
+
+	self._tmpInputAtk.text = self._netUnionCreateReqPack.require_atk
+	self._tmpInputLevel.text = self._netUnionCreateReqPack.require_level
+	self._inputName.placeholder.text = LcLocalization.getTextStr(SID.TAP_TO_ENTER)
+	self._inputDesc.placeholder.text = LcLocalization.getTextStr(SID.TAP_TO_ENTER)
+
+	self._goFlagWidget:SetActive(false)
+	self._goFlagSwitch:SetActive(false)
+end
+
+function M:initPrefabVar()
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+	LangChooseArea.noCreate(self._goLanguageChoose)
+
+	self._searchCtrl = UnionSearchCtrl.noCreate(self._goTabContentJoin)
+
+	self._goLanguageChoose:init(self, function (langId)
+		self._netUnionCreateReqPack.language = langId
+
+		self:updateLanguage()
+	end)
+	self._goTabContentJoin:init(self)
+end
+
+function M:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:OnFocus()
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._searchCtrl then
+		self._searchCtrl:OnDestroy()
+	end
+end
+
+function M:updateContentJoin()
+end
+
+function M:showPage(index)
+	if self._tabIndex == index then
+		return
+	end
+
+	if self._tabIndex ~= 0 then
+		self._imgTabs[self._tabIndex].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[self._tabIndex].color = Color.str2Static(V.tabUnSelectTextColor)
+
+		LuaUnity.setTPSprite(self._imgTabs[1], index == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		self._goTabContents[self._tabIndex]:SetActive(false)
+		self._goSelectedTabs[self._tabIndex]:SetActive(false)
+	end
+
+	self._tabIndex = index
+	self._imgTabs[index].color = Color.str2Static(V.tabSelectedColor)
+	self._txtTabs[index].color = Color.str2Static(V.tabSelectTextColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[2], index == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+	self._goTabContents[index]:SetActive(true)
+	self._goSelectedTabs[index]:SetActive(true)
+
+	if index == 2 then
+		self._goLanguageChoose._langWidgetopened = false
+	end
+end
+
+function M:doChangeLevelStep(dt)
+	local require_level = self._netUnionCreateReqPack.require_level + dt
+
+	if require_level > 100 then
+		require_level = 0
+	elseif require_level < 0 then
+		require_level = 100
+	end
+
+	self:doChangeLevel(require_level)
+end
+
+function M:doChangeLevel(pt)
+	self._netUnionCreateReqPack.require_level = math.max(pt, 0)
+	self._tmpInputLevel.text = pt
+end
+
+function M:doChangeAtk(pt)
+	self._netUnionCreateReqPack.require_atk = math.max(pt, 0)
+	self._tmpInputAtk.text = pt
+end
+
+function M:doChangeAtkStep(dt)
+	local require_atk = self._netUnionCreateReqPack.require_atk + dt
+
+	if require_atk > 10000 then
+		require_atk = 0
+	elseif require_atk < 0 then
+		require_atk = 10000
+	end
+
+	self:doChangeAtk(require_atk)
+end
+
+function M:updateFlag()
+	local pack = self._netUnionCreateReqPack
+
+	self._goFlagWidget:init(pack.avatar_base, pack.avatar_badge)
+end
+
+function M:onClickCreateUnion()
+	if P:getLevel() < D._systemUnlockConfig[36]._unlockVal then
+		V.showToast({
+			SID.UNION_CREATE_TIPS4,
+			D._systemUnlockConfig[36]._unlockVal
+		})
+
+		return
+	end
+
+	if P._playerAsset:getAssetNum(D.ResType.diamond) < D._globalConfig._union_create_cost then
+		UIManager.openPanel(PrefabDefine.DiamondPanel)
+
+		return
+	end
+
+	if not self._flagSelected then
+		V.showToast(SID.UNION_CREATE_TIPS0)
+
+		return
+	end
+
+	local pack = self._netUnionCreateReqPack
+
+	if pack.name:len() == 0 then
+		V.showToast(SID.UNION_CREATE_TIPS1)
+
+		return
+	end
+
+	if not string.hasNoSpecialChars(self._netUnionCreateReqPack.name) then
+		V.showToast(SID.CN_INPUT_VAILD)
+
+		return
+	end
+
+	self._unionWaitingPage._goSyncWaiting:SetActive(true)
+	P._playerUnion:tryCreateUnion()
+end
+
+function M:updateLanguage()
+	local langId = self._netUnionCreateReqPack.language
+
+	if langId == 1 then
+		self._textLanguage.text = LcLocalization.getTextStr(SID.ALL_LANGUAGE_STR)
+	else
+		self._textLanguage.text = D.UnionLanguages[langId]
+	end
+
+	self._tmpLanguage.text = ""
+end
+
+return M

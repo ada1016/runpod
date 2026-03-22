@@ -1,0 +1,60 @@
+local M = class("DomeRankWidget")
+local RANK_IMG = {
+	"general/g_icon_28",
+	"general/g_icon_29",
+	"general/g_icon_30"
+}
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DomeRankWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtName, data)
+
+	local rank = data.rank
+
+	if rank <= 3 then
+		self._txtRank.gameObject:SetActive(false)
+		self._imgBgRank:SetActive(true)
+		LuaUnity.setTPSprite(self._imgBgRank, RANK_IMG[rank])
+	else
+		self._txtRank.gameObject:SetActive(true)
+		self._imgBgRank:SetActive(false)
+
+		if data.rank == 9999 then
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		else
+			self._txtRank.text = data.rank
+		end
+	end
+
+	if self._txtAtk then
+		self._txtAtk.text = data.atk or 0
+	end
+
+	local rankValue = math.floor(data.rankValue)
+
+	V.loadAvatar(self._tfAvatar, data.avatar, data.avatarFrame)
+
+	if lc._isCN then
+		self._txtScoreNum.text = rankValue
+	else
+		self._txtScoreNum.text = math.floor(rankValue / 1000000)
+	end
+end
+
+return M

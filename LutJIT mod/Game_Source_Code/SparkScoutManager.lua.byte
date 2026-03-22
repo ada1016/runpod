@@ -1,0 +1,134 @@
+local M = class("SparkScoutManager", BLB)
+M.args = {
+	camera = Types.Camera,
+	atorRole = Types.Animator,
+	tfSkeletonAnim = Types.Transform,
+	animVfxGuan = Types.Animation,
+	animVfx = Types.Animation,
+	animVfxWhite = Types.Animation
+}
+M.FIT_SHIP_WIDTH_PREVIEW = 8.2
+M.FIT_SHIP_WIDTH_MAIN = 8
+M.FIT_SHIP_WIDTH_MAIN_OPEN = 4
+M.FIT_SHIP_MAIN_HEIGHT = 5.5
+M.FIT_SHIP_MAIN_HEIGHT_OPEN = 3.34
+M.IOS_AND_BOTTOM_FIT = -0.3
+M.MAX_FIT_3D_HEIGHT = 17
+M.designAspectRatio = lc._designAspectRatio
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.SparkScoutManager = self
+	self._skltAnim = self._tfSkeletonAnim:GetComponent("LCSpineAnimationController")
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	lc.stopTimer(self._timer2)
+
+	_G.SparkScoutManager = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:init(...)
+	self._tfCamera = self._camera.transform
+	self._aspectRatio = Screen.width / Screen.height
+	local x, y, z = lc.getLocalPosition(self._tfCamera)
+	self._previewSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_PREVIEW)
+	self._mainCloseSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_MAIN)
+	self._mainOpenSize = self:getFitCameraSizeByWidth(M.FIT_SHIP_WIDTH_MAIN_OPEN)
+	self._cameraMainFitHeight = M.FIT_SHIP_MAIN_HEIGHT
+	self._cameraMainFocusFitHeight = M.FIT_SHIP_MAIN_HEIGHT_OPEN
+	self._fitDeltaCarmeraHeight = MainGameRoot._safeFit._safeBottomOffY > 0 and M.IOS_AND_BOTTOM_FIT or 0
+
+	if self._aspectRatio < M.designAspectRatio then
+		local height1 = M.FIT_SHIP_WIDTH_MAIN / M.designAspectRatio / 2
+		local height2 = self._mainCloseSize
+		local deltaRatio = 1 / self._aspectRatio - 1 / M.designAspectRatio
+		local autoHeight = deltaRatio * height1 / 5
+		local delta = height2 - height1
+		self._cameraMainFitHeight = M.FIT_SHIP_MAIN_HEIGHT + delta + M._fitDeltaCarmeraHeight
+		self._cameraMainFitHeight = self._cameraMainFitHeight - autoHeight
+		self._cameraMainFocusFitHeight = M.FIT_SHIP_MAIN_HEIGHT_OPEN + delta * self._mainOpenSize / self._mainCloseSize + M._fitDeltaCarmeraHeight
+	end
+end
+
+function M:getFitCameraSizeByWidth(width, ignoreWidth)
+	if ignoreWidth then
+		return width / (M.designAspectRatio * 2)
+	elseif M.designAspectRatio < self._aspectRatio then
+		return width
+	else
+		return width / (self._aspectRatio * 2)
+	end
+end
+
+function M:adaptScreen(...)
+	self._camera.orthographicSize = self._previewSize
+end
+
+function M:playEnterAnim(callback)
+	local animTime = 17.8
+	local uiEnterTime = 19
+	local playSpeed = 1
+
+	self._animVfx:Play("anim_WangGe")
+	self._animVfxWhite:Play("anim_suidao")
+	self._skltAnim:Play("Enter", false, 1)
+
+	self._timer2 = lc.setTimer(function ()
+		if callback then
+			callback()
+		end
+
+		self._isInMain = true
+	end, uiEnterTime / playSpeed)
+end
+
+function M:skipEnterAnim()
+	self._timer2:Done()
+	self:enterMain()
+end
+
+function M:enterPreview()
+	self._camera.orthographicSize = self._previewSize
+
+	lc.setLocalPosition(self._tfCamera, 0, M.FIT_SHIP_MAIN_HEIGHT, -10)
+	self:setCamera(true)
+	self._skltAnim:Play("Idle", true)
+	V.resetAnimToStartFrame(self._animVfxWhite, "anim_suidao")
+	V.resetAnimToStartFrame(self._animVfx, "anim_WangGe")
+end
+
+function M:enterMain()
+	self._camera.orthographicSize = self._mainCloseSize
+
+	lc.setLocalPosition(self._tfCamera, 0, self._cameraMainFitHeight, -10)
+	self:setCamera(true)
+
+	self._isInMain = true
+end
+
+function M:isInMain()
+	return self._isInMain
+end
+
+function M:exitMain()
+	self:setCamera(false)
+
+	self._isInMain = false
+end
+
+function M:exitBattle()
+	self._camera:DOOrthoSize(self._mainCloseSize, 0.5):OnComplete(function ()
+	end)
+	self._tfCamera:DOMove(Vector3.static(0, self._cameraMainFitHeight, -10), 0.5)
+end
+
+function M:setCamera(show)
+	self._camera.enabled = show
+end
+
+return M

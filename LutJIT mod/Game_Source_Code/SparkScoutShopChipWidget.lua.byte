@@ -1,0 +1,90 @@
+local TEXT_COLORS = {
+	[D.Quality.Red] = "EC7581",
+	[D.Quality.Orange] = "CF9352",
+	[D.Quality.Purple] = "BC91EE",
+	[D.Quality.Blue] = "8694E0"
+}
+local BG_COLORS = {
+	[D.Quality.COLORFUL] = "350D23_150",
+	[D.Quality.Red] = "350D17_150",
+	[D.Quality.Orange] = "351C0D_150",
+	[D.Quality.Purple] = "2B1857_150",
+	[D.Quality.Blue] = "212C4B_150"
+}
+local BTN_COLORS = {
+	[D.Quality.Red] = "E57885",
+	[D.Quality.Orange] = "CF9352",
+	[D.Quality.Purple] = "AB84D9",
+	[D.Quality.Blue] = "6D92FF"
+}
+local M = class("SparkScoutShopChipWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SparkScoutShopChipWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	SimpleItemWidget.noCreate(self._goItem)
+end
+
+function M:updateUI(cid)
+	self._goItem:init(cid)
+
+	local conf = D._activitySparkScoutChipConfig[cid]
+
+	if conf._quality ~= D.Quality.COLORFUL then
+		self._txtDesc.gameObject:SetActive(true)
+		self._txtDescColorful.gameObject:SetActive(false)
+
+		self._imgBg.color = Color.str2Static(BG_COLORS[conf._quality])
+		self._txtDesc.color = Color.str2Static(TEXT_COLORS[conf._quality])
+
+		V.loadChipDescription(self._txtDesc, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+	else
+		self._txtDesc.gameObject:SetActive(false)
+		self._txtDescColorful.gameObject:SetActive(true)
+
+		self._imgBg.color = Color.str2Static(BG_COLORS[conf._quality])
+
+		V.loadChipDescription(self._txtDescColorful, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+	end
+
+	local weapon = D._gemEffectConfig[D._gemConfig[cid]._effect]._weaponId
+
+	if weapon ~= 0 then
+		self._goItem:setPart(100 + weapon)
+	end
+
+	if P._playerActivitySparkScout:getChips()[cid] then
+		local decomposeGold = P._playerActivitySparkScout:readCurrentCfg()._chipDecomposeGold[D._activitySparkScoutChipConfig[cid]._quality - D.Quality.Blue + 1]
+		local resStr = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_wafer), decomposeGold)
+
+		if conf._quality ~= D.Quality.COLORFUL then
+			local text = self._txtDesc.text
+
+			self._txtDesc:SetLocalizeS(SID.TIP_SPARK_SCOUT_DUPLICATE_CHIP_TRANSFORM, text, resStr)
+		else
+			local text = self._txtDescColorful.text
+
+			self._txtDescColorful:SetLocalizeS(SID.TIP_SPARK_SCOUT_DUPLICATE_CHIP_TRANSFORM, text, resStr)
+		end
+	end
+end
+
+return M

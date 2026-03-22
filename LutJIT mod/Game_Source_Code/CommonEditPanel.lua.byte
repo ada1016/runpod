@@ -1,0 +1,115 @@
+local M = class("CommonEditPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	txtInput = Types.TMP_InputField,
+	txtPlaceHolder = Types.TMP_Text,
+	btnConfirm = Types.Button,
+	tmpInputCount = Types.TMP_Text
+}
+local MAX_INPUT_LENGTH = 14
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:checkName(name)
+	if not lc.isNameStrValid(name) then
+		V.showToast(SID.TIP_NAME_INVALID)
+
+		return
+	end
+
+	if self._limit < #name then
+		V.showToast(SID.TIP_NAME_TOO_LONG)
+
+		return
+	end
+
+	return true
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:on("verify.text.result", function (pass)
+		UIManager.hideWaiting()
+
+		if pass then
+			self:doSetNameAfterVerufy()
+		else
+			V.showToast(SID.CN_INPUT_VAILD)
+		end
+	end)
+	self:setClick(self._btnConfirm, function ()
+		local name = self._txtInput.text
+
+		if not name then
+			V.showToast(SID.TIP_NAME_TOO_SHORT)
+
+			return
+		elseif not lc._isCN then
+			if self:checkName(name) then
+				if self._callback then
+					self._callback(name)
+				end
+
+				self:closePanel()
+			end
+		else
+			if not string.hasNoSpecialChars(name) then
+				V.showToast(SID.CN_INPUT_VAILD)
+
+				return
+			end
+
+			UIManager.showWaiting()
+			Request.sendCheckInputTextReq(name)
+		end
+	end)
+end
+
+function M:doSetNameAfterVerufy()
+	if self._callback then
+		self._callback(self._txtInput.text)
+	end
+
+	self:closePanel()
+end
+
+function M:init(title, desc, orginValue, limit, callback)
+	self._txtTitle:SetLocalize(title)
+	self._txtDesc:SetLocalize(desc, limit)
+
+	self._callback = callback
+	self._originValue = orginValue
+	self._limit = limit
+	self._txtPlaceHolder.text = orginValue
+	self._txtInput.characterLimit = limit
+
+	if lc._isCN then
+		self._txtInput.onValueChanged:RemoveAllListeners()
+		self._txtInput.onValueChanged:AddListener(function (pt)
+			local is_valid, weighted_length = string.checkInputLength(pt, MAX_INPUT_LENGTH)
+
+			if not is_valid then
+				local truncated = string.truncateToMaxLength(pt, MAX_INPUT_LENGTH)
+				self._txtInput.text = truncated
+			end
+
+			self._tmpInputCount.text = string.format("%d/%d", math.min(weighted_length, MAX_INPUT_LENGTH), MAX_INPUT_LENGTH)
+		end)
+
+		local weighted_length = string.getWeightedLength(orginValue, MAX_INPUT_LENGTH)
+		self._tmpInputCount.text = string.format("%d/%d", weighted_length, MAX_INPUT_LENGTH)
+
+		self._txtDesc:SetLocalize(SID.CN_NAME_VAILD_TIPS_2)
+		self._tmpInputCount.gameObject:SetActive(true)
+	end
+end
+
+return M

@@ -1,0 +1,95 @@
+local M = class("SpineGraphicWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SpineGraphicWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	self._isOriginGun = true
+end
+
+function M:updateUI(bodySkinId, param1)
+	self._cfg = D._skinRoleConfig
+	local defaultSkinId = 120000
+	self._spineType = nil
+
+	if bodySkinId <= 130000 then
+		self._cfg = D._skinRoleConfig
+		defaultSkinId = 120000
+		self._spineType = "Player"
+	elseif bodySkinId <= 160000 then
+		self._cfg = D._rangerConfig
+		defaultSkinId = 150001
+		self._spineType = "Ranger"
+	end
+
+	local bodyChanged = false
+
+	if not self._cfg[bodySkinId] or self._cfg[bodySkinId]._hidden then
+		bodySkinId = defaultSkinId
+	end
+
+	if self._bodySkinId ~= bodySkinId then
+		self._bodySkinId = bodySkinId
+
+		self:changeBodySpine()
+
+		bodyChanged = true
+	end
+
+	if self._spineType == "Player" then
+		self._goSpine:changeGunSkin(self._bodySkinId, param1)
+	end
+end
+
+function M:testForceUpdatePlayerUI(bodySkinId, weaponSkinId, sex)
+	self._bodySkinId = bodySkinId
+
+	self:changeBodySpine()
+	self._goSpine:changeGunSkin(self._bodySkinId, weaponSkinId, true, sex)
+end
+
+function M:changeBodySpine()
+	if self._goSpine then
+		if self._spineType == "Player" then
+			self._goSpine:recycleWeapon()
+		end
+
+		V.recycleRoleUISpine(self._goSpine)
+
+		self._goSpine = nil
+	end
+
+	self._goSpine = V.getRoleUISpine(self._tfSpineParent, self._bodySkinId)
+end
+
+function M:clearSpine()
+	if self._goSpine then
+		if self._spineType == "Player" then
+			self._goSpine:recycleWeapon()
+		end
+
+		V.recycleRoleUISpine(self._goSpine)
+
+		self._goSpine = nil
+	end
+
+	self._bodySkinId = nil
+end
+
+return M

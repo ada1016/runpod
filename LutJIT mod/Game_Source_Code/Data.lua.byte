@@ -1,0 +1,2183 @@
+local M = {}
+
+declare("D", M)
+
+local opt = opt
+local json = json
+local requireLua = requireLua
+local type = type
+local pairs = pairs
+local assert = assert
+local stringFormat = string.format
+local tableSort = table.sort
+local mathFloor = math.floor
+local Cond = Cond
+M.DAY_SECONDS = 86400
+M.MONTH_SECONDS = 2592000
+M.DAY_MILLISECONDS = 86400000
+M.HOUR_MILLISECONDS = 3600000
+M.PART_NUM = 6
+M.PART_FILTER_NUM = 7
+M.MAX_WEAPON_LEVEL = 32
+M.MAX_WEAPON_ID = 12
+M.MAX_SUPER_WEAPON_STAGE = 4
+M.MAX_SKIN_STAR = 5
+M.MAX_RANGER_STAR = 15
+M.RANGER_EQUIP_SLOT_NUM = 4
+M.RANGER_EQUIP_PART_NUM = 5
+M.RANGER_EQUIP_PART_FILTER_NUM = 6
+M.CRISIS_ZONE_MAX_DIFFICULTY = 5
+M.SPARK_SCOUT_MAX_GRADE = 6
+M.SPARK_SCOUT_MATCH_VERSION = 1
+M.DRAW_EXTRA_DELTA = 20
+M.DRAW_EXTRA_SHOWCELL_PER_TURN = 25
+M.CHIP_DROP_NORMAL = 13101
+M.CHIP_DROP_ELITE = 13201
+M.CHIP_DROP_OFFLINE_NORMAL = 13301
+M.CHIP_DROP_OFFLINE_ELITE = 13401
+M.CHIP_DROP_GLOBAL_DEFENSE = 13501
+M.FloatFactor = 300
+M.AVATAR_BEGIN = 15001
+M.AVATAR_END = 15002
+M.AVATAR_FRAME_BEGIN = 16001
+M.AVATAR_FRAME_END = 16004
+M.AVATAR_MEDAL_BEGIN = 16501
+M.AVATAR_MEDAL_END = 16504
+M.DEFAULT_GATLIN_SKIN = 110000
+M.DEFAULT_ROLE_SKIN = 120000
+M.DEFAULT_DOME_SKIN = 140000
+M.EQUIP_QUALITY_FILTER = "equip_quality_default_filter"
+M.EQUIP_GRADE_FILTER = "equip_grade_default_filter"
+M.URL_TERM_SERVICE = "http://www.cyberjoygame.com/Agree.html"
+M.URL_PRIVACY_POLICY = "http://www.cyberjoygame.com/Privacy.html"
+M.URL_EMAIL_TO = "mailto:galaxydefense@cyberjoygame.com"
+M.URL_EMAIL = "galaxydefense@cyberjoygame.com"
+M.BATTLE_UNIT_TEST_DIR = "../R6Data/battle_unit_test/"
+M.URL_DISCORD_GALAXYDEFENSE = "https://discord.gg/kj66tgpp3t"
+M.URL_FACEBOOK_GALAXYDEFENSE = "https://www.facebook.com/profile.php?id=61566182020223"
+M.URL_DISCORD_GALAXYDEFENSE_INVITE_GD = "https://discord.gg/N4mpUFTUSx"
+M.URL_DISCORD_GALAXYDEFENSE_INVITE_SETTING = "https://discord.gg/j4fJcrVQnM"
+M.URL_DISCORD_GALAXYDEFENSE_INVITE_FAIL = "https://discord.gg/tQShkZP7aQ"
+M.URL_DISCORD_GALAXYDEFENSE_INVITE_MAIL = "https://discord.gg/yYWGzTQMVx"
+M.URL_DISCORD_SUPPORT_INVITE = "https://discord.gg/MjrbM3KY65"
+M.URL_DISCORD_COMPENSATE_MAIL = "https://discord.gg/tQShkZP7aQ"
+M.URL_FEEDBACK_GOOGLE_FORM = "https://forms.gle/sGjn3gqQBa16JiuJ7"
+M.URL_DISCORD_GALAXYDEFENSE_CHANNEL = "https://discord.com/channels/1295312655233323008/1315971538612260906"
+M.URL_DISCORD_GALAXYDEFENSE_GLOBALDEFENCE = "https://discord.com/channels/1295312655233323008/1319145092904259674"
+M.URL_DISCORD_GALAXYDEFENSE_GUIDE = "https://discord.com/channels/1295312655233323008/1379724851845267496"
+M.URL_MOVE_REWARD_DISCORD = "https://discord.gg/MYXgPmqFqK"
+M.URL_MOVE_REWARD_FACEBOOK = "https://www.facebook.com/profile.php?id=61566182020223"
+
+if lc._isiOS then
+	M.STORE_URL = "https://apps.apple.com/us/app/galaxy-defense-fortress-td/id6740189002"
+else
+	M.STORE_URL = "https://play.google.com/store/apps/details?id=com.cyberjoy.galaxydefense"
+end
+
+M.DIAMOND_USE_CONFIRM_NUM = 100
+M.UnionRole = {
+	COORDINATOR = 3,
+	VICE_PRESIDENT = 2,
+	PRESIDENT = 1,
+	NONE = 0
+}
+M.UnionLogType = {
+	ROLE = 5,
+	JOIN = 2,
+	CREATE = 1,
+	KICK = 6,
+	ACCEPT = 4,
+	LEAVE = 3
+}
+M.UnionNameMaxLength = 16
+M.UnionDescMaxLength = 250
+M.UnionChatMaxLength = 100
+M.UnionLanguages = {
+	"ALL",
+	"English",
+	"Français",
+	"Deutsch",
+	"Português",
+	"简体中文",
+	"繁體中文",
+	"日本語",
+	"한국어",
+	"Filipino",
+	"हिंदी",
+	"Русский",
+	"Indonesia",
+	"ภาษาไทย",
+	"Türkçe",
+	"Tiếng Việt",
+	"Melayu",
+	"Polski"
+}
+M.ResType = {
+	monopoly_exp = 10026,
+	ark_rebuild_key = 10104,
+	ranger_exchange_token = 10046,
+	spark_scout_10057 = 10057,
+	global_defense_ticket = 10012,
+	anniversary_star = 10063,
+	crisis_zone_bag_slot = 10049,
+	SparkChipCustom4 = 15304,
+	spark_scout_exchange_key = 10106,
+	anniversary_lottery_core = 10066,
+	weapon_skin_token_red = 10022,
+	seven_day_exp = 10013,
+	ark_rebuild_ticket_common = 10029,
+	ark_spark_offline_right = 10070,
+	gatlin_skin_token_orange = 10015,
+	spark_scout_wafer = 10050,
+	dome_skin_token_purple = 10023,
+	spark_scout_10056 = 10056,
+	lottery1_exchange_item = 10101,
+	spark_scout_grade_protect_ticket = 10055,
+	role_skin_token_red = 10019,
+	weapon_skin_token_purple = 10020,
+	ark_rebuild_gold = 10028,
+	SparkChipCustom2 = 15302,
+	equip_refine_mat = 10007,
+	MonthlyCustom1 = 15400,
+	spark_scout_10062 = 10062,
+	MonthlyCustom2 = 15401,
+	AnniversaryEnd = 19050,
+	role_skin_token_purple = 10017,
+	week_activity_key = 10102,
+	exp = 10004,
+	gatlin_skin_token_red = 10016,
+	chip_wash_mat = 10008,
+	random_weapon_piece = 11000,
+	weapon_skin_token_orange = 10021,
+	gatlin_skin_token_purple = 10014,
+	coin = 10001,
+	monopoly_dice = 10027,
+	anniversary_exchange_key = 10107,
+	AnniversaryStart = 19001,
+	ranger_base_upgrade_mat = 10045,
+	RandomChipQ7 = 13009,
+	dome_skin_token_red = 10025,
+	dome_break_mat = 10010,
+	ark_rebuild_sp_gold = 10031,
+	SparkChipCustomEnd = 15304,
+	treasure_hunting_shovel = 10064,
+	dome_upgrade_mat = 10009,
+	anniversary_task_exp = 10065,
+	spark_scout_sp_key = 10053,
+	player_return_exp = 10069,
+	dome_skin_token_orange = 10024,
+	SparkChipCustom3 = 15303,
+	spark_scout_key = 10051,
+	ark_rebuild_ticket_advance = 10030,
+	ranger_equip_refine_mat = 10047,
+	bp_skin_key = 10103,
+	diamond = 10002,
+	ranger_draw_token = 10044,
+	role_skin_token_orange = 10018,
+	dome_tech_upgrade_mat = 10011,
+	SparkChipCustom1 = 15301,
+	monopoly_key = 10105,
+	RandomChipQ1 = 13003,
+	anniversary_charge_score = 10067,
+	anniversary_star_box = 14702,
+	energy = 10003,
+	spark_scout_duel_ticket = 10054,
+	key_purple = 10005,
+	spark_scout_sp_wafer = 10052,
+	ranger_egg_speed_up = 10048,
+	key_gold = 10006
+}
+M.WEAPON_ORDER = {}
+M.WEAPON_GATLIN = 1
+M.WEAPON_GATLIN_CLONE = 99
+M.WEAPON_FIRE_BOMB = 3
+M.WEAPON_HIVE = 12
+M.SKILL_FIRE_BOMB = -3
+M.SKILL_FIRE_BOMB_RANGE = -301
+M.SKILL_6_RANGE = -601
+M.SKILL_10_RANGE = -1001
+M.WEAPON_DOME = 100
+M.TECH_DOME_DMG_REDUCE = 10000
+M.DOME_MAP = 5
+M.MAX_GEM_GROUP = 10
+M.DOME_GRADE_AVATAR_BEGIN = 15101
+M.DOME_GRADE_AVATAR_END = 15109
+M.WEAPON_RANGER_BEGAIN_ID = 150001
+M.WEAPON_RANGER_BEGAIN_END = 159999
+M.CRISIS_ZONE_MAX_ENEMY_COUNT = 200
+M.PVP_MAX_ROUND = 5
+M.MAX_PLAYER_LEVEL = 200
+M.UserFlag = {
+	NeedCheckNetwork = 4,
+	TraceBattleInput = 8,
+	ForbidForModifyMemoryCompare = 1,
+	ForbidForGetIllegalityLogWay2 = 2
+}
+M.LogWay = {
+	init_account = "init_account",
+	ark_rebuild_module_35 = "ark_rebuild_module_35",
+	dome_rank = "dome_rank",
+	anniversary_battle_pass_treasureHunting = "anniversary_battle_pass_treasureHunting",
+	week_gift = "week_gift",
+	battle_pass_ark_rebuild = "battle_pass_ark_rebuild",
+	ark_decompose_card = "ark_decompose_card",
+	ranger_egg_incubate_speedup = "ranger_egg_incubate_speedup",
+	dome_trial_rank = "dome_trial_rank",
+	finish_mission = "finish_mission",
+	unlock_skin = "unlock_skin",
+	activity_week_lottery2_10 = "activity_week_lottery2_10",
+	upgrade_equip = "upgrade_equip",
+	ranger_equip_refine = "ranger_equip_refine",
+	stashed = "stashed",
+	activity_week_lottery2_1 = "activity_week_lottery2_1",
+	iap_first = "iap_first",
+	ark_rebuild_miletone = "ark_rebuild_miletone",
+	lottery_normal_10 = "lottery_normal_10",
+	ark_rebuild_offline = "ark_rebuild_offline",
+	ark_rebuild_mission = "ark_rebuild_mission",
+	battle_pass = "battle_pass",
+	spark_scout_unlock_chip_slot = "spark_scout_unlock_chip_slot",
+	spark_scout_grade = "spark_scout_grade",
+	spark_scout_sweep = "spark_scout_sweep",
+	mission_chest = "mission_chest",
+	ark_rebuild_upgrade_atk = "ark_rebuild_upgrade_atk",
+	global_defense = "global_defense",
+	stage_rank_like = "stage_rank_like",
+	exchange_code = "exchange_code",
+	svip_card = "svip_card",
+	ark_rebuild_rank = "ark_rebuild_rank",
+	ranger_egg_incubate = "ranger_egg_incubate",
+	lottery_normal = "lottery_normal",
+	spark_scout_rank = "spark_scout_rank",
+	ark_rebuild_unlock_stage = "ark_rebuild_unlock_stage",
+	ark_rebuild_lottery_1 = "ark_rebuild_lottery_1",
+	spark_scout_offline = "spark_scout_offline",
+	ad_stamina = "ad_stamina",
+	lottery_high_10 = "lottery_high_10",
+	level_fund = "level_fund",
+	monthly_checkin_daily = "monthly_checkin_daily",
+	activity_week_lottery1 = "activity_week_lottery1",
+	day_gift = "day_gift",
+	claim_mail = "claim_mail",
+	battle_pass_skin = "battle_pass_skin",
+	change_name = "change_name",
+	dome_battlepass = "dome_battlepass",
+	anniversary_task = "anniversary_task",
+	month_gift = "month_gift",
+	iap = "iap",
+	anniversary_feedback_rewards = "anniversary_feedback_rewards",
+	ranger_unlock = "ranger_unlock",
+	spark_scout_lottery_1 = "spark_scout_lottery_1",
+	lottery_extra = "lottery_extra",
+	spark_scout_quit = "spark_scout_quit",
+	buy_crisis_zone_chance = "buy_crisis_zone_chance",
+	share_coordinate = "share_coordinate",
+	diamond_exchange = "diamond_exchange",
+	finish_spark_scout = "finish_spark_scout",
+	mission_gift = "mission_gift",
+	sweep_mission = "sweep_mission",
+	spark_scout = "spark_scout",
+	upgrade_skin = "upgrade_skin",
+	anniversary_cost_star = "anniversary_cost_star",
+	spark_scout_unlock_pvp_weapon_slot = "spark_scout_unlock_pvp_weapon_slot",
+	ranger_upgrade = "ranger_upgrade",
+	anniversary_draw_package = "anniversary_draw_package",
+	anniversary_draw_package_big_free = "anniversary_draw_package_big_free",
+	crisis_zone_task = "crisis_zone_task",
+	upgrade_research = "upgrade_research",
+	bind_account = "bind_account",
+	chip_wash = "chip_wash",
+	anniversary_treasure_hunting_dig = "anniversary_treasure_hunting_dig",
+	ranger_decompose_equip = "ranger_decompose_equip",
+	lottery_high = "lottery_high",
+	monopoly_rank = "monopoly_rank",
+	battle_pass_ranger = "battle_pass_ranger",
+	spark_scout_upgrade_atk = "spark_scout_upgrade_atk",
+	refine_equip = "refine_equip",
+	anniversary_expire = "anniversary_expire",
+	player_return_milestone = "player_return_milestone",
+	debug_code = "debug_code",
+	ark_rebuild_sweep = "ark_rebuild_sweep",
+	ark_rebuild_unlock_weapon = "ark_rebuild_unlock_weapon",
+	vip_card = "vip_card",
+	anniversary_task_milestone = "anniversary_task_milestone",
+	monopoly_task = "monopoly_task",
+	activity_week_lottery2 = "activity_week_lottery2",
+	spark_scout_battle = "spark_scout_battle",
+	auto_recover = "auto_recover",
+	monopoly_milestone = "monopoly_milestone",
+	decompose_equip = "decompose_equip",
+	anniversary_newbie_rewards = "anniversary_newbie_rewards",
+	spark_scout_shop_ad = "spark_scout_shop_ad",
+	bp_diamond_buy_level = "bp_diamond_buy_level",
+	spark_scout_bp = "spark_scout_bp",
+	battle_pass_monopoly = "battle_pass_monopoly",
+	gm = "gm",
+	free_exchange = "free_exchange",
+	finish_dome = "finish_dome",
+	upgrade_weapon = "upgrade_weapon",
+	battle_pass_spark_scout = "battle_pass_spark_scout",
+	battle_pass_expire = "battle_pass_expire",
+	monthly_checkin_cumulative = "monthly_checkin_cumulative",
+	activity_week_lottery1_5 = "activity_week_lottery1_5",
+	anniversary_recharge = "anniversary_recharge",
+	ark_rebuild_shop = "ark_rebuild_shop",
+	union_create = "union_create",
+	ark_decompose_module = "ark_decompose_module",
+	finish_ark_rebuild = "finish_ark_rebuild",
+	anniversary_treasure_hunting_mission_clear = "anniversary_treasure_hunting_mission_clear",
+	player_return_checkin = "player_return_checkin",
+	package = "package",
+	anniversary_treasure_hunting_get_item = "anniversary_treasure_hunting_get_item",
+	update_compensation = "update_compensation",
+	unlock_slot = "unlock_slot",
+	buy_dome_chance = "buy_dome_chance",
+	finish_mission_crisis = "finish_mission_crisis",
+	dock_upgrade = "dock_upgrade",
+	spark_scout_mission = "spark_scout_mission",
+	upgrade_dome = "upgrade_dome",
+	anniversary_checkin_daily = "anniversary_checkin_daily",
+	ark_rebuild_shop_ad = "ark_rebuild_shop_ad",
+	daily_task = "daily_task",
+	dome_trial_grade_up = "dome_trial_grade_up",
+	ranger_draw_egg = "ranger_draw_egg",
+	spark_scout_chip_overflow = "spark_scout_chip_overflow",
+	activity_week_lottery1_claim = "activity_week_lottery1_claim",
+	anniversary_checkin_daily_repair = "anniversary_checkin_daily_repair",
+	spark_scout_lottery_10 = "spark_scout_lottery_10",
+	monopoly_throw_dice = "monopoly_throw_dice",
+	ark_rebuild_bp = "ark_rebuild_bp",
+	chip_merge = "chip_merge",
+	player_return_expire = "player_return_expire",
+	guide = "guide",
+	iap_after = "iap_after",
+	level_up = "level_up",
+	canteen = "canteen",
+	anniversary_star_treasure = "anniversary_star_treasure",
+	activity_week_lottery1_1 = "activity_week_lottery1_1",
+	spark_scout_shop = "spark_scout_shop",
+	seven_day = "seven_day",
+	newbie_task = "newbie_task",
+	offline = "offline",
+	spark_scout_duel = "spark_scout_duel",
+	ad_double = "ad_double",
+	ark_rebuild = "ark_rebuild",
+	battle_reborn = "battle_reborn",
+	ark_rebuild_lottery_10 = "ark_rebuild_lottery_10",
+	iap_anniversary = "iap_anniversary",
+	more_reward_jump = "more_reward_jump"
+}
+M.BoxType = {
+	Purple = 1,
+	Gold = 2
+}
+M.RightCardType = {
+	VIP = 2,
+	End = 2,
+	Start = 1,
+	SVIP = 1
+}
+M.ItemType = {
+	Drop = 3,
+	ChipSystemShard = 11,
+	Ranger = 18,
+	CustomSelect = 4,
+	AvatarFrame = 15,
+	WeaponShard = 12,
+	RangerPiece = 19,
+	Currency = 1,
+	Avatar = 13,
+	AvatarMedal = 20,
+	Skin = 14,
+	SkinCommonToken = 16
+}
+M.ItemGroup = {
+	Box = 2,
+	Ungrouped = 1
+}
+M.SPItemType = {
+	ArkRebulidModule = 1
+}
+M.AdType = {
+	Battle_Reborn_Rogue = 5,
+	Dome_Trail_Refresh = 301,
+	SpecialOfferGift_Week1 = 12,
+	Shop_Ad_Draw_Purple = 7,
+	Shop_Ad_Energy = 10,
+	Ranger_Reduce_2 = 14,
+	AdSweep = 9,
+	AnniversaryLottery_AdPack = 502,
+	Battle_Reborn = 4,
+	Ranger_Reduce_4 = 16,
+	Ranger_Reduce_7 = 19,
+	Ranger_Reduce_3 = 15,
+	ArkRebuild_Offline = 101,
+	ArkRebuild_Refresh = 103,
+	Monopoly_Pack = 201,
+	Ranger_Reduce_5 = 17,
+	Shop_Ad_Gold = 6,
+	AnniversaryCheck_Repair = 503,
+	SparkScout_DuelRefresh = 403,
+	SparkScout_PackRefresh = 404,
+	Rogue_Death_Draw = 2,
+	SpecialOfferGift_Month1 = 13,
+	Refresh_Rogue = 1,
+	SparkScout_Offline = 401,
+	ArkRebuild_AdPack = 102,
+	AnniversaryDig_AdPack = 501,
+	SpecialOfferGift_Day1 = 11,
+	Mission_Double = 3,
+	Ranger_Reduce_6 = 18,
+	Shop_Ad_Draw_Gold = 8,
+	SparkScout_AdPack = 402
+}
+M.IapType = {
+	Gift_Start = 10000,
+	AnniversaryLottery_BIG = 19016,
+	SVIP_NOAD2 = 13024,
+	ArkRebuild_Skip_Mission = 16011,
+	SVIP11 = 13012,
+	BP_Step3 = 13102,
+	BPRanger_Step2 = 13108,
+	BPNew_Step3 = 13105,
+	Limit1 = 11001,
+	MissionGift_End = 15999,
+	SVIP_NOAD_end = 13026,
+	VIP1 = 13003,
+	VIP_start = 13000,
+	SVIP_NOAD3 = 13025,
+	MissionGift_Start = 15000,
+	Gift_End = 11999,
+	SVIP1 = 13013,
+	BPNew_Step2 = 13104,
+	SVIP_NOAD_start = 13021,
+	SparkScout_Pack2 = 18002,
+	SparkScout_Pack4 = 18004,
+	SVIP_NOAD4 = 13026,
+	SparkScout_Pack5 = 18005,
+	LevelFund = 14001,
+	VIP11 = 13002,
+	SparkScout_Pack_Duel_Ticket = 18007,
+	VIP = 13001,
+	Monopoly_Pack4 = 17002,
+	ArkRebuild_Pack5 = 16005,
+	SVIP_start = 13010,
+	ArkRebuild_Pack4 = 16004,
+	Monopoly_Pack5 = 17003,
+	SVIP = 13011,
+	VIP2 = 13004,
+	Diamond3 = 12003,
+	SVIP_NOAD1 = 13023,
+	SVIP2 = 13014,
+	BPRanger_Step3 = 13109,
+	Monopoly_Pack8 = 17006,
+	NOAD = 13027,
+	Monopoly_BP = 17001,
+	SparkScout_Pack3 = 18003,
+	ArkRebuild_Pack3 = 16003,
+	Dome_BP_Step3 = 13103,
+	SparkScout_Pack_End = 18010,
+	Newbie1 = 10001,
+	VIP_end = 13010,
+	Diamond5 = 12005,
+	ArkRebuild_Pack2 = 16002,
+	BPSkin_Step3 = 13107,
+	Limit2 = 11002,
+	Diamond6 = 12006,
+	BPSkin_Step2 = 13106,
+	VIP4 = 13006,
+	SparkScout_Pack6 = 18006,
+	TreasureHunting_BP = 19001,
+	Newbie2 = 10002,
+	Diamond4 = 12004,
+	SparkScout_BP = 18001,
+	Monopoly_Pack6 = 17004,
+	SVIP_NOAD = 13021,
+	SVIP_NOAD11 = 13022,
+	VIP3 = 13005,
+	Monopoly_Pack7 = 17005,
+	Diamond1 = 12001,
+	ArkRebuild_Pack6 = 16006,
+	SVIP4 = 13016,
+	ArkRebuild_BP = 16001,
+	Diamond2 = 12002,
+	SVIP_end = 13020,
+	Diamond7 = 12007,
+	SVIP3 = 13015,
+	BP_Step2 = 13101
+}
+M.ShopType = {
+	SparkScout = 4,
+	Monopoly = 3,
+	ArkRebuild = 2,
+	Main = 1,
+	Anniversary = 5
+}
+M.PurchaseChannel = {
+	Main = "Main",
+	Activity = "Activity",
+	ArkRebuild = "ArkRebuild",
+	Shop = "Shop",
+	ArkRebuildLottery = "ArkRebuildLottery",
+	AdBanner = "ad_banner",
+	Banner = "Banner",
+	SparkScout = "SparkScout",
+	Pop = "Pop",
+	Battle = "Battle"
+}
+M.BPType = {
+	DigLottery = 8,
+	Dome = 2,
+	ArkRebuild = 3,
+	Monopoly = 5,
+	LevelFund = 9,
+	Ranger = 6,
+	SparkScout = 7,
+	New = 1,
+	Skin = 4
+}
+M.GiftType = {
+	Common = 2,
+	Newbie = 4,
+	Mission = 5,
+	LimitTime = 3,
+	FirstCharge = 1
+}
+M.GiftBuyType = {
+	CantBuy = 0,
+	Purchase = 1,
+	Diamond = 2
+}
+M.GiftUnlockType = {
+	PlayerLevel = 3,
+	Purchase = 1,
+	FailureNum = 4,
+	Mission = 2
+}
+M.GiftId = {
+	Newbie2 = 1102,
+	Newbie1_origin = 1101,
+	Newbie2c = 1105,
+	Newbie1 = 1101,
+	LimitTime2 = 1202,
+	Mission30 = 2030,
+	Mission20 = 2020,
+	Newbie3 = 1103,
+	Newbie1_CN_1 = 1109,
+	Newbie2b = 1104,
+	Newbie1_forever = 1106,
+	Newbie4 = 1107,
+	Newbie1_CN_2 = 1110,
+	FirstCharge = 1001,
+	Newbie2a = 1102,
+	Newbie5 = 1108,
+	Mission15 = 2015,
+	LimitTime1 = 1201
+}
+M.ExchangeId = {
+	SpecialOfferGift_DayAd1 = 3101,
+	SpecialOfferGift_WeekFree1 = 3299,
+	Anniversary_Lottery_Ad = 16201,
+	DiamondExchangeCoin1 = 2003,
+	ExchangeGlobalDefenseTicketFree = 2301,
+	ExchangeGlobalDefenseTicketBuy = 2303,
+	Energy2 = 2202,
+	ExchangeGlobalDefenseTicketHalfBuy = 2302,
+	FreeCoin = 2002,
+	Energy3 = 2203,
+	SpecialOfferGift_MonthAd1 = 3398,
+	SpecialOfferGift_MonthFree1 = 3399,
+	BP_Skin_Group = 10300,
+	Energy1 = 2201,
+	Monopoly_Pack_Ad = 12002,
+	SpecialOfferGift_DayFree1 = 3102,
+	DiamondExchangeCoin2 = 2004,
+	SpecialOfferGift_WeekAd1 = 3298,
+	MaterialType = 2100,
+	Monopoly_Pack_Free = 12001,
+	AdFreeCoin = 2001,
+	Anniversary_Treasure_Ad = 16001,
+	DiamondExchangeCoin3 = 2005
+}
+M.ExchangeId2AdId = {
+	[M.ExchangeId.AdFreeCoin] = M.AdType.Shop_Ad_Energy,
+	[M.ExchangeId.SpecialOfferGift_DayAd1] = M.AdType.SpecialOfferGift_Day1,
+	[M.ExchangeId.SpecialOfferGift_WeekAd1] = M.AdType.SpecialOfferGift_Week1,
+	[M.ExchangeId.SpecialOfferGift_MonthAd1] = M.AdType.SpecialOfferGift_Month1,
+	[M.ExchangeId.Monopoly_Pack_Ad] = M.AdType.Monopoly_Pack,
+	[M.ExchangeId.Anniversary_Treasure_Ad] = M.AdType.AnniversaryDig_AdPack,
+	[M.ExchangeId.Anniversary_Lottery_Ad] = M.AdType.AnniversaryLottery_AdPack
+}
+M.ActivityType = {
+	SparkScout = 5,
+	ArkRebuild = 4,
+	WeekLottery = 1,
+	Monopoly = 3,
+	TreasureHunting = 6,
+	WeekLottery2 = 2,
+	ArkRebuildLottery = 41,
+	Anniversary = 100
+}
+M.ActivityPersistUID = {
+	[D.ActivityType.Monopoly] = "Monopoly",
+	[D.ActivityType.ArkRebuild] = "ArkRebuild",
+	[D.ActivityType.ArkRebuildLottery] = "ArkRebuildLottery",
+	[D.ActivityType.SparkScout] = "SparkScout",
+	[D.ActivityType.Anniversary] = "Anniversary",
+	[D.ActivityType.TreasureHunting] = "TreasureHunting"
+}
+M.JumpId = {
+	EquipRefine = 16,
+	Shop = 9
+}
+M.CHIP_STAGE = 99
+M.Quality = {
+	Blue = 3,
+	Orange = 5,
+	COLORFUL = 7,
+	Green = 2,
+	Red = 6,
+	White = 1,
+	Purple = 4
+}
+M.QualityGrade = {
+	Blue = 3,
+	Orange = 3,
+	COLORFUL = 3,
+	Green = 3,
+	Red = 3,
+	White = 3,
+	Purple = 3
+}
+M.WeaponProperty = {
+	DamageRange = 3,
+	AttackTimes = 12,
+	Damage = 1,
+	ImpactDamage = 101,
+	LastTime = 7,
+	ReflectTimes = 10,
+	DamageInterval = 6,
+	CenterDamage = 9,
+	RangeDamage = 2,
+	Through = 5,
+	CoolDown = 4,
+	OuterDamage = 8
+}
+M.ChipShardId = {
+	12001,
+	12002,
+	12003,
+	12004,
+	12005,
+	12006
+}
+M.MissionType = {
+	Common = 1,
+	CrisisZone = 6,
+	ArkRebuild = 5,
+	Elite = 2,
+	GlobalDefense = 4,
+	Dome = 3,
+	SparkScout = 7
+}
+
+function M.isChallengeMsType(msType)
+	return D.MissionType.Dome <= msType
+end
+
+M.PerfectType = {
+	HalfPerfect = 2,
+	NotCleared = 0,
+	Perfect = 3,
+	Success = 1
+}
+M.BattleResult = {
+	Quit = 3,
+	Lose = 2,
+	Win = 1
+}
+M.RougeType = {
+	Reborn = 3,
+	Level = 1,
+	Dome_Cards = 6,
+	Elite = 2,
+	Level_Chip = 5,
+	Dome = 4
+}
+M.TaskType = {
+	ENERGY_COST = 10,
+	FINISH_MISSION = 1,
+	FINISH_GLOBAL_DEFENCE_MISSION = 25,
+	OPEN_BOX_ADVANCE = 19,
+	LOGIN_DAY = 7,
+	GET_DOUBLE_REWARD = 17,
+	FINISH_DOME_DIFF = 26,
+	KILL_ENEMY = 13,
+	COMPLETE_EQUIP_REFINE = 21,
+	CHALLENGE_DOME = 14,
+	UPGRADE_DOME = 22,
+	SPARK_SCOUT_WIN = 34,
+	BIRTH_RANGER_EGG = 35,
+	GET_CHIP = 16,
+	OPEN_BOX_LOW = 18,
+	PLAYER_LEVELUP = 6,
+	UNLOCK_CHIP_SLOT = 28,
+	DIAMOND_COST = 20,
+	FINISH_ELITE_MISSION = 5,
+	WEAPON_UPGRADE = 3,
+	CHIP_COMPOSE = 11,
+	EQUIP_GEM = 4,
+	CRISIS_ZONE_KILL_NUM = 31,
+	CLAIM_STAMINA_PRODUCER = 27,
+	UPGRADE_DOME_TECH = 23,
+	PAY_COUNT = 29,
+	COMPLETE_ARK_REBUILD = 33,
+	CHALLENGE_CRISIS_ZONE = 32,
+	CHALLENGE_GLOBAL_DEFENCE = 24,
+	SPARK_SCOUT_GRADE = 36,
+	THROW_DICE = 30,
+	SWEEP_COUNT = 8,
+	WATCH_AD = 12,
+	GATLIN_UPGRADE = 2,
+	CHALLENGE_ELITE = 15,
+	CHIP_SYSTEM_UPGRADE = 9
+}
+M.TaskClass = {
+	Anniversary = 13,
+	CrisisZone = 12,
+	SevenDay2 = 3,
+	Monopoly = 11,
+	SevenDay = 2,
+	SevenDay1 = 2,
+	Newbie = 1,
+	PlayerReturn = 14,
+	Daily = 10
+}
+M.SystemType = {
+	Chip = 3,
+	SpecialOfferGift_Month = 22,
+	LevelFund = 19,
+	EliteMission = 2,
+	SevenDay = 24,
+	EnhanceAll = 16,
+	Sweep = 9,
+	ExtraChipSlot = 14,
+	Afk = 8,
+	Package = 12,
+	SparkScout = 33,
+	BPRanger = 31,
+	Union = 35,
+	UnionCreate = 36,
+	Weapon = 5,
+	ArkRebuild = 29,
+	SpecialOfferGift = 20,
+	BPSkin = 26,
+	Ranger = 30,
+	EquipEnhance = 15,
+	Store = 10,
+	MonthlyCheckin = 34,
+	DailyTask = 7,
+	Dome = 17,
+	SpecialOfferGift_Week = 21,
+	DomeMission = 13,
+	MonthCard = 11,
+	StageRank = 27,
+	BP = 18,
+	BPNew = 25,
+	CommonMission = 1,
+	SparkScout_Entrance = 32,
+	GlobalDefense = 23,
+	Gatlin = 4,
+	ArkRebuild_Entrance = 28,
+	NewbieTask = 6
+}
+M.GuideTriggerType = {
+	CompleteMission = 2,
+	ClaimNewbieTask = 1,
+	CompleteGuideGroup = 3,
+	Level = 4,
+	Custom = 99
+}
+M.GuideGroupId = {
+	Battle = 1,
+	ChipWash = 10,
+	Offline = 5,
+	EnhanceEquip = 4,
+	DomeSkinSkill = 13,
+	EquipRefine = 9,
+	Ranger = 14,
+	EnhanceWeapon = 3,
+	SparkScout = 17,
+	WeaponSkinSkill = 12,
+	Union = 18,
+	RoleSkinSkill = 11,
+	CrisisZone = 16,
+	RangerDeploy = 15
+}
+M.ChallengeId = {
+	SparkScout = 5,
+	RangerChallenge = 4,
+	ArkRebuild = 3,
+	GlobalDefense = 2,
+	Dome = 1
+}
+M.SkinType = {
+	Weapon = 3,
+	Role = 2,
+	Dome = 4,
+	Gatlin = 1,
+	Ranger = 5
+}
+M.ModuleType = {
+	SELECT_CARD_NUM_ADD = 1,
+	ATK_GOLD_COST_LIMIT = 17,
+	MODULE_DAMAGE_ADD = 14,
+	SELECT_CARD_EXTRA_CHANCE_PERCENT = 13,
+	GAIN_GOLD_PER_CARD = 35,
+	PACK_SP_GOLD_COST_LIMIT = 37,
+	DOME_HP_ADD_BY_ATK = 20,
+	WIN_EXTRA_GOLD = 12,
+	EMPTY_SLOT_ATK_ADD = 21,
+	WIN_EXTRA_SP_GOLD = 36,
+	CARD_ATK_ADD = 15
+}
+M.ArkRebuildDropType = {
+	GoldDrop = 4,
+	Pack1Drop = 2,
+	SPGoldDrop = 5,
+	Pack2Drop = 3,
+	MissionDrop = 1
+}
+M.SparkScoutDropType = {
+	Pack1Drop = 1,
+	GoldDrop = 3,
+	Pack2Drop = 2,
+	SPGoldDrop = 4
+}
+M.Goto = {}
+M.RankType = {
+	DomeRank = "ranks_dome_v3",
+	CrisisZoneRank = "crisis_zone",
+	MonopolyRank = "monopoly",
+	MainMissionRank = "main_mission",
+	SparkScoutRank = "spark_scout",
+	ArkRebuildRankOld = "ark_rebuild",
+	InviteRank = "invite_data",
+	ArkRebuildRank = "ark_rebuild_84_"
+}
+M.MailId = {
+	ImportanceNotice = 2,
+	PurchaseRecover = 4,
+	SuperCharge = 11,
+	NewbieWelcome = 3,
+	DiscordCompensate = 10,
+	DiscordRewards = 7,
+	VersionUpdate = 1,
+	MakeUp = 5,
+	Monopoly_Rewards = 6
+}
+M.SexDefine = {
+	1,
+	[120000.0] = 1,
+	[120002.0] = 2,
+	[120001.0] = 2
+}
+
+setmetatable(M.SexDefine, {
+	__index = function (tbl, index)
+		return 1
+	end
+})
+
+M.NotificationType = {
+	EnergyRecover_Full = 3,
+	MainOffline_Full = 1,
+	RangerEgg_Incubate = 4,
+	Player_Return = 5,
+	ArkRebuildOffline_Full = 2
+}
+M.AnniversaryNewbieTaskType = {
+	PassMission = 2,
+	ReachLevel = 1,
+	Charge = 3
+}
+M.MissionBegin = 10001
+M.MissionEnd = 19999
+M.ItemBegin = 10001
+M.ItemEnd = 19999
+M.ItemBegin2 = 100001
+M.ItemEnd2 = 199999
+M.SkinBegin = 110000
+M.SkinEnd = 149999
+M.PropGemBegin = 3000001
+M.PropGemEnd = 3999999
+M.PropEquipBegin = 30001
+M.PropEquipEnd = 39999
+M.RangerEquipBegin = 40001
+M.RangerEquipEnd = 49999
+
+function M.isDiamondIap(iapId)
+	return M.IapType.Diamond1 <= iapId and iapId <= M.IapType.Diamond6
+end
+
+function M.isRightCardIap(iapId)
+	return M.IapType.VIP_start < iapId and iapId < M.IapType.SVIP_end
+end
+
+function M.isVIPIap(iapId)
+	return M.IapType.VIP_start < iapId and iapId < M.IapType.VIP_end
+end
+
+function M.isSVIPNOADIap(iapId)
+	return M.IapType.SVIP_NOAD_start <= iapId and iapId <= M.IapType.SVIP_NOAD_end
+end
+
+function M.isSVIPIap(iapId)
+	return M.IapType.SVIP_start < iapId and iapId < M.IapType.SVIP_end
+end
+
+function M.isGiftIap(iapId)
+	return M.IapType.Gift_Start < iapId and iapId < M.IapType.Gift_End or M.IapType.MissionGift_Start < iapId and iapId < M.IapType.MissionGift_End
+end
+
+function M.isArkRebuildGiftIap(iapId)
+	return M.IapType.ArkRebuild_Pack2 <= iapId and iapId <= M.IapType.ArkRebuild_Skip_Mission
+end
+
+function M.isSparkScoutGiftIap(iapId)
+	return M.IapType.SparkScout_Pack2 <= iapId and iapId <= M.IapType.SparkScout_Pack_End
+end
+
+function M.isAnniversaryGiftIap(iapId)
+	return M.IapType.AnniversaryStart <= iapId and iapId <= M.IapType.AnniversaryEnd
+end
+
+function M.isMonopolyGiftIap(iapId)
+	return M.IapType.Monopoly_Pack4 <= iapId and iapId <= M.IapType.Monopoly_Pack8
+end
+
+function M.isItem(cid)
+	return M.ItemBegin <= cid and cid <= M.ItemEnd or M.ItemBegin2 <= cid and cid <= M.ItemEnd2
+end
+
+function M.isRandomChipItem(cid)
+	return M.ResType.RandomChipQ1 <= cid and cid <= M.ResType.RandomChipQ7
+end
+
+function M.isGem(rid)
+	if D.PropGemBegin <= rid and rid <= D.PropGemEnd then
+		return true
+	end
+end
+
+function M.isSkin(rid)
+	if D.SkinBegin <= rid and rid <= D.SkinEnd then
+		return true
+	end
+end
+
+function M.isEquip(rid)
+	if D.PropEquipBegin <= rid and rid <= D.PropEquipEnd then
+		return true
+	end
+end
+
+function M.isRandomEquip(rid)
+	if rid >= 14100 and rid < 14600 then
+		return true
+	end
+end
+
+function M.isSparkChipCustom(rid)
+	return M.ResType.SparkChipCustom1 <= rid and rid <= M.ResType.SparkChipCustomEnd
+end
+
+function M.isRangerEquip(rid)
+	if D.RangerEquipBegin <= rid and rid <= D.RangerEquipEnd then
+		return true
+	end
+end
+
+function M.isAvatar(rid)
+	if D.AVATAR_BEGIN <= rid and rid <= D.AVATAR_END then
+		return true
+	end
+end
+
+function M.isSpecialItem(rid)
+	return rid < 10000
+end
+
+function M.isCustomSelectItem(rid)
+	if D.isSpecialItem(rid) then
+		return false
+	end
+
+	return D._itemConfig[rid]._type == M.ItemType.CustomSelect
+end
+
+function M.isRangerItem(rid)
+	return D._itemConfig[rid]._type == M.ItemType.Ranger
+end
+
+function M.isRangerPieceItem(rid)
+	return D._itemConfig[rid]._type == M.ItemType.RangerPiece
+end
+
+function M.toNameSid(cid)
+	if M.isItem(cid) then
+		return D._itemConfig[cid]._nameSid
+	end
+end
+
+function M.toShortNameSid(cid)
+	if M.isItem(cid) then
+		return SID[D._itemConfig[cid]._shortName]
+	end
+
+	return M.toNameSid(cid)
+end
+
+function M.toDescSid(cid)
+	if M.isItem(cid) then
+		local cfg = D._itemConfig[cid]
+		local descSid = cfg._descSid
+		local descVal = cfg._descVal
+
+		if cid == D.ResType.spark_scout_10056 then
+			local p1, p2, p3 = unpack(D._battleGlobalConfig._battle_pvp_bp_effect_parmas)
+
+			return descSid, p1, p2, p3
+		end
+
+		if descVal == nil then
+			return descSid
+		else
+			return descSid, descVal
+		end
+	end
+
+	return 1
+end
+
+function M.toQuality(cid)
+	if M.isItem(cid) then
+		return M._itemConfig[cid]._quality
+	elseif M.isGem(cid) then
+		return M._gemConfig[cid]._quality
+	elseif M.isEquip(cid) then
+		return M._equipConfig[cid]._quality
+	elseif M.isRangerEquip(cid) then
+		return M._rangerEquipConfig[cid]._quality
+	else
+		return 1
+	end
+end
+
+function M.toSprite(cid)
+	if M.isGem(cid) then
+		return string.format("general/chip_%02d", D._gemConfig[cid]._quality)
+	elseif M.isEquip(cid) then
+		return "general/equip1_" .. D._equipConfig[cid]._part
+	elseif M.isRangerEquip(cid) then
+		return "item/item_" .. cid
+	else
+		return "item/item_" .. (D._itemConfig[cid]._icon or cid)
+	end
+end
+
+function M.toSmallSprite(cid)
+	if M.isGem(cid) then
+		return string.format("general/chip_%02d", D._gemConfig[cid]._quality)
+	elseif M.isEquip(cid) then
+		return "general/equip1_" .. D._equipConfig[cid]._part
+	else
+		return "itemSmall/item_small_" .. (D._itemConfig[cid] and D._itemConfig[cid]._icon or cid)
+	end
+end
+
+function M.toAvatarBgSprite(cid)
+	if cid <= D.MAX_WEAPON_ID or D._itemAvatarConfig[cid] == nil then
+		return "avatar/avatar_bg"
+	elseif D._itemAvatarConfig[cid]._quality == 7 then
+		return "avatar/avatar_bg_color"
+	elseif D._itemAvatarConfig[cid]._quality == 6 then
+		return "avatar/avatar_bg_red"
+	elseif D._itemAvatarConfig[cid]._quality == 4 then
+		return "avatar/avatar_bg_purple"
+	elseif D._itemAvatarConfig[cid]._quality == 1 then
+		return "avatar/avatar_bg"
+	else
+		return "avatar/avatar_bg_orange"
+	end
+end
+
+function M.toAvatarFrameSprite(cid)
+	return "avatar/frame_" .. cid
+end
+
+function M.toSkinType(id)
+	if id >= 110000 and id < 120000 then
+		return D.SkinType.Gatlin
+	elseif id >= 120000 and id < 130000 then
+		return D.SkinType.Role
+	elseif id >= 130000 and id < 140000 then
+		return D.SkinType.Weapon
+	elseif id >= 140000 and id < 150000 then
+		return D.SkinType.Dome
+	elseif id >= 150000 and id < 160000 then
+		return D.SkinType.Ranger
+	end
+
+	return nil
+end
+
+function M.toFragment(id)
+	if D.isSkin(id) then
+		return 100000 + id
+	else
+		return id + 1000
+	end
+end
+
+function M.formatRewards(cids, nums, rate)
+	rate = rate or 1
+	local tb = {}
+
+	if type(cids) == "table" then
+		local cid = 0
+		local len_cids = cids.c or #cids
+
+		for i = 1, len_cids do
+			cid = cids[i]
+
+			if cid ~= 0 then
+				local item = {
+					cid,
+					nums[i] * rate
+				}
+				tb[#tb + 1] = item
+			end
+		end
+	elseif cids then
+		local item = {
+			cids,
+			nums * rate
+		}
+		tb[#tb + 1] = item
+	end
+
+	return tb
+end
+
+function M.rewardMultiRate(rewards, rate)
+	if rate == 1 then
+		return
+	end
+
+	for i, v in ipairs(rewards) do
+		v[2] = v[2] * rate
+	end
+end
+
+function M.foldRewards(rewards1, rewards2)
+	if not rewards2 then
+		return rewards1
+	end
+
+	local len_rewards2 = lc.lenTable(rewards2)
+
+	for i = 1, len_rewards2 do
+		local data = rewards2[i]
+		local idx, value = table.findArray(rewards1, function (tbv)
+			return tbv[1] == data[1] and not data[3]
+		end)
+
+		if idx then
+			value[2] = value[2] + data[2]
+		else
+			rewards1[#rewards1 + 1] = {
+				data[1],
+				data[2],
+				data[3]
+			}
+		end
+	end
+
+	return rewards1
+end
+
+function M.foldCidsAndNums2Rewards(rewards1, cids, nums)
+	local rewards2 = M.formatRewards(cids, nums)
+
+	return M.foldRewards(rewards1, rewards2)
+end
+
+function M.foldCidsAndNums(cids1, nums1, cids2, nums2, rate)
+	local rewards1 = M.formatRewards(cids1, nums1)
+
+	if rate == 0 then
+		return rewards1
+	end
+
+	local rewards2 = M.formatRewards(cids2, nums2, rate)
+
+	return M.foldRewards(rewards1, rewards2)
+end
+
+function M.foldCidsAndNums2Separate(cids1, nums1, cids2, nums2, rate)
+	if rate == 0 then
+		return cids1, nums1
+	end
+
+	local lenCids2 = lc.lenTable(cids2)
+
+	for i = 1, lenCids2 do
+		local cid = cids2[i]
+		local num = nums2[i]
+		local idx = table.findArray(cids1, cid)
+
+		if idx then
+			nums1[idx] = nums1[idx] + num
+		else
+			cids1[#cids1 + 1] = cid
+			nums1[#nums1 + 1] = num
+		end
+	end
+
+	return cids1, nums1
+end
+
+function M.sortRewards(rewards, down, downCid)
+	table.sort(rewards, function (a, b)
+		local cid1 = a.cid or a[1]
+		local cid2 = b.cid or b[1]
+		local q1 = D.toQuality(cid1)
+		local q2 = D.toQuality(cid2)
+
+		if q1 ~= q2 then
+			if down then
+				return q2 < q1
+			else
+				return q1 < q2
+			end
+		end
+
+		if downCid and cid1 ~= cid2 then
+			if down then
+				return cid2 < cid1
+			else
+				return cid1 < cid2
+			end
+		end
+
+		return cid1 < cid2
+	end)
+
+	return rewards
+end
+
+function M.isSystemUnlocked(sys)
+	if sys == D.SystemType.Union and not P._playerUnion._meta.opened and C._appConfig.unionClose then
+		return false
+	end
+
+	local ret1 = false
+	local conf = D._systemUnlockConfig[sys]
+	local bitType = conf._bitType
+
+	if conf._unlockType == 2 then
+		ret1 = conf._unlockVal <= P:getLevel()
+	elseif conf._unlockType == 3 then
+		ret1 = P._playerMission:getMissionIdByType(math.floor(conf._unlockVal / 10000)) % 10000 >= conf._unlockVal % 10000
+	elseif conf._unlockType == 4 then
+		ret1 = P._playerMission:getMissionIdByType(math.floor(conf._unlockVal / 10000)) % 10000 > conf._unlockVal % 10000
+	elseif conf._unlockType == 5 then
+		ret1 = conf._unlockVal <= P:getCreateDay()
+	else
+		ret1 = true
+	end
+
+	if bitType == 1 and ret1 then
+		return true
+	end
+
+	local ret2 = false
+	local unlockParams = conf._unlockParams
+
+	if unlockParams and unlockParams[1] == 1 then
+		ret2 = unlockParams[2] <= P._playerStore:getPayMoney()
+	end
+
+	if bitType == 1 then
+		return ret2
+	elseif bitType == 2 then
+		return ret1 and ret2
+	end
+
+	return false
+end
+
+function M.getTMPSpriteRichText(str, repeatNum)
+	if repeatNum == nil then
+		return string.format("<sprite name=\"%s\">", str)
+	end
+
+	local str = string.format("<sprite name=\"%s\">", str)
+	local tb = {}
+
+	for i = 1, repeatNum do
+		tb[i] = str
+	end
+
+	return table.concat(tb)
+end
+
+function M.toResearchSprite(conf)
+	if conf._bulletDmgAdd then
+		return "general/defender-g_research_1"
+	elseif conf._critAdd then
+		return "general/defender-g_research_2"
+	elseif conf._critDmgAdd then
+		return "general/defender-g_research_3"
+	elseif conf._chargeBulletDmgAdd then
+		return "general/defender-g_research_4"
+	elseif conf._chargeBulletCritAdd then
+		return "general/defender-g_research_5"
+	elseif conf._smallBulletDmgAdd then
+		return "general/defender-g_research_6"
+	elseif conf._rouge then
+		return "general/defender-g_research_" .. conf._rouge
+	end
+end
+
+function M.loadConfig()
+	M._notificationConfig = requireLua("notification")
+	M._globalConfig = requireLua("global")
+	M._audioConfig = requireLua("audio")
+	M._supportConfig = requireLua("support")
+	M.DIAMOND_USE_CONFIRM_NUM = M._globalConfig._diamond_use_confirm_num or M.DIAMOND_USE_CONFIRM_NUM
+	M.CRISIS_ZONE_MAX_ENEMY_COUNT = M._globalConfig._crisis_zone_total_wave or M.CRISIS_ZONE_MAX_ENEMY_COUNT
+	M._iapConfig = requireLua("iap")
+	M._exchangeConfig = requireLua("exchange")
+	M._giftConfig = requireLua("gift")
+	M._battlePassAllConfig = requireLua("battlepass_all")
+	M._battlePassConfig = requireLua("battlepass")
+	M._battlePassNewConfig = requireLua("battlepass_key")
+	M._battlePassSkinConfig = requireLua("battlepass_skin")
+	M._battlePassRangerConfig = requireLua("battlepass_ranger")
+	M._battlePassDomeConfig = requireLua("battlepass_dome")
+	M._levelFundConfig = requireLua("levelfund")
+	M._sevenDayConfig = requireLua("seven_day")
+	M._monthlyCheckinConfig = requireLua("monthly_checkin")
+	M._guideConfig = requireLua("guide")
+	M._guideTextConfig = requireLua("guide_text")
+	M._guideTriggerConfig = requireLua("guide_trigger")
+	M._guideTriggerMap = {}
+
+	for k, v in pairs(M._guideTriggerConfig) do
+		D._guideTriggerMap[v._type .. v._val] = v
+	end
+
+	M._playerLevelConfig = requireLua("player_level")
+	M._dropPathConfig = requireLua("drop_path")
+	M._lotteryConfig = requireLua("lottery")
+	M._lotteryExtraConfig = requireLua("lottery_extra")
+	M._rewardsConfig = requireLua("rewards")
+	M._missionOfflineConfig = requireLua("mission_offline")
+	M._battleSkillConfig = requireLua("battle_skill")
+	M._battleEnemyConfig = requireLua("battle_enemy")
+	M._battleRougeConfig = requireLua("battle_rouge")
+	M._battleBuffConfig = requireLua("battle_buff")
+	M._battleGlobalConfig = requireLua("battle_global")
+	M._battleEnemyBuffConfig = requireLua("battle_enemy_buff")
+	M._battleEffectConfig = requireLua("battle_effect_enum")
+	M._battleGlobalBuffConfig = requireLua("battle_global_buff")
+	M._battleVFXWebgl = requireLua("battle_vfx_webgl")
+	M._enemyBuffConfig = requireLua("battle_enemy_buff")
+	M._equipUpgradeConfig = requireLua("equip_upgrade")
+	M.MAX_EQUIP_LEVEL = #M._equipUpgradeConfig
+	M._equipRefineConfig = requireLua("equip_refine")
+	M._weaponConfig = requireLua("weapon")
+	M._weaponUpgradeConfig = requireLua("weapon_upgrade")
+	M._weaponGrowConfig = requireLua("weapon_grow")
+	M._weaponPropConfig = requireLua("weapon_prop")
+	M._gatlinUpgradeConfig = requireLua("defender_upgrade")
+	M._domeUpgradeConfig = requireLua("dome_upgrade")
+	M._equipConfig = requireLua("equip")
+	M._skinEffectConfig = requireLua("skin_effect")
+	M._taskConfig = requireLua("task")
+	M._jumpConfig = requireLua("jump")
+	M._systemUnlockConfig = requireLua("system_unlock")
+	M._mailConfig = requireLua("mail")
+	M._missionCommonConfig = requireLua("mission")
+	M._missionEliteConfig = requireLua("mission_elite")
+	M._missionDomeConfig = requireLua("mission_dome")
+	M._missionGlobalDefenseConfig = requireLua("mission_global_defense")
+	M._missionArkRebuildConfig = requireLua("mission_ark_rebuild")
+	M._missionCrisisConfig = requireLua("mission_crisis")
+	M._missionSparkConfig = requireLua("mission_spark")
+
+	M.loadCrisisConfig()
+
+	M._missionConfigs = {
+		[D.MissionType.Common] = M._missionCommonConfig,
+		[D.MissionType.Elite] = M._missionEliteConfig,
+		[D.MissionType.Dome] = M._missionDomeConfig,
+		[D.MissionType.GlobalDefense] = M._missionGlobalDefenseConfig,
+		[D.MissionType.ArkRebuild] = M._missionArkRebuildConfig,
+		[D.MissionType.CrisisZone] = M._missionCrisisConfig,
+		[D.MissionType.SparkScout] = M._missionSparkConfig
+	}
+
+	setmetatable(M._missionEliteConfig, {
+		__index = function (tbl, index)
+			if index < 10001 or index > 30000 then
+				return nil
+			end
+
+			return tbl[index + 10000]
+		end
+	})
+
+	M._challengeConfig = requireLua("challenge")
+	M._activityTimeConfig = requireLua("activity_time")
+	M._activityWeekLotteryConfig = requireLua("activity_week_lottery")
+	M._activityWeekLottery2Config = requireLua("activity_week_lottery_2")
+	M._activityMonopolyConfig = requireLua("activity_monopoly")
+	M._activityMonopolyCellConfig = requireLua("activity_monopoly_cell")
+	M._activityMonopolyMilestoneConfig = requireLua("activity_monopoly_milestone")
+	M._battlePassMonopolyConfig = requireLua("activity_monopoly_battlepass")
+	M._activityArkRebuildConfig = requireLua("activity_ark_rebuild")
+	M._arkRebuildMilestoneConfig = requireLua("activity_ark_rebuild_milestone")
+	M._battlePassArkRebuildConfig = requireLua("ark_rebuild_battlepass")
+	M._rankArkRebuildConfig = requireLua("rank_ark_rebuild")
+	M._arkRebuildModuleConfig = requireLua("ark_rebuild_module")
+	M._arkRebuildLotteryConfig = requireLua("activity_ark_rebuild_lottery")
+	M._activitySparkScoutConfig = requireLua("activity_spark_scout")
+	M._battlePassSparkScoutConfig = requireLua("activity_spark_scout_battlepass")
+	M._rankSparkScoutConfig = requireLua("rank_spark_scout")
+	M._gradeSparkScoutConfig = requireLua("activity_spark_scout_grade")
+	M._sparkScoutWeaponCardConfig = requireLua("activity_spark_scout_weapon_card")
+	M._sparkScoutRobotConfig = requireLua("activity_spark_scout_robot")
+	M._activitySparkScoutChipConfig = requireLua("activity_spark_scout_chip")
+	M._anniversaryCheckinConfig = requireLua("anniversary_checkin")
+	M._anniversaryCheckinStarTreasureConfig = requireLua("anniversary_checkin_star_treasure")
+	M._anniversaryCheckinGlobalStarConfig = requireLua("anniversary_checkin_global_star")
+	M._activityAnniversaryConfig = requireLua("anniversary")
+	M._anniversaryNewbieTaskConfig = requireLua("anniversary_newbie_task")
+	M._anniversaryNewbieRewardConfig = requireLua("anniversary_newbie_rewards")
+	M._anniversaryRechargeConfig = requireLua("anniversary_recharge")
+	M._anniversaryTreasureHuntingBPConfig = requireLua("anniversary_treasure_hunting_battlepass")
+	M._anniversaryTreasureHuntingMissionConfig = requireLua("anniversary_treasure_hunting_mission")
+	M._anniversaryDrawPackageCfg = requireLua("anniversary_draw_package")
+	M._rankDomeConfig = requireLua("rank_dome")
+	M._rankMonopolyConfig = requireLua("rank_monopoly")
+	M._domeGradeConfig = requireLua("dome_grade")
+	M._rangerConfig = requireLua("ranger")
+	M._rangerEggConfig = requireLua("ranger_egg")
+	M._rangerEquipConfig = requireLua("ranger_equip")
+	M._rangerEquipConfigDropList = {}
+
+	for k, v in pairs(M._rangerEquipConfig) do
+		M._rangerEquipConfigDropList[#M._rangerEquipConfigDropList + 1] = v
+	end
+
+	M._rangerBaseUpgradeConfig = requireLua("ranger_base_upgrade")
+
+	M.loadRangerSkillConfigs()
+
+	for _, weaponConfig in pairs(M._weaponConfig) do
+		M.WEAPON_ORDER[weaponConfig._sort] = weaponConfig._id
+	end
+
+	M.loadGemConfigs()
+
+	M._qualityEquipConfig = {}
+
+	for _, equipConf in pairs(M._equipConfig) do
+		local confs = M._qualityEquipConfig[equipConf._quality * 100 + equipConf._grade]
+
+		if not confs then
+			confs = {}
+			M._qualityEquipConfig[equipConf._quality * 100 + equipConf._grade] = confs
+		end
+
+		confs[#confs + 1] = equipConf
+	end
+
+	M._domeTechConfig = {}
+
+	for _, domeUpgradeConf in pairs(M._domeUpgradeConfig) do
+		if domeUpgradeConf._tech then
+			M._domeTechConfig[domeUpgradeConf._tech] = domeUpgradeConf
+		end
+	end
+
+	M._itemConfig = requireLua("item")
+	M._itemAvatarConfig = requireLua("item_avatar")
+
+	table.merge(M._itemConfig, M._itemAvatarConfig)
+
+	for key, val in pairs(D._itemAvatarConfig) do
+		if key > 15000 and key < 16000 and M.AVATAR_END < key then
+			M.AVATAR_END = key
+		end
+
+		if key > 16000 and key < 16500 and M.AVATAR_FRAME_END < key then
+			M.AVATAR_FRAME_END = key
+		end
+
+		if key > 16500 and key < 17000 and M.AVATAR_MEDAL_END < key then
+			M.AVATAR_MEDAL_END = key
+		end
+	end
+
+	M._rangerItemCfgByQuality = {}
+	M._rangerPieceItemCfgByQuality = {}
+
+	for key, val in pairs(D._itemConfig) do
+		if val._type == D.ItemType.Ranger then
+			if D._rangerConfig[key] and not D._rangerConfig[key]._hidden then
+				local tb = M._rangerItemCfgByQuality[val._quality]
+
+				if not tb then
+					tb = {}
+					M._rangerItemCfgByQuality[val._quality] = tb
+				end
+
+				tb[#tb + 1] = val._id
+			end
+		elseif val._type == D.ItemType.RangerPiece and D._rangerConfig[key - 1000] and not D._rangerConfig[key - 1000]._hidden then
+			local tb = M._rangerPieceItemCfgByQuality[val._quality]
+
+			if not tb then
+				tb = {}
+				M._rangerPieceItemCfgByQuality[val._quality] = tb
+			end
+
+			tb[#tb + 1] = val._id
+		end
+	end
+
+	M._skinGatlinConfig = requireLua("skin_gatlin")
+	M._skinRoleConfig = requireLua("skin_role")
+	M._skinWeaponConfig = requireLua("skin_weapon")
+	M._skinDomeConfig = requireLua("skin_dome")
+	M._skinConfigs = {
+		[D.SkinType.Gatlin] = M._skinGatlinConfig,
+		[D.SkinType.Role] = M._skinRoleConfig,
+		[D.SkinType.Weapon] = M._skinWeaponConfig,
+		[D.SkinType.Dome] = M._skinDomeConfig
+	}
+
+	M.loadBattleCard()
+
+	M._playerReturnMilestoneConfig = requireLua("player_return_milestone")
+	M._playerReturnCheckinConfig = requireLua("player_return_checkin")
+
+	if lc._isCN then
+		M.RankType.ArkRebuildRank = "ark_rebuild"
+		M.RankType.DomeRank = "dome_v3"
+		M.URL_TERM_SERVICE = "https://minigame.leocool.com/policy/termsofservice.html"
+		M.URL_PRIVACY_POLICY = "https://minigame.leocool.com/policy/privacy.html"
+	end
+end
+
+function M.loadCrisisConfig()
+	local cfgs = M._missionCrisisConfig
+	M._missionCrisisEnemyByDifficulty = {}
+	local missionCrisisEnemyByDifficultyTempCache = {}
+
+	for id, cfg in pairs(cfgs) do
+		local diff = math.floor(cfg._id / 1000) % 10
+
+		if M.CRISIS_ZONE_MAX_DIFFICULTY < diff then
+			M.CRISIS_ZONE_MAX_DIFFICULTY = diff
+		end
+
+		local ems = M._missionCrisisEnemyByDifficulty[diff]
+		local emsCache = missionCrisisEnemyByDifficultyTempCache[diff]
+
+		if not ems then
+			ems = {}
+			M._missionCrisisEnemyByDifficulty[diff] = ems
+			emsCache = {}
+			missionCrisisEnemyByDifficultyTempCache[diff] = emsCache
+		end
+
+		local eIds = cfg._eliteId
+
+		for i = 1, #eIds do
+			local eid = eIds[i]
+
+			if not emsCache[eid] then
+				emsCache[eid] = 1
+				ems[#ems + 1] = eid
+			end
+		end
+	end
+end
+
+function M.loadRangerSkillConfigs()
+	M._rangerSkillConfig = requireLua("ranger_skill")
+	M._rangerEquipSkillConfig = requireLua("ranger_equip_skill")
+	M._rangerSkillList = {}
+	M._rangerEquipSkillConfigDropList = {}
+
+	for k, v in pairs(M._rangerEquipSkillConfig) do
+		local bucket = v._quality * 100 + v._level
+
+		if not M._rangerEquipSkillConfigDropList[bucket] then
+			M._rangerEquipSkillConfigDropList[bucket] = {}
+		end
+
+		M._rangerEquipSkillConfigDropList[bucket][#M._rangerEquipSkillConfigDropList[bucket] + 1] = v
+		local rangerId = v._ranger
+
+		if rangerId and not M._rangerConfig[rangerId]._hidden then
+			if not M._rangerSkillList[rangerId] then
+				M._rangerSkillList[rangerId] = {}
+			end
+
+			M._rangerSkillList[rangerId][#M._rangerSkillList[rangerId] + 1] = v
+		end
+	end
+
+	for i, bucket in pairs(M._rangerEquipSkillConfigDropList) do
+		table.sort(bucket, function (a, b)
+			if a._effect ~= b._effect then
+				return a._effect < b._effect
+			end
+
+			return a._id < b._id
+		end)
+	end
+
+	for i, bucket in pairs(M._rangerSkillList) do
+		table.sort(bucket, function (a, b)
+			return a._level < b._level
+		end)
+	end
+end
+
+function M.loadGemConfigs()
+	M._gemConfig = requireLua("chip")
+	M._gemEffectConfig = requireLua("gem_effect")
+	M._qualityGemConfig = {}
+	M._activityQualityGemConfig = {}
+
+	for _, gemConf in pairs(M._gemConfig) do
+		local confs = M._qualityGemConfig[gemConf._quality]
+
+		if not confs then
+			confs = {}
+			M._qualityGemConfig[gemConf._quality] = confs
+		end
+
+		local needContinue = false
+
+		if gemConf._wash_weight == 0 or gemConf._weight == 0 then
+			needContinue = true
+		end
+
+		if not needContinue then
+			confs[#confs + 1] = gemConf
+		end
+	end
+
+	for _, gemConf in pairs(M._activitySparkScoutChipConfig) do
+		local confs = M._activityQualityGemConfig[gemConf._quality]
+
+		if not confs then
+			confs = {}
+			M._activityQualityGemConfig[gemConf._quality] = confs
+		end
+
+		local needContinue = false
+
+		if gemConf._wash_weight == 0 or gemConf._weight == 0 then
+			needContinue = true
+		end
+
+		if not needContinue then
+			confs[#confs + 1] = gemConf
+		end
+	end
+
+	local rareGemEffectByPartRecord = {}
+	M.RareEffectByPartConfig = {}
+	M.RareGemEffectByPartConfig = {}
+
+	for q = M.Quality.Orange, M.Quality.COLORFUL do
+		local gemConfigs = M._qualityGemConfig[q]
+
+		for k, gemConf in pairs(gemConfigs) do
+			local gemId = gemConf._id
+			local effectId = gemConf._effect
+			local part = gemConf._part
+			local needContinue = false
+
+			if gemConf._wash_weight == 0 or gemConf._weight == 0 then
+				needContinue = true
+			end
+
+			if not needContinue then
+				local effectConfs = M.RareEffectByPartConfig[part]
+				local gemEffectConfs = M.RareGemEffectByPartConfig[part]
+				local partEffectRecord = rareGemEffectByPartRecord[part]
+
+				if not effectConfs then
+					effectConfs = {}
+					gemEffectConfs = {}
+					partEffectRecord = {}
+					M.RareEffectByPartConfig[part] = effectConfs
+					M.RareGemEffectByPartConfig[part] = gemEffectConfs
+					rareGemEffectByPartRecord[part] = partEffectRecord
+				end
+
+				if D._gemConfig[gemId - q * 100000 + 400000] == nil then
+					if not partEffectRecord[effectId] then
+						partEffectRecord[effectId] = true
+						effectConfs[#effectConfs + 1] = effectId
+					end
+
+					local gemEffectIds = gemEffectConfs[effectId]
+
+					if not gemEffectIds then
+						gemEffectIds = {}
+						gemEffectConfs[effectId] = gemEffectIds
+					end
+
+					gemEffectIds[#gemEffectIds + 1] = gemId
+				end
+			end
+		end
+	end
+
+	for k, v in pairs(D._activitySparkScoutChipConfig) do
+		if not M._gemConfig[k] then
+			M._gemConfig[k] = v
+		end
+	end
+
+	M._qualityGemConfigWithSparkChip = {}
+
+	for _, gemConf in pairs(M._activitySparkScoutChipConfig) do
+		local confs = M._qualityGemConfigWithSparkChip[gemConf._quality]
+
+		if not confs then
+			confs = {}
+			M._qualityGemConfigWithSparkChip[gemConf._quality] = confs
+		end
+
+		local needContinue = false
+
+		if gemConf._wash_weight == 0 or gemConf._weight == 0 then
+			needContinue = true
+		end
+
+		if not needContinue then
+			confs[#confs + 1] = gemConf
+		end
+	end
+
+	for k, gemEffectIds in pairs(M.RareGemEffectByPartConfig) do
+		for k, gemIds in pairs(gemEffectIds) do
+			table.sort(gemIds, function (a, b)
+				return a < b
+			end)
+		end
+	end
+
+	M._gemEffectFilterValueMap = {}
+
+	for id, effectConf in pairs(M._gemEffectConfig) do
+		local effectWeapons = M.calcEffectWeapons(effectConf)
+
+		if effectWeapons then
+			local filterValue = 0
+
+			for i = 1, #effectWeapons do
+				local weapon = effectWeapons[i]
+
+				if weapon == 100 then
+					weapon = M.MAX_WEAPON_ID + 1
+				end
+
+				filterValue = filterValue + 2^(weapon - 1)
+			end
+
+			M._gemEffectFilterValueMap[id] = filterValue * 2^M.PART_FILTER_NUM
+		else
+			M._gemEffectFilterValueMap[id] = -2^M.PART_FILTER_NUM
+		end
+	end
+end
+
+function M.calcEffectWeapons(effectConf)
+	local effectWeapons = nil
+
+	if effectConf._displayWeaponId ~= 0 then
+		effectWeapons = {
+			effectConf._displayWeaponId
+		}
+	elseif effectConf._props and BattlePropEnum.DamageNature1Per <= effectConf._props[1] and effectConf._props[1] <= BattlePropEnum.DamageNature5Per then
+		effectWeapons = {}
+
+		for _, weaponConf in pairs(D._weaponConfig) do
+			if weaponConf._dmgType == effectConf._props[1] - BattlePropEnum.DamageNature1Per + 1 then
+				effectWeapons[#effectWeapons + 1] = weaponConf._id
+			end
+		end
+	end
+
+	return effectWeapons
+end
+
+function M.loadBattleCard()
+	M._battleRougeCardConfig = requireLua("battle_rouge_card")
+	M._weaponCardConfig = {}
+	M._weaponAllCards = {}
+	M._rougePrevUnlockCards = {}
+	M._weaponTreeRoot = {}
+	M._card2WeaponTreeRoot = {}
+
+	local function buildWeaponTreeRoot(id)
+		local rougeConf = M._battleRougeCardConfig[id]
+
+		if M._battleRougeConfig[id] == nil or rougeConf._type == 4 then
+			return
+		end
+
+		local prevCardIds = rougeConf._prevRougeCards
+
+		if not prevCardIds then
+			return
+		end
+
+		for i = 1, #prevCardIds do
+			local prevCardId = prevCardIds[i]
+
+			if M._battleRougeCardConfig[prevCardId]._prevRougeCards then
+				local rootId = buildWeaponTreeRoot(prevCardId)
+				M._card2WeaponTreeRoot[id] = rootId
+			else
+				M._weaponTreeRoot[prevCardId] = 1
+				M._card2WeaponTreeRoot[prevCardId] = prevCardId
+				M._card2WeaponTreeRoot[id] = prevCardId
+
+				return prevCardId
+			end
+		end
+	end
+
+	local rogueCombos = {}
+
+	for id, rougeConf in pairs(M._battleRougeCardConfig) do
+		local needContinue = false
+
+		if M._battleRougeConfig[id] == nil or rougeConf._type == 4 then
+			needContinue = true
+		end
+
+		if not needContinue then
+			buildWeaponTreeRoot(id)
+
+			local stage = rougeConf._stage
+			local weapon = rougeConf._belongWeapon
+			local tb1 = M._weaponCardConfig[weapon]
+
+			if not tb1 then
+				tb1 = {}
+				M._weaponCardConfig[weapon] = tb1
+			end
+
+			local tb2 = tb1[stage]
+
+			if not tb2 then
+				tb2 = {}
+				tb1[stage] = tb2
+			end
+
+			tb2[#tb2 + 1] = rougeConf
+			local comboCfg = rougeConf._unlockWeaponCards
+
+			if comboCfg then
+				rogueCombos[#rogueCombos + 1] = rougeConf
+			end
+
+			local prevCardIds = rougeConf._prevRougeCards
+
+			if prevCardIds then
+				for i = 1, #prevCardIds do
+					local prevCardId = prevCardIds[i]
+
+					if M._rougePrevUnlockCards[prevCardId] then
+						local tb = M._rougePrevUnlockCards[prevCardId]
+						tb[#tb + 1] = rougeConf._id
+					else
+						M._rougePrevUnlockCards[prevCardId] = {
+							rougeConf._id
+						}
+					end
+				end
+			end
+
+			if not M._weaponAllCards[weapon] then
+				M._weaponAllCards[weapon] = {}
+			end
+
+			if rougeConf._id ~= weapon and rougeConf._id ~= 107 then
+				M._weaponAllCards[weapon][#M._weaponAllCards[weapon] + 1] = rougeConf
+			end
+		end
+	end
+
+	M._rougeUnlock = {}
+	M._rougeExpire = {}
+
+	for k, v in pairs(M._gatlinUpgradeConfig) do
+		if v._rouge then
+			M._rougeUnlock[v._rouge] = k
+		end
+
+		if v._rougeDelete then
+			M._rougeExpire[v._rougeDelete] = k
+		end
+	end
+
+	for k, v in pairs(M._weaponGrowConfig) do
+		if v._addRouge then
+			M._rougeUnlock[v._addRouge] = k % 100
+		end
+
+		if v._delRouge then
+			M._rougeExpire[v._delRouge] = k % 100
+		end
+	end
+
+	for weapon, stageCards in pairs(M._weaponCardConfig) do
+		for stage, cardConfs in pairs(stageCards) do
+			table.sort(cardConfs, function (a, b)
+				if b._type < a._type then
+					return false
+				elseif a._type < b._type then
+					return true
+				else
+					local unlockA = M._rougeUnlock[a._id] or 0
+					local unlockB = M._rougeUnlock[b._id] or 0
+
+					if unlockA == unlockB then
+						return a._id < b._id
+					else
+						return unlockA < unlockB
+					end
+				end
+			end)
+		end
+	end
+
+	M._weaponCardComboConfig = {}
+	M._weaponAllCardComboConfig = {}
+
+	for key, cfg in pairs(rogueCombos) do
+		local id = cfg._belongWeapon
+		local comboCfg = cfg._unlockWeaponCards
+		local rougeId = cfg._id
+		local weaponId = comboCfg[1]
+		local weaponStage = comboCfg[2]
+		local weaponStar = comboCfg[3]
+		local weaponId2 = comboCfg[4]
+		local weaponStage2 = comboCfg[5]
+		local weaponStar2 = comboCfg[6]
+		local tb = M._weaponCardComboConfig[id]
+
+		if tb == nil then
+			tb = {}
+			M._weaponCardComboConfig[id] = tb
+		end
+
+		if weaponId == id then
+			tb[#tb + 1] = {
+				comboCfg[1],
+				comboCfg[2],
+				comboCfg[3],
+				comboCfg[4],
+				comboCfg[5],
+				comboCfg[6],
+				rougeId
+			}
+		end
+
+		local tbAll1 = M._weaponAllCardComboConfig[weaponId]
+
+		if tbAll1 == nil then
+			tbAll1 = {}
+			M._weaponAllCardComboConfig[weaponId] = tbAll1
+		end
+
+		local tbAll2 = M._weaponAllCardComboConfig[weaponId2]
+
+		if tbAll2 == nil then
+			tbAll2 = {}
+			M._weaponAllCardComboConfig[weaponId2] = tbAll2
+		end
+
+		local combodata = {
+			comboCfg[1],
+			comboCfg[2],
+			comboCfg[3],
+			comboCfg[4],
+			comboCfg[5],
+			comboCfg[6],
+			rougeId
+		}
+		tbAll1[#tbAll1 + 1] = combodata
+		tbAll2[#tbAll2 + 1] = combodata
+	end
+
+	for key, value in pairs(M._weaponCardComboConfig) do
+		lc.stableQuickSort(value, 1, #value, function (a, b)
+			if a[2] ~= b[2] then
+				return a[2] < b[2]
+			end
+
+			if a[3] ~= b[3] then
+				return a[3] < b[3]
+			end
+
+			return true
+		end)
+	end
+end
+
+function M.outputConfigValues(name)
+	local config = requireLua(name)
+	local sort_ids = {}
+
+	for k, v in pairs(config) do
+		if type(k) == "number" then
+			sort_ids[#sort_ids + 1] = k
+		end
+	end
+
+	table.sort(sort_ids, function (a, b)
+		return a < b
+	end)
+
+	local keys = config.mapKeyIndexArray
+	local str_vals = {}
+
+	for i = 1, #sort_ids do
+		local row = config[sort_ids[i]]
+
+		for j = 1, #keys do
+			local v = row[keys[j]]
+
+			if type(v) == "table" then
+				local c = lc.lenTable(v)
+
+				for i = 1, c do
+					local vv = v[i]
+
+					if type(vv) == "table" then
+						local cc = lc.lenTable(vv)
+
+						for i = 1, cc do
+							local vvv = vv[i]
+							str_vals[#str_vals + 1] = tostring(vvv) .. "\n"
+						end
+					else
+						str_vals[#str_vals + 1] = tostring(vv) .. "\n"
+					end
+				end
+			else
+				str_vals[#str_vals + 1] = tostring(v) .. "\n"
+			end
+		end
+	end
+
+	local file, err = io.open(Application.persistentDataPath .. "/output2/" .. name .. ".txt", "w")
+	local result, errMsg = file:write(table.concat(str_vals))
+
+	file:close()
+end
+
+function M.checkData()
+	M.outputConfigValues("activity_ark_rebuild")
+	M.outputConfigValues("activity_ark_rebuild_milestone")
+	M.outputConfigValues("activity_monopoly")
+	M.outputConfigValues("activity_monopoly_battlepass")
+	M.outputConfigValues("activity_monopoly_cell")
+	M.outputConfigValues("activity_monopoly_milestone")
+	M.outputConfigValues("activity_time")
+	M.outputConfigValues("activity_week_lottery")
+	M.outputConfigValues("activity_week_lottery_2")
+	M.outputConfigValues("ark_rebuild_atk_level")
+	M.outputConfigValues("ark_rebuild_battlepass")
+	M.outputConfigValues("ark_rebuild_module")
+	M.outputConfigValues("battlepass")
+	M.outputConfigValues("battlepass_dome")
+	M.outputConfigValues("battlepass_key")
+	M.outputConfigValues("battlepass_skin")
+	M.outputConfigValues("challenge")
+	M.outputConfigValues("chip")
+	M.outputConfigValues("damage_type_enum")
+	M.outputConfigValues("defender_upgrade")
+	M.outputConfigValues("dome_upgrade")
+	M.outputConfigValues("drop")
+	M.outputConfigValues("drop_path")
+	M.outputConfigValues("equip")
+	M.outputConfigValues("equip_refine")
+	M.outputConfigValues("equip_upgrade")
+	M.outputConfigValues("exchange")
+	M.outputConfigValues("gem_effect")
+	M.outputConfigValues("gift")
+	M.outputConfigValues("guide")
+	M.outputConfigValues("guide_text")
+	M.outputConfigValues("guide_trigger")
+	M.outputConfigValues("iap")
+	M.outputConfigValues("item")
+	M.outputConfigValues("item_avatar")
+	M.outputConfigValues("jump")
+	M.outputConfigValues("levelfund")
+	M.outputConfigValues("lottery")
+	M.outputConfigValues("lottery_extra")
+	M.outputConfigValues("mail")
+	M.outputConfigValues("mission")
+	M.outputConfigValues("mission_ark_rebuild")
+	M.outputConfigValues("mission_dome")
+	M.outputConfigValues("mission_elite")
+	M.outputConfigValues("mission_global_defense")
+	M.outputConfigValues("mission_offline")
+	M.outputConfigValues("player_level")
+	M.outputConfigValues("rank_ark_rebuild")
+	M.outputConfigValues("rank_dome")
+	M.outputConfigValues("rank_monopoly")
+	M.outputConfigValues("rewards")
+	M.outputConfigValues("seven_day")
+	M.outputConfigValues("skin_dome")
+	M.outputConfigValues("skin_effect")
+	M.outputConfigValues("skin_gatlin")
+	M.outputConfigValues("skin_role")
+	M.outputConfigValues("skin_weapon")
+	M.outputConfigValues("support")
+	M.outputConfigValues("system_unlock")
+	M.outputConfigValues("task")
+	M.outputConfigValues("tips")
+	M.outputConfigValues("weapon")
+	M.outputConfigValues("weapon_grow")
+	M.outputConfigValues("weapon_prop")
+	M.outputConfigValues("weapon_upgrade")
+	M.outputConfigValues("battle_buff")
+	M.outputConfigValues("battle_enemy")
+	M.outputConfigValues("battle_global_buff")
+	M.outputConfigValues("battle_rouge")
+	M.outputConfigValues("battle_rouge_card")
+	M.outputConfigValues("battle_skill")
+end
+
+function M.getBattleEffectParams(id)
+	return D._battleEffectConfig[id]._params
+end

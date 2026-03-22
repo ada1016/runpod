@@ -1,0 +1,78 @@
+local M = class("SparkScoutChipDropWeightOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfCardContainer = Types.Transform,
+	tmpTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+end
+
+function M:init(quality)
+	local cardPools = P._playerActivitySparkScout:calcChipPools()
+	self._quality = quality
+
+	self._tmpTitle:SetLocalize(SID["SHOP_BOX_ODDS" .. quality])
+
+	local cards = cardPools[quality]
+	local cardNum = #cards
+	local totalWeight = 0
+
+	for i = 1, cardNum do
+		local cfg = cards[i]
+		totalWeight = totalWeight + cfg._weight
+	end
+
+	table.sort(cards, function (a, b)
+		local weaponIdA = D._gemEffectConfig[a._effect]._weaponId
+
+		if weaponIdA == 0 then
+			weaponIdA = 100
+		end
+
+		local weaponIdB = D._gemEffectConfig[b._effect]._weaponId
+
+		if weaponIdB == 0 then
+			weaponIdB = 100
+		end
+
+		if weaponIdA ~= weaponIdB then
+			return weaponIdA < weaponIdB
+		else
+			return a._id < b._id
+		end
+	end)
+
+	local id, cfg = nil
+
+	for i = 1, cardNum do
+		local copyNum = 0
+		cfg = cards[i]
+		id = cfg._id
+		copyNum = 1
+		local goCell = GameObject.Instantiate(self._goTemplate, self._tfCardContainer)
+
+		goCell:SetActive(true)
+
+		local tfTmps = goCell.transform:GetChild(0)
+		local tmpDesc = tfTmps:Find("Text"):GetComponent("TMP_Text")
+		local tmpWeight = tfTmps:Find("TextWeight"):GetComponent("TMP_Text")
+		tmpWeight.text = string.format("%.2f%%", math.floor(cfg._weight / totalWeight * 10000) / 100)
+		local effectConf = D._gemEffectConfig[cfg._effect]
+
+		V.loadChipDescription(tmpDesc, effectConf, cfg._param, cfg._params)
+	end
+
+	self._tfContainer:GetChild(0):SetActive(cardNum > 0)
+	self._goEmpty:SetActive(cardNum == 0)
+end
+
+return M

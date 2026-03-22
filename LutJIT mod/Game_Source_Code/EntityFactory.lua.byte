@@ -1,0 +1,41 @@
+local M = class("EntityFactory")
+
+function M:ctor()
+	self._entitysMap = {}
+end
+
+local function _get_entity(self, name, capacity)
+	local entitys = self._entitysMap[name]
+
+	if entitys == nil then
+		entitys = table.new(capacity or 2, 0)
+		self._entitysMap[name] = objs
+	end
+
+	local entity = entitys[#entitys]
+
+	if entity then
+		entitys[#entitys] = nil
+	end
+
+	return entity
+end
+
+function M:getEntity(name, capacity)
+	local entity = _get_entity(self, name, capacity)
+	local new = false
+
+	if entity == nil then
+		entity = requireLua(name).create()
+		new = true
+	end
+
+	return entity, new
+end
+
+function M:putEntity(entity)
+	local entitys = self._entitysMap[entity.__cname]
+	entitys[#entitys + 1] = entity
+end
+
+return M

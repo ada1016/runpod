@@ -1,0 +1,421 @@
+local M = class("PlayerUnion")
+
+function M:ctor()
+	self._connected = false
+	self._selfInfo = nil
+	self._role1Count = 0
+	self._role2Count = 0
+	self._role3Count = 0
+	self._membersMap = {}
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.chatCount = self._meta.chatCount or 0
+end
+
+function M:start()
+end
+
+function M:isJoin()
+	return self._meta.isJoin
+end
+
+function M:isConnected()
+	return self._connected
+end
+
+function M:disconnect()
+	self._connected = false
+end
+
+function M:connectServer()
+	if self._connected then
+		return
+	end
+
+	self._meta.opened = true
+	self._connected = true
+	local serverDomain = C._config.gameDomain or C._appConfig.gameDomain or "dev.gameserver.idefense.leocool.com"
+	local serverAddr = string.find(serverDomain, "192.168") ~= nil and "ws://" .. serverDomain .. "/ws" or "wss://" .. serverDomain .. "/ws"
+
+	Network:init(serverAddr, 10)
+end
+
+local SORT_ROLE_KEY = {
+	[0] = 1,
+	4,
+	3,
+	2
+}
+
+function M:sortMemersByAtk(members)
+	table.sort(members, function (a, b)
+		if b.atk < a.atk then
+			return true
+		elseif a.atk < b.atk then
+			return false
+		elseif SORT_ROLE_KEY[b.role] < SORT_ROLE_KEY[a.role] then
+			return true
+		elseif SORT_ROLE_KEY[a.role] < SORT_ROLE_KEY[b.role] then
+			return false
+		else
+			return b.id < a.id
+		end
+	end)
+end
+
+function M:walkUnionMembers()
+	self._role1Count = 0
+	self._role2Count = 0
+	self._role3Count = 0
+
+	if self._union == nil then
+		return
+	end
+
+	self._union.atk = 0
+	local members = self._union.members
+
+	for i = 1, #members do
+		self._union.atk = self._union.atk + members[i].atk
+		local member = members[i]
+
+		if member.id == C._userId then
+			self._selfInfo = members[i]
+		end
+
+		if member.role == D.UnionRole.PRESIDENT then
+			self._role1Count = self._role1Count + 1
+		elseif member.role == D.UnionRole.VICE_PRESIDENT then
+			self._role2Count = self._role2Count + 1
+		elseif member.role == D.UnionRole.COORDINATOR then
+			self._role3Count = self._role3Count + 1
+		end
+
+		self._membersMap[member.id] = member
+	end
+
+	self:sortMemersByAtk(members)
+end
+
+function M:getUnionMembers()
+	return self._union.members
+end
+
+function M:isInUnion()
+	return self._union ~= nil
+end
+
+function M:getUnion()
+	return self._union
+end
+
+function M:getLogs()
+	return self._logs
+end
+
+function M:dealNotInUnion()
+	self._union = nil
+	self._selfInfo = nil
+
+	SimpleEvent.emit("union.not.in")
+end
+
+function M:tryGetUnionDetailReq(union_id)
+	P:genSelfInfoToPack()
+	Request.sendUnionGetDetailReq(union_id)
+end
+
+function M:onGetUnionDetailResp(result)
+	local new_union = result.union
+	local refresh = false
+
+	if self._union then
+		if new_union then
+			refresh = true
+			self._union = result.union
+
+			self:walkUnionMembers()
+			SimpleEvent.emit("union.get.detail.resp.refresh")
+		else
+			self._union = nil
+
+			SimpleEvent.emit("union.not.in")
+		end
+	elseif new_union then
+		self._union = result.union
+
+		self:walkUnionMembers()
+		SimpleEvent.emit("union.get.detail.resp")
+	else
+		self._meta.join_union_next_timestamp = math.floor(result.my_info.join_leave_timestamp / 1000) + D._globalConfig._union_apply_cd * 3600
+
+		SimpleEvent.emit("union.get.detail.resp")
+	end
+end
+
+function M:tryCreateUnion()
+	P:genSelfInfoToPack()
+	Request.sendUnionCreateReq()
+end
+
+function M:onCreateUnionResp(result)
+	self._union = result.union
+
+	self:walkUnionMembers()
+	P._playerAsset:decreaseAssetNum(D.ResType.diamond, D._globalConfig._union_create_cost, D.LogWay.union_create)
+	SimpleEvent.emit("union.join.resp")
+	Trace.traceDesign("Union_Create")
+end
+
+function M:trySearchUnion()
+	NetPack.UnionSearchReqPack.enable_filter = false
+
+	Request.sendUnionSearchReq()
+end
+
+function M:tryGetRecmdUnions()
+	NetPack.UnionSearchReqPack.key = ""
+
+	Request.sendUnionSearchReq()
+end
+
+function M:onGetRecmdUnionsResp(result)
+	self._unions = result.unions
+
+	SimpleEvent.emit("union.get.list.resp")
+end
+
+function M:tryJoinUnionReq(union_id, apply)
+	NetPack.UnionApplyReqPack.union_id = union_id
+
+	P:genSelfInfoToPack()
+	Request.sendUnionJoinReq()
+
+	if apply then
+		Trace.traceDesign("Union_Apply")
+	else
+		Trace.traceDesign("Union_Join")
+	end
+end
+
+function M:onJoinUnionResp(result)
+	self._union = result.union
+
+	self:walkUnionMembers()
+	SimpleEvent.emit("union.join.resp")
+end
+
+function M:tryLeaveUnionReq()
+	Request.sendUnionLeaveReq()
+end
+
+function M:onLeaveUnionResp()
+	self._union = nil
+	self._meta.join_union_next_timestamp = C.getCurTime() + D._globalConfig._union_apply_cd * 3600
+
+	SimpleEvent.emit("union.leave.resp")
+	Trace.traceDesign("Union_Leave")
+end
+
+function M:couldJoinUnion()
+	if self._meta.join_union_next_timestamp == nil then
+		return true
+	end
+
+	if self._meta.join_union_next_timestamp < C.getCurTime() then
+		return true
+	end
+
+	return false
+end
+
+function M:tryGetUnionLogReq()
+	Request.sendUnionGetLogReq()
+end
+
+function M:onGetUnionLogResp(result)
+	self._logs = result.logs
+
+	SimpleEvent.emit("union.log.resp")
+end
+
+function M:tryEditUnionInfoReq()
+	Request.sendUnionEditReq()
+end
+
+function M:onEditUnionInfoResp()
+	self._union.name = NetPack.UnionSetupReqPack.name
+	self._union.desc = NetPack.UnionSetupReqPack.desc
+	self._union.avatar_base = NetPack.UnionSetupReqPack.avatar_base
+	self._union.avatar_badge = NetPack.UnionSetupReqPack.avatar_badge
+	self._union.need_apply = NetPack.UnionSetupReqPack.need_apply
+	self._union.require_level = NetPack.UnionSetupReqPack.require_level
+	self._union.require_atk = NetPack.UnionSetupReqPack.require_atk
+	self._union.language = NetPack.UnionSetupReqPack.language
+
+	SimpleEvent.emit("union.edit.resp")
+end
+
+function M:tryDealApplyReq(applier_id, accepted)
+	local appliers = self._union.appliers
+
+	for i = 1, #appliers do
+		if appliers[i].id == applier_id then
+			table.remove(appliers, i)
+
+			break
+		end
+	end
+
+	Request.sendUnionDealApplyReq({
+		applier_id
+	}, accepted)
+	SimpleEvent.emit("union.deal.apply.req")
+end
+
+function M:tryDealBatchApplyReq(accepted)
+	if #self._union.appliers == 0 then
+		return
+	end
+
+	local applier_ids = {}
+
+	for i = 1, #self._union.appliers do
+		applier_ids[#applier_ids + 1] = self._union.appliers[i].id
+	end
+
+	Request.sendUnionDealApplyReq(applier_ids, accepted)
+	table.clear(self._union.appliers)
+	SimpleEvent.emit("union.deal.apply.req")
+end
+
+function M:onDealApplyResp(result)
+	local members = result.members
+
+	for i = 1, #members do
+		self:doMemberJoinUnion(members[i])
+	end
+
+	if #members > 0 then
+		SimpleEvent.emit("union.member.ditry")
+	end
+end
+
+function M:doMemberJoinUnion(member)
+	self._union.members[#self._union.members + 1] = member
+end
+
+function M:tryKickMemberReq(member)
+	Request.sendUnionKickMemberReq(member.id)
+end
+
+function M:onKickMember(result)
+	local id = result.str
+	local members = self._union.members
+
+	for i = 1, #members do
+		if members[i].id == id then
+			table.remove(members, i)
+
+			break
+		end
+	end
+
+	SimpleEvent.emit("union.member.ditry")
+end
+
+function M:tryAdjuestRole(member, role)
+	self._adjuestingMember = member
+	self._adjuestingRole = role
+	NetPack.UnionAppointReq.member = member.id
+	NetPack.UnionAppointReq.role = role
+
+	Request.sendUnionAdjuestRoleReq()
+end
+
+function M:onAppointResp()
+	if self._adjuestingRole == D.UnionRole.PRESIDENT and self._selfInfo.role == D.UnionRole.PRESIDENT then
+		self._selfInfo.role = D.UnionRole.NONE
+	end
+
+	local oldRole = self._adjuestingMember.role
+	local newRole = self._adjuestingRole
+	self._adjuestingMember.role = self._adjuestingRole
+	self._adjuestingRole = nil
+	self._adjuestingMember = nil
+
+	if oldRole == D.UnionRole.PRESIDENT then
+		self._role1Count = self._role1Count - 1
+	elseif oldRole == D.UnionRole.VICE_PRESIDENT then
+		self._role2Count = self._role2Count - 1
+	elseif oldRole == D.UnionRole.COORDINATOR then
+		self._role3Count = self._role3Count - 1
+	end
+
+	if newRole == D.UnionRole.PRESIDENT then
+		self._role1Count = self._role1Count + 1
+	elseif newRole == D.UnionRole.VICE_PRESIDENT then
+		self._role2Count = self._role2Count + 1
+	elseif newRole == D.UnionRole.COORDINATOR then
+		self._role3Count = self._role3Count + 1
+	end
+
+	SimpleEvent.emit("union.member.ditry")
+	SimpleEvent.emit("union.appoint.resp")
+end
+
+function M:tryJoinChat()
+	local pack = NetPack.ChatJoinReq
+	pack.channel = 1
+	pack.channel_id = self._union.id
+
+	Request.sendJoinChatReq(pack)
+end
+
+function M:onChatList(result)
+	local chats = result.chats
+	self._chats = chats
+
+	SimpleEvent.emit("union.chat.list.resp")
+end
+
+function M:trySendChatReq(message)
+	local pack = NetPack.ChatReq
+	pack.channel_id = self._union.id
+	pack.message = message
+
+	Request.sendChatReq(pack)
+end
+
+function M:onChatNotify(result)
+	if result.chat.log then
+		self._unionDitry = true
+		local log = result.chat.log
+
+		if log.type == D.UnionLogType.KICK then
+			local p = string.split(log.name2, ":")
+
+			if p[3] == C._firebaseId then
+				self._union = nil
+
+				SimpleEvent.emit("union.leave.resp")
+			end
+		end
+	else
+		self._chats[#self._chats + 1] = result.chat
+
+		SimpleEvent.emit("union.chat.ditry", result.chat)
+	end
+end
+
+function M:onChatResp(result)
+	self._meta.chatCount = self._meta.chatCount + 1
+
+	if self._meta.chatCount <= 5 then
+		Trace.traceDesign("Union_Chat:%d", self._meta.chatCount)
+	end
+end
+
+return M

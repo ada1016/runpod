@@ -1,0 +1,35 @@
+local M = class("WaitingPanel", requireLua("BasePanel"))
+M.args = {
+	tmpDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(desc)
+	desc = desc or ""
+	self._tmpDesc.text = desc
+end
+
+function M:delayHideWait(t, tips)
+	lc.stopTimer(self._delayHideTimer)
+
+	self._delayHideTimer = lc.setTimer(function ()
+		self.gameObject:SetActive(false)
+
+		if tips then
+			V.showToast(tips)
+		end
+	end, t or 30)
+end
+
+function M:cancelDealyHide()
+	if self._delayHideTimer then
+		lc.stopTimer(self._delayHideTimer)
+
+		self._delayHideTimer = nil
+	end
+end
+
+return M

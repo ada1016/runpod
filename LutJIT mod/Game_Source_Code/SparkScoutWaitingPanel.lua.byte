@@ -1,0 +1,56 @@
+local M = class("SparkScoutWaitingPanel", requireLua("BasePanel"))
+M.args = {
+	txtMatching = Types.TMP_Text,
+	btnClose = Types.Button
+}
+local MAX = 100
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:closePanel()
+	P._playerActivitySparkScout:cancelMatch()
+	self:cancelDealyHide()
+	self.gameObject:SetActive(false)
+end
+
+function M:init()
+end
+
+function M:delayHideWait(t, tips)
+	self._btnClose:SetActive(false)
+	lc.stopTimer(self._delayHideTimer)
+
+	local dt = 0
+
+	self._txtMatching:SetLocalize(SID.TIP_SPARK_SCOUT_MATCH_COUNT_DOWN, math.ceil(t - dt))
+
+	self._delayHideTimer = lc.setInterval(function ()
+		if dt >= 100 then
+			self.gameObject:SetActive(false)
+			P._playerActivitySparkScout:cancelMatch()
+
+			if tips then
+				V.showToast(tips)
+			end
+		elseif t <= dt then
+			self._txtMatching:SetLocalize(SID.TIP_SPARK_SCOUT_MATCHING)
+			self._btnClose:SetActive(true)
+		else
+			dt = dt + 0.5
+
+			self._txtMatching:SetLocalize(SID.TIP_SPARK_SCOUT_MATCH_COUNT_DOWN, math.ceil(t - dt))
+		end
+	end, 0.5)
+end
+
+function M:cancelDealyHide()
+	if self._delayHideTimer then
+		lc.stopTimer(self._delayHideTimer)
+
+		self._delayHideTimer = nil
+	end
+end
+
+return M

@@ -1,0 +1,622 @@
+local M = class("ProfileSettingPanel", requireLua("BasePanel"))
+local btnEnabelColor = "112022"
+local btnDisabelColor = "225961"
+local MailWidget = requireLua("MailWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	btnTab3 = Types.Button,
+	imgTab1 = Types.Image,
+	imgTab2 = Types.Image,
+	imgTab3 = Types.Image,
+	txtTab1 = Types.TMP_Text,
+	txtTab2 = Types.TMP_Text,
+	txtTab3 = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	goContent3 = Types.GameObject,
+	txtTitle = Types.TMP_Text,
+	imgTabSep1 = Types.Image,
+	imgTabSep2 = Types.Image,
+	tfAvatar = Types.Transform,
+	txtLevel = Types.TMP_Text,
+	imgLevelProgress = Types.Image,
+	btnEditName = Types.Button,
+	btnCopyId = Types.Button,
+	txtName = Types.TMP_Text,
+	txtId = Types.TMP_Text,
+	txtPower = Types.TMP_Text,
+	txtMission = Types.TMP_Text,
+	btnAvatar = Types.LCButton,
+	btnRoleSkin = Types.Button,
+	btnWeaponSkin = Types.Button,
+	btnGatlinSkin = Types.Button,
+	btnDomeSkin = Types.Button,
+	btnRanger = Types.Button,
+	txtRoleSkinNum = Types.TMP_Text,
+	txtWeaponSkinNum = Types.TMP_Text,
+	txtGatlinSkinNum = Types.TMP_Text,
+	txtDomeSkinNum = Types.TMP_Text,
+	txtRangerNum = Types.TMP_Text,
+	btnCodeIssue = Types.Button,
+	cdkeyFrame = Types.GameObject,
+	sliderMusic = Types.Slider,
+	sliderSound = Types.Slider,
+	btnHigh = Types.Button,
+	btnMedium = Types.Button,
+	btnLow = Types.Button,
+	btnShake = Types.Button,
+	btnNoShake = Types.Button,
+	btnLanguage = Types.Button,
+	txtLanguage = Types.TMP_Text,
+	imgLanguage = Types.Image,
+	btnDiscord = Types.Button,
+	btnMail = Types.Button,
+	btnFAQ = Types.Button,
+	btnService = Types.Button,
+	btnPolicy = Types.Button,
+	tmpVersion = Types.TMP_Text,
+	tfFrameLanguage = Types.Transform,
+	tfFrameEmpty = Types.Transform,
+	tfLanguageBtnParent = Types.Transform,
+	atorLanguage = Types.Animator,
+	txtCodeInput = Types.TMP_InputField,
+	btnClaimCode = Types.Button,
+	btnOpenRedeem = Types.Button,
+	btnNotify = Types.Button,
+	btnAccount = Types.Button,
+	textAccountStatus = Types.TMP_Text,
+	goBindDiamond = Types.GameObject,
+	tmpBindDiamond = Types.TMP_Text,
+	goMailDot = Types.GameObject,
+	tfMailContainer = Types.Transform,
+	goMailEmpty = Types.GameObject,
+	btnFixCache = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	if lc._isCN then
+		self._goContent1:Find("frame1"):Find("BgList"):Find("List5"):SetActive(false)
+	end
+end
+
+function M:initPrefabVar()
+	self._btnTabs = {
+		self._btnTab1,
+		self._btnTab2,
+		self._btnTab3
+	}
+	self._imgTabs = {
+		self._imgTab1,
+		self._imgTab2,
+		self._imgTab3
+	}
+	self._txtTabs = {
+		self._txtTab1,
+		self._txtTab2,
+		self._txtTab3
+	}
+	self._goTabContents = {
+		self._goContent1,
+		self._goContent2,
+		self._goContent3
+	}
+	self._goMailWidgets = {}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	for i = 1, #self._btnTabs do
+		self:setClickWithoutAction(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+
+	self:setClick(self._btnEditName, function ()
+		UIManager.openPanel(PrefabDefine.EditNamePanel, function ()
+			self._txtName.text = P:getName()
+		end)
+	end)
+	self:setClick(self._btnCopyId, function ()
+		UniClipboard.SetText(C._userId)
+
+		if lc._isWebGL then
+			return
+		end
+
+		V.showToast(SID.CONT_COPY_SUCCEED)
+
+		self._clickCount = (self._clickCount or 0) + 1
+
+		if self._clickCount == 5 then
+			FirebaseManager:StartListenStore(C._firebaseId)
+		end
+	end)
+	self:setClick(self._btnLow, function ()
+		lc.setGraphicsQuality(1)
+		self:updateQuality()
+	end)
+	self:setClick(self._btnMedium, function ()
+	end)
+	self:setClick(self._btnHigh, function ()
+		lc.setGraphicsQuality(2)
+		self:updateQuality()
+	end)
+	self:setClick(self._btnShake, function ()
+		Client.switchShake(1)
+		self:updateShake()
+	end)
+	self:setClick(self._btnNoShake, function ()
+		Client.switchShake(0)
+		self:updateShake()
+	end)
+	self:setClick(self._btnLanguage, function ()
+		self:handleLanguageBtn()
+	end)
+	self:setClick(self._btnMail, function ()
+		UIManager.openPanel(PrefabDefine.EmailContactPanel)
+	end)
+	self:setClick(self._btnOpenRedeem, function ()
+		UIManager.openPanel(PrefabDefine.MoreRewardPanel)
+	end)
+	self:setClick(self._btnNotify, function ()
+		UIManager.openPanel(PrefabDefine.NotificationPanel)
+	end)
+	self:setClick(self._btnDiscord, function ()
+		lc.openUrl(D.URL_DISCORD_GALAXYDEFENSE_INVITE_SETTING)
+	end)
+	self:setClick(self._btnFAQ, function ()
+		if lc._isCN then
+			LuaHelper.OpenCustomerService("setting_panel")
+		else
+			UIManager.openPanel(PrefabDefine.FAQPanel)
+		end
+	end)
+	self:setClickWithoutAction(self._btnService, function ()
+		lc.openUrl(D.URL_TERM_SERVICE)
+	end)
+	self:setClickWithoutAction(self._btnPolicy, function ()
+		lc.openUrl(D.URL_PRIVACY_POLICY)
+	end)
+	self:setClick(self._btnAvatar, function ()
+		UIManager.openPanel(PrefabDefine.AvatarChangePanel)
+	end)
+	self:setClick(self._btnCodeIssue, function ()
+		V.showBubbleTips({
+			desc = SID.STR_EXCHANGE_CODE_ISSUE
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnCodeIssue.gameObject
+		})
+	end)
+	self._sliderMusic.onValueChanged:AddListener(function (value)
+		Client.updateMusicVolumeStepless(value)
+	end)
+	self._sliderSound.onValueChanged:AddListener(function (value)
+		Client.updateSoundVolumeStepless(value)
+	end)
+	self:setClick(self._btnAccount, function ()
+		UIManager.openPanel(PrefabDefine.AccountTipPanel)
+	end)
+	self:setClick(self._btnRoleSkin, function ()
+		if D.isSystemUnlocked(D.SystemType.Chip) then
+			self:closePanel()
+			UIManager.openPanel(PrefabDefine.RoleSystemPanel, 3)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.Chip]._unlockVal
+			})
+		end
+	end)
+	self:setClick(self._btnWeaponSkin, function ()
+		if D.isSystemUnlocked(D.SystemType.Weapon) then
+			self:closePanel()
+			UIManager.getMainPanel():changePage(4)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.Weapon]._unlockVal
+			})
+		end
+	end)
+	self:setClick(self._btnGatlinSkin, function ()
+		if D.isSystemUnlocked(D.SystemType.Chip) then
+			self:closePanel()
+			UIManager.openPanel(PrefabDefine.RoleSystemPanel, 2)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.Chip]._unlockVal
+			})
+		end
+	end)
+	self:setClick(self._btnDomeSkin, function ()
+		if D.isSystemUnlocked(D.SystemType.Dome) then
+			self:closePanel()
+			UIManager.openPanel(PrefabDefine.DomeSystemPanel, 2)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.Dome]._unlockVal
+			})
+		end
+	end)
+	self:setClick(self._btnRanger, function ()
+		if D.isSystemUnlocked(D.SystemType.Dome) then
+			self:closePanel()
+			UIManager.openPanel(PrefabDefine.RangerPanel, 2)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.Ranger]._unlockVal
+			})
+		end
+	end)
+	self:setClick(self._btnFixCache, function ()
+		C.fixGameGameCache("ProfileSettingPanel")
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("mail.received", function ()
+		self._goMailDot:SetActive(true)
+
+		self._mailDirty = true
+
+		self:tryRefreshMails()
+	end)
+	self:on("day.cross", function ()
+		self._mailDirty = true
+
+		self:tryRefreshMails()
+	end)
+end
+
+function M:init(tabIdx)
+	self._mailDirty = true
+
+	if lc._isCN then
+		self._btnAccount:SetActive(false)
+		self._btnNotify:SetActive(false)
+		self._tfFrameLanguage:SetActive(false)
+		self._tfFrameEmpty:SetActive(true)
+		self._btnFixCache:SetActive(true)
+	else
+		self._btnAccount:SetActive(true)
+		self._btnNotify:SetActive(true)
+		self._tfFrameLanguage:SetActive(true)
+		self._tfFrameEmpty:SetActive(false)
+		self._btnFixCache:SetActive(false)
+	end
+
+	self._goTabContents[1]:SetActive(true)
+	self._goTabContents[2]:SetActive(false)
+	self._goTabContents[3]:SetActive(false)
+	self._atorLanguage.gameObject:SetActive(true)
+
+	self._sliderMusic.value = Client._musicVolume > 0 and Client._musicVolumeFactor / 100 or 0
+	self._sliderSound.value = Client._soundVolume > 0 and Client._soundVolumeFactor / 100 or 0
+	self._tmpVersion.text = Client.getVersion()
+
+	if Client.getIsGuest() then
+		self._goBindDiamond:SetActive(true)
+
+		self._tmpBindDiamond.text = D._globalConfig._bind_reward[2]
+
+		self._textAccountStatus:SetLocalize(SID.ACCOUNT_NOT_LINK)
+	else
+		self._goBindDiamond:SetActive(false)
+		self._textAccountStatus:SetLocalize(SID.LINKED_CURRENT)
+	end
+
+	self:refreshMailDot()
+
+	local targetTab = tabIdx or 1
+
+	self:changeTab(targetTab)
+	self._btnOpenRedeem:SetActive(true)
+
+	if lc._isCN then
+		self._btnOpenRedeem:SetActive(false)
+	end
+end
+
+function M:changeTab(tab)
+	if self._tab == tab then
+		return
+	end
+
+	self._imgTabSep1:SetActive(tab == 3)
+	self._imgTabSep2:SetActive(tab == 1)
+	LuaUnity.setTPSprite(self._imgTabs[2], tab == 2 and "general/g_bg_104" or "general/g_bg_11_2")
+
+	for i = 1, #self._imgTabs do
+		self._imgTabs[i].color = Color.str2Static(i == tab and V.tabSelectedColor or V.tabUnSelectedColor)
+		self._txtTabs[i].color = Color.str2Static(i == tab and V.tabSelectTextColor or V.tabUnSelectTextColor)
+
+		self._goTabContents[i]:SetActive(i == tab)
+	end
+
+	self._tab = tab
+
+	self:updateUI()
+
+	if self._tab == 2 then
+		self._langWidgetopened = false
+	end
+end
+
+function M:updateUI()
+	if self._tab == 1 then
+		self._txtTitle:SetLocalize(SID.TITLE_PROFILE)
+		V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+
+		self._txtId.text = string.format("ID:%s", C._userId)
+		self._avatar = P._playerProfile:getAvatar()
+		self._avatarFrame = P._playerProfile:getAvatarFrame()
+
+		V.loadAvatar(self._tfAvatar, self._avatar, self._avatarFrame)
+
+		self._txtLevel.text = P:getLevel()
+		self._imgLevelProgress.fillAmount = P._playerProfile:getExpProgress()
+
+		if P._playerMission:isMissionExist(P._playerMission:getMissionId()) then
+			self._txtMission:SetLocalizeComplex(SID.STR_MISSION_X, {
+				{
+					sid = -P._playerMission:readMissionName(P._playerMission:getMissionId(), D.MissionType.Common),
+					vi = P._playerMission:getMissionId() % 10000
+				}
+			})
+			self._txtMission:SetLocalizeComplex(SID.STR_MISSION_X, {
+				{
+					sid = -P._playerMission:readMissionName(P._playerMission:getMissionId(), D.MissionType.Common),
+					vi = P._playerMission:getMissionId() % 10000
+				}
+			})
+		else
+			self._txtMission:SetLocalizeComplex(SID.STR_MISSION_X, {
+				{
+					sid = -P._playerMission:readMissionName(P._playerMission:getMissionId() - 1, D.MissionType.Common),
+					vi = P._playerMission:getMissionId() % 10000 - 1
+				}
+			})
+		end
+
+		self._txtPower.text = P._playerRole:getPlayerAtk()
+		self._txtRoleSkinNum.text = P._playerSkin:getTotalStar(D.SkinType.Role)
+		self._txtWeaponSkinNum.text = P._playerSkin:getTotalStar(D.SkinType.Weapon)
+		self._txtGatlinSkinNum.text = P._playerSkin:getTotalStar(D.SkinType.Gatlin)
+		self._txtDomeSkinNum.text = P._playerSkin:getTotalStar(D.SkinType.Dome)
+		self._txtRangerNum.text = P._playerRanger:getTotalStar()
+
+		self._btnAvatar.dot:SetActive(P._playerRecord:hasNewAvatar() or P._playerRecord:hasNewAvatarFrame() or P._playerRecord:hasNewAvatarMedal())
+	elseif self._tab == 2 then
+		self._txtTitle:SetLocalize(SID.TITLE_SETTINGS)
+		self:updateMusicFlag()
+		self:updateSoundFlag()
+		self:updateQuality()
+		self:updateShake()
+
+		local langId = Client.getLangId()
+
+		if Client.IsSpecialLang(langId) then
+			self._txtLanguage.gameObject:SetActive(false)
+			self._imgLanguage.gameObject:SetActive(true)
+			LuaUnity.setTPSprite(self._imgLanguage, string.format("general/icon_font_%d", langId), true)
+		else
+			self._txtLanguage.gameObject:SetActive(true)
+			self._imgLanguage.gameObject:SetActive(false)
+
+			self._txtLanguage.text = Client.Lang_Str[langId]
+		end
+
+		local isGuest = C.getIsGuest()
+
+		self._textAccountStatus:SetLocalize(isGuest and SID.ACCOUNT_NOT_LINK or SID.LINKED_CURRENT)
+	else
+		self._txtTitle:SetLocalize(SID.TITLE_MAIL)
+		self:tryRefreshMails()
+	end
+end
+
+function M:updateMusicFlag()
+end
+
+function M:updateSoundFlag()
+end
+
+function M:updateShake()
+	self._btnShake.enabled = Client._shakeCameraOn == 0
+	self._btnShake:GetComponent("Image").color = Color.str2Static(Client._shakeCameraOn == 0 and btnEnabelColor or btnDisabelColor)
+	self._btnNoShake.enabled = Client._shakeCameraOn == 1
+	self._btnNoShake:GetComponent("Image").color = Color.str2Static(Client._shakeCameraOn == 1 and btnEnabelColor or btnDisabelColor)
+end
+
+function M:updateQuality()
+	self._btnHigh.enabled = lc._graphicsQuality ~= 2
+	self._btnHigh:GetComponent("Image").color = Color.str2Static(lc._graphicsQuality ~= 2 and btnEnabelColor or btnDisabelColor)
+	self._btnLow.enabled = lc._graphicsQuality == 2
+	self._btnLow:GetComponent("Image").color = Color.str2Static(lc._graphicsQuality == 2 and btnEnabelColor or btnDisabelColor)
+end
+
+function M:handleLanguageBtn()
+	self._atorLanguage:ResetTrigger("Hide")
+
+	self._langWidgetopened = not self._langWidgetopened
+
+	self._atorLanguage:SetInteger("Status", self._langWidgetopened and 1 or 0)
+
+	if self._langWidgetopened then
+		self:tryInitLanguageWidget()
+	else
+		self._atorLanguage:SetTrigger("Hide")
+	end
+end
+
+function M:tryInitLanguageWidget()
+	if self._languageInited then
+		return
+	end
+
+	local langs = Client.SupportSwitchLanguage
+	local langNum = #langs
+	local btnNum = self._tfLanguageBtnParent.childCount - 2
+	self._selectIdx = table.findArray(langs, Client.getLangId())
+	local btn1 = self._tfLanguageBtnParent:GetChild(2).gameObject
+
+	for i = 1, math.max(langNum, btnNum) do
+		if i <= langNum then
+			if btnNum < i then
+				GameObject.Instantiate(btn1, self._tfLanguageBtnParent)
+			end
+
+			local langId = langs[i]
+			local btnTf = self._tfLanguageBtnParent:GetChild(i - 1 + 2)
+
+			btnTf:SetActive(true)
+			self:setClick(btnTf:GetComponent("Button"), function ()
+				self._selectIdx = i
+
+				self:changeLanguage(langId)
+			end)
+
+			local tfTxt = btnTf:GetChild(0)
+			local tfImg = btnTf:GetChild(1)
+
+			if Client.IsSpecialLang(langId) then
+				tfTxt:SetActive(false)
+				tfImg:SetActive(true)
+				LuaUnity.setTPSprite(tfImg:GetComponent("Image"), string.format("general/icon_font_%d", langId), true)
+			else
+				tfTxt:SetActive(true)
+				tfImg:SetActive(false)
+
+				tfTxt:GetComponent("TMP_Text").text = Client.Lang_Str[langId]
+			end
+		else
+			self._tfLanguageBtnParent:GetChild(i - 1 + 2):SetActive(false)
+		end
+	end
+
+	self._languageInited = true
+
+	self:updateLanguageBtns()
+end
+
+function M:updateLanguageBtns()
+	local langs = Client.SupportSwitchLanguage
+
+	for i = 1, #langs do
+		local tfBtn = self._tfLanguageBtnParent:GetChild(i - 1 + 2)
+		local btnImg = tfBtn:GetComponent("Image")
+		btnImg.color = Color.str2Static(i == self._selectIdx and "FFFFFF" or "898989")
+
+		LuaUnity.setTPSprite(btnImg, i == self._selectIdx and "general/g_btn_06" or "general/g_btn_07")
+
+		local btnTxt = tfBtn:GetChild(0):GetComponent("TMP_Text")
+		local btnImg = tfBtn:GetChild(1):GetComponent("Image")
+		local targetColor = Color.str2Static(i == self._selectIdx and "77C3B4" or "398E7D")
+		btnTxt.color = targetColor
+		btnImg.color = targetColor
+	end
+end
+
+function M:changeLanguage(langId)
+	local currentLangId = C._langId
+
+	if currentLangId == langId then
+		return
+	end
+
+	if not C.SupportLang(langId) then
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.ChangeLanguagePanel, langId, function ()
+		MainGameRoot:showGlobalMask()
+		lc.setIntKeyValue(C.PrefKey.lang_id, langId)
+		lc.saveSetValues()
+		Client.trySaveGameDataToLocal()
+		lc.setTimer(function ()
+			if lc._isiOS then
+				Application.Quit()
+			else
+				LuaHelper.RestartApp()
+			end
+		end, 0.2)
+	end)
+end
+
+function M:tryRefreshMails()
+	if self._tab ~= 3 then
+		return
+	end
+
+	if not self._mailDirty then
+		return
+	end
+
+	self._mailDirty = false
+
+	self:refreshMails()
+end
+
+function M:refreshMails()
+	self._mails = P._playerMail:listMails()
+
+	for i = 1, #self._goMailWidgets do
+		self._goMailWidgets[i]:SetActive(false)
+	end
+
+	self._goMailEmpty:SetActive(#self._mails == 0)
+
+	for i = 1, #self._mails do
+		local mail = self._mails[i]
+		local widget = nil
+
+		if not self._goMailWidgets[i] then
+			widget = MailWidget.create(self._tfMailContainer)
+			self._goMailWidgets[i] = widget
+		else
+			widget = self._goMailWidgets[i]
+		end
+
+		self._goMailWidgets[i]:SetActive(true)
+		widget:init(mail)
+		self:setClick(widget._btnClick, function ()
+			mail.read = true
+
+			widget:init(mail)
+			self:refreshMailDot()
+			UIManager.openPanel(PrefabDefine.MailDetailPanel, mail, function ()
+				widget:init(mail)
+			end)
+			SimpleEvent.emit("mail.read")
+		end)
+	end
+end
+
+function M:refreshMailDot()
+	self._goMailDot:SetActive(P._playerMail:hasNewMail())
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+return M

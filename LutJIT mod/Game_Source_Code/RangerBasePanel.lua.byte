@@ -1,0 +1,622 @@
+local M = class("RangerBasePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnUpgrade = Types.Button,
+	btnAnimToggle = Types.Button,
+	txtAnimToggle = Types.TMP_Text,
+	animToggleChoose = Types.Animation,
+	btnComplete = Types.Button,
+	btnStat = Types.Button,
+	anim = Types.Animation,
+	goDock1 = Types.GameObject,
+	goDock2 = Types.GameObject,
+	goDock2Lock = Types.GameObject,
+	txtDockUnlock = Types.TMP_Text,
+	txtDockLevel = Types.TMP_Text,
+	txtCurLevelAtk = Types.TMP_Text,
+	txtNextLevelIncAtk = Types.TMP_Text,
+	txtCurLevelAtkPercent = Types.TMP_Text,
+	txtNextLevelAtkIncPercent = Types.TMP_Text,
+	goBtnArea = Types.GameObject,
+	goMaxArea = Types.GameObject,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	goCost2 = Types.GameObject,
+	imgCost2 = Types.Image,
+	txtCost2 = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfRangerContainer = Types.Transform,
+	btnUpOrDown = Types.Button,
+	txtUpOrDown = Types.TMP_Text,
+	goAniArea = Types.GameObject,
+	txtPlayerAtk = Types.TMP_Text,
+	txtPlayerAtkChange = Types.TMP_Text,
+	goAtkPop1 = Types.GameObject,
+	goAtkPop2 = Types.GameObject,
+	btnRangerAtkPercentIcon1 = Types.Button,
+	btnRangerAtkPercentIcon2 = Types.Button,
+	btnLoadout = Types.Button,
+	txtCurLoadout = Types.TMP_Text,
+	txtCurLoadoutName = Types.TMP_Text
+}
+local RangerItemWidget = requireLua("RangerItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+local RangerAtkBubbleWidget = requireLua("RangerAtkBubbleWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goAniArea:SetActive(false)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goDock1)
+	lc.prefabVarPeer(self._goDock2)
+
+	self._goDocks = {
+		self._goDock1,
+		self._goDock2
+	}
+	self._oldAtks = {}
+	self._oldPlayerAtk = P._playerRole:getPlayerAtk()
+	self._goPopProps = {
+		self._goAtkPop1,
+		self._goAtkPop2
+	}
+
+	lc.prefabVarPeer(self._goAtkPop1)
+	lc.prefabVarPeer(self._goAtkPop2)
+	SpineGraphicWidget.noCreate(self._goDock1._goSpineWidget)
+	SpineGraphicWidget.noCreate(self._goDock2._goSpineWidget)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerRanger:tryUpgradeDock()
+
+		if ret == ResultCode.OK then
+			local level = P._playerRanger:getDockLevel()
+			local docks = P._playerRanger:getDocks()
+			local hasAnyRanger = docks[1] ~= nil or docks[2] ~= nil
+
+			if hasAnyRanger and level > 1 and D._rangerBaseUpgradeConfig[level - 1]._atkPercentAdd < D._rangerBaseUpgradeConfig[level]._atkPercentAdd then
+				self:showAtkPopResult()
+			else
+				self._goAniArea:SetActive(false)
+			end
+
+			Client.playSound("ui_Toast_1")
+			self:updateUI()
+		else
+			V.showResultCode(ret, param)
+		end
+	end)
+	self:setClick(self._btnAnimToggle, function ()
+		self:switchEditMode(not self._inUpgrade)
+	end)
+	self:setClick(self._btnStat, function ()
+		UIManager.openPanel(PrefabDefine.RangerStatPanel)
+	end)
+	self:setClick(self._btnComplete, function ()
+		self:switchEditMode(true)
+	end)
+
+	for i = 1, #self._goDocks do
+		self:setClick(self._goDocks[i]._btnAdd, function ()
+			self:switchEditMode(false)
+		end)
+		self:setClick(self._goDocks[i]._btnReplace, function ()
+			if self._selectedRangerId then
+				local index = P._playerRanger:getDockIndex(self._selectedRangerId)
+
+				if index then
+					P._playerRanger:tryDownBattle(self._selectedRangerId, i)
+
+					if P._playerRanger:getDockRanger(i) then
+						P._playerRanger:tryUpBattle(P._playerRanger:getDockRanger(i), index)
+					end
+
+					P._playerRanger:tryUpBattle(self._selectedRangerId, i)
+					self:updateDisplayRanger()
+				else
+					P._playerRanger:tryUpBattle(self._selectedRangerId, i)
+					self:updateDisplayRanger()
+				end
+
+				Client.playSound("ui_Button_use_1")
+			end
+		end)
+		self:setClick(self._goDocks[i]._btnRemove, function ()
+			if self._selectedRangerId then
+				local index = P._playerRanger:getDockIndex(self._selectedRangerId)
+
+				if index then
+					P._playerRanger:tryDownBattle(self._selectedRangerId, i)
+					self:updateDisplayRanger()
+
+					return
+				end
+
+				Client.playSound("ui_Button_use_1")
+			end
+		end)
+		self:setClick(self._goDocks[i]._btnClickArea, function ()
+			UIManager.openPanel(PrefabDefine.RangerDetailPanel, P._playerRanger:getDockRanger(i), self._displayRangers)
+		end)
+		self:setClick(self._goDocks[i]._btnAtk, function ()
+			local docks = P._playerRanger:getDocks()
+
+			if docks[i] then
+				if not self._goRangerAtkBubbleWidget then
+					self._goRangerAtkBubbleWidget = RangerAtkBubbleWidget.create(self.transform)
+
+					self._goRangerAtkBubbleWidget:initClick(self)
+				end
+
+				self._goRangerAtkBubbleWidget:SetActive(true)
+
+				local x, y, z = lc.getPosition(self._goDocks[i]._btnAtk.transform)
+
+				self._goRangerAtkBubbleWidget:init(docks[i])
+
+				if i == 1 then
+					lc.setPosition(self._goRangerAtkBubbleWidget, x + 50, y - 180, z)
+				else
+					lc.setPosition(self._goRangerAtkBubbleWidget, x - 50, y - 180, z)
+				end
+			end
+		end)
+	end
+
+	self:setClick(self._btnRangerAtkPercentIcon1, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_RANGER_ATK_PERCENT_ADD
+		}, {
+			target = self._btnRangerAtkPercentIcon1.gameObject
+		})
+	end)
+	self:setClick(self._btnRangerAtkPercentIcon2, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_RANGER_ATK_PERCENT_ADD
+		}, {
+			target = self._btnRangerAtkPercentIcon2.gameObject
+		})
+	end)
+	self:setClick(self._btnLoadout, function ()
+		UIManager.openPanel(PrefabDefine.LoadoutPanel, function ()
+			self:updateLoadout()
+		end)
+	end)
+end
+
+function M:addEvents()
+	self:on("ranger.doReplace", function (rangerId)
+		self:switchEditMode(false)
+
+		if self._selectedRangerWidget then
+			self._selectedRangerWidget:setChoose(false)
+		end
+
+		self._selectedRangerWidget = self._rangerWidgets[rangerId]
+		self._selectedRangerId = rangerId
+
+		self._selectedRangerWidget:setChoose(true)
+		self:updateUpOrReplace()
+	end)
+	self:on("ranger.upgrade", function (rangerId)
+		self._rangerWidgets[rangerId]:init(rangerId)
+		self:updateDisplayRanger()
+		self:updateOrder()
+	end)
+	self:on("rangerPiece.dirty", function ()
+		for _, widget in pairs(self._rangerWidgets) do
+			widget:updateFragmentNum()
+		end
+	end)
+	self:on("ranger.equip", function (rangerId)
+		self._rangerWidgets[rangerId]:init(rangerId)
+	end)
+	self:on("group.dirty", function ()
+		self:updateDisplayRanger()
+	end)
+end
+
+function M:init(panel)
+	self._parentPanel = panel
+	self._displayRangers = P._playerRanger:getOrderedRangers()
+	local hasAnyRanger = false
+	self._rangerWidgets = {}
+	self._inUpgrade = true
+
+	for i = 1, #self._displayRangers do
+		local id = self._displayRangers[i]
+
+		if P._playerRanger:getRangerLevel(id) > 0 then
+			hasAnyRanger = true
+		end
+
+		local widget = RangerItemWidget.create(self._tfRangerContainer)
+		widget._index = i
+
+		widget:init(id)
+
+		self._rangerWidgets[id] = widget
+
+		self:setClick(widget._btnClick, function ()
+			if self._inUpgrade then
+				UIManager.openPanel(PrefabDefine.RangerDetailPanel, id, self._displayRangers)
+			else
+				if self._selectedRangerWidget then
+					self._selectedRangerWidget:setChoose(false)
+				end
+
+				self._selectedRangerWidget = widget
+				self._selectedRangerId = id
+
+				widget:setChoose(true)
+				self:updateUpOrReplace()
+			end
+		end)
+	end
+
+	self:updateLoadout()
+	self:updateUI()
+end
+
+function M:updateLoadout()
+	self._txtCurLoadout.text = P._playerRole:getGemGroup()
+	local groupName = P._playerRole:getGroupName(P._playerRole:getGemGroup())
+
+	if groupName then
+		self._txtCurLoadoutName.text = groupName
+	else
+		self._txtCurLoadoutName:SetLocalize(SID.STR_LOADOUT_X, P._playerRole:getGemGroup())
+	end
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:updateOrder()
+
+	for rangerId, widget in pairs(self._rangerWidgets) do
+		widget:init(rangerId)
+	end
+
+	self:updateLoadout()
+	self:updateUI()
+	self:addEvents()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:switchEditMode(true)
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:closePanel()
+	self:clear()
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	self:clear()
+	M.super.OnDestroy(self)
+end
+
+function M:clear()
+	if self._secondTimer then
+		lc.stopTimer(self._secondTimer)
+
+		self._secondTimer = nil
+	end
+
+	self._goDock1._goSpineWidget:clearSpine()
+	self._goDock2._goSpineWidget:clearSpine()
+end
+
+function M:switchEditMode(inUpgrade)
+	if self._inUpgrade ~= inUpgrade then
+		self._inUpgrade = inUpgrade
+		self._btnComplete.enabled = not inUpgrade
+
+		if not inUpgrade then
+			self._anim:Play("ani_rangerBaseUp")
+			self._animToggleChoose:Play("anim_rangerBase_btn")
+			Client.playSound("ui_Open_panel_1")
+			self:hideNotOwnedRanger()
+			self:updateUpOrReplace()
+			self._txtAnimToggle:SetLocalize(SID.STR_COMPLETE)
+		else
+			self._anim:Play("ani_rangerBaseDown")
+			self._animToggleChoose:Play("anim_rangerBase_btn_2")
+			Client.playSound("ui_Close_panel_1")
+			self:showNotOwnedRanger()
+			self:updateUpOrReplace()
+			self._txtAnimToggle:SetLocalize(SID.STR_MIMICRY_BTN)
+		end
+	end
+end
+
+function M:hideNotOwnedRanger()
+	if self._selectedRangerWidget then
+		self._selectedRangerWidget:setChoose(true)
+	end
+
+	self._goAniArea:SetActive(false)
+
+	for i = 1, #self._displayRangers do
+		if P._playerRanger:getRangerLevel(self._displayRangers[i]) == 0 then
+			self._rangerWidgets[self._displayRangers[i]]:SetActive(false)
+		else
+			self._rangerWidgets[self._displayRangers[i]]._goCombatArea:SetActive(true)
+			self._rangerWidgets[self._displayRangers[i]]._goFragmentArea:SetActive(false)
+
+			self._rangerWidgets[self._displayRangers[i]]._txtAtk.text = math.floor(P._playerRanger:getRangerAtk(self._displayRangers[i]))
+
+			self._rangerWidgets[self._displayRangers[i]]._imgDot.transform:SetVisible(false)
+		end
+	end
+
+	SimpleEvent.emit("rangerPanel.hide", true)
+end
+
+function M:showNotOwnedRanger()
+	if self._selectedRangerWidget then
+		self._selectedRangerWidget:setChoose(false)
+	end
+
+	for i = 1, #self._displayRangers do
+		if P._playerRanger:getRangerLevel(self._displayRangers[i]) == 0 then
+			self._rangerWidgets[self._displayRangers[i]]:SetActive(true)
+		else
+			self._rangerWidgets[self._displayRangers[i]]._goCombatArea:SetActive(false)
+			self._rangerWidgets[self._displayRangers[i]]._goFragmentArea:SetActive(true)
+			self._rangerWidgets[self._displayRangers[i]]._imgDot.transform:SetVisible(true)
+			self._rangerWidgets[self._displayRangers[i]]:updateDot()
+		end
+	end
+
+	SimpleEvent.emit("rangerPanel.hide", false)
+end
+
+function M:updateUI()
+	local cids, nums = P._playerRanger:getDockUpgradeCost()
+
+	if cids then
+		V.loadItemCost(self._imgCost, self._txtCost, cids[1], nums[1], self)
+
+		if cids[2] then
+			self._goCost2:SetActive(true)
+			V.loadItemCost(self._imgCost2, self._txtCost2, cids[2], nums[2], self)
+		else
+			self._goCost2:SetActive(false)
+		end
+	else
+		self._goBtnArea:SetActive(false)
+		self._goMaxArea:SetActive(true)
+	end
+
+	self._btnUpgrade.dot:SetActive(P._playerRanger:canUpgradeDock())
+
+	local level = P._playerRanger:getDockLevel()
+
+	self._txtDockLevel:SetLocalize(SID.STR_LEVEL_X, level)
+
+	local curAtk = D._rangerBaseUpgradeConfig[level] and D._rangerBaseUpgradeConfig[level]._atk or 0
+	self._txtCurLevelAtk.text = string.format("%d", curAtk)
+	local curAtkPercent = D._rangerBaseUpgradeConfig[level] and D._rangerBaseUpgradeConfig[level]._atkPercentAdd or 0
+	self._txtCurLevelAtkPercent.text = string.format("%d%%", curAtkPercent)
+
+	if D._rangerBaseUpgradeConfig[level + 1] then
+		local nextAtk = D._rangerBaseUpgradeConfig[level + 1]._atk
+
+		if curAtk < nextAtk then
+			self._txtNextLevelIncAtk.text = string.format("+%d", nextAtk - curAtk)
+		else
+			self._txtNextLevelIncAtk.text = ""
+		end
+
+		local nextAtkPercent = D._rangerBaseUpgradeConfig[level + 1]._atkPercentAdd
+
+		if curAtkPercent < nextAtkPercent then
+			self._txtNextLevelAtkIncPercent.text = string.format("+%d%%", nextAtkPercent - curAtkPercent)
+		else
+			self._txtNextLevelAtkIncPercent.text = ""
+		end
+	else
+		self._txtNextLevelIncAtk.text = ""
+		self._txtNextLevelAtkIncPercent.text = ""
+	end
+
+	local dockNum = P._playerRanger:getDockNum()
+
+	if dockNum < 2 then
+		self._goDock2Lock:SetActive(true)
+		self._goDock2._goContent:SetActive(false)
+		self._goDock2._goAtkArea:SetActive(false)
+		self._goDock2._goUnlockVfx:SetActive(false)
+	else
+		self._goDock2Lock:SetActive(false)
+		self._goDock2._goContent:SetActive(true)
+		self._goDock2._goUnlockVfx:SetActive(true)
+	end
+
+	self:updateDisplayRanger()
+end
+
+function M:updateDisplayRanger()
+	local docks = P._playerRanger:getDocks()
+	local dockNum = P._playerRanger:getDockNum()
+	local isWaitingUpOrReplace = not self._inUpgrade and self._selectedRangerId ~= nil
+
+	for i = 1, dockNum do
+		for q = D.Quality.Purple, D.Quality.Red do
+			self._goDocks[i]["_goVfxHalo" .. q]:SetActive(false)
+		end
+
+		if docks[i] then
+			local rangerId = docks[i]
+			local quality = D._rangerConfig[rangerId]._quality
+
+			self._goDocks[i]["_goVfxHalo" .. quality]:SetActive(true)
+			self._goDocks[i]._goAtkArea:SetActive(true)
+			self._goDocks[i]._goTitleArea:SetActive(true)
+			self._goDocks[i]._goStarArea:SetActive(true)
+			self._goDocks[i]._btnAdd:SetActive(false)
+			self._goDocks[i]._txtName:SetLocalize(D._rangerConfig[rangerId]._nameSid)
+			LuaUnity.setTPSprite(self._goDocks[i]._imgNature, "general/g_element_" .. D._rangerConfig[rangerId]._dmgType)
+			V.setRangerQualityStar(self._goDocks[i]._tfStarContainer, nil, P._playerRanger:getRangerLevel(rangerId))
+
+			self._oldAtks[i] = math.floor(P._playerRanger:getRangerAtk(rangerId))
+			self._goDocks[i]._txtAtk.text = self._oldAtks[i]
+
+			if docks[i] == self._selectedRangerId then
+				self._goDocks[i]._btnReplace:SetActive(false)
+				self._goDocks[i]._btnRemove:SetActive(true)
+			else
+				self._goDocks[i]._txtUpOrReplace:SetLocalize(SID.STR_REPLACE)
+				self._goDocks[i]._btnReplace:SetActive(true)
+				self._goDocks[i]._btnRemove:SetActive(false)
+			end
+
+			self._goDocks[i]._goSpineWidget:SetActive(true)
+			self._goDocks[i]._goSpineWidget:updateUI(rangerId)
+			self._goDocks[i]._btnClickArea:SetActive(true)
+		else
+			self._goDocks[i]._goAtkArea:SetActive(false)
+			self._goDocks[i]._goTitleArea:SetActive(false)
+			self._goDocks[i]._goStarArea:SetActive(false)
+			self._goDocks[i]._btnAdd:SetActive(true)
+			self._goDocks[i]._txtUpOrReplace:SetLocalize(SID.STR_MIMICRY_BTN)
+			self._goDocks[i]._btnReplace:SetActive(true)
+			self._goDocks[i]._goSpineWidget:SetActive(false)
+			self._goDocks[i]._btnClickArea:SetActive(false)
+			self._goDocks[i]._btnReplace:SetActive(true)
+			self._goDocks[i]._btnRemove:SetActive(false)
+		end
+
+		if not isWaitingUpOrReplace then
+			self._goDocks[i]._btnReplace:SetActive(false)
+			self._goDocks[i]._btnRemove:SetActive(false)
+		end
+	end
+
+	for id, widget in pairs(self._rangerWidgets) do
+		widget._goUse:SetActive(P._playerRanger:getDockIndex(id) ~= nil)
+	end
+end
+
+function M:updateUpOrReplace()
+	local docks = P._playerRanger:getDocks()
+	local dockNum = P._playerRanger:getDockNum()
+	local isWaitingUpOrReplace = not self._inUpgrade and self._selectedRangerId ~= nil
+
+	for i = 1, dockNum do
+		if docks[i] then
+			if docks[i] == self._selectedRangerId then
+				self._goDocks[i]._btnReplace:SetActive(false)
+				self._goDocks[i]._btnRemove:SetActive(true)
+			else
+				self._goDocks[i]._txtUpOrReplace:SetLocalize(SID.STR_REPLACE)
+				self._goDocks[i]._btnReplace:SetActive(true)
+				self._goDocks[i]._btnRemove:SetActive(false)
+			end
+		else
+			self._goDocks[i]._txtUpOrReplace:SetLocalize(SID.STR_MIMICRY_BTN)
+			self._goDocks[i]._btnReplace:SetActive(true)
+			self._goDocks[i]._btnRemove:SetActive(false)
+		end
+
+		if not isWaitingUpOrReplace then
+			self._goDocks[i]._btnReplace:SetActive(false)
+			self._goDocks[i]._btnRemove:SetActive(false)
+		end
+	end
+end
+
+function M:updateOrder()
+	self._displayRangers = P._playerRanger:getOrderedRangers()
+
+	for i = 1, #self._displayRangers do
+		local id = self._displayRangers[i]
+		local widget = self._rangerWidgets[id]
+		widget._index = i
+
+		widget.transform:SetSiblingIndex(i - 1)
+	end
+end
+
+function M:showAtkPopResult()
+	MainGameRoot:showGlobalMask()
+	UIManager.hideScoreToast()
+	self._goAniArea:SetActive(false)
+	self._goAniArea:SetActive(true)
+
+	local texts = {}
+	local baseScores = {}
+	local deltaScores = {}
+	local targetScores = {}
+	local docks = P._playerRanger:getDocks()
+	local newPlayerAtk = P._playerRole:getPlayerAtk()
+	self._txtPlayerAtk.text = self._oldPlayerAtk
+	self._txtPlayerAtkChange.text = "+" .. newPlayerAtk - self._oldPlayerAtk
+	texts[#texts + 1] = self._txtPlayerAtk
+	baseScores[#baseScores + 1] = self._oldPlayerAtk
+	deltaScores[#deltaScores + 1] = newPlayerAtk - self._oldPlayerAtk
+	targetScores[#targetScores + 1] = newPlayerAtk
+	self._oldPlayerAtk = newPlayerAtk
+
+	for i = 1, 2 do
+		if docks[i] then
+			local goPopProp = self._goPopProps[i]
+
+			goPopProp:SetActive(true)
+			goPopProp._txtPropName:SetLocalize(D._rangerConfig[docks[i]]._nameSid)
+
+			goPopProp._txtPropValue.text = P._playerRanger:getRangerAtk(docks[i])
+			local newAtk = math.floor(P._playerRanger:getRangerAtk(docks[i]))
+			local oldAtk = self._oldAtks[i]
+			goPopProp._txtPropChange.text = "+" .. newAtk - oldAtk
+			texts[#texts + 1] = goPopProp._txtPropValue
+			baseScores[#baseScores + 1] = oldAtk
+			deltaScores[#deltaScores + 1] = newAtk - oldAtk
+			targetScores[#targetScores + 1] = newAtk
+		else
+			self._goPopProps[i]:SetActive(false)
+		end
+	end
+
+	self._timer = lc.setTimer(function ()
+		self:startScoreChangeAnim(texts, baseScores, deltaScores, targetScores)
+	end, 0.3)
+end
+
+function M:startScoreChangeAnim(texts, baseScores, deltaScores, targetScores)
+	self._timer = lc.setInterval(function ()
+		for i = 1, #texts do
+			baseScores[i] = baseScores[i] + deltaScores[i] / 7
+			texts[i].text = math.floor(baseScores[i])
+		end
+
+		if targetScores[1] <= baseScores[1] then
+			for i = 1, #texts do
+				texts[i].text = math.floor(targetScores[i])
+			end
+
+			lc.stopTimer(self._timer)
+			MainGameRoot:hideGlobalMask()
+
+			self._timer = nil
+		end
+	end, 0.03333333333333333)
+end
+
+return M

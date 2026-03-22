@@ -1,0 +1,153 @@
+local M = class("OfflineStatPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tmpCommon = Types.TMP_Text,
+	tmpElite = Types.TMP_Text,
+	tfRewardArea = Types.Transform,
+	goTemp = Types.GameObject
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+	self._goRewardsItem = {}
+end
+
+function M:addClicks()
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+end
+
+function M:OnHide()
+	M.super.OnHide(self)
+end
+
+function M:updateTime()
+end
+
+function M:init(rewards, common, elite)
+	local msId = P._playerMission:getMissionIdByType(D.MissionType.Common) - 1
+	local eliteMsId = P._playerMission:getMissionIdByType(D.MissionType.Elite) - 1
+	self._fixCids = {}
+
+	if msId >= 10001 then
+		V.loadMissionTitleText(self._tmpCommon, msId, D.MissionType.Common)
+
+		local cfg = D._missionOfflineConfig[P._playerMission:readOfflineId(msId, D.MissionType.Common)]
+
+		for i = 1, #cfg._rewardCids do
+			self._fixCids[cfg._rewardCids[i]] = true
+		end
+	else
+		self._tmpCommon:SetLocalize(SID.STR_NO_MISSION)
+	end
+
+	if eliteMsId >= 10001 then
+		V.loadMissionTitleText(self._tmpElite, eliteMsId, D.MissionType.Elite)
+
+		local cfg = D._missionOfflineConfig[P._playerMission:readOfflineId(eliteMsId, D.MissionType.Elite)]
+
+		for i = 1, #cfg._rewardCids do
+			self._fixCids[cfg._rewardCids[i]] = true
+		end
+	else
+		self._tmpElite:SetLocalize(SID.STR_NO_MISSION)
+	end
+
+	self._rewards = clone(rewards)
+
+	for i = #self._rewards, 1, -1 do
+		local cid = self._rewards[i]
+
+		if cid >= 13000 and cid < 14000 then
+			table.remove(self._rewards, i)
+		end
+	end
+
+	table.sort(self._rewards, function (a, b)
+		if self._fixCids[a] and self._fixCids[b] then
+			return a < b
+		elseif not self._fixCids[a] and not self._fixCids[b] then
+			return a < b
+		elseif self._fixCids[a] then
+			return true
+		else
+			return false
+		end
+	end)
+
+	self._common = common
+	self._elite = elite
+
+	self._goTemp:SetActive(false)
+	self:updateRewards()
+end
+
+function M:updateUI()
+end
+
+function M:updateRewards()
+	for i = 1, math.max(#self._goRewards, #self._rewards) do
+		if i <= #self._rewards then
+			local cid = self._rewards[i]
+
+			if self._goRewards[i] == nil then
+				local goItemWidget = nil
+
+				if i == 1 then
+					goItemWidget = self._goTemp
+				else
+					goItemWidget = GameObject.Instantiate(self._goTemp, self._tfRewardArea)
+				end
+
+				goItemWidget:SetActive(true)
+
+				self._goRewards[i] = goItemWidget
+				self._goRewardsItem[i] = goItemWidget:GetChild(1).gameObject
+
+				ItemWidget.noCreate(self._goRewardsItem[i])
+				self._goRewardsItem[i]:setNum(false)
+				self:setClick(self._goRewardsItem[i]._btnClick, function ()
+					self._goRewardsItem[i]:rewardclickCallback()
+				end)
+			end
+
+			self._goRewards[i]:SetActive(true)
+			self._goRewardsItem[i]:init(cid)
+			self:updateListCell(self._goRewards[i].transform, i, cid, self._common[cid], self._elite[cid])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+end
+
+function M:updateListCell(tfWidget, idx, cid, common, elite)
+	local bg = tfWidget:GetChild(0)
+	local tmpCommon = tfWidget:GetChild(2):GetComponent("TextMeshProUGUI")
+	local tmpElite = tfWidget:GetChild(3):GetComponent("TextMeshProUGUI")
+
+	bg:SetActive(idx % 2 == 1)
+
+	local num1 = common or 0
+	local isPercent = not self._fixCids[cid]
+	local num2 = elite or 0
+
+	if isPercent then
+		tmpCommon.text = string.format("%d%%", num1)
+	else
+		tmpCommon.text = string.format("%d", num1)
+	end
+
+	if isPercent then
+		tmpElite.text = string.format("%d%%", num2)
+	else
+		tmpElite.text = string.format("%d", num2)
+	end
+end
+
+return M

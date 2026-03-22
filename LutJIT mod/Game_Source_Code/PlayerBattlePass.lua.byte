@@ -1,0 +1,17 @@
+local M = class("PlayerBattlePass", requireLua("PlayerBattlePassBase"))
+M.BPCfg = {
+	Design_BP_Level = "Bp_Old",
+	Reddot = "city.home.special.battlepass",
+	ExpireEvent = "bp.expire",
+	Step = 3,
+	LevelEvent = "bp.level.change",
+	AddExpIgnoreLock = true,
+	Circle = 0,
+	ExpireTimer = "bp.expire.update",
+	LogWay = D.LogWay.battle_pass,
+	DataCfg = D._battlePassConfig,
+	PeriodTime = D._globalConfig._bp1_period_day,
+	SystemId = D.SystemType.BP
+}
+
+return M

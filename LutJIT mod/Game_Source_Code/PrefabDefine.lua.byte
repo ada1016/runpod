@@ -1,0 +1,2585 @@
+local M = {
+	DrawAllToastPanel = {
+		id = "DrawAllToastPanel",
+		path = "Assets/FW/Prefabs/UI/top/DrawAllToastPanel.prefab",
+		type = 9
+	},
+	WaitingBattlePanel = {
+		id = "WaitingBattlePanel",
+		path = "Assets/FW/Prefabs/UI/top/WaitingBattlePanel.prefab",
+		type = 9
+	},
+	DrawAgainToastPanel = {
+		id = "DrawAgainToastPanel",
+		path = "Assets/FW/Prefabs/UI/top/DrawAgainToastPanel.prefab",
+		type = 9
+	},
+	SyncWaitingPanel = {
+		id = "SyncWaitingPanel",
+		path = "Assets/FW/Prefabs/UI/top/SyncWaitingPanel.prefab",
+		type = 9
+	},
+	MessageBoxTopPanel = {
+		id = "MessageBoxTopPanel",
+		path = "Assets/FW/Prefabs/UI/top/MessageBoxTopPanel.prefab",
+		type = 9
+	},
+	ToastScorePanel = {
+		id = "ToastScorePanel",
+		path = "Assets/FW/Prefabs/UI/top/ToastScorePanel.prefab",
+		type = 9
+	},
+	BubbleMonsterTipsPanel = {
+		id = "BubbleMonsterTipsPanel",
+		path = "Assets/FW/Prefabs/UI/top/BubbleMonsterTipsPanel.prefab",
+		type = 9
+	},
+	EnhanceSuccessPanel = {
+		id = "EnhanceSuccessPanel",
+		path = "Assets/FW/Prefabs/UI/top/EnhanceSuccessPanel.prefab",
+		type = 9
+	},
+	WaitingPanel = {
+		id = "WaitingPanel",
+		path = "Assets/FW/Prefabs/UI/top/WaitingPanel.prefab",
+		type = 9
+	},
+	BubbleTipsPanel = {
+		id = "BubbleTipsPanel",
+		path = "Assets/FW/Prefabs/UI/top/BubbleTipsPanel.prefab",
+		type = 9
+	},
+	SparkScoutWaitingPanel = {
+		id = "SparkScoutWaitingPanel",
+		path = "Assets/FW/Prefabs/UI/top/SparkScoutWaitingPanel.prefab",
+		type = 9
+	},
+	ToastPanel = {
+		id = "ToastPanel",
+		path = "Assets/FW/Prefabs/UI/top/ToastPanel.prefab",
+		type = 9
+	},
+	GetResToastPanel = {
+		id = "GetResToastPanel",
+		path = "Assets/FW/Prefabs/UI/top/GetResToastPanel.prefab",
+		type = 9
+	},
+	SparkScoutEditPanel = {
+		id = "SparkScoutEditPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutEditPanel.prefab",
+		type = 1
+	},
+	LoadoutPanel = {
+		id = "LoadoutPanel",
+		path = "Assets/FW/Prefabs/UI/full/LoadoutPanel.prefab",
+		type = 1
+	},
+	SparkScoutGradeRewardPanel = {
+		id = "SparkScoutGradeRewardPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutGradeRewardPanel.prefab",
+		type = 1
+	},
+	OpenBoxPanel = {
+		id = "OpenBoxPanel",
+		path = "Assets/FW/Prefabs/UI/full/OpenBoxPanel.prefab",
+		type = 1
+	},
+	BattleLayoutPanel = {
+		id = "BattleLayoutPanel",
+		path = "Assets/FW/Prefabs/UI/full/BattleLayoutPanel.prefab",
+		type = 1
+	},
+	LoginPanel = {
+		id = "LoginPanel",
+		path = "Assets/FW/Prefabs/UI/full/LoginPanel.prefab",
+		type = 1
+	},
+	ArkRebuildOpenBoxPanel = {
+		id = "ArkRebuildOpenBoxPanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildOpenBoxPanel.prefab",
+		type = 1
+	},
+	OpenBoxNewPanel = {
+		id = "OpenBoxNewPanel",
+		path = "Assets/FW/Prefabs/UI/full/OpenBoxNewPanel.prefab",
+		type = 1
+	},
+	SparkScoutOpenBoxPanel = {
+		id = "SparkScoutOpenBoxPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutOpenBoxPanel.prefab",
+		type = 1
+	},
+	GlobalDefensePanel = {
+		id = "GlobalDefensePanel",
+		path = "Assets/FW/Prefabs/UI/full/GlobalDefensePanel.prefab",
+		type = 1
+	},
+	WeaponSystemPanel = {
+		id = "WeaponSystemPanel",
+		path = "Assets/FW/Prefabs/UI/full/WeaponSystemPanel.prefab",
+		type = 1
+	},
+	SpecialRewardsPanel = {
+		id = "SpecialRewardsPanel",
+		path = "Assets/FW/Prefabs/UI/full/SpecialRewardsPanel.prefab",
+		type = 1
+	},
+	AnniversaryTreasureHuntingStorePanel = {
+		id = "AnniversaryTreasureHuntingStorePanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryTreasureHuntingStorePanel.prefab",
+		type = 1
+	},
+	ActivityPanel = {
+		id = "ActivityPanel",
+		path = "Assets/FW/Prefabs/UI/full/ActivityPanel.prefab",
+		type = 1
+	},
+	ArkRebuildStorePanel = {
+		id = "ArkRebuildStorePanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildStorePanel.prefab",
+		type = 1
+	},
+	AnniversaryGlobalCheckinPanel = {
+		id = "AnniversaryGlobalCheckinPanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryGlobalCheckinPanel.prefab",
+		type = 1
+	},
+	MainPanel = {
+		id = "MainPanel",
+		path = "Assets/FW/Prefabs/UI/full/MainPanel.prefab",
+		type = 1
+	},
+	PlayerReturnPanel = {
+		id = "PlayerReturnPanel",
+		path = "Assets/FW/Prefabs/UI/full/PlayerReturnPanel.prefab",
+		type = 1
+	},
+	ArkRebuildSettlementRewardPanel = {
+		id = "ArkRebuildSettlementRewardPanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildSettlementRewardPanel.prefab",
+		type = 1
+	},
+	ArkRebuildMainPanel = {
+		id = "ArkRebuildMainPanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildMainPanel.prefab",
+		type = 1
+	},
+	ActivityArkRebuildCardsEditPanel = {
+		id = "ActivityArkRebuildCardsEditPanel",
+		path = "Assets/FW/Prefabs/UI/full/ActivityArkRebuildCardsEditPanel.prefab",
+		type = 1
+	},
+	ChipsSharePanel = {
+		id = "ChipsSharePanel",
+		path = "Assets/FW/Prefabs/UI/full/ChipsSharePanel.prefab",
+		type = 1
+	},
+	MonthlyCheckinPanel = {
+		id = "MonthlyCheckinPanel",
+		path = "Assets/FW/Prefabs/UI/full/MonthlyCheckinPanel.prefab",
+		type = 1
+	},
+	WeaponHandbookPanel = {
+		id = "WeaponHandbookPanel",
+		path = "Assets/FW/Prefabs/UI/full/WeaponHandbookPanel.prefab",
+		type = 1
+	},
+	SparkScoutStorePanel = {
+		id = "SparkScoutStorePanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutStorePanel.prefab",
+		type = 1
+	},
+	SparkScoutPreviewPanel = {
+		id = "SparkScoutPreviewPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutPreviewPanel.prefab",
+		type = 1
+	},
+	BattlePassContainerPanel = {
+		id = "BattlePassContainerPanel",
+		path = "Assets/FW/Prefabs/UI/full/BattlePassContainerPanel.prefab",
+		type = 1
+	},
+	ArkRebuildPreviewPanel = {
+		id = "ArkRebuildPreviewPanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildPreviewPanel.prefab",
+		type = 1
+	},
+	EquipImprovePanel = {
+		id = "EquipImprovePanel",
+		path = "Assets/FW/Prefabs/UI/full/EquipImprovePanel.prefab",
+		type = 1
+	},
+	RoleSystemPanel = {
+		id = "RoleSystemPanel",
+		path = "Assets/FW/Prefabs/UI/full/RoleSystemPanel.prefab",
+		type = 1
+	},
+	GuidePanel = {
+		id = "GuidePanel",
+		path = "Assets/FW/Prefabs/UI/full/GuidePanel.prefab",
+		type = 1
+	},
+	AnniversaryLotteryPanel = {
+		id = "AnniversaryLotteryPanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryLotteryPanel.prefab",
+		type = 1
+	},
+	RangerPanel = {
+		id = "RangerPanel",
+		path = "Assets/FW/Prefabs/UI/full/RangerPanel.prefab",
+		type = 1
+	},
+	MissionOverviewPanel = {
+		id = "MissionOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/full/MissionOverviewPanel.prefab",
+		type = 1
+	},
+	SparkScoutSettlementRewardPanel = {
+		id = "SparkScoutSettlementRewardPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutSettlementRewardPanel.prefab",
+		type = 1
+	},
+	ArkRebuildMilestonePanel = {
+		id = "ArkRebuildMilestonePanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildMilestonePanel.prefab",
+		type = 1
+	},
+	EquipDecomposePanel = {
+		id = "EquipDecomposePanel",
+		path = "Assets/FW/Prefabs/UI/full/EquipDecomposePanel.prefab",
+		type = 1
+	},
+	BattleInLayoutPanel = {
+		id = "BattleInLayoutPanel",
+		path = "Assets/FW/Prefabs/UI/full/BattleInLayoutPanel.prefab",
+		type = 1
+	},
+	GMPanel = {
+		id = "GMPanel",
+		path = "Assets/FW/Prefabs/UI/full/GMPanel.prefab",
+		type = 1
+	},
+	CrisisZoneHomePanel = {
+		id = "CrisisZoneHomePanel",
+		path = "Assets/FW/Prefabs/UI/full/CrisisZoneHomePanel.prefab",
+		type = 1
+	},
+	RangerDetailPanel = {
+		id = "RangerDetailPanel",
+		path = "Assets/FW/Prefabs/UI/full/RangerDetailPanel.prefab",
+		type = 1
+	},
+	AnniversaryDigPanel = {
+		id = "AnniversaryDigPanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryDigPanel.prefab",
+		type = 1
+	},
+	AnniversaryTreasureHuntingPanel = {
+		id = "AnniversaryTreasureHuntingPanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryTreasureHuntingPanel.prefab",
+		type = 1
+	},
+	DomeSystemPanel = {
+		id = "DomeSystemPanel",
+		path = "Assets/FW/Prefabs/UI/full/DomeSystemPanel.prefab",
+		type = 1
+	},
+	SevenDayPanel = {
+		id = "SevenDayPanel",
+		path = "Assets/FW/Prefabs/UI/full/SevenDayPanel.prefab",
+		type = 1
+	},
+	UnionInfoFullPanel = {
+		id = "UnionInfoFullPanel",
+		path = "Assets/FW/Prefabs/UI/full/UnionInfoFullPanel.prefab",
+		type = 1
+	},
+	SparkScoutMainPanel = {
+		id = "SparkScoutMainPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutMainPanel.prefab",
+		type = 1
+	},
+	ArkRebuildSpinPanel = {
+		id = "ArkRebuildSpinPanel",
+		path = "Assets/FW/Prefabs/UI/full/ArkRebuildSpinPanel.prefab",
+		type = 1
+	},
+	RangerEquipDecomposePanel = {
+		id = "RangerEquipDecomposePanel",
+		path = "Assets/FW/Prefabs/UI/full/RangerEquipDecomposePanel.prefab",
+		type = 1
+	},
+	DomeHomePanel = {
+		id = "DomeHomePanel",
+		path = "Assets/FW/Prefabs/UI/full/DomeHomePanel.prefab",
+		type = 1
+	},
+	CrisisZoneFinalRewardPanel = {
+		id = "CrisisZoneFinalRewardPanel",
+		path = "Assets/FW/Prefabs/UI/full/CrisisZoneFinalRewardPanel.prefab",
+		type = 1
+	},
+	SparkScoutTemporaryCardsPanel = {
+		id = "SparkScoutTemporaryCardsPanel",
+		path = "Assets/FW/Prefabs/UI/full/SparkScoutTemporaryCardsPanel.prefab",
+		type = 1
+	},
+	AnniversaryInvitePanel = {
+		id = "AnniversaryInvitePanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryInvitePanel.prefab",
+		type = 1
+	},
+	AnniversaryMainPanel = {
+		id = "AnniversaryMainPanel",
+		path = "Assets/FW/Prefabs/UI/full/AnniversaryMainPanel.prefab",
+		type = 1
+	},
+	ArkRebuildShopPage = {
+		id = "ArkRebuildShopPage",
+		path = "Assets/FW/Prefabs/UI/page/ArkRebuildShopPage.prefab",
+		type = 0
+	},
+	ExchangeGroupPage = {
+		id = "ExchangeGroupPage",
+		path = "Assets/FW/Prefabs/UI/page/ExchangeGroupPage.prefab",
+		type = 0
+	},
+	ShopResourcePage = {
+		id = "ShopResourcePage",
+		path = "Assets/FW/Prefabs/UI/page/ShopResourcePage.prefab",
+		type = 0
+	},
+	DomeSkinPanel = {
+		id = "DomeSkinPanel",
+		path = "Assets/FW/Prefabs/UI/page/DomeSkinPanel.prefab",
+		type = 0
+	},
+	ActivityLottery2Panel = {
+		id = "ActivityLottery2Panel",
+		path = "Assets/FW/Prefabs/UI/page/ActivityLottery2Panel.prefab",
+		type = 0
+	},
+	ExchangeGroupPage_SparkScout = {
+		id = "ExchangeGroupPage_SparkScout",
+		path = "Assets/FW/Prefabs/UI/page/ExchangeGroupPage_SparkScout.prefab",
+		type = 0
+	},
+	ShopPage = {
+		id = "ShopPage",
+		path = "Assets/FW/Prefabs/UI/page/ShopPage.prefab",
+		type = 0
+	},
+	BattlePassAnniversaryTreasureHuntingPanel = {
+		id = "BattlePassAnniversaryTreasureHuntingPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassAnniversaryTreasureHuntingPanel.prefab",
+		type = 0
+	},
+	RangerFoundryPanel = {
+		id = "RangerFoundryPanel",
+		path = "Assets/FW/Prefabs/UI/page/RangerFoundryPanel.prefab",
+		type = 0
+	},
+	BasePage = {
+		id = "BasePage",
+		path = "Assets/FW/Prefabs/UI/page/BasePage.prefab",
+		type = 0
+	},
+	ShopActivityExchangePage = {
+		id = "ShopActivityExchangePage",
+		path = "Assets/FW/Prefabs/UI/page/ShopActivityExchangePage.prefab",
+		type = 0
+	},
+	HomePage = {
+		id = "HomePage",
+		path = "Assets/FW/Prefabs/UI/page/HomePage.prefab",
+		type = 0
+	},
+	ArmoryPage = {
+		id = "ArmoryPage",
+		path = "Assets/FW/Prefabs/UI/page/ArmoryPage.prefab",
+		type = 0
+	},
+	ShopDayWeekMonthPage = {
+		id = "ShopDayWeekMonthPage",
+		path = "Assets/FW/Prefabs/UI/page/ShopDayWeekMonthPage.prefab",
+		type = 0
+	},
+	SparkScoutShopPage = {
+		id = "SparkScoutShopPage",
+		path = "Assets/FW/Prefabs/UI/page/SparkScoutShopPage.prefab",
+		type = 0
+	},
+	RolePage = {
+		id = "RolePage",
+		path = "Assets/FW/Prefabs/UI/page/RolePage.prefab",
+		type = 0
+	},
+	ActivityLottery1Panel = {
+		id = "ActivityLottery1Panel",
+		path = "Assets/FW/Prefabs/UI/page/ActivityLottery1Panel.prefab",
+		type = 0
+	},
+	GatlinSkinPanel = {
+		id = "GatlinSkinPanel",
+		path = "Assets/FW/Prefabs/UI/page/GatlinSkinPanel.prefab",
+		type = 0
+	},
+	ResearchPanel = {
+		id = "ResearchPanel",
+		path = "Assets/FW/Prefabs/UI/page/ResearchPanel.prefab",
+		type = 0
+	},
+	BattlePassArkRebuildPanel = {
+		id = "BattlePassArkRebuildPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassArkRebuildPanel.prefab",
+		type = 0
+	},
+	BattlePassRangerPanel = {
+		id = "BattlePassRangerPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassRangerPanel.prefab",
+		type = 0
+	},
+	UnionJoinPage = {
+		id = "UnionJoinPage",
+		path = "Assets/FW/Prefabs/UI/page/UnionJoinPage.prefab",
+		type = 0
+	},
+	ChallengePage = {
+		id = "ChallengePage",
+		path = "Assets/FW/Prefabs/UI/page/ChallengePage.prefab",
+		type = 0
+	},
+	DiamondPackPage = {
+		id = "DiamondPackPage",
+		path = "Assets/FW/Prefabs/UI/page/DiamondPackPage.prefab",
+		type = 0
+	},
+	DomeImprovePanel = {
+		id = "DomeImprovePanel",
+		path = "Assets/FW/Prefabs/UI/page/DomeImprovePanel.prefab",
+		type = 0
+	},
+	LevelFundPanel = {
+		id = "LevelFundPanel",
+		path = "Assets/FW/Prefabs/UI/page/LevelFundPanel.prefab",
+		type = 0
+	},
+	WeaponUpgradePanel = {
+		id = "WeaponUpgradePanel",
+		path = "Assets/FW/Prefabs/UI/page/WeaponUpgradePanel.prefab",
+		type = 0
+	},
+	RoleSkinPanel = {
+		id = "RoleSkinPanel",
+		path = "Assets/FW/Prefabs/UI/page/RoleSkinPanel.prefab",
+		type = 0
+	},
+	BattlePassMonopolyPanel = {
+		id = "BattlePassMonopolyPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassMonopolyPanel.prefab",
+		type = 0
+	},
+	ShopPage2 = {
+		id = "ShopPage2",
+		path = "Assets/FW/Prefabs/UI/page/ShopPage2.prefab",
+		type = 0
+	},
+	AnniversaryTreasureHuntingShopPage = {
+		id = "AnniversaryTreasureHuntingShopPage",
+		path = "Assets/FW/Prefabs/UI/page/AnniversaryTreasureHuntingShopPage.prefab",
+		type = 0
+	},
+	RangerBasePanel = {
+		id = "RangerBasePanel",
+		path = "Assets/FW/Prefabs/UI/page/RangerBasePanel.prefab",
+		type = 0
+	},
+	BattlePassNewPanel = {
+		id = "BattlePassNewPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassNewPanel.prefab",
+		type = 0
+	},
+	ExchangeGroupPage_Anniversary = {
+		id = "ExchangeGroupPage_Anniversary",
+		path = "Assets/FW/Prefabs/UI/page/ExchangeGroupPage_Anniversary.prefab",
+		type = 0
+	},
+	BattlePassSkinPanel = {
+		id = "BattlePassSkinPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassSkinPanel.prefab",
+		type = 0
+	},
+	ActivityMonopolyPanel = {
+		id = "ActivityMonopolyPanel",
+		path = "Assets/FW/Prefabs/UI/page/ActivityMonopolyPanel.prefab",
+		type = 0
+	},
+	DomeBattlePassPanel = {
+		id = "DomeBattlePassPanel",
+		path = "Assets/FW/Prefabs/UI/page/DomeBattlePassPanel.prefab",
+		type = 0
+	},
+	UnionWaitingPage = {
+		id = "UnionWaitingPage",
+		path = "Assets/FW/Prefabs/UI/page/UnionWaitingPage.prefab",
+		type = 0
+	},
+	BattlePassSparkScoutPanel = {
+		id = "BattlePassSparkScoutPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassSparkScoutPanel.prefab",
+		type = 0
+	},
+	BattlePassPanel = {
+		id = "BattlePassPanel",
+		path = "Assets/FW/Prefabs/UI/page/BattlePassPanel.prefab",
+		type = 0
+	},
+	UnionChatPage = {
+		id = "UnionChatPage",
+		path = "Assets/FW/Prefabs/UI/page/UnionChatPage.prefab",
+		type = 0
+	},
+	SpecialOfferGiftPanel = {
+		id = "SpecialOfferGiftPanel",
+		path = "Assets/FW/Prefabs/UI/page/SpecialOfferGiftPanel.prefab",
+		type = 0
+	},
+	StatsWidgetOfMainSetting = {
+		id = "StatsWidgetOfMainSetting",
+		path = "Assets/FW/Prefabs/UI/widget/StatsWidgetOfMainSetting.prefab",
+		type = 0
+	},
+	VipEntrance2 = {
+		id = "VipEntrance2",
+		path = "Assets/FW/Prefabs/UI/widget/VipEntrance2.prefab",
+		type = 0
+	},
+	WeaponEntryWidget = {
+		id = "WeaponEntryWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponEntryWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_Dome = {
+		id = "BPRewardWidget_Dome",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_Dome.prefab",
+		type = 0
+	},
+	SelectRewardListWidget = {
+		id = "SelectRewardListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SelectRewardListWidget.prefab",
+		type = 0
+	},
+	ReturnCheckRewardWidget = {
+		id = "ReturnCheckRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ReturnCheckRewardWidget.prefab",
+		type = 0
+	},
+	CrisisZoneRankWidget = {
+		id = "CrisisZoneRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/CrisisZoneRankWidget.prefab",
+		type = 0
+	},
+	WeaponDamageWidget = {
+		id = "WeaponDamageWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponDamageWidget.prefab",
+		type = 0
+	},
+	ActivityShopWidget = {
+		id = "ActivityShopWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ActivityShopWidget.prefab",
+		type = 0
+	},
+	RangerEquipRowWidget = {
+		id = "RangerEquipRowWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerEquipRowWidget.prefab",
+		type = 0
+	},
+	MonopolyRankListWidget = {
+		id = "MonopolyRankListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonopolyRankListWidget.prefab",
+		type = 0
+	},
+	RangerAtkBubbleWidget = {
+		id = "RangerAtkBubbleWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerAtkBubbleWidget.prefab",
+		type = 0
+	},
+	StageRankWidget = {
+		id = "StageRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/StageRankWidget.prefab",
+		type = 0
+	},
+	DiamondArkArea = {
+		id = "DiamondArkArea",
+		path = "Assets/FW/Prefabs/UI/widget/DiamondArkArea.prefab",
+		type = 0
+	},
+	SparkScoutShopChipWidget = {
+		id = "SparkScoutShopChipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutShopChipWidget.prefab",
+		type = 0
+	},
+	Grade110Widget = {
+		id = "Grade110Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade110Widget.prefab",
+		type = 0
+	},
+	SparkScoutWeaponWidget = {
+		id = "SparkScoutWeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutWeaponWidget.prefab",
+		type = 0
+	},
+	GatlinSkinWidget = {
+		id = "GatlinSkinWidget",
+		path = "Assets/FW/Prefabs/UI/widget/GatlinSkinWidget.prefab",
+		type = 0
+	},
+	AvatarEditWidget = {
+		id = "AvatarEditWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AvatarEditWidget.prefab",
+		type = 0
+	},
+	UnionSearchListWidget = {
+		id = "UnionSearchListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionSearchListWidget.prefab",
+		type = 0
+	},
+	ArkRebuildWeaponWidget = {
+		id = "ArkRebuildWeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildWeaponWidget.prefab",
+		type = 0
+	},
+	ChipWidget = {
+		id = "ChipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChipWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_Monopoly = {
+		id = "BPRewardWidget_Monopoly",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_Monopoly.prefab",
+		type = 0
+	},
+	UnionMemberListWidget = {
+		id = "UnionMemberListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionMemberListWidget.prefab",
+		type = 0
+	},
+	MonopolyRankWidget = {
+		id = "MonopolyRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonopolyRankWidget.prefab",
+		type = 0
+	},
+	RogueCardInfoWidget = {
+		id = "RogueCardInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RogueCardInfoWidget.prefab",
+		type = 0
+	},
+	Grade610Widget = {
+		id = "Grade610Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade610Widget.prefab",
+		type = 0
+	},
+	StaminaWidget = {
+		id = "StaminaWidget",
+		path = "Assets/FW/Prefabs/UI/widget/StaminaWidget.prefab",
+		type = 0
+	},
+	MissionPassInfoWidget = {
+		id = "MissionPassInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MissionPassInfoWidget.prefab",
+		type = 0
+	},
+	SevenDayWidget = {
+		id = "SevenDayWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SevenDayWidget.prefab",
+		type = 0
+	},
+	LoadOutWidget = {
+		id = "LoadOutWidget",
+		path = "Assets/FW/Prefabs/UI/widget/LoadOutWidget.prefab",
+		type = 0
+	},
+	UnionOperationWidget = {
+		id = "UnionOperationWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionOperationWidget.prefab",
+		type = 0
+	},
+	SpecialOfferGiftWidget_2 = {
+		id = "SpecialOfferGiftWidget_2",
+		path = "Assets/FW/Prefabs/UI/widget/SpecialOfferGiftWidget_2.prefab",
+		type = 0
+	},
+	ChallengeMissionWidget = {
+		id = "ChallengeMissionWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChallengeMissionWidget.prefab",
+		type = 0
+	},
+	ChipShareListWidget_Sparkscout = {
+		id = "ChipShareListWidget_Sparkscout",
+		path = "Assets/FW/Prefabs/UI/widget/ChipShareListWidget_Sparkscout.prefab",
+		type = 0
+	},
+	DropGroupWidget = {
+		id = "DropGroupWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DropGroupWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget = {
+		id = "BPRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget.prefab",
+		type = 0
+	},
+	SpecialOfferGiftWidget = {
+		id = "SpecialOfferGiftWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SpecialOfferGiftWidget.prefab",
+		type = 0
+	},
+	AnniversaryIntegralDetailsWidget = {
+		id = "AnniversaryIntegralDetailsWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryIntegralDetailsWidget.prefab",
+		type = 0
+	},
+	IapGoldWidget = {
+		id = "IapGoldWidget",
+		path = "Assets/FW/Prefabs/UI/widget/IapGoldWidget.prefab",
+		type = 0
+	},
+	SkinSkillWidget = {
+		id = "SkinSkillWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SkinSkillWidget.prefab",
+		type = 0
+	},
+	ComboSkillWidget = {
+		id = "ComboSkillWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ComboSkillWidget.prefab",
+		type = 0
+	},
+	MonthlyItemWidget = {
+		id = "MonthlyItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonthlyItemWidget.prefab",
+		type = 0
+	},
+	LangChooseArea = {
+		id = "LangChooseArea",
+		path = "Assets/FW/Prefabs/UI/widget/LangChooseArea.prefab",
+		type = 0
+	},
+	HandbookCardInfoWidget = {
+		id = "HandbookCardInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/HandbookCardInfoWidget.prefab",
+		type = 0
+	},
+	WeaponWidget = {
+		id = "WeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponWidget.prefab",
+		type = 0
+	},
+	TreasureHuntingMapWidget = {
+		id = "TreasureHuntingMapWidget",
+		path = "Assets/FW/Prefabs/UI/widget/TreasureHuntingMapWidget.prefab",
+		type = 0
+	},
+	RankIconWidget = {
+		id = "RankIconWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RankIconWidget.prefab",
+		type = 0
+	},
+	ChipShareListWidget = {
+		id = "ChipShareListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChipShareListWidget.prefab",
+		type = 0
+	},
+	Grade210Widget = {
+		id = "Grade210Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade210Widget.prefab",
+		type = 0
+	},
+	MonopolyMilestoneWidget = {
+		id = "MonopolyMilestoneWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonopolyMilestoneWidget.prefab",
+		type = 0
+	},
+	StatsWidgetOfMainSettle = {
+		id = "StatsWidgetOfMainSettle",
+		path = "Assets/FW/Prefabs/UI/widget/StatsWidgetOfMainSettle.prefab",
+		type = 0
+	},
+	MonopolySpinRewardWidget = {
+		id = "MonopolySpinRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonopolySpinRewardWidget.prefab",
+		type = 0
+	},
+	SparkScoutRankWidget = {
+		id = "SparkScoutRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutRankWidget.prefab",
+		type = 0
+	},
+	TreasureWidget = {
+		id = "TreasureWidget",
+		path = "Assets/FW/Prefabs/UI/widget/TreasureWidget.prefab",
+		type = 0
+	},
+	DomeRankWidget = {
+		id = "DomeRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DomeRankWidget.prefab",
+		type = 0
+	},
+	ArkRebuildRogueCardInfoWidget = {
+		id = "ArkRebuildRogueCardInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildRogueCardInfoWidget.prefab",
+		type = 0
+	},
+	PlayerReturnWidget = {
+		id = "PlayerReturnWidget",
+		path = "Assets/FW/Prefabs/UI/widget/PlayerReturnWidget.prefab",
+		type = 0
+	},
+	Grade510Widget = {
+		id = "Grade510Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade510Widget.prefab",
+		type = 0
+	},
+	MissionGiftWidget = {
+		id = "MissionGiftWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MissionGiftWidget.prefab",
+		type = 0
+	},
+	ChipShareDetailWidget = {
+		id = "ChipShareDetailWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChipShareDetailWidget.prefab",
+		type = 0
+	},
+	AnniversaryInviteMissionWidget = {
+		id = "AnniversaryInviteMissionWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryInviteMissionWidget.prefab",
+		type = 0
+	},
+	OfflineListWidget = {
+		id = "OfflineListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/OfflineListWidget.prefab",
+		type = 0
+	},
+	WeaponPassWidget = {
+		id = "WeaponPassWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponPassWidget.prefab",
+		type = 0
+	},
+	ActivityLotteryHistroyWidget = {
+		id = "ActivityLotteryHistroyWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ActivityLotteryHistroyWidget.prefab",
+		type = 0
+	},
+	EquipKindWidget = {
+		id = "EquipKindWidget",
+		path = "Assets/FW/Prefabs/UI/widget/EquipKindWidget.prefab",
+		type = 0
+	},
+	WeaponTabWidget = {
+		id = "WeaponTabWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponTabWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_SparkScout = {
+		id = "BPRewardWidget_SparkScout",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_SparkScout.prefab",
+		type = 0
+	},
+	RangerDockWidget = {
+		id = "RangerDockWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerDockWidget.prefab",
+		type = 0
+	},
+	RankWidget = {
+		id = "RankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RankWidget.prefab",
+		type = 0
+	},
+	ItemWidget = {
+		id = "ItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ItemWidget.prefab",
+		type = 0
+	},
+	CrisisZoneRewardRowWidget = {
+		id = "CrisisZoneRewardRowWidget",
+		path = "Assets/FW/Prefabs/UI/widget/CrisisZoneRewardRowWidget.prefab",
+		type = 0
+	},
+	UnionLogWidget = {
+		id = "UnionLogWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionLogWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_Skin = {
+		id = "BPRewardWidget_Skin",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_Skin.prefab",
+		type = 0
+	},
+	BattleSkillDmgRecordWidget = {
+		id = "BattleSkillDmgRecordWidget",
+		path = "Assets/FW/Prefabs/UI/widget/BattleSkillDmgRecordWidget.prefab",
+		type = 0
+	},
+	AvatarFrameWidget = {
+		id = "AvatarFrameWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AvatarFrameWidget.prefab",
+		type = 0
+	},
+	HPWidget = {
+		id = "HPWidget",
+		path = "Assets/FW/Prefabs/UI/widget/HPWidget.prefab",
+		type = 0
+	},
+	RangerFoundryEggWidget = {
+		id = "RangerFoundryEggWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerFoundryEggWidget.prefab",
+		type = 0
+	},
+	SparkScoutGradeRewardWidget = {
+		id = "SparkScoutGradeRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutGradeRewardWidget.prefab",
+		type = 0
+	},
+	WeaponCardWidget = {
+		id = "WeaponCardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponCardWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_TreasureHunting = {
+		id = "BPRewardWidget_TreasureHunting",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_TreasureHunting.prefab",
+		type = 0
+	},
+	ActivityItemWidget = {
+		id = "ActivityItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ActivityItemWidget.prefab",
+		type = 0
+	},
+	UnionFlagEditWidget = {
+		id = "UnionFlagEditWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionFlagEditWidget.prefab",
+		type = 0
+	},
+	Grade410Widget = {
+		id = "Grade410Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade410Widget.prefab",
+		type = 0
+	},
+	RankRewardWidget = {
+		id = "RankRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RankRewardWidget.prefab",
+		type = 0
+	},
+	ResWidget = {
+		id = "ResWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ResWidget.prefab",
+		type = 0
+	},
+	FAQWidget = {
+		id = "FAQWidget",
+		path = "Assets/FW/Prefabs/UI/widget/FAQWidget.prefab",
+		type = 0
+	},
+	LotteryAnnouncement = {
+		id = "LotteryAnnouncement",
+		path = "Assets/FW/Prefabs/UI/widget/LotteryAnnouncement.prefab",
+		type = 0
+	},
+	StatsWidgetOfSparkScoutSettle_Group = {
+		id = "StatsWidgetOfSparkScoutSettle_Group",
+		path = "Assets/FW/Prefabs/UI/widget/StatsWidgetOfSparkScoutSettle_Group.prefab",
+		type = 0
+	},
+	DomeImproveWidget = {
+		id = "DomeImproveWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DomeImproveWidget.prefab",
+		type = 0
+	},
+	Grade310Widget = {
+		id = "Grade310Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Grade310Widget.prefab",
+		type = 0
+	},
+	RogueCardInfoWidget_DrawVariant = {
+		id = "RogueCardInfoWidget_DrawVariant",
+		path = "Assets/FW/Prefabs/UI/widget/RogueCardInfoWidget_DrawVariant.prefab",
+		type = 0
+	},
+	EquipWidget = {
+		id = "EquipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/EquipWidget.prefab",
+		type = 0
+	},
+	ChatWidget = {
+		id = "ChatWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChatWidget.prefab",
+		type = 0
+	},
+	ArkModuleListWidget = {
+		id = "ArkModuleListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkModuleListWidget.prefab",
+		type = 0
+	},
+	ResearchItemWidget = {
+		id = "ResearchItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ResearchItemWidget.prefab",
+		type = 0
+	},
+	SparkScoutWeaponChipWidget = {
+		id = "SparkScoutWeaponChipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutWeaponChipWidget.prefab",
+		type = 0
+	},
+	GroupItemWidget = {
+		id = "GroupItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/GroupItemWidget.prefab",
+		type = 0
+	},
+	MailWidget = {
+		id = "MailWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MailWidget.prefab",
+		type = 0
+	},
+	SparkScoutDuelWidget = {
+		id = "SparkScoutDuelWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutDuelWidget.prefab",
+		type = 0
+	},
+	ChipShareListWidget_sparkscout_common = {
+		id = "ChipShareListWidget_sparkscout_common",
+		path = "Assets/FW/Prefabs/UI/widget/ChipShareListWidget_sparkscout_common.prefab",
+		type = 0
+	},
+	SimpleItemWidget = {
+		id = "SimpleItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SimpleItemWidget.prefab",
+		type = 0
+	},
+	ArkRebuildRankWidget = {
+		id = "ArkRebuildRankWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildRankWidget.prefab",
+		type = 0
+	},
+	ArkModuleWidget = {
+		id = "ArkModuleWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkModuleWidget.prefab",
+		type = 0
+	},
+	SparkChipListWidget = {
+		id = "SparkChipListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkChipListWidget.prefab",
+		type = 0
+	},
+	ReturnDaysWidget = {
+		id = "ReturnDaysWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ReturnDaysWidget.prefab",
+		type = 0
+	},
+	ChatWidget_Right = {
+		id = "ChatWidget_Right",
+		path = "Assets/FW/Prefabs/UI/widget/ChatWidget_Right.prefab",
+		type = 0
+	},
+	PlayerReturnRewardWidget = {
+		id = "PlayerReturnRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/PlayerReturnRewardWidget.prefab",
+		type = 0
+	},
+	SevenDayRewardWidget = {
+		id = "SevenDayRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SevenDayRewardWidget.prefab",
+		type = 0
+	},
+	ResearchUnitWidget = {
+		id = "ResearchUnitWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ResearchUnitWidget.prefab",
+		type = 0
+	},
+	EnemyWidget = {
+		id = "EnemyWidget",
+		path = "Assets/FW/Prefabs/UI/widget/EnemyWidget.prefab",
+		type = 0
+	},
+	anniversaryLotteryItemWidget = {
+		id = "anniversaryLotteryItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/anniversaryLotteryItemWidget.prefab",
+		type = 0
+	},
+	RangerWeaponWidget = {
+		id = "RangerWeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerWeaponWidget.prefab",
+		type = 0
+	},
+	ArkRebuildRankListWidget = {
+		id = "ArkRebuildRankListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildRankListWidget.prefab",
+		type = 0
+	},
+	BPRewardWidget_Ranger = {
+		id = "BPRewardWidget_Ranger",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_Ranger.prefab",
+		type = 0
+	},
+	RoleSkinWidget = {
+		id = "RoleSkinWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RoleSkinWidget.prefab",
+		type = 0
+	},
+	ChipShareDetailWidget_Sparkscout = {
+		id = "ChipShareDetailWidget_Sparkscout",
+		path = "Assets/FW/Prefabs/UI/widget/ChipShareDetailWidget_Sparkscout.prefab",
+		type = 0
+	},
+	AnniversaryLotteryPropWidget = {
+		id = "AnniversaryLotteryPropWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryLotteryPropWidget.prefab",
+		type = 0
+	},
+	RangerItemWidget = {
+		id = "RangerItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerItemWidget.prefab",
+		type = 0
+	},
+	ChatWidget_Left = {
+		id = "ChatWidget_Left",
+		path = "Assets/FW/Prefabs/UI/widget/ChatWidget_Left.prefab",
+		type = 0
+	},
+	ChipEnhancelWidget = {
+		id = "ChipEnhancelWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChipEnhancelWidget.prefab",
+		type = 0
+	},
+	ArkRebuildEditCardsWidget = {
+		id = "ArkRebuildEditCardsWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildEditCardsWidget.prefab",
+		type = 0
+	},
+	MonthlyCheckinWidget = {
+		id = "MonthlyCheckinWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MonthlyCheckinWidget.prefab",
+		type = 0
+	},
+	IapMaterialWidget = {
+		id = "IapMaterialWidget",
+		path = "Assets/FW/Prefabs/UI/widget/IapMaterialWidget.prefab",
+		type = 0
+	},
+	StatsWidgetOfSparkScoutSetting = {
+		id = "StatsWidgetOfSparkScoutSetting",
+		path = "Assets/FW/Prefabs/UI/widget/StatsWidgetOfSparkScoutSetting.prefab",
+		type = 0
+	},
+	ArkRebuildIShopWidget = {
+		id = "ArkRebuildIShopWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildIShopWidget.prefab",
+		type = 0
+	},
+	ContentArea = {
+		id = "ContentArea",
+		path = "Assets/FW/Prefabs/UI/widget/ContentArea.prefab",
+		type = 0
+	},
+	OptionWidget = {
+		id = "OptionWidget",
+		path = "Assets/FW/Prefabs/UI/widget/OptionWidget.prefab",
+		type = 0
+	},
+	SparkScoutBattleWidget = {
+		id = "SparkScoutBattleWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutBattleWidget.prefab",
+		type = 0
+	},
+	LevelFundRewardWidget = {
+		id = "LevelFundRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/LevelFundRewardWidget.prefab",
+		type = 0
+	},
+	AvatarFrameEditWidget = {
+		id = "AvatarFrameEditWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AvatarFrameEditWidget.prefab",
+		type = 0
+	},
+	ArkWeaponCardWidget = {
+		id = "ArkWeaponCardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkWeaponCardWidget.prefab",
+		type = 0
+	},
+	RightCardEntranceBtnWidget = {
+		id = "RightCardEntranceBtnWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RightCardEntranceBtnWidget.prefab",
+		type = 0
+	},
+	IapDiamondWidget = {
+		id = "IapDiamondWidget",
+		path = "Assets/FW/Prefabs/UI/widget/IapDiamondWidget.prefab",
+		type = 0
+	},
+	ModuleWidget = {
+		id = "ModuleWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ModuleWidget.prefab",
+		type = 0
+	},
+	EquipInnerChipWidget = {
+		id = "EquipInnerChipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/EquipInnerChipWidget.prefab",
+		type = 0
+	},
+	AnniversaryRechargeScoreWidget = {
+		id = "AnniversaryRechargeScoreWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryRechargeScoreWidget.prefab",
+		type = 0
+	},
+	UnionMemberListWidget_2 = {
+		id = "UnionMemberListWidget_2",
+		path = "Assets/FW/Prefabs/UI/widget/UnionMemberListWidget_2.prefab",
+		type = 0
+	},
+	TaskWidget_Anniversary = {
+		id = "TaskWidget_Anniversary",
+		path = "Assets/FW/Prefabs/UI/widget/TaskWidget_Anniversary.prefab",
+		type = 0
+	},
+	SparkScoutRoleChipWidget = {
+		id = "SparkScoutRoleChipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutRoleChipWidget.prefab",
+		type = 0
+	},
+	DomeRankListWidget = {
+		id = "DomeRankListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DomeRankListWidget.prefab",
+		type = 0
+	},
+	SkillFilterWeaponWidget = {
+		id = "SkillFilterWeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SkillFilterWeaponWidget.prefab",
+		type = 0
+	},
+	ExchangeGroupWidget_2 = {
+		id = "ExchangeGroupWidget_2",
+		path = "Assets/FW/Prefabs/UI/widget/ExchangeGroupWidget_2.prefab",
+		type = 0
+	},
+	RangerSkillWidget = {
+		id = "RangerSkillWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerSkillWidget.prefab",
+		type = 0
+	},
+	ArkRebuildMilestoneWidget = {
+		id = "ArkRebuildMilestoneWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ArkRebuildMilestoneWidget.prefab",
+		type = 0
+	},
+	AnniversaryInviteRewardWidget = {
+		id = "AnniversaryInviteRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryInviteRewardWidget.prefab",
+		type = 0
+	},
+	sparkscoutMainMonsterWidget = {
+		id = "sparkscoutMainMonsterWidget",
+		path = "Assets/FW/Prefabs/UI/widget/sparkscoutMainMonsterWidget.prefab",
+		type = 0
+	},
+	ActivityPackGroupWidget = {
+		id = "ActivityPackGroupWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ActivityPackGroupWidget.prefab",
+		type = 0
+	},
+	WeaponCardWidget_Upgrade = {
+		id = "WeaponCardWidget_Upgrade",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponCardWidget_Upgrade.prefab",
+		type = 0
+	},
+	SpineGraphicWidget = {
+		id = "SpineGraphicWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SpineGraphicWidget.prefab",
+		type = 0
+	},
+	LoadoutTabWidget = {
+		id = "LoadoutTabWidget",
+		path = "Assets/FW/Prefabs/UI/widget/LoadoutTabWidget.prefab",
+		type = 0
+	},
+	ChipListWidget = {
+		id = "ChipListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ChipListWidget.prefab",
+		type = 0
+	},
+	StatsWidgetOfSparkScoutSettle = {
+		id = "StatsWidgetOfSparkScoutSettle",
+		path = "Assets/FW/Prefabs/UI/widget/StatsWidgetOfSparkScoutSettle.prefab",
+		type = 0
+	},
+	SparkscoutReport = {
+		id = "SparkscoutReport",
+		path = "Assets/FW/Prefabs/UI/widget/SparkscoutReport.prefab",
+		type = 0
+	},
+	TaskWidget = {
+		id = "TaskWidget",
+		path = "Assets/FW/Prefabs/UI/widget/TaskWidget.prefab",
+		type = 0
+	},
+	DiscordShareWidget = {
+		id = "DiscordShareWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DiscordShareWidget.prefab",
+		type = 0
+	},
+	SparkScoutRankListWidget = {
+		id = "SparkScoutRankListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutRankListWidget.prefab",
+		type = 0
+	},
+	MissionPerfectRewardWidget = {
+		id = "MissionPerfectRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MissionPerfectRewardWidget.prefab",
+		type = 0
+	},
+	PlayerInfoWidget = {
+		id = "PlayerInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/PlayerInfoWidget.prefab",
+		type = 0
+	},
+	Activity2Widget = {
+		id = "Activity2Widget",
+		path = "Assets/FW/Prefabs/UI/widget/Activity2Widget.prefab",
+		type = 0
+	},
+	ArkStar = {
+		id = "ArkStar",
+		path = "Assets/FW/Prefabs/UI/widget/ArkStar.prefab",
+		type = 0
+	},
+	MidweekCardsWidget = {
+		id = "MidweekCardsWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MidweekCardsWidget.prefab",
+		type = 0
+	},
+	WeaponDamageBubbleWidget = {
+		id = "WeaponDamageBubbleWidget",
+		path = "Assets/FW/Prefabs/UI/widget/WeaponDamageBubbleWidget.prefab",
+		type = 0
+	},
+	RangerStorageItemWidget = {
+		id = "RangerStorageItemWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerStorageItemWidget.prefab",
+		type = 0
+	},
+	TreasureHuntingGridWidget = {
+		id = "TreasureHuntingGridWidget",
+		path = "Assets/FW/Prefabs/UI/widget/TreasureHuntingGridWidget.prefab",
+		type = 0
+	},
+	SelectChipDescListWidget = {
+		id = "SelectChipDescListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SelectChipDescListWidget.prefab",
+		type = 0
+	},
+	SkinStatWidget = {
+		id = "SkinStatWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SkinStatWidget.prefab",
+		type = 0
+	},
+	RowWidget = {
+		id = "RowWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RowWidget.prefab",
+		type = 0
+	},
+	FilterPartWidget = {
+		id = "FilterPartWidget",
+		path = "Assets/FW/Prefabs/UI/widget/FilterPartWidget.prefab",
+		type = 0
+	},
+	AnniversaryTaskRewardWidget = {
+		id = "AnniversaryTaskRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryTaskRewardWidget.prefab",
+		type = 0
+	},
+	AnniversaryStarTreasureWidget = {
+		id = "AnniversaryStarTreasureWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryStarTreasureWidget.prefab",
+		type = 0
+	},
+	DropInfoWidget = {
+		id = "DropInfoWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DropInfoWidget.prefab",
+		type = 0
+	},
+	SparkScoutQuickEditWidget = {
+		id = "SparkScoutQuickEditWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutQuickEditWidget.prefab",
+		type = 0
+	},
+	MechaEggSlotWidget = {
+		id = "MechaEggSlotWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MechaEggSlotWidget.prefab",
+		type = 0
+	},
+	FilterWeaponWidget = {
+		id = "FilterWeaponWidget",
+		path = "Assets/FW/Prefabs/UI/widget/FilterWeaponWidget.prefab",
+		type = 0
+	},
+	SyncWaitingWidget = {
+		id = "SyncWaitingWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SyncWaitingWidget.prefab",
+		type = 0
+	},
+	AnniversaryCheckRewardWidget = {
+		id = "AnniversaryCheckRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversaryCheckRewardWidget.prefab",
+		type = 0
+	},
+	SparkScoutWeaponListWidget = {
+		id = "SparkScoutWeaponListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/SparkScoutWeaponListWidget.prefab",
+		type = 0
+	},
+	VipEntrance = {
+		id = "VipEntrance",
+		path = "Assets/FW/Prefabs/UI/widget/VipEntrance.prefab",
+		type = 0
+	},
+	BPRewardWidget_ArkRebuild = {
+		id = "BPRewardWidget_ArkRebuild",
+		path = "Assets/FW/Prefabs/UI/widget/BPRewardWidget_ArkRebuild.prefab",
+		type = 0
+	},
+	UnionMemberApplyWidget = {
+		id = "UnionMemberApplyWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionMemberApplyWidget.prefab",
+		type = 0
+	},
+	UnionFlagWidget = {
+		id = "UnionFlagWidget",
+		path = "Assets/FW/Prefabs/UI/widget/UnionFlagWidget.prefab",
+		type = 0
+	},
+	RangerEquipWidget = {
+		id = "RangerEquipWidget",
+		path = "Assets/FW/Prefabs/UI/widget/RangerEquipWidget.prefab",
+		type = 0
+	},
+	NotificationListWidget = {
+		id = "NotificationListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/NotificationListWidget.prefab",
+		type = 0
+	},
+	ExchangeGroupWidget = {
+		id = "ExchangeGroupWidget",
+		path = "Assets/FW/Prefabs/UI/widget/ExchangeGroupWidget.prefab",
+		type = 0
+	},
+	AvatarMedalEditWidget = {
+		id = "AvatarMedalEditWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AvatarMedalEditWidget.prefab",
+		type = 0
+	},
+	AnniversarySelectRewardWidget = {
+		id = "AnniversarySelectRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/AnniversarySelectRewardWidget.prefab",
+		type = 0
+	},
+	TreasureHuntingMissionRewardWidget = {
+		id = "TreasureHuntingMissionRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/TreasureHuntingMissionRewardWidget.prefab",
+		type = 0
+	},
+	FAQListWidget = {
+		id = "FAQListWidget",
+		path = "Assets/FW/Prefabs/UI/widget/FAQListWidget.prefab",
+		type = 0
+	},
+	MissionCellWidget = {
+		id = "MissionCellWidget",
+		path = "Assets/FW/Prefabs/UI/widget/MissionCellWidget.prefab",
+		type = 0
+	},
+	DrawExtraRewardWidget = {
+		id = "DrawExtraRewardWidget",
+		path = "Assets/FW/Prefabs/UI/widget/DrawExtraRewardWidget.prefab",
+		type = 0
+	},
+	SkinSkillIcon = {
+		id = "SkinSkillIcon",
+		path = "Assets/FW/Prefabs/UI/widget/SkinSkillIcon.prefab",
+		type = 0
+	},
+	RangerDropWeightOverviewPanel = {
+		id = "RangerDropWeightOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerDropWeightOverviewPanel.prefab",
+		type = 2
+	},
+	RangerEquipReplacePanel = {
+		id = "RangerEquipReplacePanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEquipReplacePanel.prefab",
+		type = 2
+	},
+	MissionGiftPanel = {
+		id = "MissionGiftPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MissionGiftPanel.prefab",
+		type = 2
+	},
+	TaskPanel = {
+		id = "TaskPanel",
+		path = "Assets/FW/Prefabs/UI/modal/TaskPanel.prefab",
+		type = 2
+	},
+	TaskInfoPanel = {
+		id = "TaskInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/TaskInfoPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelBlue = {
+		id = "CrossScreenPanelBlue",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelBlue.prefab",
+		type = 2
+	},
+	RangerEggDropInfoPanel = {
+		id = "RangerEggDropInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEggDropInfoPanel.prefab",
+		type = 2
+	},
+	ChipRareOverviewPanel = {
+		id = "ChipRareOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipRareOverviewPanel.prefab",
+		type = 2
+	},
+	RangerEquipFilterPanel = {
+		id = "RangerEquipFilterPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEquipFilterPanel.prefab",
+		type = 2
+	},
+	RangerUpgradePanel = {
+		id = "RangerUpgradePanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerUpgradePanel.prefab",
+		type = 2
+	},
+	LevelUpPanel = {
+		id = "LevelUpPanel",
+		path = "Assets/FW/Prefabs/UI/modal/LevelUpPanel.prefab",
+		type = 2
+	},
+	SparkScoutWinPanel = {
+		id = "SparkScoutWinPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutWinPanel.prefab",
+		type = 2
+	},
+	CoinPanel = {
+		id = "CoinPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CoinPanel.prefab",
+		type = 2
+	},
+	DomeRewardPanel = {
+		id = "DomeRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeRewardPanel.prefab",
+		type = 2
+	},
+	AnniversaryDigRulePanel = {
+		id = "AnniversaryDigRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryDigRulePanel.prefab",
+		type = 2
+	},
+	SparkScoutChipEquipPanel = {
+		id = "SparkScoutChipEquipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutChipEquipPanel.prefab",
+		type = 2
+	},
+	EquipInfoPanel = {
+		id = "EquipInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/EquipInfoPanel.prefab",
+		type = 2
+	},
+	CrisisZoneMilestonePanel = {
+		id = "CrisisZoneMilestonePanel",
+		path = "Assets/FW/Prefabs/UI/modal/CrisisZoneMilestonePanel.prefab",
+		type = 2
+	},
+	DomeSelectSkillPanel = {
+		id = "DomeSelectSkillPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeSelectSkillPanel.prefab",
+		type = 2
+	},
+	RangerInfoPanel = {
+		id = "RangerInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerInfoPanel.prefab",
+		type = 2
+	},
+	SparkScoutChipDropWeightOverviewPanel = {
+		id = "SparkScoutChipDropWeightOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutChipDropWeightOverviewPanel.prefab",
+		type = 2
+	},
+	ItemSelectPanel = {
+		id = "ItemSelectPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ItemSelectPanel.prefab",
+		type = 2
+	},
+	PromptsPanel = {
+		id = "PromptsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/PromptsPanel.prefab",
+		type = 2
+	},
+	SparkScoutOfflineRewardPanel = {
+		id = "SparkScoutOfflineRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutOfflineRewardPanel.prefab",
+		type = 2
+	},
+	EquipDecomposeTipPanel = {
+		id = "EquipDecomposeTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/EquipDecomposeTipPanel.prefab",
+		type = 2
+	},
+	AccountInitializationConfirmPanel = {
+		id = "AccountInitializationConfirmPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AccountInitializationConfirmPanel.prefab",
+		type = 2
+	},
+	NewbieGiftPanel = {
+		id = "NewbieGiftPanel",
+		path = "Assets/FW/Prefabs/UI/modal/NewbieGiftPanel.prefab",
+		type = 2
+	},
+	ArkRebuildDescPanel = {
+		id = "ArkRebuildDescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildDescPanel.prefab",
+		type = 2
+	},
+	SparkScoutWeaponCardsPanel = {
+		id = "SparkScoutWeaponCardsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutWeaponCardsPanel.prefab",
+		type = 2
+	},
+	ChipImprovePanel = {
+		id = "ChipImprovePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipImprovePanel.prefab",
+		type = 2
+	},
+	ActivityMonopolyMilestonePanel = {
+		id = "ActivityMonopolyMilestonePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityMonopolyMilestonePanel.prefab",
+		type = 2
+	},
+	WeaponSelectSkillPanelSub = {
+		id = "WeaponSelectSkillPanelSub",
+		path = "Assets/FW/Prefabs/UI/modal/WeaponSelectSkillPanelSub.prefab",
+		type = 2
+	},
+	InputBoxPanel = {
+		id = "InputBoxPanel",
+		path = "Assets/FW/Prefabs/UI/modal/InputBoxPanel.prefab",
+		type = 2
+	},
+	ScorePanel = {
+		id = "ScorePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ScorePanel.prefab",
+		type = 2
+	},
+	WeaponTreePanel = {
+		id = "WeaponTreePanel",
+		path = "Assets/FW/Prefabs/UI/modal/WeaponTreePanel.prefab",
+		type = 2
+	},
+	RogueUnlockPanel = {
+		id = "RogueUnlockPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RogueUnlockPanel.prefab",
+		type = 2
+	},
+	AnniversaryMissRewardPanel = {
+		id = "AnniversaryMissRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryMissRewardPanel.prefab",
+		type = 2
+	},
+	UnionInfoPanel = {
+		id = "UnionInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionInfoPanel.prefab",
+		type = 2
+	},
+	ActivityLotteryHistroyPanel = {
+		id = "ActivityLotteryHistroyPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityLotteryHistroyPanel.prefab",
+		type = 2
+	},
+	ModuleDetailPanel = {
+		id = "ModuleDetailPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ModuleDetailPanel.prefab",
+		type = 2
+	},
+	MissionGuideTipPanel = {
+		id = "MissionGuideTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MissionGuideTipPanel.prefab",
+		type = 2
+	},
+	ResearchOverviewPanel = {
+		id = "ResearchOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ResearchOverviewPanel.prefab",
+		type = 2
+	},
+	AnniversaryLotteryPropPanel = {
+		id = "AnniversaryLotteryPropPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryLotteryPropPanel.prefab",
+		type = 2
+	},
+	ArkRebuildLoadoutPanel = {
+		id = "ArkRebuildLoadoutPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildLoadoutPanel.prefab",
+		type = 2
+	},
+	RangerEggPanel = {
+		id = "RangerEggPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEggPanel.prefab",
+		type = 2
+	},
+	DomeScoreRulePanel = {
+		id = "DomeScoreRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeScoreRulePanel.prefab",
+		type = 2
+	},
+	ResearchTipsPanel = {
+		id = "ResearchTipsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ResearchTipsPanel.prefab",
+		type = 2
+	},
+	OtherInfoPanel = {
+		id = "OtherInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/OtherInfoPanel.prefab",
+		type = 2
+	},
+	AccountLinkTipsPanel = {
+		id = "AccountLinkTipsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AccountLinkTipsPanel.prefab",
+		type = 2
+	},
+	NotificationPanel = {
+		id = "NotificationPanel",
+		path = "Assets/FW/Prefabs/UI/modal/NotificationPanel.prefab",
+		type = 2
+	},
+	ActivityMonopolySpinPanel = {
+		id = "ActivityMonopolySpinPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityMonopolySpinPanel.prefab",
+		type = 2
+	},
+	DomeGradeChangePanel = {
+		id = "DomeGradeChangePanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeGradeChangePanel.prefab",
+		type = 2
+	},
+	ArkRebuildImproveATKPanel = {
+		id = "ArkRebuildImproveATKPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildImproveATKPanel.prefab",
+		type = 2
+	},
+	SkinStatPanel = {
+		id = "SkinStatPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SkinStatPanel.prefab",
+		type = 2
+	},
+	EmailContactPanel = {
+		id = "EmailContactPanel",
+		path = "Assets/FW/Prefabs/UI/modal/EmailContactPanel.prefab",
+		type = 2
+	},
+	DomeSelectPanel = {
+		id = "DomeSelectPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeSelectPanel.prefab",
+		type = 2
+	},
+	ChipFilterPanel = {
+		id = "ChipFilterPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipFilterPanel.prefab",
+		type = 2
+	},
+	RangerEggOddsPanel = {
+		id = "RangerEggOddsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEggOddsPanel.prefab",
+		type = 2
+	},
+	DrawExtraRewardsPanel = {
+		id = "DrawExtraRewardsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DrawExtraRewardsPanel.prefab",
+		type = 2
+	},
+	UnionLogPanel = {
+		id = "UnionLogPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionLogPanel.prefab",
+		type = 2
+	},
+	CrisisZoneRankPanel = {
+		id = "CrisisZoneRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CrisisZoneRankPanel.prefab",
+		type = 2
+	},
+	chipSelectConfirmPanel = {
+		id = "chipSelectConfirmPanel",
+		path = "Assets/FW/Prefabs/UI/modal/chipSelectConfirmPanel.prefab",
+		type = 2
+	},
+	EditNamePanel = {
+		id = "EditNamePanel",
+		path = "Assets/FW/Prefabs/UI/modal/EditNamePanel.prefab",
+		type = 2
+	},
+	BattleUpgradeCombinationPanel = {
+		id = "BattleUpgradeCombinationPanel",
+		path = "Assets/FW/Prefabs/UI/modal/BattleUpgradeCombinationPanel.prefab",
+		type = 2
+	},
+	RangerBaseTipPanel = {
+		id = "RangerBaseTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerBaseTipPanel.prefab",
+		type = 2
+	},
+	RangerMissionDescPanel = {
+		id = "RangerMissionDescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerMissionDescPanel.prefab",
+		type = 2
+	},
+	DomeSelectSkillPanelSub = {
+		id = "DomeSelectSkillPanelSub",
+		path = "Assets/FW/Prefabs/UI/modal/DomeSelectSkillPanelSub.prefab",
+		type = 2
+	},
+	ChipAttributePanel = {
+		id = "ChipAttributePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipAttributePanel.prefab",
+		type = 2
+	},
+	ActivityPackGroupAnniversaryPanel = {
+		id = "ActivityPackGroupAnniversaryPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityPackGroupAnniversaryPanel.prefab",
+		type = 2
+	},
+	SparkScoutCardPreviewPanel = {
+		id = "SparkScoutCardPreviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutCardPreviewPanel.prefab",
+		type = 2
+	},
+	SparkScoutRankPanel = {
+		id = "SparkScoutRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutRankPanel.prefab",
+		type = 2
+	},
+	Activity2DescPanel = {
+		id = "Activity2DescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/Activity2DescPanel.prefab",
+		type = 2
+	},
+	ChipViewPanel = {
+		id = "ChipViewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipViewPanel.prefab",
+		type = 2
+	},
+	Activity1ExchangePanel = {
+		id = "Activity1ExchangePanel",
+		path = "Assets/FW/Prefabs/UI/modal/Activity1ExchangePanel.prefab",
+		type = 2
+	},
+	RecruitmentCenterPanel = {
+		id = "RecruitmentCenterPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RecruitmentCenterPanel.prefab",
+		type = 2
+	},
+	ArkRebuildOfflineRewardPanel = {
+		id = "ArkRebuildOfflineRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildOfflineRewardPanel.prefab",
+		type = 2
+	},
+	DomeHpPanel = {
+		id = "DomeHpPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeHpPanel.prefab",
+		type = 2
+	},
+	BattleNewStagePanel = {
+		id = "BattleNewStagePanel",
+		path = "Assets/FW/Prefabs/UI/modal/BattleNewStagePanel.prefab",
+		type = 2
+	},
+	MailDetailPanel = {
+		id = "MailDetailPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MailDetailPanel.prefab",
+		type = 2
+	},
+	ChipWashPanel = {
+		id = "ChipWashPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipWashPanel.prefab",
+		type = 2
+	},
+	BattleSkillDmgRecordPanel = {
+		id = "BattleSkillDmgRecordPanel",
+		path = "Assets/FW/Prefabs/UI/modal/BattleSkillDmgRecordPanel.prefab",
+		type = 2
+	},
+	SystemUnlockPanel = {
+		id = "SystemUnlockPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SystemUnlockPanel.prefab",
+		type = 2
+	},
+	SparkScoutQuickEditPanel = {
+		id = "SparkScoutQuickEditPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutQuickEditPanel.prefab",
+		type = 2
+	},
+	SaveDataChoosePanel = {
+		id = "SaveDataChoosePanel",
+		path = "Assets/FW/Prefabs/UI/modal/SaveDataChoosePanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelArkRebuild = {
+		id = "CrossScreenPanelArkRebuild",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelArkRebuild.prefab",
+		type = 2
+	},
+	ConfirmPanel = {
+		id = "ConfirmPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ConfirmPanel.prefab",
+		type = 2
+	},
+	MonopolyRankRewardPanel = {
+		id = "MonopolyRankRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MonopolyRankRewardPanel.prefab",
+		type = 2
+	},
+	EquipFilterPanel = {
+		id = "EquipFilterPanel",
+		path = "Assets/FW/Prefabs/UI/modal/EquipFilterPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelRed = {
+		id = "CrossScreenPanelRed",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelRed.prefab",
+		type = 2
+	},
+	AutoMergePanel = {
+		id = "AutoMergePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AutoMergePanel.prefab",
+		type = 2
+	},
+	ArkRebuildSelectPanel = {
+		id = "ArkRebuildSelectPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildSelectPanel.prefab",
+		type = 2
+	},
+	DomeRankPanel = {
+		id = "DomeRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeRankPanel.prefab",
+		type = 2
+	},
+	AnniversaryThanksRewardPanel = {
+		id = "AnniversaryThanksRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryThanksRewardPanel.prefab",
+		type = 2
+	},
+	SparkScoutImproveATKPanel = {
+		id = "SparkScoutImproveATKPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutImproveATKPanel.prefab",
+		type = 2
+	},
+	ArkRebuildModuleListPanel = {
+		id = "ArkRebuildModuleListPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildModuleListPanel.prefab",
+		type = 2
+	},
+	RecruitmentBattlePanel = {
+		id = "RecruitmentBattlePanel",
+		path = "Assets/FW/Prefabs/UI/modal/RecruitmentBattlePanel.prefab",
+		type = 2
+	},
+	RemoveAdPanel = {
+		id = "RemoveAdPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RemoveAdPanel.prefab",
+		type = 2
+	},
+	AvatarChangePanel = {
+		id = "AvatarChangePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AvatarChangePanel.prefab",
+		type = 2
+	},
+	UnionTransferPanel = {
+		id = "UnionTransferPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionTransferPanel.prefab",
+		type = 2
+	},
+	MessageBoxPanel = {
+		id = "MessageBoxPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MessageBoxPanel.prefab",
+		type = 2
+	},
+	ItemSelectConfirmPanel = {
+		id = "ItemSelectConfirmPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ItemSelectConfirmPanel.prefab",
+		type = 2
+	},
+	BoxOddsPanel = {
+		id = "BoxOddsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/BoxOddsPanel.prefab",
+		type = 2
+	},
+	DomeRulePanel = {
+		id = "DomeRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeRulePanel.prefab",
+		type = 2
+	},
+	ActivityDescPanel = {
+		id = "ActivityDescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityDescPanel.prefab",
+		type = 2
+	},
+	SparkScoutDuelPanel = {
+		id = "SparkScoutDuelPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutDuelPanel.prefab",
+		type = 2
+	},
+	ActivityMonopolyDescPanel = {
+		id = "ActivityMonopolyDescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityMonopolyDescPanel.prefab",
+		type = 2
+	},
+	UnionFilterPanel = {
+		id = "UnionFilterPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionFilterPanel.prefab",
+		type = 2
+	},
+	RangerUpStarPanel = {
+		id = "RangerUpStarPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerUpStarPanel.prefab",
+		type = 2
+	},
+	RedeemPanel = {
+		id = "RedeemPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RedeemPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanel = {
+		id = "CrossScreenPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanel.prefab",
+		type = 2
+	},
+	CrisisZoneBagPanel = {
+		id = "CrisisZoneBagPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CrisisZoneBagPanel.prefab",
+		type = 2
+	},
+	SparkScoutChangeGradePanel = {
+		id = "SparkScoutChangeGradePanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutChangeGradePanel.prefab",
+		type = 2
+	},
+	UnionManagePanel = {
+		id = "UnionManagePanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionManagePanel.prefab",
+		type = 2
+	},
+	ExchangeResourcePanel = {
+		id = "ExchangeResourcePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ExchangeResourcePanel.prefab",
+		type = 2
+	},
+	SpinePreviewPanel = {
+		id = "SpinePreviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SpinePreviewPanel.prefab",
+		type = 2
+	},
+	WeaponUnlockPanel = {
+		id = "WeaponUnlockPanel",
+		path = "Assets/FW/Prefabs/UI/modal/WeaponUnlockPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelGreen = {
+		id = "CrossScreenPanelGreen",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelGreen.prefab",
+		type = 2
+	},
+	ArkRebuildCardDropWeightOverviewPanel = {
+		id = "ArkRebuildCardDropWeightOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildCardDropWeightOverviewPanel.prefab",
+		type = 2
+	},
+	AnniversaryItemChangePanel = {
+		id = "AnniversaryItemChangePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryItemChangePanel.prefab",
+		type = 2
+	},
+	MissionInfoPanel = {
+		id = "MissionInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MissionInfoPanel.prefab",
+		type = 2
+	},
+	BPBuyLevelPanel = {
+		id = "BPBuyLevelPanel",
+		path = "Assets/FW/Prefabs/UI/modal/BPBuyLevelPanel.prefab",
+		type = 2
+	},
+	SkinInfoPanel = {
+		id = "SkinInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SkinInfoPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelPurple = {
+		id = "CrossScreenPanelPurple",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelPurple.prefab",
+		type = 2
+	},
+	DomeCardsPopPanel = {
+		id = "DomeCardsPopPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeCardsPopPanel.prefab",
+		type = 2
+	},
+	SkinRefitPanel = {
+		id = "SkinRefitPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SkinRefitPanel.prefab",
+		type = 2
+	},
+	AnniversaryTaskPanel = {
+		id = "AnniversaryTaskPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryTaskPanel.prefab",
+		type = 2
+	},
+	ChipDropWeightOverviewPanel = {
+		id = "ChipDropWeightOverviewPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipDropWeightOverviewPanel.prefab",
+		type = 2
+	},
+	DomeDifficultyPanel = {
+		id = "DomeDifficultyPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeDifficultyPanel.prefab",
+		type = 2
+	},
+	SparkScoutVSPanel = {
+		id = "SparkScoutVSPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutVSPanel.prefab",
+		type = 2
+	},
+	MonthlyPassPanel = {
+		id = "MonthlyPassPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MonthlyPassPanel.prefab",
+		type = 2
+	},
+	OfflineRewardPanel = {
+		id = "OfflineRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/OfflineRewardPanel.prefab",
+		type = 2
+	},
+	ProfileSettingPanel = {
+		id = "ProfileSettingPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ProfileSettingPanel.prefab",
+		type = 2
+	},
+	AnniversaryRechargePanel = {
+		id = "AnniversaryRechargePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryRechargePanel.prefab",
+		type = 2
+	},
+	UnionRulePanel = {
+		id = "UnionRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionRulePanel.prefab",
+		type = 2
+	},
+	SparkScoutRulePanel = {
+		id = "SparkScoutRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutRulePanel.prefab",
+		type = 2
+	},
+	DomeCardsPanel = {
+		id = "DomeCardsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeCardsPanel.prefab",
+		type = 2
+	},
+	DeleteAccountPanel = {
+		id = "DeleteAccountPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DeleteAccountPanel.prefab",
+		type = 2
+	},
+	RefineResultPanel = {
+		id = "RefineResultPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RefineResultPanel.prefab",
+		type = 2
+	},
+	RangerSkillRulePanel = {
+		id = "RangerSkillRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerSkillRulePanel.prefab",
+		type = 2
+	},
+	AtkAttributePanel = {
+		id = "AtkAttributePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AtkAttributePanel.prefab",
+		type = 2
+	},
+	SparkScoutBoxDropInfoPanel = {
+		id = "SparkScoutBoxDropInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutBoxDropInfoPanel.prefab",
+		type = 2
+	},
+	MoreRewardPanel = {
+		id = "MoreRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MoreRewardPanel.prefab",
+		type = 2
+	},
+	RangerExclusiveSkillPanel = {
+		id = "RangerExclusiveSkillPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerExclusiveSkillPanel.prefab",
+		type = 2
+	},
+	AccountUpgradePanel = {
+		id = "AccountUpgradePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AccountUpgradePanel.prefab",
+		type = 2
+	},
+	RightCardPanel = {
+		id = "RightCardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RightCardPanel.prefab",
+		type = 2
+	},
+	CrisisZoneRulePanel = {
+		id = "CrisisZoneRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/CrisisZoneRulePanel.prefab",
+		type = 2
+	},
+	MissRewardPanel = {
+		id = "MissRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MissRewardPanel.prefab",
+		type = 2
+	},
+	RangerSkillTipPanel = {
+		id = "RangerSkillTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerSkillTipPanel.prefab",
+		type = 2
+	},
+	ArkRebuildPopPanel = {
+		id = "ArkRebuildPopPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildPopPanel.prefab",
+		type = 2
+	},
+	FAQPanel = {
+		id = "FAQPanel",
+		path = "Assets/FW/Prefabs/UI/modal/FAQPanel.prefab",
+		type = 2
+	},
+	UnionFlagEditPanel = {
+		id = "UnionFlagEditPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionFlagEditPanel.prefab",
+		type = 2
+	},
+	RangerStatPanel = {
+		id = "RangerStatPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerStatPanel.prefab",
+		type = 2
+	},
+	CrossScreenPanelSparkScout = {
+		id = "CrossScreenPanelSparkScout",
+		path = "Assets/FW/Prefabs/UI/modal/CrossScreenPanelSparkScout.prefab",
+		type = 2
+	},
+	ChangeLanguagePanel = {
+		id = "ChangeLanguagePanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChangeLanguagePanel.prefab",
+		type = 2
+	},
+	SparkScoutWeaponDetailPanel = {
+		id = "SparkScoutWeaponDetailPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutWeaponDetailPanel.prefab",
+		type = 2
+	},
+	AccountInitializationLinkTipPanel = {
+		id = "AccountInitializationLinkTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AccountInitializationLinkTipPanel.prefab",
+		type = 2
+	},
+	ActivityArkLotteryDescPanel = {
+		id = "ActivityArkLotteryDescPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityArkLotteryDescPanel.prefab",
+		type = 2
+	},
+	CommonEditPanel = {
+		id = "CommonEditPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CommonEditPanel.prefab",
+		type = 2
+	},
+	ArkRebuildDropInfoPanel = {
+		id = "ArkRebuildDropInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildDropInfoPanel.prefab",
+		type = 2
+	},
+	MonopolyRankPanel = {
+		id = "MonopolyRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/MonopolyRankPanel.prefab",
+		type = 2
+	},
+	EquipReplacePanel = {
+		id = "EquipReplacePanel",
+		path = "Assets/FW/Prefabs/UI/modal/EquipReplacePanel.prefab",
+		type = 2
+	},
+	UnionDescEditPanel = {
+		id = "UnionDescEditPanel",
+		path = "Assets/FW/Prefabs/UI/modal/UnionDescEditPanel.prefab",
+		type = 2
+	},
+	OfflineStatPanel = {
+		id = "OfflineStatPanel",
+		path = "Assets/FW/Prefabs/UI/modal/OfflineStatPanel.prefab",
+		type = 2
+	},
+	ExchangeGroupPanel = {
+		id = "ExchangeGroupPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ExchangeGroupPanel.prefab",
+		type = 2
+	},
+	LotteryRewardPanel = {
+		id = "LotteryRewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/LotteryRewardPanel.prefab",
+		type = 2
+	},
+	PurchaseStaminaPanel = {
+		id = "PurchaseStaminaPanel",
+		path = "Assets/FW/Prefabs/UI/modal/PurchaseStaminaPanel.prefab",
+		type = 2
+	},
+	RandomBoxOpenPanel = {
+		id = "RandomBoxOpenPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RandomBoxOpenPanel.prefab",
+		type = 2
+	},
+	AnniversaryLotteryRulePanel = {
+		id = "AnniversaryLotteryRulePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryLotteryRulePanel.prefab",
+		type = 2
+	},
+	AnniversaryBindCodePanel = {
+		id = "AnniversaryBindCodePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryBindCodePanel.prefab",
+		type = 2
+	},
+	SparkScoutWeaponInfoPanel = {
+		id = "SparkScoutWeaponInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutWeaponInfoPanel.prefab",
+		type = 2
+	},
+	DiamondPanel = {
+		id = "DiamondPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DiamondPanel.prefab",
+		type = 2
+	},
+	SparkScoutChipAttributePanel = {
+		id = "SparkScoutChipAttributePanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutChipAttributePanel.prefab",
+		type = 2
+	},
+	VfxTestPanel = {
+		id = "VfxTestPanel",
+		path = "Assets/FW/Prefabs/UI/modal/VfxTestPanel.prefab",
+		type = 2
+	},
+	RewardPanel = {
+		id = "RewardPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RewardPanel.prefab",
+		type = 2
+	},
+	RangerMissionInfoPanel = {
+		id = "RangerMissionInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerMissionInfoPanel.prefab",
+		type = 2
+	},
+	ChipInfoPanel = {
+		id = "ChipInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ChipInfoPanel.prefab",
+		type = 2
+	},
+	SparkScoutGemEquipPanel = {
+		id = "SparkScoutGemEquipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkScoutGemEquipPanel.prefab",
+		type = 2
+	},
+	RangerEquipWashPanel = {
+		id = "RangerEquipWashPanel",
+		path = "Assets/FW/Prefabs/UI/modal/RangerEquipWashPanel.prefab",
+		type = 2
+	},
+	ItemInfoPanel = {
+		id = "ItemInfoPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ItemInfoPanel.prefab",
+		type = 2
+	},
+	LimitGiftPanel = {
+		id = "LimitGiftPanel",
+		path = "Assets/FW/Prefabs/UI/modal/LimitGiftPanel.prefab",
+		type = 2
+	},
+	GemEquipPanel = {
+		id = "GemEquipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/GemEquipPanel.prefab",
+		type = 2
+	},
+	WeaponSelectSkillPanel = {
+		id = "WeaponSelectSkillPanel",
+		path = "Assets/FW/Prefabs/UI/modal/WeaponSelectSkillPanel.prefab",
+		type = 2
+	},
+	PlayerReturnPopPanel = {
+		id = "PlayerReturnPopPanel",
+		path = "Assets/FW/Prefabs/UI/modal/PlayerReturnPopPanel.prefab",
+		type = 2
+	},
+	FirstChargePanel = {
+		id = "FirstChargePanel",
+		path = "Assets/FW/Prefabs/UI/modal/FirstChargePanel.prefab",
+		type = 2
+	},
+	AccountTipPanel = {
+		id = "AccountTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AccountTipPanel.prefab",
+		type = 2
+	},
+	CAPDAPanel = {
+		id = "CAPDAPanel",
+		path = "Assets/FW/Prefabs/UI/modal/CAPDAPanel.prefab",
+		type = 2
+	},
+	AnniversaryRechargeResetPanel = {
+		id = "AnniversaryRechargeResetPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryRechargeResetPanel.prefab",
+		type = 2
+	},
+	SkinUpgradePanel = {
+		id = "SkinUpgradePanel",
+		path = "Assets/FW/Prefabs/UI/modal/SkinUpgradePanel.prefab",
+		type = 2
+	},
+	DomeImproveTipPanel = {
+		id = "DomeImproveTipPanel",
+		path = "Assets/FW/Prefabs/UI/modal/DomeImproveTipPanel.prefab",
+		type = 2
+	},
+	ActivityPackGroupPanel = {
+		id = "ActivityPackGroupPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ActivityPackGroupPanel.prefab",
+		type = 2
+	},
+	SparkItemSelectPanel = {
+		id = "SparkItemSelectPanel",
+		path = "Assets/FW/Prefabs/UI/modal/SparkItemSelectPanel.prefab",
+		type = 2
+	},
+	RewardsBubblePanel = {
+		id = "RewardsBubblePanel",
+		path = "Assets/FW/Prefabs/UI/modal/RewardsBubblePanel.prefab",
+		type = 2
+	},
+	AnniversaryLotteryChoosePanel = {
+		id = "AnniversaryLotteryChoosePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryLotteryChoosePanel.prefab",
+		type = 2
+	},
+	AnniversaryStarTreasurePanel = {
+		id = "AnniversaryStarTreasurePanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryStarTreasurePanel.prefab",
+		type = 2
+	},
+	AnniversaryIntegralDetailsPanel = {
+		id = "AnniversaryIntegralDetailsPanel",
+		path = "Assets/FW/Prefabs/UI/modal/AnniversaryIntegralDetailsPanel.prefab",
+		type = 2
+	},
+	ArkRebuildRankPanel = {
+		id = "ArkRebuildRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/ArkRebuildRankPanel.prefab",
+		type = 2
+	},
+	StageRankPanel = {
+		id = "StageRankPanel",
+		path = "Assets/FW/Prefabs/UI/modal/StageRankPanel.prefab",
+		type = 2
+	},
+	ArkRebuildBattleCardsBrowsePanel = {
+		id = "ArkRebuildBattleCardsBrowsePanel",
+		path = "Assets/Battle/Prefabs/UI/full/ArkRebuildBattleCardsBrowsePanel.prefab",
+		type = 1
+	},
+	BattlePanelArk = {
+		id = "BattlePanelArk",
+		path = "Assets/Battle/Prefabs/UI/full/BattlePanelArk.prefab",
+		type = 1
+	},
+	BattlePanel = {
+		id = "BattlePanel",
+		path = "Assets/Battle/Prefabs/UI/full/BattlePanel.prefab",
+		type = 1
+	},
+	BattleCardsBrowsePanel = {
+		id = "BattleCardsBrowsePanel",
+		path = "Assets/Battle/Prefabs/UI/full/BattleCardsBrowsePanel.prefab",
+		type = 1
+	},
+	EnemyHp2 = {
+		id = "EnemyHp2",
+		path = "Assets/Battle/Prefabs/UI/widget/EnemyHp2.prefab",
+		type = 0
+	},
+	EnemyHp1 = {
+		id = "EnemyHp1",
+		path = "Assets/Battle/Prefabs/UI/widget/EnemyHp1.prefab",
+		type = 0
+	},
+	EnemyHp = {
+		id = "EnemyHp",
+		path = "Assets/Battle/Prefabs/UI/widget/EnemyHp.prefab",
+		type = 0
+	},
+	BattleRebornPanel = {
+		id = "BattleRebornPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleRebornPanel.prefab",
+		type = 2
+	},
+	BattleProfilerPanel = {
+		id = "BattleProfilerPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleProfilerPanel.prefab",
+		type = 2
+	},
+	BattleNewEnemyPanel = {
+		id = "BattleNewEnemyPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleNewEnemyPanel.prefab",
+		type = 2
+	},
+	BattleDeathDrawPanel = {
+		id = "BattleDeathDrawPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleDeathDrawPanel.prefab",
+		type = 2
+	},
+	BattleRebornUpgradePanel = {
+		id = "BattleRebornUpgradePanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleRebornUpgradePanel.prefab",
+		type = 2
+	},
+	BattleSettingPanel = {
+		id = "BattleSettingPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleSettingPanel.prefab",
+		type = 2
+	},
+	BattleDebugPanel = {
+		id = "BattleDebugPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleDebugPanel.prefab",
+		type = 2
+	},
+	BattleSettlementPanel = {
+		id = "BattleSettlementPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleSettlementPanel.prefab",
+		type = 2
+	},
+	BattleUpgradePanel = {
+		id = "BattleUpgradePanel",
+		path = "Assets/Battle/Prefabs/UI/modal/BattleUpgradePanel.prefab",
+		type = 2
+	},
+	WeekendMidBattleSettingPanel = {
+		id = "WeekendMidBattleSettingPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/WeekendMidBattleSettingPanel.prefab",
+		type = 2
+	},
+	WeekendMidBattleSettlementPanel = {
+		id = "WeekendMidBattleSettlementPanel",
+		path = "Assets/Battle/Prefabs/UI/modal/WeekendMidBattleSettlementPanel.prefab",
+		type = 2
+	}
+}
+_G.PrefabDefine = M
+
+return M

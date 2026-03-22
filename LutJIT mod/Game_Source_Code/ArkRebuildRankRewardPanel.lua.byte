@@ -1,0 +1,86 @@
+local M = class("ArkRebuildRankRewardPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("ArkRebuildRankWidget")
+local RankRewardWidget = requireLua("RankRewardWidget")
+M.args = {
+	tfMilestoneStars = Types.Transform,
+	tfMilestoneRewards = Types.Transform,
+	tfRankRewards = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	goVfxLottery = Types.GameObject,
+	btnClaim = Types.Button,
+	btnRank = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClaim, function ()
+		self:handleClaimBtn()
+	end)
+	self:setClick(self._btnRank, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildRankPanel)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init()
+	self:updateRankData()
+	self:updateRewards()
+end
+
+function M:updateRankData()
+	local rankData = P:genRankData()
+	rankData.rank = P._playerActivityArkRebuild:getFinalRank()
+	rankData.rankValue = P._playerActivityArkRebuild:getRankValue()
+	self._canOpenLottery = rankData.rank <= P._playerArkRebuildLottery:readLimitRankIdx()
+
+	self._goVfxLottery:SetActive(self._canOpenLottery)
+
+	if self._canOpenLottery then
+		Client.playSound("ui_Rebuild_canival_rankopen_1")
+	end
+
+	self._goSelfRankWidget:init(rankData)
+end
+
+function M:updateRewards()
+	local subType = P._playerActivityArkRebuild:getSubType()
+	local star, rewards1 = P._playerActivityArkRebuild:getMilestoneRewards(subType)
+
+	for i = 1, self._tfMilestoneStars.childCount do
+		self._tfMilestoneStars:GetChild(i - 1):GetChild(0):SetActive(i <= star)
+	end
+
+	V.loadRewardsWidget(self, self._tfMilestoneRewards, rewards1, false, false, 0.9)
+
+	local rankRewards, conf = P._playerActivityArkRebuild:getRankRewards()
+
+	V.loadRewardsWidget(self, self._tfRankRewards, rankRewards, false, false, 0.9)
+end
+
+function M:handleClaimBtn()
+	V.showRewardClaimPanel(P._playerActivityArkRebuild:tryClaimSettleRewards(), nil, function ()
+		if P._playerArkRebuildLottery:isOpening() then
+			local mainPanel = UIManager.getMainPanel()
+
+			mainPanel:changePage(3)
+			UIManager.openPanel(PrefabDefine.SystemUnlockPanel, {
+				fly = true,
+				nameSid = SID.TITLE_ARK_CARNIVAL,
+				descSid = SID.DESC_ARK_CARNIVAL_UNLOCK
+			})
+		end
+	end)
+	self:closePanel()
+end
+
+return M

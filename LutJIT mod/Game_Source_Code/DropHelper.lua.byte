@@ -1,0 +1,306 @@
+local M = {}
+_G.DropHelper = M
+local dropConfig = requireLua("drop")
+local dropGroups = {}
+local GEM_SUB_DROP = 1
+local EQUIP_SUB_DROP = 2
+local RANGER_SUB_DROP = 4
+local RANGER_PIECE_SUB_DROP = 5
+
+for id, v in pairs(dropConfig) do
+	local dropId = v._dropId
+
+	if dropGroups[dropId] == nil then
+		dropGroups[dropId] = {}
+	end
+
+	local group = dropGroups[dropId]
+	group[#group + 1] = v
+end
+
+for k, group in pairs(dropGroups) do
+	table.sort(group, function (a, b)
+		return a._id < b._id
+	end)
+end
+
+function M.readDropsById(dropId)
+	return dropGroups[dropId] or {}
+end
+
+function M.getByDropId(dropId, predicate, n)
+	local drops = dropGroups[dropId]
+
+	if dropId == 11000 then
+		local expectedLevels = P._playerArmory:getExpectedWeaponLevels()
+		local expectedWeights = {}
+
+		for k, v in pairs(expectedLevels) do
+			expectedWeights[D._weaponConfig[k]._shardId] = math.round(10000 / expectedLevels[k])
+		end
+
+		return M.dropOne(drops, predicate, n, nil, expectedWeights)
+	end
+
+	return M.dropOne(drops, predicate, n)
+end
+
+function M.dropOne(drops, predicate, n, weightName, expectedWeights)
+	local sum = 0
+	local weights_total = {}
+	n = n or 1
+
+	for i = 1, #drops do
+		local drop = drops[i]
+		local id = drop._itemId or drop._id
+
+		if not predicate or drops[i]._subDrop ~= nil or predicate(drop) then
+			if weightName then
+				sum = sum + drops[i][weightName]
+			else
+				sum = sum + drops[i]._weight
+			end
+
+			if expectedWeights then
+				sum = sum + (expectedWeights[drop._itemId] or 0)
+			end
+
+			weights_total[i] = sum
+		else
+			weights_total[i] = 0
+		end
+	end
+
+	local val = math.random(1, sum)
+	local index = -1
+
+	for i = 1, #weights_total do
+		if val <= weights_total[i] then
+			index = i
+
+			break
+		end
+	end
+
+	local drop = drops[index]
+
+	if not drop._subDrop then
+		if drop._itemId then
+			return drop._itemId, (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n, index
+		else
+			return drop._id, 1, index
+		end
+	elseif drop._subDrop == GEM_SUB_DROP then
+		local num = (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n
+
+		if num == 1 then
+			return M.dropOne(D._qualityGemConfig[drop._itemId], predicate)
+		else
+			local items = {}
+
+			for i = 1, num do
+				items[#items + 1] = {
+					M.dropOne(D._qualityGemConfig[drop._itemId], predicate)
+				}
+			end
+
+			return items
+		end
+	elseif drop._subDrop == EQUIP_SUB_DROP then
+		local num = (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n
+
+		if num == 1 then
+			return M.dropOne(D._qualityEquipConfig[drop._itemId])
+		else
+			local items = {}
+
+			for i = 1, num do
+				items[#items + 1] = {
+					M.dropOne(D._qualityEquipConfig[drop._itemId])
+				}
+			end
+
+			return items
+		end
+	elseif drop._subDrop == RANGER_SUB_DROP then
+		local num = (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n
+
+		if num == 1 then
+			local cfgs = D._rangerItemCfgByQuality[drop._itemId]
+			local retIdx = math.random(1, #cfgs)
+
+			return cfgs[retIdx], 1, 1
+		else
+			local items = {}
+			local cfgs = D._rangerItemCfgByQuality[drop._itemId]
+			local retIdx = math.random(1, #cfgs)
+			items[#items + 1] = {
+				cfgs[retIdx],
+				num
+			}
+
+			return items
+		end
+	elseif drop._subDrop == RANGER_PIECE_SUB_DROP then
+		local num = (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n
+
+		if num == 1 then
+			local cfgs = D._rangerPieceItemCfgByQuality[drop._itemId]
+			local retIdx = math.random(1, #cfgs)
+
+			return cfgs[retIdx], 1, 1
+		else
+			local items = {}
+			local cfgs = D._rangerPieceItemCfgByQuality[drop._itemId]
+			local retIdx = math.random(1, #cfgs)
+			items[#items + 1] = {
+				cfgs[retIdx],
+				num
+			}
+
+			return items
+		end
+	else
+		local num = (drop._minNum == drop._maxNum and drop._minNum or math.random(drop._minNum, drop._maxNum)) * n
+
+		if num == 1 then
+			return M.getByDropId(drop._itemId, predicate)
+		else
+			local items = {}
+
+			if num <= 50 then
+				for i = 1, num do
+					items[#items + 1] = {
+						M.getByDropId(drop._itemId, predicate)
+					}
+				end
+			else
+				local batchDropNum = math.floor(num / 50) * 50
+
+				for i = 1, batchDropNum, batchDropNum / 50 do
+					local id, num = M.getByDropId(drop._itemId, predicate)
+					items[#items + 1] = {
+						id,
+						num * batchDropNum / 50
+					}
+				end
+
+				for i = 1, num - batchDropNum do
+					items[#items + 1] = {
+						M.getByDropId(drop._itemId, predicate)
+					}
+				end
+			end
+
+			return items
+		end
+	end
+end
+
+function M.dropFromGroup(drops, predicate, showDebugLog)
+	local weights = {}
+
+	for i = 1, #drops do
+		if not predicate or predicate and predicate(drops[i]) then
+			weights[i] = drops[i]._weight
+		else
+			weights[i] = 0
+		end
+	end
+
+	if showDebugLog then
+		local idxs = {}
+
+		for i = 1, #drops do
+			idxs[i] = drops._id
+		end
+	end
+
+	local idx = M.randomIndexByWeights(weights, true)
+
+	if idx == -1 then
+		return nil
+	end
+
+	return drops[idx], idx
+end
+
+function M.dropFromGroupWithCustomWeight(drops, predicate, weightField, showDebugLog)
+	local weights = {}
+
+	for i = 1, #drops do
+		if not predicate or predicate and predicate(drops[i]) then
+			weights[i] = drops[i][weightField]
+		else
+			weights[i] = 0
+		end
+	end
+
+	if showDebugLog then
+		local idxs = {}
+
+		for i = 1, #drops do
+			idxs[i] = drops._id
+		end
+	end
+
+	local idx = M.randomIndexByWeights(weights, true)
+
+	if idx == -1 then
+		return nil
+	end
+
+	return drops[idx], idx
+end
+
+function M.randomIndexByWeights(weights, showDebugLog)
+	local sum = 0
+	local weights_total = {}
+
+	for i = 1, #weights do
+		sum = sum + weights[i]
+		weights_total[#weights_total + 1] = sum
+	end
+
+	local val = math.random(1, sum)
+	local index = -1
+
+	for i = 1, #weights_total do
+		if val <= weights_total[i] then
+			index = i
+
+			break
+		end
+	end
+
+	if showDebugLog then
+		-- Nothing
+	end
+
+	return index
+end
+
+function M.randomIndexByWeightSeed(weights, seed)
+	local sum = 0
+	local weights_total = {}
+
+	for i = 1, #weights do
+		sum = sum + weights[i]
+		weights_total[#weights_total + 1] = sum
+	end
+
+	local val = seed % sum + 1
+	local index = -1
+
+	for i = 1, #weights_total do
+		if val <= weights_total[i] then
+			index = i
+
+			break
+		end
+	end
+
+	return index
+end
+
+return M

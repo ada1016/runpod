@@ -1,0 +1,26 @@
+local M = class("ModuleDetailPanel", requireLua("BasePanel"))
+local ArkRebuildRogueCardInfoWidget = requireLua("ArkRebuildRogueCardInfoWidget")
+M.args = {
+	btnMask = Types.Button,
+	txtName = Types.TMP_Text,
+	goCard = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ArkRebuildRogueCardInfoWidget.noCreate(self._goCard)
+end
+
+function M:addClicks()
+end
+
+function M:init(id)
+	id = -id
+
+	self._goCard:updateUI(id)
+end
+
+return M

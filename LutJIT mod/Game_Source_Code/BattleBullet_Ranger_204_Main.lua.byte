@@ -1,0 +1,242 @@
+local M = class("BattleBullet_Ranger_204_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+local math = math
+local ROTATE_SPEED = 100
+local DISTANCE = 1.5
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._stage = 1
+	self._moveMode = 1
+	self._effect20401 = self._battleWeapon:getEffect(20401)
+
+	if self._effect20401 then
+		self._atkInterval = self._battleSkill:getProp(BattlePropEnum.AtkInterval, 1)
+	end
+
+	self._effect20402 = self._battleWeapon:getEffect(20402)
+	self._effect20403 = self._battleWeapon:getEffect(20403)
+	self._effect20403Param1 = self._battleSkill:getProp(BattlePropEnum.BattlePropParam1)
+	self._effect20403Param2 = self._battleSkill:getProp(BattlePropEnum.BattlePropParam2)
+	self._effect20403Param3 = self._battleSkill:getProp(BattlePropEnum.BattlePropParam3)
+	self._duration = 99999
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 1 or self._stage == 2 then
+		self:seekEnemyIf()
+
+		if self._lockEnemy == nil then
+			return
+		end
+	elseif self._stage == 3 then
+		self:seekEnemyIf()
+	end
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 1 then
+		self._stage = 2
+	elseif self._stage == 2 then
+		self:setDir(self._lockEnemy._position)
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 2 then
+		local dis = Vector2.Distance(self._position, self._lockEnemy._position)
+
+		if dis <= 0.05 then
+			self._stage = 3
+			self._moveMode = 3
+
+			if self._subBulletCreated == nil then
+				self._subBulletCreated = true
+
+				self:createSubBullet()
+			end
+		end
+	end
+
+	if self._subBulletCreated then
+		self._angle1 = self._angle1 + ROTATE_SPEED * dt
+
+		self:updateSubBullet(dt, self._angle1, self._bullet1)
+
+		self._angle2 = self._angle2 + ROTATE_SPEED * dt
+
+		self:updateSubBullet(dt, self._angle2, self._bullet2)
+
+		if self._effect20402 then
+			self._angle3 = self._angle3 + ROTATE_SPEED * dt
+
+			self:updateSubBullet(dt, self._angle3, self._bullet3)
+
+			self._angle4 = self._angle4 + ROTATE_SPEED * dt
+
+			self:updateSubBullet(dt, self._angle4, self._bullet4)
+		end
+	end
+
+	if self._stage == 3 and self._atkInterval then
+		self._atkInterval = self._atkInterval - dt
+
+		if self._atkInterval <= 0 then
+			self._atkInterval = self._battleSkill:getProp(BattlePropEnum.AtkInterval, 1)
+			local triggerSkill = self._battleWeapon:getSkill(20403)
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+end
+
+function M:createSubBullet()
+	local duration = self._battleSkill:getProp(BattlePropEnum.LiveDuration, 0)
+	duration = duration + duration * self._battleSkill:getProp(BattlePropEnum.LiveDurationAddPer, 0) / 100
+	self._duration = duration
+	local subSkill = self._battleWeapon:getSkill(20401)
+	local bullet1 = subSkill:createBullet()
+
+	self:setBullet1(bullet1)
+
+	local bullet2 = subSkill:createBullet()
+
+	self:setBullet2(bullet2)
+
+	if self._effect20402 then
+		local bullet3 = subSkill:createBullet()
+
+		self:setBullet3(bullet3)
+
+		local bullet4 = subSkill:createBullet()
+
+		self:setBullet4(bullet4)
+	end
+end
+
+function M:updateSubBullet(dt, angle, bullet)
+	local newRad = math.rad(angle)
+	local x = self._position.x + DISTANCE * math.sin(newRad)
+	local y = self._position.y + DISTANCE * math.cos(newRad)
+
+	bullet:setPos(x, y)
+
+	bullet._angle = angle + self._angle
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+end
+
+function M:setBullet1(b)
+	self._angle1 = 0
+	self._bullet1 = b
+	b._motionless = true
+end
+
+function M:setBullet2(b)
+	self._angle2 = 180
+	self._bullet2 = b
+	b._motionless = true
+end
+
+function M:setBullet3(b)
+	self._angle3 = 90
+	self._bullet3 = b
+	b._motionless = true
+end
+
+function M:setBullet4(b)
+	self._angle4 = -90
+	self._bullet4 = b
+	b._motionless = true
+end
+
+function M:seekEnemy(firstHunt)
+	local targetEnemy = nil
+
+	if firstHunt then
+		targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self._battleWeapon, self._battleWeapon._atkRange)
+	else
+		targetEnemy = self._battleSession:randomOneEnemyInRange(self._position, 3, nil, self._battleWeapon)
+
+		if targetEnemy == nil then
+			targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery3(self._battleWeapon)
+		end
+	end
+
+	if targetEnemy == nil then
+		targetEnemy = self._battleSession:randomOneEnemy(nil, self._battleWeapon)
+	end
+
+	self:lockEnemy(targetEnemy)
+
+	if targetEnemy == nil then
+		self:markToBeDestroyed()
+	end
+end
+
+function M:seekEnemyIf()
+	if self._lockEnemy == nil or self._lockEnemy._isToBeDestroyed then
+		self:seekEnemy()
+
+		self._moveMode = 1
+		self._stage = 2
+	end
+end
+
+function M:markToBeDestroyed()
+	if self._bullet1 then
+		self._bullet1:markToBeDestroyed()
+
+		self._bullet1 = nil
+	end
+
+	if self._bullet2 then
+		self._bullet2:markToBeDestroyed()
+
+		self._bullet2 = nil
+	end
+
+	if self._bullet3 then
+		self._bullet3:markToBeDestroyed()
+
+		self._bullet3 = nil
+	end
+
+	if self._bullet4 then
+		self._bullet4:markToBeDestroyed()
+
+		self._bullet4 = nil
+	end
+
+	self._stage = nil
+	self._subBulletCreated = nil
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

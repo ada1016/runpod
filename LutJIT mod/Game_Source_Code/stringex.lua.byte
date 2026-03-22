@@ -1,0 +1,384 @@
+local string = string
+local table = table
+local math = math
+local bit = bit
+local type = type
+local pairs = pairs
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+
+function string.formatnumbercomma(num)
+	if num < 1000 then
+		return num
+	end
+
+	local t = {}
+
+	for i = 1, 10 do
+		if num < 1000 then
+			table.insert(t, 1, num)
+
+			break
+		else
+			table.insert(t, 1, string.format("%03d", num % 1000))
+
+			num = math.floor(num / 1000)
+		end
+	end
+
+	return table.concat(t, ",")
+end
+
+function string.formatOrder(fmt, ...)
+	local args = {
+		...
+	}
+	local argc = #args
+	local tonumber = tonumber
+
+	local function func(k)
+		local index = tonumber(k)
+
+		if index >= 0 or index <= argc then
+			return tostring(args[index + 1])
+		else
+			return ""
+		end
+	end
+
+	return string.gsub(fmt, "{(%d)}", func)
+end
+
+function string.trim(str)
+	return string.gsub(str, "^%s*(.-)%s*$", "%1")
+end
+
+function string.trimAll(str)
+	return string.gsub(str, "%s*(.-)%s*", "%1")
+end
+
+function string.hasPrefix(str, prefix)
+	return str:find(prefix) == 1
+end
+
+function string.hasSuffix(str, suffix)
+	return suffix == "" or str:sub(-(#suffix)) == suffix
+end
+
+function string.utfstrlen(str)
+	local len = #str
+	local left = len
+	local cnt = 0
+	local arr = {
+		0,
+		192,
+		224,
+		240,
+		248,
+		252
+	}
+
+	while left ~= 0 do
+		local tmp = string.byte(str, -left)
+
+		if not tmp then
+			break
+		end
+
+		local i = #arr
+
+		while arr[i] do
+			if arr[i] <= tmp then
+				left = left - i
+
+				break
+			end
+
+			i = i - 1
+		end
+
+		cnt = cnt + 1
+	end
+
+	return cnt
+end
+
+function string.countCharacters(str)
+	local chinese_count = 0
+	local other_count = 0
+	local i = 1
+	local len = #str
+
+	while i <= len do
+		local byte = string.byte(str, i)
+
+		if byte >= 224 and byte <= 239 and len >= i + 2 then
+			local byte2 = string.byte(str, i + 1)
+			local byte3 = string.byte(str, i + 2)
+
+			if byte2 and byte3 and byte2 >= 128 and byte2 <= 191 and byte3 >= 128 and byte3 <= 191 then
+				chinese_count = chinese_count + 1
+				i = i + 3
+			else
+				other_count = other_count + 1
+				i = i + 1
+			end
+		else
+			other_count = other_count + 1
+			i = i + 1
+		end
+	end
+
+	return chinese_count, other_count
+end
+
+function string.truncateToMaxLength(str, max_length)
+	max_length = max_length or 8
+	local result = ""
+	local current_length = 0
+	local i = 1
+	local len = #str
+
+	while i <= len and current_length < max_length do
+		local byte = string.byte(str, i)
+		local char_len = 1
+		local char_weight = 1
+
+		if byte >= 224 and byte <= 239 and len >= i + 2 then
+			local byte2 = string.byte(str, i + 1)
+			local byte3 = string.byte(str, i + 2)
+
+			if byte2 and byte3 and byte2 >= 128 and byte2 <= 191 and byte3 >= 128 and byte3 <= 191 then
+				char_len = 3
+				char_weight = 2
+			end
+		end
+
+		if max_length >= current_length + char_weight then
+			result = result .. string.sub(str, i, i + char_len - 1)
+			current_length = current_length + char_weight
+			i = i + char_len
+		else
+			break
+		end
+	end
+
+	return result
+end
+
+function string.getWeightedLength(str)
+	local total_length = 0
+	local i = 1
+	local len = #str
+
+	while i <= len do
+		local byte = string.byte(str, i)
+
+		if byte >= 224 and byte <= 239 and len >= i + 2 then
+			local byte2 = string.byte(str, i + 1)
+			local byte3 = string.byte(str, i + 2)
+
+			if byte2 and byte3 and byte2 >= 128 and byte2 <= 191 and byte3 >= 128 and byte3 <= 191 then
+				total_length = total_length + 2
+				i = i + 3
+			else
+				total_length = total_length + 1
+				i = i + 1
+			end
+		else
+			total_length = total_length + 1
+			i = i + 1
+		end
+	end
+
+	return total_length
+end
+
+function string.checkInputLength(str, max_length)
+	max_length = max_length or 8
+	local weighted_length = string.getWeightedLength(str)
+	local is_valid = weighted_length <= max_length
+
+	return is_valid, weighted_length
+end
+
+function string.hasNoSpecialChars(str)
+	if str == nil or str == "" then
+		return false
+	end
+
+	local forbidden_char = string.match(str, "[^A-Za-z0-9_\\x80-\\xff]")
+
+	if forbidden_char then
+		return false
+	end
+
+	return true
+end
+
+function string.toArray(str)
+	local t = {}
+
+	for i = 1, #str do
+		local curByte = string.byte(str, i)
+		local step = 0
+
+		if curByte > 0 and curByte <= 127 then
+			step = 1
+		elseif curByte >= 192 and curByte < 223 then
+			step = 2
+		elseif curByte >= 224 and curByte < 239 then
+			step = 3
+		elseif curByte >= 240 and curByte <= 247 then
+			step = 4
+		end
+
+		local newStr = string.sub(str, i, i + step - 1)
+
+		if newStr ~= "" then
+			t[#t + 1] = newStr
+		end
+
+		i = i + step - 1
+	end
+
+	return t
+end
+
+function string.toUnicode(convertStr)
+	if type(convertStr) ~= "string" then
+		return convertStr
+	end
+
+	local resultStr = {}
+	local i = 1
+	local num1 = string.byte(convertStr, i)
+
+	while num1 ~= nil do
+		local tempVar1, tempVar2 = nil
+
+		if num1 >= 0 and num1 <= 127 then
+			tempVar1 = num1
+			tempVar2 = 0
+		elseif bit.band(num1, 224) == 192 then
+			local t1 = 0
+			local t2 = 0
+			t1 = bit.band(num1, bit.rshift(255, 3))
+			i = i + 1
+			num1 = string.byte(convertStr, i)
+			t2 = bit.band(num1, bit.rshift(255, 2))
+			tempVar1 = bit.bor(t2, bit.lshift(bit.band(t1, bit.rshift(255, 6)), 6))
+			tempVar2 = bit.rshift(t1, 2)
+		elseif bit.band(num1, 240) == 224 then
+			local t1 = 0
+			local t2 = 0
+			local t3 = 0
+			t1 = bit.band(num1, bit.rshift(255, 3))
+			i = i + 1
+			num1 = string.byte(convertStr, i)
+			t2 = bit.band(num1, bit.rshift(255, 2))
+			i = i + 1
+			num1 = string.byte(convertStr, i)
+			t3 = bit.band(num1, bit.rshift(255, 2))
+			tempVar1 = bit.bor(bit.lshift(bit.band(t2, bit.rshift(255, 6)), 6), t3)
+			tempVar2 = bit.bor(bit.lshift(t1, 4), bit.rshift(t2, 2))
+		elseif bit.band(num1, 248) == 240 then
+			i = i + 3
+		elseif bit.band(num1, 252) == 248 then
+			i = i + 4
+		elseif bit.band(num1, 254) == 252 then
+			i = i + 5
+		end
+
+		if tempVar1 ~= nil then
+			resultStr[#resultStr + 1] = bit.lshift(tempVar2, 8) + tempVar1
+		end
+
+		i = i + 1
+		num1 = string.byte(convertStr, i)
+	end
+
+	return resultStr
+end
+
+function string.subUTF8String(str, start, len)
+	local firstResult = ""
+	local strResult = ""
+	local maxLen = string.len(str)
+	start = start - 1
+	local preSite = 1
+
+	if start > 0 then
+		for i = 1, maxLen do
+			local s_dropping = string.byte(str, i)
+
+			if not s_dropping then
+				local s_str = string.sub(str, preSite, i - 1)
+				preSite = i + 1
+
+				break
+			end
+
+			if s_dropping < 128 or i + 1 - preSite == 3 then
+				local s_str = string.sub(str, preSite, i)
+				preSite = i + 1
+				firstResult = firstResult .. s_str
+				local curLen = string.utfstrlen(firstResult)
+
+				if curLen == start then
+					break
+				end
+			end
+		end
+	end
+
+	preSite = string.len(firstResult) + 1
+	local startC = preSite
+
+	for i = startC, maxLen do
+		local s_dropping = string.byte(str, i)
+
+		if not s_dropping then
+			local s_str = string.sub(str, preSite, i - 1)
+			preSite = i
+			strResult = strResult .. s_str
+
+			return strResult
+		end
+
+		if s_dropping < 128 or i + 1 - preSite == 3 then
+			local s_str = string.sub(str, preSite, i)
+			preSite = i + 1
+			strResult = strResult .. s_str
+			local curLen = string.utfstrlen(strResult)
+
+			if curLen == len then
+				return strResult
+			end
+		end
+	end
+
+	return strResult
+end
+
+function string.transferredSpace(str)
+	local content = ""
+
+	for i = 1, string.len(str) do
+		local curByte = string.byte(str, i)
+
+		if curByte == 32 then
+			local nextByte = string.byte(str, i + 1)
+
+			if nextByte and nextByte > 127 then
+				content = content .. " "
+			else
+				content = content .. string.sub(str, i, i)
+			end
+		else
+			content = content .. string.sub(str, i, i)
+		end
+	end
+
+	return content
+end

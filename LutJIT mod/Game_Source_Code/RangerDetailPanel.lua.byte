@@ -1,0 +1,813 @@
+local M = class("RangerDetailPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	goDock = Types.GameObject,
+	txtEliteDamageProp = Types.TMP_Text,
+	goInheritAtkArea = Types.GameObject,
+	txtInheritAtk = Types.TMP_Text,
+	tfMainSkillContainer = Types.Transform,
+	btnEquip = Types.Button,
+	btnUpgrade = Types.Button,
+	btnUnlock = Types.Button,
+	txtEquip = Types.TMP_Text,
+	goCostArea = Types.GameObject,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	btnTabUpStar = Types.Button,
+	btnTabEquip = Types.Button,
+	animTabSwitch = Types.Animation,
+	txtRefineMat = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfRangerEquipContainer = Types.Transform,
+	goSlot1 = Types.GameObject,
+	goSlot2 = Types.GameObject,
+	goSlot3 = Types.GameObject,
+	goSlot4 = Types.GameObject,
+	btnPrev = Types.Button,
+	btnNext = Types.Button,
+	btnRefineMat = Types.Button,
+	btnFilter = Types.Button,
+	btnDecompose = Types.Button,
+	btnReplaceCover = Types.Button,
+	goTabArea = Types.GameObject,
+	goBottomArea = Types.GameObject,
+	btnAtkTip = Types.Button,
+	btnRangerEquipInfo = Types.Button
+}
+local ROW_CELL = 6
+local tabSelectWidth = 450
+local tabUnSelectWidth = 390
+local tabUnSelectedColor = "051524"
+local tabSelectedColor = "1A3143"
+local tabUnSelectTextColor = "295C78"
+local tabSelectTextColor = "6BBACC"
+local RangerEquipWidget = requireLua("RangerEquipWidget")
+local band = bit.band
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+local RangerAtkBubbleWidget = requireLua("RangerAtkBubbleWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goMainSkills = {}
+
+	for i = 1, self._tfMainSkillContainer.childCount do
+		self._goMainSkills[i] = self._tfMainSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goMainSkills[i])
+	end
+
+	self._goEquipSlots = {
+		self._goSlot1,
+		self._goSlot2,
+		self._goSlot3,
+		self._goSlot4
+	}
+
+	for i = 1, #self._goEquipSlots do
+		lc.prefabVarPeer(self._goEquipSlots[i])
+	end
+
+	self._imgTabs = {
+		self._btnTabUpStar.transform:GetComponent("Image"),
+		self._btnTabEquip.transform:GetComponent("Image")
+	}
+	self._chooseTabs = {
+		self._btnTabUpStar.transform:Find("ImgChoose"),
+		self._btnTabEquip.transform:Find("ImgChoose")
+	}
+	self._txtTabs = {
+		self._btnTabUpStar.transform:Find("Text"):GetComponent("TMP_Text"),
+		self._btnTabEquip.transform:Find("Text"):GetComponent("TMP_Text")
+	}
+
+	lc.prefabVarPeer(self._goDock)
+	SpineGraphicWidget.noCreate(self._goDock._goSpineWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnEquip, function ()
+		SimpleEvent.emit("ranger.doReplace", self._rangerId)
+		self:closePanel()
+	end)
+	self:setClick(self._btnUnlock, function ()
+		local ret, param = P._playerRanger:tryUpgradeRanger(self._rangerId)
+
+		if ret == ResultCode.OK then
+			self._star = self._star + 1
+
+			UIManager.openPanel(PrefabDefine.RangerUpgradePanel, self._rangerId)
+			self:updateUI()
+		else
+			V.showResultCode(ret, param)
+			self:updateDot()
+
+			return
+		end
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		UIManager.openPanel(PrefabDefine.RangerUpStarPanel, self._rangerId, function ()
+			self._star = self._star + 1
+
+			self:updateUI()
+			self:updateDot()
+		end)
+	end)
+	self:setClick(self._btnTabUpStar, function ()
+		self:changeTab(1)
+	end, "ui_Tap_page_1")
+	self:setClick(self._btnTabEquip, function ()
+		self:changeTab(2)
+	end, "ui_Tap_page_1")
+	self:setClick(self._btnNext, function ()
+		for i = 1, #self._rangerList do
+			if self._rangerList[i] == self._rangerId then
+				if i < #self._rangerList then
+					self._rangerId = self._rangerList[i + 1]
+
+					break
+				end
+
+				self._rangerId = self._rangerList[1]
+
+				break
+			end
+		end
+
+		self._star = P._playerRanger:getRangerLevel(self._rangerId)
+
+		self:initMainSkill()
+		self:updateUI()
+		self:updateRangerEquipData()
+	end)
+	self:setClick(self._btnPrev, function ()
+		for i = 1, #self._rangerList do
+			if self._rangerList[i] == self._rangerId then
+				if i > 1 then
+					self._rangerId = self._rangerList[i - 1]
+
+					break
+				end
+
+				self._rangerId = self._rangerList[#self._rangerList]
+
+				break
+			end
+		end
+
+		self._star = P._playerRanger:getRangerLevel(self._rangerId)
+		self._isInDock = P._playerRanger:getDockIndex(self._rangerId) ~= nil
+
+		self:initMainSkill()
+		self:updateUI()
+		self:updateRangerEquipData()
+	end)
+	self:setClick(self._btnDecompose, function ()
+		UIManager.openPanel(PrefabDefine.RangerEquipDecomposePanel, self._rangerId)
+	end)
+	self:setClick(self._btnFilter, function ()
+		UIManager.openPanel(PrefabDefine.RangerEquipFilterPanel, self._partQualityFilter, -1, function (value)
+			self._partQualityFilter = value
+
+			self:updateRangerEquipData()
+		end)
+	end)
+	self:setClickWithoutAction(self._btnReplaceCover, function ()
+		self._replacing = false
+
+		self._btnReplaceCover:SetActive(false)
+		self._goTabArea:SetActive(true)
+		self._goBottomArea:SetActive(true)
+
+		for i = 1, P._playerRanger:getUnlockedEquipSlot(self._rangerId) do
+			self._goEquipSlots[i]:GetComponent("Animation"):Stop()
+			self._goEquipSlots[i]:SetLocalRotation(0, 0, 0)
+		end
+	end)
+	self:setClick(self._btnAtkTip, function ()
+		if self._star > 0 then
+			if not self._goRangerAtkBubbleWidget then
+				self._goRangerAtkBubbleWidget = RangerAtkBubbleWidget.create(self.transform)
+
+				self._goRangerAtkBubbleWidget:initClick(self)
+			end
+
+			self._goRangerAtkBubbleWidget:SetActive(true)
+
+			local x, y, z = lc.getPosition(self._btnAtkTip.transform)
+
+			self._goRangerAtkBubbleWidget:init(self._rangerId)
+			lc.setPosition(self._goRangerAtkBubbleWidget, x, y - 180, z)
+		end
+	end)
+	self:setClick(self._btnRefineMat, function ()
+		V.showItemInfoPanel(D.ResType.ranger_equip_refine_mat, P._playerAsset:getAssetNum(D.ResType.ranger_equip_refine_mat))
+	end)
+	self:setClick(self._btnRangerEquipInfo, function ()
+		UIManager.openPanel(PrefabDefine.RangerExclusiveSkillPanel, self._rangerId)
+	end)
+end
+
+function M:addEvents()
+	self:on("ranger.equips.dirty", function ()
+		self._equipDirty = true
+	end)
+	self:on("ranger.equip.locked", function (lock)
+		local viewEquip = self:getViewEquip(self._viewEquipId)
+
+		if viewEquip then
+			viewEquip:setLock(lock)
+		end
+	end)
+end
+
+function M:init(id, rangerList, tab)
+	self._rangerId = id
+	self._rangerList = rangerList
+	self._tab = 1
+	self._partQualityFilter = -1
+	self._star = P._playerRanger:getRangerLevel(id)
+	self._isInDock = P._playerRanger:getDockIndex(self._rangerId) ~= nil
+
+	self:initScrollView()
+	self:changeTab(tab or 1)
+	self:initMainSkill()
+	self:updateUI()
+	self:initEquipSlotClick()
+end
+
+function M:closePanel()
+	self._goDock._goSpineWidget:clearSpine()
+	M.super.closePanel(self)
+end
+
+function M:initEquipSlotClick()
+	for i = 1, #self._goEquipSlots do
+		self:setClick(self._goEquipSlots[i]._btnClick, function ()
+			if self._star <= 0 then
+				return
+			end
+
+			if P._playerRanger:getUnlockedEquipSlot(self._rangerId) < i then
+				return
+			end
+
+			if self._replacing then
+				self._replacing = false
+
+				self._btnReplaceCover:SetActive(false)
+				self._goTabArea:SetActive(true)
+				self._goBottomArea:SetActive(true)
+
+				for j = 1, P._playerRanger:getUnlockedEquipSlot(self._rangerId) do
+					self._goEquipSlots[j]:GetComponent("Animation"):Stop()
+					self._goEquipSlots[j]:SetLocalRotation(0, 0, 0)
+				end
+
+				UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, self._viewEquipId, self._rangerId, i, function (targetIndex)
+					local viewEquip = self:getViewEquip(self._viewEquipId)
+					local info = P._playerRanger:getRangerEquipById(self._viewEquipId)
+					local cfg = D._rangerEquipConfig[info.cid]
+
+					self:flyEquip(viewEquip, self._viewEquipId, i, cfg)
+
+					for i = 1, P._playerRanger:getUnlockedEquipSlot(self._rangerId) do
+						self._goEquipSlots[i]:GetComponent("Animation"):Stop()
+						self._goEquipSlots[i]:SetLocalRotation(0, 0, 0)
+					end
+				end)
+			else
+				local equips = P._playerRanger:getRangerEquips(self._rangerId)
+				local id = equips[i]
+
+				if id then
+					local lb = UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, id, self._rangerId, nil, function ()
+						P._playerRanger:unequipRangerEquip(id, self._rangerId, i)
+						self:updateDot()
+						self:updateRangerEquipData()
+						self:updateCurRangerEquip()
+					end)
+				end
+			end
+		end)
+	end
+
+	self._btnReplaceCover:SetActive(false)
+end
+
+function M:initMainSkill()
+	local cfg = D._rangerConfig[self._rangerId]
+
+	for i = 1, #self._goMainSkills do
+		local skill = cfg._mainSkills[i]
+
+		if skill then
+			self._goMainSkills[i]:SetActive(true)
+
+			local type = D._rangerSkillConfig[skill]._group + 1
+
+			if type == 3 then
+				self._goMainSkills[i]._imgWeapon:SetActive(true)
+				self._goMainSkills[i]._imgIcon:SetActive(false)
+				LuaUnity.setTPSprite(self._goMainSkills[i]._imgWeapon, "weapon/weapon_" .. D._rangerSkillConfig[skill]._weapon, true, true)
+			else
+				self._goMainSkills[i]._imgWeapon:SetActive(false)
+				self._goMainSkills[i]._imgIcon:SetActive(true)
+				LuaUnity.setTPSprite(self._goMainSkills[i]._imgIcon, string.format("ranger/RangerSkill-%d-%d", self._rangerId % 100, i), true)
+			end
+
+			LuaUnity.setTPSprite(self._goMainSkills[i]._imgType, "ranger/ranger_icon_0" .. type + 5, true)
+			self._goMainSkills[i]._txtType:SetLocalize(SID["STR_RANGER_SKILL_TYPE_" .. type])
+		else
+			self._goMainSkills[i]:SetActive(false)
+		end
+
+		self:setClick(self._goMainSkills[i]._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.RangerSkillTipPanel, self._rangerId, skill, i, true)
+		end)
+	end
+end
+
+function M:initScrollView()
+	self._equipDatas = {}
+	self._rowCellWidth = self._tfRangerEquipContainer.rect.width
+	self._rowCellHeight = 120
+	self._rowCellMargin = 9
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		cellMargin = 20,
+		topPadding = 20,
+		cellInitCount = 8,
+		bottomPadding = 0
+	})
+
+	self:updateRangerEquipData()
+end
+
+function M:hideTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(tabUnSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10_2" or "general/g_bg_11")
+	lc.setSizeDelta(self._imgTabs[tab], tabUnSelectWidth, 81)
+
+	self._txtTabs[tab].color = Color.str2Static(tabUnSelectTextColor)
+
+	self._chooseTabs[tab]:SetActive(false)
+end
+
+function M:showTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(tabSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10" or "general/g_bg_11_2")
+	lc.setSizeDelta(self._imgTabs[tab], tabSelectWidth, 81)
+
+	self._txtTabs[tab].color = Color.str2Static(tabSelectTextColor)
+
+	self._chooseTabs[tab]:SetActive(true)
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		self._animTabSwitch:Play(tab == 1 and "ani_rangerDetail_tab1" or "ani_rangerDetail_tab2")
+		self:hideTab(self._tab)
+
+		self._tab = tab
+
+		self:showTab(self._tab)
+	end
+end
+
+function M:updateUI()
+	local cfg = D._rangerConfig[self._rangerId]
+	local quality = cfg._quality
+
+	self._goDock._txtName:SetLocalize(cfg._nameSid)
+	V.setRangerQualityStar(self._goDock._tfStarContainer, quality, self._star)
+
+	local atk = math.floor(P._playerRanger:getRangerAtk(self._rangerId))
+
+	if self._star > 0 then
+		self._goDock._goAtkArea:SetActive(true)
+		self._goInheritAtkArea:SetActive(false)
+
+		self._goDock._txtAtk.text = atk
+	else
+		self._goDock._goAtkArea:SetActive(false)
+		self._goInheritAtkArea:SetActive(true)
+		self._txtInheritAtk:SetLocalize(SID.TIP_RANGER_EXTEND_ATK_PERCENT, cfg._atkPercents[1])
+	end
+
+	local dockIdx = P._playerRanger:getDockIndex(self._rangerId)
+
+	for q = D.Quality.Purple, D.Quality.Red do
+		self._goDock["_goVfxHalo" .. q]:SetActive(false)
+	end
+
+	local quality = D._rangerConfig[self._rangerId]._quality
+
+	self._goDock["_goVfxHalo" .. quality]:SetActive(true)
+
+	if self._star == 0 then
+		self._goTabArea:SetActive(true)
+		self._btnEquip:SetActive(false)
+		self._btnUnlock:SetActive(true)
+		self._btnUpgrade:SetActive(false)
+		self._goCostArea:SetActive(true)
+
+		if P._playerRanger:canUpgradeRanger(self._rangerId) then
+			self._btnUnlock.dot:SetActive(true)
+			V.loadItemCost(self._imgCost, self._txtCost, self._rangerId, 1, self)
+			V.formatNeedStr1(self._txtCost, 1, 1)
+		else
+			self._btnUnlock.dot:SetActive(false)
+			V.loadItemCost(self._imgCost, self._txtCost, D.toFragment(self._rangerId), D._rangerConfig[self._rangerId]._costPieceNum[1], self)
+		end
+
+		self._txtEliteDamageProp:SetLocalizeS(SID.SID_GEM_EFFECT_DESCSID_18, tostring(cfg._eliteDamageAdd[1]))
+	else
+		self._goTabArea:SetActive(true)
+		self._btnEquip:SetActive(true)
+		self._btnUnlock:SetActive(false)
+		self._btnUpgrade:SetActive(true)
+		self._btnUpgrade.dot:SetActive(P._playerRanger:canUpgradeRanger(self._rangerId))
+		self._goCostArea:SetActive(false)
+		self._txtEliteDamageProp:SetLocalizeS(SID.SID_GEM_EFFECT_DESCSID_18, tostring(cfg._eliteDamageAdd[self._star]))
+	end
+
+	if self._star == 0 or dockIdx then
+		self._btnEquip:SetActive(false)
+	else
+		self._btnEquip:SetActive(true)
+		self._txtEquip:SetLocalize(SID.STR_MIMICRY_BTN)
+	end
+
+	self:updateCurRangerEquip()
+	self:updateDot()
+
+	self._txtRefineMat.text = P._playerAsset:getAssetNum(D.ResType.ranger_equip_refine_mat)
+
+	self._goDock._goSpineWidget:updateUI(self._rangerId)
+end
+
+function M:updateCurRangerEquip()
+	local equips = P._playerRanger:getRangerEquips(self._rangerId)
+	local star = self._star
+	local unlockSlot = P._playerRanger:getUnlockedEquipSlot(self._rangerId)
+
+	for i = 1, D.RANGER_EQUIP_SLOT_NUM do
+		local eid = equips[i]
+		local goSlot = self._goEquipSlots[i]
+
+		if i <= unlockSlot then
+			if eid then
+				goSlot._imgIcon:SetActive(true)
+				LuaUnity.setTPSprite(goSlot._imgIcon, "item/item_" .. P._playerRanger:getRangerEquipById(eid).cid, true)
+				LuaUnity.setTPSprite(goSlot._imgFrame, "ranger/ranger_frame_0" .. D._rangerEquipConfig[P._playerRanger:getRangerEquipById(eid).cid]._quality - D.Quality.Blue + 1, true)
+				goSlot._goAdd:SetActive(false)
+			else
+				goSlot._imgIcon:SetActive(false)
+				goSlot._goAdd:SetActive(true)
+				LuaUnity.setTPSprite(goSlot._imgFrame, "ranger/ranger_frame_01", true)
+			end
+
+			goSlot._goLock:SetActive(false)
+		else
+			LuaUnity.setTPSprite(goSlot._imgFrame, "ranger/ranger_frame_01", true)
+			goSlot._imgIcon:SetActive(false)
+			goSlot._goAdd:SetActive(false)
+			goSlot._goLock:SetActive(true)
+
+			if i > 1 then
+				goSlot._txtLockDesc:SetLocalizeS(SID.TIP_RANGER_EQUIP_SLOT_REQUIRE, string.format("%d<sprite name=\"%s\">", 5, V.TMP_COLOR_STAR[i - 1]))
+			else
+				goSlot._txtLockDesc:SetLocalizeS(SID.TIP_RANGER_EQUIP_SLOT_REQUIRE, string.format("%d<sprite name=\"%s\">", 1, V.TMP_COLOR_STAR[1]))
+			end
+		end
+	end
+end
+
+function M:updateRangerEquipData()
+	local equips = P._playerRanger:getAvailableRangerEquips(self._rangerId)
+
+	if self._unusedTypes then
+		table.clear(self._unusedTypes)
+	else
+		self._unusedTypes = {}
+	end
+
+	if self._isInDock and P._playerRanger:hasEmptyEquipSlot(self._rangerId) then
+		for i = 1, 5 do
+			self._unusedTypes[#self._unusedTypes + 1] = i * 3
+		end
+
+		for _, eid in pairs(P._playerRanger:getRangerEquips(self._rangerId)) do
+			local equip = P._playerRanger:getRangerEquipById(eid)
+
+			table.erase(self._unusedTypes, equip.cid % 100)
+		end
+	end
+
+	table.clear(self._equipDatas)
+
+	local equipGroup1 = {}
+	local equipGroup2 = {}
+	local equipGroup3 = {}
+	local partFilterValueBase = 2^D.RANGER_EQUIP_PART_FILTER_NUM
+
+	for i = 1, #equips do
+		local equip = equips[i]
+		local cfg = D._rangerEquipConfig[equip.cid]
+		local filterValue = 2^(cfg._level / 3 - 1) + 2^(cfg._quality + D.RANGER_EQUIP_PART_FILTER_NUM - 1)
+
+		if band(-partFilterValueBase, band(filterValue, self._partQualityFilter)) ~= 0 and band(partFilterValueBase - 1, band(filterValue, self._partQualityFilter)) ~= 0 then
+			if equip.skill2 and D._rangerEquipSkillConfig[equip.skill2]._ranger == self._rangerId then
+				equipGroup1[#equipGroup1 + 1] = equip
+			elseif not equip.skill2 or equip.skill2 and D._rangerEquipSkillConfig[equip.skill2]._ranger == nil then
+				equipGroup2[#equipGroup2 + 1] = equip
+			else
+				equipGroup3[#equipGroup3 + 1] = equip
+			end
+		end
+	end
+
+	self._equipDatas[#self._equipDatas + 1] = 1
+
+	for i = 1, #equipGroup1, 6 do
+		self._equipDatas[#self._equipDatas + 1] = {
+			equipGroup1[i],
+			equipGroup1[i + 1],
+			equipGroup1[i + 2],
+			equipGroup1[i + 3],
+			equipGroup1[i + 4],
+			equipGroup1[i + 5]
+		}
+	end
+
+	self._equipDatas[#self._equipDatas + 1] = 2
+
+	for i = 1, #equipGroup2, 6 do
+		self._equipDatas[#self._equipDatas + 1] = {
+			equipGroup2[i],
+			equipGroup2[i + 1],
+			equipGroup2[i + 2],
+			equipGroup2[i + 3],
+			equipGroup2[i + 4],
+			equipGroup2[i + 5]
+		}
+	end
+
+	self._equipDatas[#self._equipDatas + 1] = 3
+
+	for i = 1, #equipGroup3, 6 do
+		self._equipDatas[#self._equipDatas + 1] = {
+			equipGroup3[i],
+			equipGroup3[i + 1],
+			equipGroup3[i + 2],
+			equipGroup3[i + 3],
+			equipGroup3[i + 4],
+			equipGroup3[i + 5]
+		}
+	end
+
+	self._scrollViewEx:reloadData()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	local data = self._equipDatas[index]
+
+	goCell.noneArea:SetActive(false)
+
+	if type(data) == "number" then
+		goCell.titleBar:SetActive(true)
+		goCell.txtTitle:SetLocalize(SID["TITLE_RANGER_EQUIP_TYPE_" .. data])
+
+		for i = 1, ROW_CELL do
+			goCell.items[i]:SetVisible(false)
+		end
+
+		local nextData = self._equipDatas[index + 1]
+
+		if nextData == nil or type(nextData) == "number" then
+			goCell.noneArea:SetActive(true)
+		end
+
+		return goCell
+	end
+
+	goCell.titleBar:SetActive(false)
+
+	for i = 1, ROW_CELL do
+		local item = goCell.items[i]
+		local equip = data[i]
+		local w = self._rowCellWidth / ROW_CELL
+
+		lc.setLocalPosition(item, -self._rowCellWidth / 2 + (i - 0.5) * w, -self._rowCellHeight / 2, 0)
+
+		if equip then
+			item:SetVisible(true)
+			item:init(equip)
+			item:setChoose(equip.selected)
+			item:setDot(equip.ranger == nil and table.contains(self._unusedTypes, equip.cid % 100))
+			self:setClick(item._btnClick, function ()
+				self:setViewEquip(equip.id)
+			end)
+		else
+			item:SetVisible(false)
+		end
+	end
+
+	return goCell
+end
+
+local function moveFollowingItems(self, curItem, duration)
+	local w = self._rowCellWidth / ROW_CELL
+	local followingItems = {}
+	local isFollowing = false
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		if isFollowing and cell:Find("TitleArea").activeSelf then
+			isFollowing = false
+		end
+
+		for j = 2, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if isFollowing then
+				if item.activeSelf then
+					local x, y = lc.getLocalPosition(item)
+
+					if j == 2 then
+						item.transform:DOLocalMoveX(x - w / 2, duration / 2):OnComplete(function ()
+							lc.setLocalPosition(item, x + self._rowCellWidth - w / 2, y + self._rowCellHeight + self._rowCellMargin + 10, 0)
+							item.transform:DOLocalMoveX(x + self._rowCellWidth - w, duration / 2):SetEase(V.EASE_LINEAR)
+						end):SetEase(V.EASE_LINEAR)
+					else
+						item.transform:DOLocalMoveX(x - w, duration)
+					end
+				end
+			elseif item == curItem then
+				isFollowing = true
+			end
+		end
+	end
+end
+
+function M:setViewEquip(id)
+	local prevViewEquip = self:getViewEquip(self._viewEquipId)
+
+	if prevViewEquip then
+		prevViewEquip:setChoose(false)
+	end
+
+	self._viewEquipId = id
+	local viewEquip = self:getViewEquip(self._viewEquipId)
+
+	viewEquip:setChoose(true)
+	viewEquip:setNew(false)
+
+	local lb = UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, id, self._rangerId, nil, function (targetIndex)
+		local info = P._playerRanger:getRangerEquipById(id)
+		local cfg = D._rangerEquipConfig[info.cid]
+		local equip, index = P._playerRanger:getTargetReplaceEquip(self._rangerId, id)
+
+		if equip then
+			self:flyEquip(viewEquip, id, index, cfg)
+		elseif targetIndex then
+			self:flyEquip(viewEquip, id, targetIndex, cfg)
+		else
+			self._replacing = true
+
+			self._btnReplaceCover:SetActive(true)
+			self._goTabArea:SetActive(false)
+			self._goBottomArea:SetActive(false)
+
+			for i = 1, P._playerRanger:getUnlockedEquipSlot(self._rangerId) do
+				self._goEquipSlots[i]:GetComponent("Animation"):Play()
+			end
+		end
+	end)
+end
+
+function M:flyEquip(viewEquip, id, index, cfg)
+	local tfEquip = self._goEquipSlots[index].transform
+	local quality = cfg._quality
+	local duration = 0.6
+
+	ResAnimHelper.flyItem(cfg._id, viewEquip, tfEquip, 1, V.QUALITY_TRIANGLE[quality], duration)
+
+	self._isPlayingChipFly = true
+
+	viewEquip:setDot(false)
+	self:clearViewEquip()
+	lc.setLocalScale(viewEquip, 0, 0, 0)
+	moveFollowingItems(self, viewEquip, duration - 0.1)
+	MainGameRoot:showGlobalMask()
+
+	function self._seqFunc()
+		P._playerRanger:equipRangerEquip(id, self._rangerId, index)
+		self:updateDot()
+		self:updateRangerEquipData()
+		self:updateCurRangerEquip()
+
+		self._isPlayingChipFly = false
+		self._seqFunc = nil
+
+		MainGameRoot:hideGlobalMask()
+	end
+
+	lc.setTimer(self._seqFunc, duration)
+end
+
+function M:clearViewEquip()
+	if self._viewEquipId then
+		local viewEquip = self:getViewEquip(self._viewEquipId)
+
+		if viewEquip then
+			viewEquip:setChoose(false)
+		end
+
+		self._viewEquipId = nil
+	end
+end
+
+function M:getViewEquip(id)
+	if id == nil then
+		return nil
+	end
+
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if item._id == id and item.activeSelf then
+				return item
+			end
+		end
+	end
+end
+
+function M:onCellHeight(index)
+	if type(self._equipDatas[index]) == "number" then
+		local nextData = self._equipDatas[index + 1]
+
+		if nextData == nil or type(nextData) == "number" then
+			return 190
+		end
+
+		return 40
+	else
+		return 120
+	end
+end
+
+function M:onCellNum()
+	return #self._equipDatas
+end
+
+function M:createRowCell()
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RangerEquipRowWidget.prefab", self._tfRangerEquipContainer)
+
+	lc.setSizeDelta(go, self._rowCellWidth, self._rowCellHeight)
+
+	go.items = {}
+	go.titleBar = go.transform:Find("TitleArea")
+	go.txtTitle = go.titleBar:Find("BgTitle"):GetChild(0):GetComponent("TMP_Text")
+	go.noneArea = go.transform:Find("NoneArea")
+
+	for i = 1, ROW_CELL do
+		go.items[i] = RangerEquipWidget.create(go.transform)
+
+		go.items[i]._goScaleParent:SetLocalScale(0.95, 0.95, 0.95)
+	end
+
+	return go
+end
+
+function M:updateDot()
+	self._btnTabUpStar.dot:SetActive(P._playerRanger:canUpgradeRanger(self._rangerId))
+	self._btnTabEquip.dot:SetActive(self._isInDock and P._playerRanger:hasRangerEquipDot(self._rangerId))
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+
+	if self._equipDirty then
+		self:updateRangerEquipData()
+	end
+
+	self._txtRefineMat.text = P._playerAsset:getAssetNum(D.ResType.ranger_equip_refine_mat)
+end
+
+return M

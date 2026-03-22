@@ -1,0 +1,301 @@
+local M = class("BattleRanger_212_Sub")
+local math = math
+local STAGE = {
+	MOVE_UP = 8,
+	ATTACK_BEFORE = 4,
+	ATTACK_WAIT = 7,
+	ATTACK = 5,
+	MOVE_BEFORE = 2,
+	IDLE = 1,
+	ATTACK_END = 6,
+	ATTACK_SKILL_2 = 10,
+	ATTACK_SKILL_1 = 9,
+	MOVE = 3
+}
+local STAGE_TIME = {
+	ATTACK_BEFORE = 0.5,
+	MOVE_BEFORE = 0.5,
+	ATTACK_END_2 = 0.1,
+	ATTACK_END = 1,
+	ATTACK_SKILL_2 = 1,
+	ATTACK_SKILL_1 = 0.05,
+	MOVE_UP = 0.8
+}
+local OFFSET_DISTANCE = 1.2
+local DISTBACE_XUANWO = 1.2
+local VFX_102_DURATION = 2.3
+local VFX_102_CD = 0.6
+local ANGLE_SPEED = 20
+
+function M:ctor(ranger)
+	self._ranger = ranger
+	self._mainSkill = ranger._mainSkill
+	self._speed = ranger._cfg._subSpeed
+	self._stage = STAGE.IDLE
+	self._battleSession = ranger._battleSession
+	self._position = Vector2.retain(0, 0)
+	self._endPosition = Vector2.retain(0, 0)
+	self._flyDir = Vector2.retain(0, 0)
+	self._endAngle = 0
+	self._angle = 90
+	self._angleSpeed = ANGLE_SPEED
+
+	if self._ranger._view then
+		self._view = self._battleSession._sessionView:createRanger("Ranger_150012_Sub")
+
+		self._view:SetLocalScale(0)
+
+		self._tf = self._view.transform
+		self._ator = self._view:GetChild(0):GetComponent("Animator")
+		self._mecanim = self._view:GetChild(0):GetComponent("SkeletonMecanim")
+	end
+end
+
+function M:step(dt)
+	if self._stageCD102 then
+		self._stageCD102 = self._stageCD102 - dt
+
+		if self._stageCD102 <= 0 then
+			self._stageCD102 = nil
+
+			self._vfx2:SetActive(true)
+		end
+	end
+
+	if self._stage == STAGE.MOVE_BEFORE then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE.MOVE_UP
+			self._stageCD = STAGE_TIME.MOVE_UP
+		end
+	elseif self._stage == STAGE.MOVE_UP then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE.MOVE
+		end
+
+		self:stepMoveBefore(dt)
+	elseif self._stage == STAGE.MOVE then
+		self:stepTowardTargetEnemy(dt)
+	elseif self._stage == STAGE.ATTACK then
+		self:doAttack()
+
+		self._stage = STAGE.ATTACK_SKILL_1
+		self._stageCD = STAGE_TIME.ATTACK_SKILL_1
+	elseif self._stage == STAGE.ATTACK_SKILL_1 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self:castSkilll1()
+
+			self._stage = STAGE.ATTACK_SKILL_2
+			self._stageCD = STAGE_TIME.ATTACK_SKILL_2
+		end
+	elseif self._stage == STAGE.ATTACK_SKILL_2 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self:castSkilll2()
+
+			self._stage = STAGE.ATTACK_WAIT
+		end
+	elseif self._stage == STAGE.ATTACK_END then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE.IDLE
+
+			self._tf:DOScale(0, 0.3):OnComplete(function ()
+				self._ranger:onEnd()
+				self._view:SetActive(false)
+			end)
+		end
+	end
+end
+
+function M:endAttack()
+	self._stage = STAGE.ATTACK_END
+
+	if self._ranger:getEffect(21202) or self._ranger:getEffect(21204) then
+		self._stageCD = STAGE_TIME.ATTACK_END
+	else
+		self._stageCD = STAGE_TIME.ATTACK_END_2
+	end
+
+	self._ator:SetTrigger("end")
+end
+
+function M:castSkilll1()
+	local bullet = self._ranger._mainSkill:createBullet("Ranger_150012_102")
+	local dx, dy = BattleMathLib.angle2dir(self._angle)
+	local x = self._position.x + DISTBACE_XUANWO * -dx
+	local y = self._position.y + DISTBACE_XUANWO * -dy
+
+	bullet:setPos(x, y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+
+		if self._ranger:getEffect(21202) then
+			self._stageCD102 = VFX_102_CD
+			self._vfx2 = self._battleSession._sessionView:addVFX("Ranger_150012_102", nil, VFX_102_DURATION)
+
+			self._vfx2:SetPosition(x, y, 0)
+			self._vfx2:SetActive(false)
+		end
+	end
+end
+
+function M:castSkilll2()
+	local dx, dy = BattleMathLib.angle2dir(self._angle)
+	local bx = self._position.x + 0.5 * dx
+	local by = self._position.y + 0.5 * dy
+	local moveDuration = self._ranger._secondSkill:getProp(BattlePropEnum.MoveDuration)
+	local moveDurationAddPer = self._ranger._secondSkill:getProp(BattlePropEnum.MoveDurationAddPer, 0)
+	moveDuration = moveDuration + moveDuration * moveDurationAddPer / 100
+	local addNum = self._ranger._secondSkill:getProp(BattlePropEnum.Salvo, 0)
+	addNum = addNum + 1
+	local isBack = self._ranger:getEffect(21204)
+
+	for i = 1, addNum do
+		local bullet = self._ranger._secondSkill:createBullet()
+
+		bullet:setPos(bx, by)
+		bullet:setDirByAngle(self._angle + 180 - 5 * i)
+
+		local t = moveDuration
+
+		if i % 2 == 0 then
+			bullet._delayStep = 0.016666666666666666
+			t = t - 0.03333333333333333
+		end
+
+		bullet._moveDurationRaw = t
+		bullet._moveDuration = t
+
+		if not isBack then
+			bullet._duration = t + 1
+		end
+
+		bullet._left = true
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent2(1)
+		end
+	end
+
+	for i = 1, addNum do
+		local bullet = self._ranger._secondSkill:createBullet()
+
+		bullet:setPos(bx, by)
+		bullet:setDirByAngle(self._angle + 180 + 5 * i)
+
+		local t = moveDuration
+
+		if i % 2 == 0 then
+			bullet._delayStep = 0.016666666666666666
+			t = t - 0.03333333333333333
+		end
+
+		bullet._moveDurationRaw = t
+		bullet._moveDuration = t
+
+		if not isBack then
+			bullet._duration = t + 1
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent2(-1)
+		end
+	end
+end
+
+function M:stepTowardTargetEnemy(dt)
+	local targetEnemy = self._targetEnemy
+
+	if self._targetEnemy == nil then
+		local enemys = self._battleSession:getEnemysInBetweenY(self._ranger._atkRange - 5, self._ranger._atkRange)
+		targetEnemy = self._battleSession._battleRandomLib:randomOne(enemys)
+
+		if targetEnemy == nil then
+			targetEnemy = self._battleSession._battleEnemyFinder:randomOneEnemy(nil, self._ranger)
+		end
+
+		if targetEnemy == nil then
+			self._stage = STAGE.ATTACK_END
+			self._stageCD = 0
+
+			return
+		end
+
+		self._targetEnemy = targetEnemy
+
+		function targetEnemy._destroyCallbackRanger212(enemy)
+			self._targetEnemy = nil
+		end
+	end
+
+	local enemyPos = targetEnemy._position
+	local targetPosX = enemyPos.x
+	local targetPosY = enemyPos.y + OFFSET_DISTANCE
+	local pos = self._position
+	self._flyDir.x = targetPosX - pos.x
+	self._flyDir.y = targetPosY - pos.y
+
+	self._flyDir:SetNormalize()
+
+	self._position.x = self._position.x + self._flyDir.x * self._speed * dt
+	self._position.y = self._position.y + self._flyDir.y * self._speed * dt
+	self._endAngle = math.deg(math.atan2(self._flyDir.y, self._flyDir.x))
+	self._angle = Mathf.MoveTowardsAngle(self._angle, self._endAngle, ANGLE_SPEED * dt)
+
+	if math.abs(pos.x - targetPosX) < 0.05 and math.abs(pos.y - targetPosY) < 0.05 then
+		self._stage = STAGE.ATTACK
+	end
+
+	if self._view then
+		self._view:SetLocalRotation(0, 0, self._angle)
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:stepMoveBefore(dt)
+	self._position.y = self._position.y + 2 * dt
+
+	if self._view then
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+	end
+end
+
+function M:doStart()
+	self._targetEnemy = nil
+	self._stage = STAGE.MOVE_BEFORE
+	self._stageCD = STAGE_TIME.MOVE_BEFORE
+	self._position.x = self._ranger._position.x
+	self._position.y = self._ranger._position.y
+	self._angle = 90
+
+	if self._view then
+		self._view:SetActive(true)
+		self._mecanim:Update()
+		self._view:SetLocalScale(1)
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+		self._ator:SetTrigger("fly")
+		self._view:SetLocalRotation(0, 0, self._angle)
+	end
+end
+
+function M:doAttack()
+	if self._view then
+		self._ator:SetTrigger("attack")
+	end
+end
+
+function M:doEnd()
+end
+
+return M

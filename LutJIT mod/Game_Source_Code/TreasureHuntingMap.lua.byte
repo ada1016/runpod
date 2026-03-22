@@ -1,0 +1,857 @@
+local M = class("TreasureHuntingMap")
+
+declare("TreasureHuntingMap", M)
+
+M.BOMB_PROBABILITY = 0.05
+M._BaseShapeCache = {}
+M.CellType = {
+	SOFT = 0,
+	BLOCK = 1,
+	STONE = 2
+}
+M.DisplayState = {
+	STONE_CRACKED = 3,
+	DUG = 2,
+	BLOCK = 0,
+	STONE = 4,
+	COVERED = 1
+}
+M.TreasureConfigs = {
+	[101] = {
+		size = 1,
+		name = "1x1",
+		uiScale = 0.7,
+		forbidRot = 1,
+		id = 101,
+		shape = {
+			{
+				1
+			}
+		}
+	},
+	[102] = {
+		size = 1,
+		name = "1x1",
+		uiScale = 0.7,
+		forbidRot = 1,
+		id = 102,
+		shape = {
+			{
+				1
+			}
+		}
+	},
+	[201] = {
+		size = 2,
+		name = "1x2",
+		uiScale = 0.5,
+		id = 201,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[202] = {
+		size = 2,
+		name = "1x2",
+		uiScale = 0.5,
+		id = 202,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[301] = {
+		size = 3,
+		name = "1x3",
+		uiScale = 0.5,
+		id = 301,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[302] = {
+		size = 3,
+		name = "1x3",
+		uiScale = 0.5,
+		id = 302,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[401] = {
+		size = 4,
+		name = "1x4",
+		uiScale = 0.4,
+		id = 401,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[402] = {
+		size = 4,
+		name = "1x4",
+		uiScale = 0.4,
+		id = 402,
+		shape = {
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			},
+			{
+				1
+			}
+		}
+	},
+	[501] = {
+		size = 16,
+		name = "4x4",
+		uiScale = 0.32,
+		id = 501,
+		shape = {
+			{
+				1,
+				1,
+				1,
+				1
+			},
+			{
+				1,
+				1,
+				1,
+				1
+			},
+			{
+				1,
+				1,
+				1,
+				1
+			},
+			{
+				1,
+				1,
+				1,
+				1
+			}
+		}
+	},
+	[601] = {
+		size = 4,
+		name = "2x2",
+		uiScale = 0.5,
+		id = 601,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	},
+	[602] = {
+		size = 4,
+		name = "2x2",
+		uiScale = 0.5,
+		id = 602,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	},
+	[701] = {
+		size = 6,
+		name = "2x3",
+		uiScale = 0.44,
+		id = 701,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	},
+	[702] = {
+		size = 6,
+		name = "2x3",
+		uiScale = 0.44,
+		id = 702,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	},
+	[801] = {
+		size = 8,
+		name = "2x4",
+		uiScale = 0.37,
+		id = 801,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	},
+	[901] = {
+		size = 12,
+		name = "2x6",
+		uiScale = 0.25,
+		id = 901,
+		shape = {
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			},
+			{
+				1,
+				1
+			}
+		}
+	}
+}
+
+setmetatable(M.TreasureConfigs, {
+	__index = function (table, key)
+		return table[101]
+	end
+})
+
+local function idx(self, x, y)
+	return (y - 1) * self.width + x
+end
+
+local function indexToCoord(i, width)
+	local y = math.ceil(i / width)
+	local x = i - (y - 1) * width
+
+	return x, y
+end
+
+function M:ctor()
+end
+
+function M:init(mapId)
+end
+
+function M.loadLevelConfigFile(mapId)
+	return requireLua(string.format("treasure_hunting_level_%d", mapId))
+end
+
+function M:loadFromMapId(mapId)
+	local levelCfg = M.loadLevelConfigFile(mapId)
+
+	assert(levelCfg, "LevelConfig not found: " .. tostring(mapId))
+
+	self._RotatedShapeCache = {}
+	self.mapId = mapId
+	self.width = levelCfg.size[1]
+	self.height = levelCfg.size[2]
+
+	self:loadFlatGrid(levelCfg.map)
+
+	local count = self.width * self.height
+	self.randomSeed = math.random(1, 999999)
+	self.digState = {}
+	local rndObj = BattleRandomLib.new(self.randomSeed)
+	self.randomIndices = {}
+
+	for i = 1, count do
+		self.randomIndices[i] = i
+	end
+
+	for i = count, 2, -1 do
+		local j = rndObj:randomMN(1, i)
+		self.randomIndices[j] = self.randomIndices[i]
+		self.randomIndices[i] = self.randomIndices[j]
+	end
+
+	local treasureIdList = clone(levelCfg.treasures)
+
+	table.sort(treasureIdList, function (a, b)
+		return M.TreasureConfigs[b].size < M.TreasureConfigs[a].size
+	end)
+
+	self.treasures = {}
+
+	for idx, tid in ipairs(treasureIdList or {}) do
+		local treasure = {
+			id = tid
+		}
+		local ok = self:placeTreasureRandom(treasure)
+
+		if ok then
+			-- Nothing
+		end
+
+		treasure.found = false
+	end
+
+	table.shuffle(self.treasures, math.randomer(math.random(1000)))
+
+	for i, v in ipairs(self.treasures) do
+		v.idx = i
+	end
+end
+
+function M:loadFromMapData(mapData)
+	assert(mapData and mapData.mapId, "invalid mapData")
+
+	local levelCfg = M.loadLevelConfigFile(mapData.mapId)
+
+	assert(levelCfg, "LevelConfig not found: " .. tostring(mapData.mapId))
+
+	self._RotatedShapeCache = {}
+	self.mapId = mapData.mapId
+	self.width = levelCfg.size[1]
+	self.height = levelCfg.size[2]
+
+	self:loadFlatGrid(levelCfg.map)
+
+	self.digState = mapData.digState or {}
+	self.randomSeed = mapData.randomSeed or 999
+	self.treasures = mapData.treasures or {}
+end
+
+function M:loadFlatGrid(flat)
+	self.grid = {}
+	local idx = 1
+
+	for y = 1, self.height do
+		self.grid[y] = {}
+
+		for x = 1, self.width do
+			self.grid[y][x] = flat[idx] or M.CellType.SOFT
+			idx = idx + 1
+		end
+	end
+end
+
+function M:getMapData()
+	return {
+		mapId = self.mapId,
+		digState = self.digState,
+		treasures = self.treasures,
+		blockRandom = math.random(1, 999999),
+		randomSeed = self.randomSeed
+	}
+end
+
+function M:loadDigStateSparse(data)
+	self.digState = data or {}
+end
+
+local function convertShapeToRelativeCoords(shape)
+	local result = {}
+
+	for ry, row in ipairs(shape) do
+		for rx, v in ipairs(row) do
+			if v ~= 0 then
+				table.insert(result, {
+					rx - 1,
+					ry - 1
+				})
+			end
+		end
+	end
+
+	return result
+end
+
+function M.getRotatableShape(treasureId)
+	local cachedShape = M._BaseShapeCache[treasureId]
+
+	if cachedShape then
+		return cachedShape
+	end
+
+	local tpl = M.TreasureConfigs[treasureId]
+
+	if not tpl then
+		error("TreasureConfig not found for ID: " .. tostring(treasureId))
+	end
+
+	local relativeShape = convertShapeToRelativeCoords(tpl.shape)
+	M._BaseShapeCache[treasureId] = relativeShape
+
+	return relativeShape
+end
+
+function M.rotateShape(shape, rot)
+	local result = {}
+
+	local function getXY(p)
+		return p.x or p[1], p.y or p[2]
+	end
+
+	local rotAngle = rot * 90
+
+	if rotAngle == 0 then
+		return shape
+	end
+
+	if rotAngle == 90 then
+		for _, p in ipairs(shape) do
+			local x, y = getXY(p)
+
+			table.insert(result, {
+				y,
+				-x
+			})
+		end
+	elseif rotAngle == 180 then
+		for _, p in ipairs(shape) do
+			local x, y = getXY(p)
+
+			table.insert(result, {
+				-x,
+				-y
+			})
+		end
+	elseif rotAngle == 270 then
+		for _, p in ipairs(shape) do
+			local x, y = getXY(p)
+
+			table.insert(result, {
+				-y,
+				x
+			})
+		end
+	else
+		return shape
+	end
+
+	return result
+end
+
+function M:getActualShape(t, rot)
+	local t_id = t.id
+	local t_rot = rot or t.rot
+	local cache_by_id = self._RotatedShapeCache[t_id]
+
+	if cache_by_id then
+		local cached_shape = cache_by_id[t_rot]
+
+		if cached_shape then
+			return cached_shape
+		end
+	else
+		cache_by_id = {}
+		self._RotatedShapeCache[t_id] = cache_by_id
+	end
+
+	local baseShape = M.getRotatableShape(t_id)
+	local rotatedShape = M.rotateShape(baseShape, t_rot)
+	cache_by_id[t_rot] = rotatedShape
+
+	return rotatedShape
+end
+
+function M:getOriginTreasureBounds(t)
+	local shp = self:getActualShape(t, 0)
+	local minX = 0
+	local minY = 0
+	local maxX = 0
+	local maxY = 0
+
+	for i, p in ipairs(shp) do
+		local rx = p.x or p[1]
+		local ry = p.y or p[2]
+
+		if rx < minX then
+			minX = rx
+		end
+
+		if ry < minY then
+			minY = ry
+		end
+
+		if maxX < rx then
+			maxX = rx
+		end
+
+		if maxY < ry then
+			maxY = ry
+		end
+	end
+
+	local width = maxX - minX + 1
+	local height = maxY - minY + 1
+	local offsetX = minX + width / 2 - 0.5
+	local offsetY = minY + height / 2 - 0.5
+
+	return width, height, offsetX, offsetY
+end
+
+function M:isInMap(x, y)
+	if x < 1 or y < 1 or self.width < x or self.height < y then
+		return false
+	end
+
+	return true
+end
+
+function M:canPlaceTreasure(treasure, px, py, shape)
+	for _, p in ipairs(shape) do
+		local x = px + (p.x or p[1])
+		local y = py + (p.y or p[2])
+
+		if x < 1 or y < 1 or self.width < x or self.height < y then
+			return false
+		end
+
+		if self.grid[y][x] == M.CellType.BLOCK then
+			return false
+		end
+	end
+
+	for _, t in ipairs(self.treasures) do
+		local shp = self:getActualShape(t)
+
+		for _, pp in ipairs(shp) do
+			local tx = t.x + (pp.x or pp[1])
+			local ty = t.y + (pp.y or pp[2])
+
+			for _, p in ipairs(shape) do
+				local x = px + (p.x or p[1])
+				local y = py + (p.y or p[2])
+
+				if x == tx and y == ty then
+					return false
+				end
+			end
+		end
+	end
+
+	return true
+end
+
+local rotations = {
+	0,
+	1,
+	3
+}
+
+function M:placeTreasureRandom(treasure)
+	local baseShape = M.getRotatableShape(treasure.id)
+
+	for _, idx1D in ipairs(self.randomIndices) do
+		local px, py = indexToCoord(idx1D, self.width)
+		local shuffledRotations = {}
+
+		if M.TreasureConfigs[treasure.id].forbidRot then
+			table.insert(shuffledRotations, rotations[1])
+		else
+			for i = 1, #rotations do
+				table.insert(shuffledRotations, rotations[i])
+			end
+		end
+
+		for i = #shuffledRotations, 2, -1 do
+			local j = math.random(1, i)
+			shuffledRotations[j] = shuffledRotations[i]
+			shuffledRotations[i] = shuffledRotations[j]
+		end
+
+		for _, rot in ipairs(shuffledRotations) do
+			local shape = M.rotateShape(baseShape, rot)
+
+			if self:canPlaceTreasure(treasure, px, py, shape) then
+				treasure.x = px
+				treasure.y = py
+				treasure.rot = rot
+
+				if self._RotatedShapeCache[treasure.id] then
+					self._RotatedShapeCache[treasure.id][rot] = nil
+				end
+
+				table.insert(self.treasures, treasure)
+
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:getDigState(x, y)
+	local i = idx(self, x, y)
+
+	return self.digState[i] or 0
+end
+
+function M:canDig(x, y)
+	if x < 1 or y < 1 or self.width < x or self.height < y then
+		return false
+	end
+
+	local cell = self.grid[y][x]
+	local state = self:getDigState(x, y)
+
+	if cell == M.CellType.BLOCK then
+		return false
+	elseif cell == M.CellType.SOFT then
+		return state == 0
+	elseif cell == M.CellType.STONE then
+		return state < 2
+	end
+
+	return false
+end
+
+function M:isTreasureHit(x, y)
+	for _, t in ipairs(self.treasures) do
+		local shp = self:getActualShape(t)
+
+		for _, p in ipairs(shp) do
+			if t.x + (p.x or p[1]) == x and t.y + (p.y or p[2]) == y then
+				return true, t
+			end
+		end
+	end
+
+	return false
+end
+
+function M:isTreasureClearedByIdx(idx)
+	local t = self.treasures[idx]
+
+	if not t then
+		return false
+	end
+
+	return self:isTreasureCleared(t)
+end
+
+function M:isTreasureCleared(t)
+	local shp = self:getActualShape(t)
+
+	for _, p in ipairs(shp) do
+		local x = t.x + (p.x or p[1])
+		local y = t.y + (p.y or p[2])
+		local cell = self.grid[y][x]
+		local dig = self:getDigState(x, y)
+
+		if cell == M.CellType.SOFT and dig < 1 then
+			return false
+		end
+
+		if cell == M.CellType.STONE and dig < 2 then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:dig(x, y)
+	if not self:canDig(x, y) then
+		return
+	end
+
+	local i = idx(self, x, y)
+	local state = self.digState[i] or 0
+	self.digState[i] = state + 1
+	local newlyFound = nil
+	local isHit, hitTreasure = self:isTreasureHit(x, y)
+
+	if isHit and not hitTreasure.found and self:isTreasureCleared(hitTreasure) then
+		hitTreasure.found = true
+		newlyFound = newlyFound or {}
+
+		table.insert(newlyFound, hitTreasure)
+	end
+
+	return newlyFound
+end
+
+function M:isAllTreasureFound()
+	for i, treasure in pairs(self.treasures) do
+		if not treasure.found then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:getCellType(x, y)
+	return self.grid[y][x]
+end
+
+function M:getDisplayState(x, y)
+	local cell = self.grid[y][x]
+	local dig = self:getDigState(x, y)
+
+	if cell == M.CellType.BLOCK then
+		return M.DisplayState.BLOCK
+	elseif cell == M.CellType.SOFT then
+		if dig == 0 then
+			return M.DisplayState.COVERED
+		end
+
+		return M.DisplayState.DUG
+	elseif cell == M.CellType.STONE then
+		if dig == 0 then
+			return M.DisplayState.STONE
+		end
+
+		if dig == 1 then
+			return M.DisplayState.STONE_CRACKED
+		end
+
+		return M.DisplayState.DUG
+	end
+
+	return M.DisplayState.COVERED
+end
+
+function M:printVisual()
+	local out = {}
+
+	table.insert(out, "=== Treasure Map Visual ===")
+
+	local symbol = {
+		[M.CellType.SOFT] = ".",
+		[M.CellType.BLOCK] = "#",
+		[M.CellType.STONE] = "O"
+	}
+	local vis = {}
+
+	for y = 1, self.height do
+		vis[y] = {}
+
+		for x = 1, self.width do
+			vis[y][x] = symbol[self.grid[y][x]] or "?"
+		end
+	end
+
+	for _, t in ipairs(self.treasures or {}) do
+		if t.x and t.y then
+			local shp = self:getActualShape(t)
+
+			for _, p in ipairs(shp) do
+				local x = t.x + (p.x or p[1])
+				local y = t.y + (p.y or p[2])
+
+				if x >= 1 and y >= 1 and x <= self.width and y <= self.height then
+					vis[y][x] = t.found and "C" or "T"
+				end
+			end
+		end
+	end
+
+	table.insert(out, "")
+
+	for y = 1, self.height do
+		table.insert(out, table.concat(vis[y], " "))
+	end
+
+	table.insert(out, "")
+	table.insert(out, "--- Treasures ---")
+
+	for _, t in ipairs(self.treasures or {}) do
+		local name = M.TreasureConfigs[t.id] and M.TreasureConfigs[t.id].name or "unknown"
+
+		table.insert(out, string.format("ID=%s (%s) at (%d,%d) Rot=%d, Found=%s", t.id, name, t.x or 0, t.y or 0, t.rot or 0, tostring(t.found or false)))
+	end
+
+	table.insert(out, "==============================")
+end
+
+return M

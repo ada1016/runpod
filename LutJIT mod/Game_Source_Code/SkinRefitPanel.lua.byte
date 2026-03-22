@@ -1,0 +1,299 @@
+local M = class("SkinRefitPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	atorColor = Types.Animator,
+	imgSkin = Types.Image,
+	imgSkinBg = Types.Image,
+	imgSkinFrame = Types.Image,
+	goStarArea = Types.GameObject,
+	goStarContainer = Types.GameObject,
+	goStarContainerNext = Types.GameObject,
+	goSkillArea = Types.GameObject,
+	txtSkillLevel = Types.TMP_Text,
+	txtSkillLevelNext = Types.TMP_Text,
+	goSkillStarContainer = Types.GameObject,
+	goSkillStarContainerNext = Types.GameObject,
+	imgSkillIcon = Types.Image,
+	imgSkillIconNext = Types.Image,
+	btnSkill = Types.Button,
+	btnSkillNext = Types.Button,
+	goProp1Area = Types.GameObject,
+	txtProp1Value = Types.TMP_Text,
+	txtProp1ValueNext = Types.TMP_Text,
+	goDamageArea = Types.GameObject,
+	txtDamageName = Types.TMP_Text,
+	txtDamageNameNext = Types.TMP_Text,
+	txtDamageValue = Types.TMP_Text,
+	txtDamageValueNext = Types.TMP_Text,
+	goSkinStarUpRequirement = Types.GameObject,
+	goItemRequireSkin = Types.GameObject,
+	goRequireNum = Types.GameObject,
+	txtRequireNum = Types.TMP_Text,
+	txtRequireTip = Types.TMP_Text,
+	goCostItem1 = Types.GameObject,
+	goCostItem2 = Types.GameObject,
+	txtCost1 = Types.TMP_Text,
+	txtCost2 = Types.TMP_Text,
+	txtCost3 = Types.TMP_Text,
+	goCostOr = Types.GameObject,
+	btnUpgrade = Types.Button,
+	goMaxArea = Types.GameObject,
+	goNoneArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goCostItem1)
+	ItemWidget.noCreate(self._goCostItem2)
+end
+
+function M:addClicks()
+	self:setClick(self._goCostItem1._btnClick, function ()
+		V.showItemInfoPanel(self._skinId)
+	end)
+	self:setClick(self._goCostItem2._btnClick, function ()
+		V.showItemInfoPanel(self._cost2Cid)
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerSkin:tryUpgradeSkin(self._skinId, self._useToken)
+
+		if ret == ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.SkinUpgradePanel, self._skinId)
+			self:updateUI()
+
+			if self._callback then
+				self._callback()
+			end
+		else
+			V.showResultCode(ret, param)
+
+			return
+		end
+	end)
+	self:setClick(self._btnSkill, function ()
+		local cfg = P._playerSkin:getCfg(self._skinId)
+		local level = math.max(P._playerSkin:getSkinLevel(self._skinId), 1)
+
+		V.showSkinSkillDescBubble(cfg, level, self._btnSkill.gameObject)
+	end)
+	self:setClick(self._btnSkillNext, function ()
+		local cfg = P._playerSkin:getCfg(self._skinId)
+		local level = math.max(P._playerSkin:getSkinLevel(self._skinId) + 1, 1)
+
+		V.showSkinSkillDescBubble(cfg, level, self._btnSkillNext.gameObject)
+	end)
+end
+
+function M:init(skinId, callback)
+	self._skinId = skinId
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local skinId = self._skinId
+	local skinType = D.toSkinType(skinId)
+	local cfg = P._playerSkin:getCfg(skinId)
+	local quality = cfg._quality
+	local level = P._playerSkin:getSkinLevel(skinId)
+
+	if quality == D.Quality.Purple then
+		self._atorColor:Play("anim_GatlinColorPurple")
+	elseif quality == D.Quality.Orange then
+		self._atorColor:Play("anim_GatlinColorOrange")
+	else
+		self._atorColor:Play("anim_GatlinColorRed")
+	end
+
+	LuaUnity.setTPSprite(self._imgSkin, "item/item_" .. skinId, true)
+	LuaUnity.setTPSprite(self._imgSkinBg, string.format("item/frame-frame_%02d", quality))
+	LuaUnity.setTPSprite(self._imgSkinFrame, string.format("item/frame-frame_%02d_out", quality))
+
+	local isMaxLevel = P._playerSkin:isMaxLevel(skinId)
+	local tfStarArea = self._goStarArea.transform
+
+	tfStarArea:GetChild(2):SetActive(not isMaxLevel)
+	tfStarArea:GetChild(3):SetActive(not isMaxLevel)
+
+	local showDMGArea = skinType == D.SkinType.Gatlin or skinType == D.SkinType.Role or skinType == D.SkinType.Weapon or skinType == D.SkinType.Dome
+	local showProp1 = skinType == D.SkinType.Role or skinType == D.SkinType.Weapon
+	local showSkillArea = skinType == D.SkinType.Role or skinType == D.SkinType.Weapon or skinType == D.SkinType.Dome
+
+	if showSkillArea and (cfg._weapon == 0 or cfg._weapon == 1000) then
+		showSkillArea = false
+	end
+
+	self._goMaxArea:SetActive(isMaxLevel)
+	self._goNoneArea:SetActive(isMaxLevel)
+	self._btnUpgrade:SetActive(not isMaxLevel)
+	self._goSkillArea:SetActive(showSkillArea)
+
+	if showSkillArea then
+		if skinType == D.SkinType.Dome then
+			LuaUnity.setTPSprite(self._imgSkillIcon, "skill/item_skill_" .. skinId, true)
+			LuaUnity.setTPSprite(self._imgSkillIconNext, "skill/item_skill_" .. skinId, true)
+		else
+			LuaUnity.setTPSprite(self._imgSkillIcon, "weapon/weapon_" .. cfg._weapon, true)
+			LuaUnity.setTPSprite(self._imgSkillIconNext, "weapon/weapon_" .. cfg._weapon, true)
+		end
+
+		V.setSkinQualityStar(self._goSkillStarContainer, quality, level)
+
+		if not isMaxLevel then
+			V.setSkinQualityStar(self._goSkillStarContainerNext, quality, level + 1)
+		end
+
+		local tfSkillArea = self._goSkillArea.transform
+
+		tfSkillArea:GetChild(2):SetActive(not isMaxLevel)
+		tfSkillArea:GetChild(3):SetActive(not isMaxLevel)
+	end
+
+	self._goDamageArea:SetActive(showDMGArea)
+
+	if showDMGArea then
+		if skinType == D.SkinType.Gatlin or skinType == D.SkinType.Role then
+			if cfg._weapon == 0 then
+				self._txtDamageName:SetLocalize(SID.STR_ALL_FINAL_DAMAGE_NAME)
+				self._txtDamageNameNext:SetLocalize(SID.STR_ALL_FINAL_DAMAGE_NAME)
+			elseif cfg._weapon == 1000 then
+				self._txtDamageName:SetLocalize(SID.STR_ALL_DAMAGE_NAME)
+				self._txtDamageNameNext:SetLocalize(SID.STR_ALL_DAMAGE_NAME)
+			else
+				self._txtDamageName:SetLocalize(SID.STR_FINAL_DAMAGE_NAME, -D._weaponConfig[cfg._weapon]._skillNameSid)
+				self._txtDamageNameNext:SetLocalize(SID.STR_FINAL_DAMAGE_NAME, -D._weaponConfig[cfg._weapon]._skillNameSid)
+			end
+
+			self._txtDamageValue.text = string.format("+%.2f%%", cfg._damageAdd * level)
+		elseif skinType == D.SkinType.Dome then
+			self._txtDamageName:SetLocalize(SID.STR_DOME_HP_ADD)
+			self._txtDamageNameNext:SetLocalize(SID.STR_DOME_HP_ADD)
+
+			self._txtDamageValue.text = string.format("+%d", cfg._domeHp * level)
+		else
+			self._txtDamageName:SetLocalize(SID.STR_DAMAGE_NAME, -SID["STR_NATURE_" .. D._weaponConfig[cfg._weapon]._dmgType])
+			self._txtDamageNameNext:SetLocalize(SID.STR_DAMAGE_NAME, -SID["STR_NATURE_" .. D._weaponConfig[cfg._weapon]._dmgType])
+
+			self._txtDamageValue.text = string.format("+%.2f%%", cfg._damageAdd * level)
+		end
+
+		if not isMaxLevel then
+			if skinType == D.SkinType.Dome then
+				self._txtDamageValueNext.text = string.format("+%d", cfg._domeHp * (level + 1))
+			else
+				self._txtDamageValueNext.text = string.format("+%.2f%%", cfg._damageAdd * (level + 1))
+			end
+		end
+
+		local tfDMGArea = self._goDamageArea.transform
+
+		tfDMGArea:GetChild(1):SetActive(not isMaxLevel)
+		tfDMGArea:GetChild(2):SetActive(not isMaxLevel)
+	end
+
+	self._goProp1Area:SetActive(showProp1)
+
+	if showProp1 then
+		self._txtProp1Value:SetLocalize(SID.SID_GEM_EFFECT_DESCSID_3, cfg._critDmgAdd * level)
+
+		if not isMaxLevel then
+			self._txtProp1ValueNext:SetLocalize(SID.SID_GEM_EFFECT_DESCSID_3, cfg._critDmgAdd * (level + 1))
+		end
+
+		local tfProp1Area = self._goProp1Area.transform
+
+		tfProp1Area:GetChild(1):SetActive(not isMaxLevel)
+		tfProp1Area:GetChild(2):SetActive(not isMaxLevel)
+	end
+
+	V.setSkinQualityStar(self._goStarContainer, quality, level)
+
+	local requireSkinSatisfied = true
+
+	if not isMaxLevel and cfg._requireSkin then
+		self._goSkinStarUpRequirement:SetActive(true)
+		ItemWidget.noCreate(self._goItemRequireSkin)
+		self._goItemRequireSkin:init(cfg._requireSkin)
+		self._goItemRequireSkin:setNum(false)
+		self:setClick(self._goItemRequireSkin._btnClick, function ()
+			self._goItemRequireSkin:rewardclickCallback()
+		end)
+
+		if level == 1 then
+			self._goRequireNum:SetActive(false)
+			self._txtRequireTip:SetLocalize(SID.TIP_SKIN_STAR_UP_REQUIREMENT_1, -D._itemConfig[cfg._requireSkin]._nameSid)
+		else
+			self._goRequireNum:SetActive(true)
+			V.formatNeedStr1(self._txtRequireNum, P._playerSkin:getSkinLevel(cfg._requireSkin), level)
+			self._txtRequireTip:SetLocalize(SID.TIP_SKIN_STAR_UP_REQUIREMENT_2, -D._itemConfig[cfg._requireSkin]._nameSid, level)
+		end
+
+		requireSkinSatisfied = level <= P._playerSkin:getSkinLevel(cfg._requireSkin)
+	else
+		self._goSkinStarUpRequirement:SetActive(false)
+	end
+
+	local costSatified = false
+
+	if isMaxLevel then
+		self._goCostOr:SetActive(false)
+		self._goCostItem1:SetActive(false)
+		self._goCostItem2:SetActive(false)
+	else
+		V.setSkinQualityStar(self._goStarContainerNext, quality, level + 1)
+		self._goCostItem1:init(skinId)
+		self._goCostItem1:setNum(false)
+		self:setClick(self._goCostItem1._btnClick, function ()
+			V.showResultCode(skinId, 1)
+		end)
+		V.formatNeedStr1(self._txtCost1, P._playerAsset:getAssetNum(skinId), 1)
+
+		local cost1Enough = P._playerAsset:isAssetEnough(skinId, 1)
+		local canUseCommonToken = P._playerSkin:canCfgCommonTokenUpgrade(skinId)
+		local cost2Cid = P._playerSkin:getCommonSkinToken(skinId)
+		self._cost2Cid = cost2Cid
+
+		V.formatNeedStr1(self._txtCost2, P._playerAsset:getAssetNum(cost2Cid), 1)
+		self._goCostItem2:init(cost2Cid)
+		self._goCostItem2:setNum(false)
+
+		if cost1Enough or not canUseCommonToken then
+			self._goCostOr:SetActive(false)
+			self._goCostItem2:SetActive(false)
+		else
+			self._goCostOr:SetActive(true)
+			self._goCostItem2:SetActive(true)
+		end
+
+		if cost1Enough then
+			self._useToken = false
+		else
+			self._useToken = true
+		end
+
+		local cost2Enough = false
+
+		if canUseCommonToken then
+			cost2Enough = P._playerAsset:isAssetEnough(cost2Cid, 1)
+		end
+
+		costSatified = cost1Enough or cost2Enough
+	end
+
+	if not requireSkinSatisfied or not costSatified then
+		if not requireSkinSatisfied then
+			self._btnUpgrade.enabled = false
+		end
+
+		V.setBtnStyle(self._btnUpgrade, V.BTN_STYLE.gray)
+	end
+end
+
+return M

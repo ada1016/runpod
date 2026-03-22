@@ -1,0 +1,107 @@
+local M = class("WeaponHandbookPanel", requireLua("BasePanel"))
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtName = Types.TMP_Text,
+	goStage1 = Types.GameObject,
+	goStage2 = Types.GameObject,
+	goStage3 = Types.GameObject,
+	goStageUpgrade = Types.GameObject,
+	goChip = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goStages = {
+		self._goStage1,
+		self._goStage2,
+		self._goStage3
+	}
+
+	for i = 1, #self._goStages do
+		lc.prefabVarPeer(self._goStages[i])
+	end
+
+	lc.prefabVarPeer(self._goChip)
+	lc.prefabVarPeer(self._goStageUpgrade)
+end
+
+function M:addClicks()
+end
+
+function M:init(id)
+	self._id = id
+
+	self:updateUI(self._id)
+end
+
+function M:updateUI(id)
+	local level = P._playerArmory:getWeaponLevel(id)
+
+	self._txtName:SetLocalize(SID.WEAPON_NAME_LEVEL, -D._weaponConfig[id]._skillNameSid, level)
+
+	local rougeStages = D._weaponCardConfig[id]
+	local order = 0
+
+	for i = 1, 3 do
+		local stageCards = D._weaponCardConfig[id][i]
+		local rouges = nil
+		rouges = stageCards
+
+		if rouges then
+			for j = 1, #rouges do
+				if i ~= 1 or j ~= 1 then
+					local card = RogueCardInfoWidget.create(self._goStages[i]._tfCardContainer)
+
+					card:updateUI(rouges[j]._id)
+
+					card:GetComponent("CanvasGroup").alpha = 0
+
+					card:setFront()
+
+					local seq = DOTween.Sequence()
+
+					seq:AppendInterval(math.floor(order / 3) * 0.1):Append(card:GetComponent("CanvasGroup"):DOFade(1, 0.4)):SetLink(self.gameObject)
+
+					order = order + 1
+					local unLockLevel = D._rougeUnlock[rouges[j]._id] or 0
+
+					if level >= unLockLevel then
+						card:showLock(false)
+					else
+						card:showLock(unLockLevel)
+					end
+
+					self:setClick(card._btnClick, function ()
+						UIManager.openPanel(PrefabDefine.WeaponTreePanel, rouges[j]._id)
+					end)
+				end
+			end
+		end
+
+		order = math.floor(order / 3) * 3 + 3
+	end
+
+	self._goStageUpgrade:SetActive(false)
+
+	local rouges = rougeStages[D.CHIP_STAGE]
+
+	if rouges then
+		for j = 1, #rouges do
+			local card = RogueCardInfoWidget.create(self._goChip._tfCardContainer)
+
+			card:updateUI(rouges[j]._id)
+			card:setFront()
+			self:setClick(card._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, rouges[j]._id)
+			end)
+		end
+	else
+		self._goChip:SetActive(false)
+	end
+end
+
+return M

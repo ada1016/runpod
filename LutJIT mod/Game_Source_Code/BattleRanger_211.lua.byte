@@ -1,0 +1,83 @@
+local M = class("BattleRanger_211", requireLua("BattleRanger"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._bulletChildren = table.new(64, 0)
+end
+
+function M:pushBullet(bullet)
+	self._bulletChildren[#self._bulletChildren + 1] = bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	local cnt = #self._bulletChildren
+
+	for i = 1, cnt do
+		if bullet == self._bulletChildren[i] then
+			self._bulletChildren[i] = nil
+
+			break
+		end
+	end
+
+	table.removeNilValuesOutOrder(self._bulletChildren, cnt)
+end
+
+function M:createMainBullet()
+	local addNum = self._mainSkill:getProp(BattlePropEnum.Salvo, 0)
+	addNum = math.max(0, addNum)
+	local bulletNum = 1 + addNum
+	local startAngle = 0
+
+	opt.dict_arg8:clear()
+
+	for i = 1, bulletNum do
+		local bullet = self._mainSkill:createBullet()
+
+		self:pushBullet(bullet)
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+		local lockEnemy = nil
+
+		if self:getEffect(21104) then
+			lockEnemy = self._battleSession._battleEnemyFinder:findEliteOrBossOne(self)
+		end
+
+		if lockEnemy == nil then
+			lockEnemy = self._battleSession._battleEnemyFinder:findEnemyCommon(self, opt.dict_arg8)
+		end
+
+		if lockEnemy == nil then
+			lockEnemy = self._battleSession._battleEnemyFinder:findEnemyCommon(self)
+		end
+
+		if lockEnemy == nil then
+			lockEnemy = self._targetEnemy
+		end
+
+		bullet:setDir(lockEnemy._position)
+		bullet:lockEnemy(lockEnemy)
+
+		if lockEnemy then
+			opt.dict_arg8[lockEnemy._id] = true
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+
+	opt.dict_arg8:clear()
+end
+
+function M:updateAngle(dt)
+	self._angle = self._facingRight and 180 or 0
+
+	Vector3.angle2dir(self._angle, self._towardDir)
+	self._shootPos:Set(self._towardDir):Mul(self._shootDistance):AddXYZ(self._position.x, self._position.y + self._rotateBaseY, 0)
+end
+
+return M

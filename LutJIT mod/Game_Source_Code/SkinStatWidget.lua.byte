@@ -1,0 +1,38 @@
+local M = class("SkinStatWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SkinStatWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	SimpleItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:init(cid, prop)
+	self._goItem:init(cid)
+
+	local cfg = P._playerSkin:getCfg(cid)
+
+	self._txtSkinName:SetLocalize(cfg._realNameSid or cfg._nameSid)
+
+	local star = P._playerSkin:getSkinLevel(cid)
+
+	if prop == "_domeHp" then
+		self._txtSkinValue.text = "+" .. cfg[prop] * star
+	else
+		self._txtSkinValue.text = "+" .. cfg[prop] * star .. "%"
+	end
+
+	local canCfgUpgrade = P._playerSkin:canCfgUpgradeSkin(cid)
+
+	self._goStars:SetActive(canCfgUpgrade)
+
+	if canCfgUpgrade then
+		V.setSkinQualityStar(self._goStarsArea, cfg._quality, star)
+	end
+end
+
+return M

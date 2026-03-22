@@ -1,0 +1,166 @@
+local M = class("ActivityArkLotteryDescPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	txtTab1 = Types.TMP_Text,
+	txtTab2 = Types.TMP_Text,
+	goTab1 = Types.GameObject,
+	goTab2 = Types.GameObject,
+	txtDesc1 = Types.TMP_Text,
+	txtDesc2 = Types.TMP_Text,
+	txtDesc3 = Types.TMP_Text,
+	txtDesc4 = Types.TMP_Text,
+	tfChanceParent = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+	self._btnTabs = {
+		self._btnTab1,
+		self._btnTab2
+	}
+	self._imgTabs = {
+		self._btnTab1.gameObject:GetComponent("Image"),
+		self._btnTab2.gameObject:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTab1,
+		self._txtTab2
+	}
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClickWithoutAction(self._btnTab1, function ()
+		self:changeTab(1)
+	end)
+	self:setClickWithoutAction(self._btnTab2, function ()
+		self:changeTab(2)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init(module, auid)
+	self._module = module
+	self._auid = auid
+	self._goChangeCell = self._tfChanceParent:GetChild(0).gameObject
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self._data = self._module:getData(self._auid)
+	self._subType = self._data.subType
+
+	self._txtTitle:SetLocalize(SID.STR_INFO)
+	self._txtTab1:SetLocalize(SID.STR_EVENT_INFO)
+	self._txtTab2:SetLocalize(SID.STR_PRIZE_CHANCE)
+	self:changeTab(1)
+end
+
+function M:changeTab(tabIdx)
+	if self._tabIdx == tabIdx then
+		return
+	end
+
+	if tabIdx == 1 then
+		self:updateTab1()
+	else
+		self:updateTab2()
+	end
+
+	if not self._tabIdx then
+		self._tabIdx = 1
+	end
+
+	self._imgTabs[self._tabIdx].color = Color.str2Static(V.tabUnSelectedColor)
+	self._txtTabs[self._tabIdx].color = Color.str2Static(V.tabUnSelectTextColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[1], tabIdx == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+	LuaUnity.setTPSprite(self._imgTabs[2], tabIdx == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+	self._imgTabs[tabIdx].color = Color.str2Static(V.tabSelectedColor)
+	self._txtTabs[tabIdx].color = Color.str2Static(V.tabSelectTextColor)
+
+	self._goTab1:SetActive(tabIdx == 1)
+	self._goTab2:SetActive(tabIdx == 2)
+
+	self._tabIdx = tabIdx
+end
+
+function M:updateTab1()
+	local keySid = -D.toNameSid(D.ResType.ark_rebuild_key)
+
+	self._txtDesc1:SetLocalize(SID.SID_TIPS_DESCSID_27, self._module:readLimitRankIdx())
+	self._txtDesc2:SetLocalize(SID.SID_TIPS_DESCSID_28, self._module:readMaxLucky(), keySid)
+	self._txtDesc3:SetLocalize(SID.SID_TIPS_DESCSID_29)
+	self._txtDesc4:SetLocalize(SID.SID_TIPS_DESCSID_30, keySid)
+end
+
+function M:updateTab2()
+	local dropId = self._module:getDrawDropId(self._subType)
+	local drops = DropHelper.readDropsById(dropId)
+	local dropIdxList = {}
+	local totalWeight = 0
+
+	for i = 1, #drops do
+		dropIdxList[#dropIdxList + 1] = i
+		totalWeight = totalWeight + drops[i]._weight
+	end
+
+	table.sort(dropIdxList, function (a, b)
+		return drops[a]._weight < drops[b]._weight
+	end)
+
+	local cidsList = drops
+	local tabChildCounts = self._tfChanceParent.childCount
+	local expectChildCounts = #cidsList
+
+	if tabChildCounts < expectChildCounts then
+		local need = expectChildCounts - tabChildCounts
+
+		for i = 1, need do
+			local goTab = GameObject.Instantiate(self._goChangeCell, self._tfChanceParent)
+
+			goTab:SetActive(true)
+		end
+	elseif expectChildCounts < tabChildCounts then
+		for i = 1, tabChildCounts do
+			self._tfChanceParent:GetChild(i - 1):SetActive(i <= expectChildCounts)
+		end
+	end
+
+	for i = 1, #cidsList do
+		local drop = drops[dropIdxList[i]]
+		local itemId = drop._itemId
+		local num = drop._minNum
+		local weight = drop._weight
+		local tf = self._tfChanceParent:GetChild(i - 1)
+		local nameSid = D.toNameSid(itemId)
+		local tmp = tf:GetChild(0):GetComponent("TextMeshProUGUI")
+
+		tmp:SetLocalize(nameSid)
+
+		tmp.text = string.format("%s  x%d", tmp.text, num)
+		tf:GetComponent("Image").enabled = i % 2 == 0
+		tf:GetChild(1):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", math.floor(weight / totalWeight * 10000) / 100)
+	end
+end
+
+return M

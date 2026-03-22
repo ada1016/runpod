@@ -1,0 +1,126 @@
+local M = class("AccountLinkTipsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	ator = Types.Animator,
+	title = Types.TMP_Text,
+	content = Types.TMP_Text,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	btnClose = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._confirmCheck then
+			local ret, param = self._confirmCheck()
+
+			if ret then
+				if self._confirmCheckFail then
+					self._confirmCheckFail()
+				else
+					V.showResultCode(ret, param)
+				end
+
+				return
+			end
+		end
+
+		local fc = self._fcComfirm
+		self._fcComfirm = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClick(self._btnCancel, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClick(self._btnClose, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+end
+
+function M:init(param)
+	self._fcComfirm = param._confirmCallback
+	self._fcCancel = param._cancelCallback
+	self._confirmCheck = param._confirmCheck
+	self._confirmCheckFail = param._confirmCheckFail
+	self._fcSure = nil
+
+	if type(param) == "string" then
+		self._title.text = ""
+		self._content.text = param
+
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	elseif type(param) == "number" then
+		self._title.text = ""
+
+		self._content:SetLocalize(param)
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	else
+		if param._title then
+			if type(param._title) == "string" then
+				self._title.text = param._title
+			else
+				self._title:SetLocalize(param._title)
+			end
+		else
+			self._title.text = ""
+		end
+
+		if type(param._content) == "string" then
+			self._content.text = param._content
+		elseif param._cParams then
+			if type(param._cParams) == "number" then
+				self._content:SetLocalize(param._content, param._cParams)
+			elseif type(param._cParams) == "string" then
+				self._content:SetLocalizeS(param._content, param._cParams)
+			else
+				self._content:SetLocalizeS(param._content, unpack(param._cParams))
+			end
+		else
+			self._content:SetLocalize(param._content)
+		end
+
+		self._textConfirm:SetLocalize(param._txtConfirm or SID.STR_CONFIRM)
+		self._textCancel:SetLocalize(param._txtCancel or SID.STR_CANCEL)
+
+		if param._type == 1 then
+			self._btnConfirm:SetActive(true)
+			self._btnCancel:SetActive(false)
+		else
+			self._btnConfirm:SetActive(true)
+			self._btnCancel:SetActive(true)
+		end
+
+		self._btnClose:SetActive(param._showClose == true)
+	end
+end
+
+return M

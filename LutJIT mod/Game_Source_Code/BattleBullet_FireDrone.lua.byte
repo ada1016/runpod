@@ -1,0 +1,292 @@
+local M = class("BattleBullet_FireDrone", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._maxReduceCD = 0
+	self._speedAddPer = 0
+	self._speedAddCD = nil
+	self._killEnemyCount802 = 0
+	self._hitEnemyCount806 = 0
+	self._killEnemyCount805 = 0
+	self._killEnemyCount807 = 0
+	self._bounceRadius = self._radius / 3 - 0.1
+	self._effect807 = false
+	self._speedSlowAdd = 0
+	self._speedSlowCD = 0
+	self._speedSlowInitialCD = battleSkill:getProp(BattlePropEnum.AtkInterval)
+	self._speedSlowInitialCD = self._speedSlowInitialCD + self._speedSlowInitialCD * battleSkill:getProp(BattlePropEnum.AtkIntervalAddPer, 0)
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._speedAddCD then
+		self._speedAddCD = self._speedAddCD - dt
+
+		if self._speedAddCD <= 0 then
+			self._speedAddCD = nil
+			local params = D.getBattleEffectParams(803)
+			self._speedAddPer = params[1]
+		end
+	elseif self._speedSlowCD then
+		self._speedSlowCD = self._speedSlowCD - dt
+
+		if self._speedSlowCD <= 0 then
+			self._speedAddPer = 0
+		end
+	end
+end
+
+function M:bulletHitEnemy(enemy)
+	SUPER.bulletHitEnemy(self, enemy)
+
+	if self._battleWeapon:getEffect(852) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(852)
+
+		if self._hitEnemyCount % params[1] == 0 then
+			local subSkill = self._battleWeapon:getSkill(803)
+			local bullet = subSkill:castSkill()
+
+			bullet:setPos(self._position.x, self._position.y)
+
+			bullet._atkPercent = self._battleWeapon:getEffect(852) / 100
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+end
+
+function M:releaseAttack()
+	SUPER.releaseAttack(self)
+
+	self._effect807 = false
+
+	if self._willDestroyed and not self._effect804Casted and self._battleWeapon:getEffect(804) and self._battleSkill == self._battleWeapon._mainSkill then
+		self._effect804Casted = true
+		self._willDestroyed = false
+		self._damageAddNum = self._damageAddNum + self._battleSkill:getProp(BattlePropEnum.BattlePropParam1, 3)
+		self._dir[1] = 0
+		self._dir[2] = 0
+
+		self._battleWeapon:bulletMarkToBeDelayDestroyed(self)
+	end
+
+	if self._battleWeapon:getEffect(801) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(801)
+
+		if self._damageNum % params[1] == 0 then
+			local subSkill = self._battleWeapon:getSkill(801)
+			local bullet1 = subSkill:castSkill()
+
+			bullet1:setDirByAngle(45)
+			bullet1:setPos(self._position.x, self._position.y)
+
+			if bullet1._view then
+				bullet1._view:posEvent()
+			end
+
+			local bullet2 = subSkill:castSkill()
+
+			bullet2:setDirByAngle(135)
+			bullet2:setPos(self._position.x, self._position.y)
+
+			if bullet2._view then
+				bullet2._view:posEvent()
+			end
+		end
+	end
+
+	if self._battleWeapon:getEffect(808) and self._battleSkill == self._battleWeapon._mainSkill then
+		local castSkill = self._battleWeapon:getSkill(804)
+		local bullet = castSkill:createBullet()
+
+		bullet:setPos(self._position.x, self._position.y)
+		bullet:setScale(self._scale)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:scaleEvent()
+		end
+	end
+
+	if self._battleWeapon:getEffect(810) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(810)
+
+		if self._damageNum % params[1] == 0 then
+			local angle = nil
+			local towardEnemy = self._battleSession:randomOneEnemyInRange(self._position, 1, nil, self._battleWeapon)
+
+			if towardEnemy then
+				angle = BattleMathLib.angle(towardEnemy._position, self._position)
+			end
+
+			if angle == nil then
+				angle = self._battleRandomLib:randomMN(0, 360)
+			end
+
+			local subSkill = self._battleWeapon:getSkill(808)
+			local bullet = subSkill:castSkill()
+
+			bullet:setDirByAngle(angle)
+			bullet:setPos(self._position.x, self._position.y)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	end
+
+	if not self._isCloned and self._battleSkill == self._battleWeapon._mainSkill and self._bullet853Effected == nil and self._battleWeapon:getEffect(853) and self._damageNum >= (self._damageAddNum + self._releaseAtkNum) / 2 then
+		self._bullet853Effected = true
+		local effPar = self._battleWeapon:getEffect(853)
+
+		if effPar == 1 then
+			local bullet = self._battleWeapon:createBullet(self._angle + 180, self._position.x, self._position.y)
+			bullet._isCloned = true
+			bullet._damageNum = self._damageNum
+			local subSkill = self._battleWeapon:getSkill(806)
+
+			if subSkill then
+				local bul = subSkill:createBullet()
+				bul._followBullet = bullet
+
+				bul:setPos(bullet._position.x, bullet._position.y)
+
+				if bul._view then
+					bul._view:posEvent()
+				end
+
+				bullet._806Bullet = bul
+			end
+		else
+			for i = 1, effPar do
+				local bullet = self._battleWeapon:createBullet(nil, self._position.x, self._position.y)
+				bullet._isCloned = true
+				bullet._damageNum = self._damageNum
+				local subSkill = self._battleWeapon:getSkill(806)
+
+				if subSkill then
+					local bul = subSkill:createBullet()
+					bul._followBullet = bullet
+
+					bul:setPos(bullet._position.x, bullet._position.y)
+
+					if bul._view then
+						bul._view:posEvent()
+					end
+
+					bullet._806Bullet = bul
+				end
+			end
+		end
+	end
+end
+
+function M:hitEnemy(enemy)
+	SUPER.hitEnemy(self, enemy)
+
+	self._speedAddPer = -50
+	self._speedSlowCD = self._speedSlowInitialCD
+
+	if self._battleWeapon:getEffect(803) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(803)
+		self._speedAddCD = params[2]
+	end
+
+	if self._battleWeapon:getEffect(806) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(806)
+		self._hitEnemyCount806 = self._hitEnemyCount806 + 1
+
+		if self._hitEnemyCount806 % params[1] == 0 and self._damageAddPer < params[3] then
+			self._damageAddPer = self._damageAddPer + params[2]
+		end
+	end
+
+	if not self._effect807 and self._battleWeapon:getEffect(807) and self._battleSkill == self._battleWeapon._mainSkill then
+		local params = D.getBattleEffectParams(807)
+		self._killEnemyCount807 = self._killEnemyCount807 + 1
+
+		if self._killEnemyCount807 % params[1] == 0 then
+			self._effect807 = true
+			local subSkill = self._battleWeapon:getSkill(params[3])
+			local count = params[2]
+			local dtAngle = 360 / count
+
+			for i = 1, count do
+				local bullet = subSkill:createBullet()
+
+				bullet:setPos(self._position.x, self._position.y)
+				bullet:setDirByAngle(dtAngle * (i - 1))
+
+				local atkRange = subSkill:getProp(BattlePropEnum.AtkRange, 0)
+				atkRange = atkRange + atkRange * subSkill:getProp(BattlePropEnum.AtkRangeAddPer, 0) / 100
+				local liveTime = atkRange / subSkill:getProp(BattlePropEnum.BallisticSpeed)
+				bullet._duration = liveTime
+				bullet._floatSpeedPer = self._battleRandomLib:randomMN(-20, 20)
+
+				if bullet._view then
+					bullet._view:posEvent()
+					bullet._view:rotationEvent()
+				end
+			end
+		end
+	end
+
+	if enemy._isToBeDestroyed then
+		if self._battleSkill == self._battleWeapon._mainSkill and self._battleWeapon:getEffect(805) then
+			local params = D.getBattleEffectParams(805)
+			self._killEnemyCount805 = self._killEnemyCount805 + 1
+
+			if self._killEnemyCount805 % params[1] == 0 and self._battleWeapon._reduceCD < params[3] then
+				self._battleWeapon._reduceCD = self._battleWeapon._reduceCD + params[2]
+			end
+		end
+
+		if self._battleSkill == self._battleWeapon._mainSkill and self._battleWeapon:getEffect(802) then
+			local params = D.getBattleEffectParams(802)
+			self._killEnemyCount802 = self._killEnemyCount802 + 1
+
+			if self._killEnemyCount802 % params[1] == 0 then
+				local subSkill = self._battleWeapon:getSkill(params[2])
+				local bullet = subSkill:createBullet()
+
+				bullet:setPos(self._position.x, self._position.y)
+				bullet:setDirByAngle(-135)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+
+				local subSkill = self._battleWeapon:getSkill(params[2])
+				local bullet = subSkill:createBullet()
+
+				bullet:setPos(self._position.x, self._position.y)
+				bullet:setDirByAngle(-45)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	self._bullet853Effected = nil
+	self._isCloned = nil
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

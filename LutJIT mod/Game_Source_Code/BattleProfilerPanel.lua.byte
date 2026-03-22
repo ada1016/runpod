@@ -1,0 +1,220 @@
+local M = class("BattleProfilerPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpVersion = Types.TMP_Text,
+	frameSwitcher = Types.GameObject,
+	audioSwitcher = Types.GameObject,
+	sliderMusic = Types.Slider,
+	sliderSound = Types.Slider,
+	qualitySwitcher = Types.GameObject,
+	effectSwitcher = Types.GameObject,
+	shakeSwitcher = Types.GameObject,
+	dmgCountSwitcher = Types.GameObject,
+	lockEliteSwitcher = Types.GameObject,
+	btnCheckBoxShowFocus = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._battleView = BattleView
+
+	self:onToggle(2, self._battleView._qualityFlag)
+	self:onToggle(3, self._battleView._mainSessionView._effectFlag)
+	self:onToggle(4, Client._shakeCameraOn == 1)
+	self:onToggleDmgTextCount(self._battleView._dmgTextCountLevel)
+	self:onToggle(5, self._battleView._lockEliteFlag)
+	self:onToggle(7, self._battleView._mainBattleSession._highFrameFlag)
+
+	if lc._isCN then
+		self._frameSwitcher:SetActive(true)
+		self._qualitySwitcher:SetActive(false)
+	else
+		self._frameSwitcher:SetActive(false)
+		self._qualitySwitcher:SetActive(true)
+	end
+
+	self._btnCheckBoxShowFocus.transform:GetChild(0):SetActive(self._battleView._showLockEliteFlag)
+
+	self._tmpVersion.text = Application.version
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._audioSwitcher)
+	lc.prefabVarPeer(self._qualitySwitcher)
+	lc.prefabVarPeer(self._frameSwitcher)
+	lc.prefabVarPeer(self._effectSwitcher)
+	lc.prefabVarPeer(self._shakeSwitcher)
+	lc.prefabVarPeer(self._dmgCountSwitcher)
+	lc.prefabVarPeer(self._lockEliteSwitcher)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._audioSwitcher._btnOff, function ()
+		self:onAudioToggle(false)
+	end)
+	self:setClickWithoutAction(self._audioSwitcher._btnOn, function ()
+		self:onAudioToggle(true)
+	end)
+	self:setClickWithoutAction(self._qualitySwitcher._btnOff, function ()
+		self:onQualityToggle(false)
+	end)
+	self:setClickWithoutAction(self._qualitySwitcher._btnOn, function ()
+		self:onQualityToggle(true)
+	end)
+	self:setClickWithoutAction(self._frameSwitcher._btnOff, function ()
+		self:onFrameToggle(false)
+	end)
+	self:setClickWithoutAction(self._frameSwitcher._btnOn, function ()
+		self:onFrameToggle(true)
+	end)
+	self:setClickWithoutAction(self._effectSwitcher._btnOff, function ()
+		self:onEffectToggle(false)
+	end)
+	self:setClickWithoutAction(self._effectSwitcher._btnOn, function ()
+		self:onEffectToggle(true)
+	end)
+	self:setClickWithoutAction(self._shakeSwitcher._btnOff, function ()
+		self:onShakeToggle(false)
+	end)
+	self:setClickWithoutAction(self._shakeSwitcher._btnOn, function ()
+		self:onShakeToggle(true)
+	end)
+	self:setClickWithoutAction(self._dmgCountSwitcher._btnNum1, function ()
+		self:onToggleDmgTextCount(1)
+	end)
+	self:setClickWithoutAction(self._dmgCountSwitcher._btnNum2, function ()
+		self:onToggleDmgTextCount(2)
+	end)
+	self:setClickWithoutAction(self._dmgCountSwitcher._btnNum3, function ()
+		self:onToggleDmgTextCount(3)
+	end)
+	self:setClickWithoutAction(self._lockEliteSwitcher._btnOff, function ()
+		self:onLockEliteToggle(false)
+
+		if BattlePanel then
+			BattlePanel._btnNotLockElite:SetActive(not self._battleView._lockEliteFlag)
+			BattlePanel._btnLockElite:SetActive(self._battleView._lockEliteFlag)
+		end
+	end)
+	self:setClickWithoutAction(self._lockEliteSwitcher._btnOn, function ()
+		self:onLockEliteToggle(true)
+		BattlePanel._btnNotLockElite:SetActive(not BattleView._lockEliteFlag)
+		BattlePanel._btnLockElite:SetActive(BattleView._lockEliteFlag)
+	end)
+	self._sliderMusic.onValueChanged:AddListener(function (value)
+		Client.updateMusicVolumeStepless(value)
+	end)
+	self._sliderSound.onValueChanged:AddListener(function (value)
+		Client.updateSoundVolumeStepless(value)
+	end)
+	self:setClickWithoutAction(self._btnCheckBoxShowFocus, function ()
+		self._battleView._showLockEliteFlag = not self._battleView._showLockEliteFlag
+
+		lc.setIntKeyValue(BattleDefine.EffectParam[6].key, self._battleView._showLockEliteFlag and 1 or 0)
+		self._btnCheckBoxShowFocus.transform:GetChild(0):SetActive(self._battleView._showLockEliteFlag)
+
+		if BattlePanel then
+			BattlePanel._goLockElite:SetActive(self._battleView._showLockEliteFlag)
+		end
+	end)
+end
+
+function M:init(from)
+	self._from = from
+
+	self._sliderMusic:SetValueWithoutNotify(Client._musicVolume > 0 and Client._musicVolumeFactor / 100 or 0)
+	self._sliderSound:SetValueWithoutNotify(Client._soundVolume > 0 and Client._soundVolumeFactor / 100 or 0)
+end
+
+function M:onToggleDmgTextCount(index)
+	lc.setIntKeyValue("dmg_text_count", index)
+
+	if index == 1 then
+		self._dmgCountSwitcher._num1On:SetActive(true)
+		self._dmgCountSwitcher._num2On:SetActive(false)
+		self._dmgCountSwitcher._num3On:SetActive(false)
+	elseif index == 2 then
+		self._dmgCountSwitcher._num1On:SetActive(false)
+		self._dmgCountSwitcher._num2On:SetActive(true)
+		self._dmgCountSwitcher._num3On:SetActive(false)
+	elseif index == 3 then
+		self._dmgCountSwitcher._num1On:SetActive(false)
+		self._dmgCountSwitcher._num2On:SetActive(false)
+		self._dmgCountSwitcher._num3On:SetActive(true)
+	end
+
+	BattleView:setDmgTextCountPercentIndex(index)
+end
+
+function M:onToggle(index, on)
+	local effectParam = BattleDefine.EffectParam[index]
+	effectParam.on = on
+
+	lc.setIntKeyValue(effectParam.key, on and 1 or 0)
+	self[effectParam.widget]._offOn:SetActive(not on)
+	self[effectParam.widget]._onOn:SetActive(on)
+end
+
+function M:onAudioToggle(on)
+	self:onToggle(1, on)
+
+	self._battleView._souldFlag = on
+
+	AudioService:SetSEBusMute(not on)
+end
+
+function M:onQualityToggle(on)
+	self:onToggle(2, on)
+
+	self._battleView._qualityFlag = on
+
+	if on then
+		lc.setResolution(lc._battleScreenRate * 1)
+	else
+		lc.setResolution(lc._battleScreenRate * 0.8)
+	end
+end
+
+function M:onFrameToggle(on)
+	self:onToggle(7, on)
+
+	self._battleView._mainBattleSession._highFrameFlag = on
+
+	self._battleView._mainBattleSession:onHighFrameDitry()
+end
+
+function M:onEffectToggle(on)
+	self:onToggle(3, on)
+
+	self._battleView._effectFlag = on
+	self._battleView._mainSessionView._effectFlag = on
+end
+
+function M:onLockEliteToggle(on)
+	self:onToggle(5, on)
+
+	self._battleView._lockEliteFlag = on
+	self._battleView._mainBattleSession._lockEliteFlag = on
+end
+
+function M:onShakeToggle(on)
+	self:onToggle(4, on)
+
+	Client._shakeCameraOn = on and 1 or 0
+
+	if on == false then
+		self._battleView._mainSessionView._cameraShaker.enabled = false
+	end
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

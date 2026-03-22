@@ -1,0 +1,285 @@
+local M = class("CrisisZoneRankPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("CrisisZoneRankWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	btnTabMonthRank = Types.Button,
+	btnTabTotalRank = Types.Button,
+	txtTabMonthRank = Types.TMP_Text,
+	txtTabTotalRank = Types.TMP_Text,
+	goEmptyRank = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	goGloryWidget = Types.GameObject,
+	btnTip = Types.Button,
+	goLoading = Types.GameObject,
+	txtSubTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTabMonthRank,
+		self._btnTabTotalRank
+	}
+	self._imgTabs = {
+		self._btnTabMonthRank:GetComponent("Image"),
+		self._btnTabTotalRank:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTabMonthRank,
+		self._txtTabTotalRank
+	}
+
+	lc.prefabVarPeer(self._goGloryWidget)
+	lc.prefabVarPeer(self._goGloryWidget._goVote1st)
+	lc.prefabVarPeer(self._goGloryWidget._goVote2nd)
+	lc.prefabVarPeer(self._goGloryWidget._goVote3rd)
+
+	self._txtTopNames = {
+		self._goGloryWidget._txtName1st,
+		self._goGloryWidget._txtName2nd,
+		self._goGloryWidget._txtName3rd
+	}
+	self._goTopSpines = {
+		self._goGloryWidget._goSpine1st,
+		self._goGloryWidget._goSpine2nd,
+		self._goGloryWidget._goSpine3rd
+	}
+	self._rawImgTopSpineBGs = {
+		self._goGloryWidget._btn1st.transform:GetChild(1):GetComponent("RawImage"),
+		self._goGloryWidget._btn2nd.transform:GetChild(1):GetComponent("RawImage"),
+		self._goGloryWidget._btn3rd.transform:GetChild(1):GetComponent("RawImage")
+	}
+	self._tfTopSpineBGLights = {
+		self._goGloryWidget._btn1st.transform:GetChild(1):GetChild(2),
+		self._goGloryWidget._btn2nd.transform:GetChild(1):GetChild(2),
+		self._goGloryWidget._btn3rd.transform:GetChild(1):GetChild(2)
+	}
+	self._btnTops = {
+		self._goGloryWidget._btn1st,
+		self._goGloryWidget._btn2nd,
+		self._goGloryWidget._btn3rd
+	}
+	self._btnVotes = {
+		self._goGloryWidget._goVote1st._btnClick,
+		self._goGloryWidget._goVote2nd._btnClick,
+		self._goGloryWidget._goVote3rd._btnClick
+	}
+	self._goVoteImgs = {
+		self._goGloryWidget._goVote1st._goVoteImg,
+		self._goGloryWidget._goVote2nd._goVoteImg,
+		self._goGloryWidget._goVote3rd._goVoteImg
+	}
+	self._goVoteDots = {
+		self._goGloryWidget._goVote1st._goRedDot,
+		self._goGloryWidget._goVote2nd._goRedDot,
+		self._goGloryWidget._goVote3rd._goRedDot
+	}
+
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine1st)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine2nd)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine3rd)
+
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 20,
+		cellHeight = 116,
+		cellInitCount = 10
+	})
+
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+
+	for i = 1, #self._btnTops do
+		self:setClickWithoutAction(self._btnTops[i], function ()
+			if self._rankList[i] then
+				V.viewOtherInfo(self._rankList[i])
+			end
+		end)
+	end
+
+	self:setClick(self._btnTip, function ()
+		if self._tab == 1 then
+			V.showBubbleTips({
+				desc = {
+					SID.TIP_CRISIS_ZONE_RANK_MONTH,
+					50
+				}
+			}, {
+				offset = {
+					0,
+					20,
+					0
+				},
+				target = self._btnTip.gameObject
+			})
+		else
+			V.showBubbleTips({
+				desc = {
+					SID.TIP_CRISIS_ZONE_RANK_GLOBAL,
+					50
+				}
+			}, {
+				offset = {
+					0,
+					20,
+					0
+				},
+				target = self._btnTip.gameObject
+			})
+		end
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(difficulty)
+	self._difficulty = difficulty
+
+	self._txtSubTitle:SetLocalize(SID.STR_DIFFICULTY_X, difficulty)
+
+	self._rankList = {}
+
+	self._goEmptyRank:SetActive(false)
+
+	self._rankData = P:genRankData()
+	self._rankData.rankValue = P._playerCrisisZone:getRankValue(difficulty)
+	self._rankData.rank = 9999
+
+	self:initTopPlayers()
+	self._goSelfRankWidget:init(self._rankData)
+
+	self._scroll1.enabled = false
+
+	self._goLoading:SetActive(true)
+	self:getRankData(os.date("!%Y-%m", C.getCurTime()))
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		LuaUnity.setTPSprite(self._imgTabs[1], tab == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		LuaUnity.setTPSprite(self._imgTabs[2], tab == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+		self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+		self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+		self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+		self._tab = tab
+		self._rankData = P:genRankData()
+		self._rankData.rankValue = P._playerCrisisZone:getRankValue(self._difficulty)
+		self._rankData.rank = 9999
+
+		if self._tab == 1 then
+			self:getRankData(os.date("!%Y-%m", C.getCurTime()))
+		else
+			self:getRankData(0)
+		end
+	end
+end
+
+function M:getRankData(month)
+	P._playerCrisisZone:getRankData(self._difficulty, month, function (data, selfRank)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._scroll1.enabled = true
+
+		self._goLoading:SetActive(false)
+
+		self._rankList = data
+
+		self:initTopPlayers()
+
+		if selfRank and data[selfRank] then
+			self._rankData = data[selfRank]
+
+			self._goSelfRankWidget:init(self._rankData)
+
+			if self._rankData.rankValue ~= P._playerMission:getMainMissionRankValue() then
+				P._playerRanker:uploadMainMissionRankData(P._playerMission:getMainMissionRankValue())
+			end
+		end
+
+		self._goEmptyRank:SetActive(#self._rankList == 0)
+		self._scrollViewEx1:reloadData(true)
+	end)
+end
+
+function M:initTopPlayers()
+	for i = 1, 3 do
+		if self._rankList[i] then
+			self._txtTopNames[i].text = self._rankList[i].name
+			local bodySkin = self._rankList[i].roleSkin or D.DEFAULT_ROLE_SKIN
+			local weaponSkin = self._rankList[i].weaponSkin or D.DEFAULT_GATLIN_SKIN
+
+			self._goTopSpines[i]:updateUI(bodySkin, weaponSkin, true)
+
+			local skinStage = P._playerSkin:readSkinStageBg(bodySkin)
+
+			if skinStage > 1 then
+				LuaUnity.setTexture(self._rawImgTopSpineBGs[i], string.format("img_bg_skin_rankbg_%d", skinStage))
+
+				local clor = Color.str2Static("B6E8FF")
+				self._tfTopSpineBGLights[i]:GetChild(0):GetComponent("Image").color = clor
+				self._tfTopSpineBGLights[i]:GetChild(1):GetComponent("Image").color = clor
+			end
+		else
+			self._goTopSpines[i]:clearSpine()
+			self._txtTopNames[i]:SetLocalize(SID.STR_WAIT_PLAYER)
+		end
+	end
+end
+
+function M:onCellNum()
+	for i = 1, #self._rankList do
+		if self._rankList[i].avatar == nil then
+			return math.min(50, i - 1)
+		end
+	end
+
+	return math.min(50, #self._rankList)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	local rankData = self._rankList[index]
+
+	goCell:init(rankData)
+	self:setClick(goCell._btnViewInfo, function ()
+		V.viewOtherInfo(rankData)
+	end)
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = RankWidget.create(self._tfScrollContainer1)
+
+	return go
+end
+
+return M

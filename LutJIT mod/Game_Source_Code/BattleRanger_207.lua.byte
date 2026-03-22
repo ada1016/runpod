@@ -1,0 +1,90 @@
+local M = class("BattleRanger_207", requireLua("BattleRanger"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+end
+
+function M:init(cid, index)
+	SUPER.init(self, cid, index)
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+end
+
+local shootNum2Angle = {
+	36,
+	90,
+	55,
+	43.333333333333336,
+	37.5,
+	34,
+	27.142857142857142,
+	25
+}
+
+function M:createMainBullet()
+	local addNum = self._mainSkill:getProp(BattlePropEnum.Salvo, 0)
+	addNum = math.max(0, addNum)
+	local bulletNum = 1 + addNum
+	local bulletDeltaAngle = shootNum2Angle[bulletNum]
+	local weaponCurrentAngle = self._angle
+	local startAngle = 0
+
+	opt.dict_arg8:clear()
+
+	for i = 1, bulletNum do
+		local bullet = self._mainSkill:createBullet()
+		startAngle = weaponCurrentAngle + bulletDeltaAngle * (-(bulletNum - 1) / 2 + i - 1)
+		bullet._angle = startAngle
+		bullet._defaultAngle = weaponCurrentAngle
+
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+		local lockEnemy = self._battleSession._battleEnemyFinder:findEnemyCommon(self, opt.dict_arg8)
+
+		if lockEnemy == nil then
+			lockEnemy = self._battleSession._battleEnemyFinder:findEnemyCommon(self)
+		end
+
+		if lockEnemy == nil then
+			lockEnemy = self._targetEnemy
+		end
+
+		bullet:lockEnemy(lockEnemy)
+
+		if lockEnemy then
+			opt.dict_arg8[lockEnemy._id] = true
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+
+		local triggerSkill = self:getSkill(20702)
+
+		if triggerSkill then
+			triggerSkill._viewScript = nil
+			local b1 = triggerSkill:createBullet()
+
+			b1:setPos(bullet._position.x, bullet._position.y)
+
+			b1._followBullet = bullet
+			bullet._beFollowBullet = b1
+		end
+	end
+
+	opt.dict_arg8:clear()
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._battleSkill == self._mainSkill and bullet._beFollowBullet then
+		bullet._beFollowBullet:markToBeDestroyed()
+
+		bullet._beFollowBullet = nil
+	end
+end
+
+return M

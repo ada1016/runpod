@@ -1,0 +1,148 @@
+local M = class("ChipDropWeightOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+
+	self._partLoaded = {}
+	self._partArrows = {}
+	self._partBtns = {}
+	self._partBgs = {}
+	self._partTitles = {}
+	self._partContents = {}
+	self._parts = {}
+end
+
+function M:init(showQuality, focusPart, param)
+	self._showQuality = showQuality
+
+	self._tmpTitle:SetLocalize(SID["SHOP_BOX_ODDS" .. showQuality])
+
+	self._focusPart = focusPart or 1
+
+	for i = 1, 6 do
+		local tfPart = self._tfContainer:GetChild(i - 1)
+		self._parts[i] = tfPart
+		self._partBgs[i] = tfPart:GetChild(0):GetChild(0)
+		self._partTitles[i] = tfPart:GetChild(0):GetChild(1)
+		local imgPart = self._partTitles[i]:GetChild(0):GetChild(1):GetComponent("Image")
+		local tmpPart = self._partTitles[i]:GetChild(1):GetComponent("TMP_Text")
+
+		tmpPart:SetLocalize(SID["STR_PART_" .. i])
+		LuaUnity.setTPSprite(imgPart, "general/g_icon_center_" .. i, true, true)
+
+		self._partContents[i] = tfPart:GetChild(0):GetChild(2)
+		self._partBtns[i] = self._partTitles[i]:GetChild(2):GetComponent("Button")
+		self._partArrows[i] = self._partTitles[i]:GetChild(2):GetChild(0):GetComponent("Image")
+
+		self:setClick(self._partBtns[i], function ()
+			self:expandPart(i)
+			self:updatePartUI(i)
+
+			if self._partLoaded[i] then
+				self:focusTab(i)
+			end
+		end)
+	end
+
+	local chipCfgs = param == D._qualityGemConfig[showQuality]
+
+	if param and param == "SparkScout" then
+		chipCfgs = D._qualityGemConfigWithSparkChip[showQuality]
+	else
+		chipCfgs = D._qualityGemConfig[showQuality]
+	end
+
+	self._chipsByPart = {}
+	self._chipWeightsByPart = {}
+	self._chipQualityWeights = 0
+	self._loadChipCount = 0
+
+	for i = 1, #chipCfgs do
+		local cfg = chipCfgs[i]
+		local part = cfg._part
+		local partChips = self._chipsByPart[part]
+
+		if not partChips then
+			partChips = {}
+			self._chipsByPart[part] = partChips
+		end
+
+		partChips[#partChips + 1] = cfg
+		self._chipWeightsByPart[part] = self._chipWeightsByPart[part] or 0 + cfg._weight
+		self._loadChipCount = self._loadChipCount + 1
+		self._chipQualityWeights = self._chipQualityWeights + cfg._weight
+	end
+
+	for i = 1, 6 do
+		if i == self._focusPart then
+			self:expandPart(i)
+		end
+
+		self:updatePartUI(i)
+	end
+
+	self:focusTab(self._focusPart)
+	self._goEmpty:SetActive(self._showQuality and self._loadChipCount == 0)
+end
+
+function M:focusTab(idx)
+	LuaUnity.forceRebuildLayoutImmediate(self._tfContainer)
+
+	local moveSpeed = 400
+	local tfPart = self._parts[idx]
+	local tfViewport = self._tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tfPart)
+	local totalHeight = tfViewport.rect.height
+	local partLen = self._partContents[idx].rect.height
+	local x2, y2, z2 = lc.getAnchoredPosition(self._tfContainer)
+
+	self._tfContainer:DOAnchorPosY(-y1, 0.35):SetLink(self.gameObject)
+end
+
+function M:expandPart(part)
+	if self._partLoaded[part] == nil then
+		self:loadPart(part)
+	else
+		self._partLoaded[part] = not self._partLoaded[part]
+	end
+end
+
+function M:updatePartUI(part)
+	self._partContents[part]:SetActive(self._partLoaded[part] == true)
+	lc.setLocalEulerAngles(self._partArrows[part], 0, 0, self._partLoaded[part] and 180 or 270)
+end
+
+function M:loadPart(dealPart)
+	local tfContainer = self._partContents[dealPart]
+	self._partLoaded[dealPart] = true
+	local cfgs = self._chipsByPart[dealPart]
+	local totalWeight = self._chipWeightsByPart[dealPart]
+
+	for i = 1, #cfgs do
+		local cfg = cfgs[i]
+		local goCell = GameObject.Instantiate(self._goTemplate, tfContainer)
+
+		goCell:SetActive(true)
+
+		local tfTmps = goCell.transform:GetChild(0)
+		local tmpDesc = tfTmps:Find("Text"):GetComponent("TMP_Text")
+		local tmpWeight = tfTmps:Find("TextWeight"):GetComponent("TMP_Text")
+		tmpWeight.text = string.format("%.2f%%", math.floor(cfg._weight / self._chipQualityWeights * 10000) / 100)
+		local effectConf = D._gemEffectConfig[cfg._effect]
+
+		V.loadChipDescription(tmpDesc, effectConf, cfg._param, cfg._params)
+	end
+end
+
+return M

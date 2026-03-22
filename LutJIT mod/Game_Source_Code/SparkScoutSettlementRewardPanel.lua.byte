@@ -1,0 +1,83 @@
+local M = class("SparkScoutSettlementRewardPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("SparkScoutRankWidget")
+local RankRewardWidget = requireLua("RankRewardWidget")
+M.args = {
+	txtTitle = Types.TMP_Text,
+	goMilestoneArea = Types.GameObject,
+	goRankArea = Types.GameObject,
+	tfMilestoneRewards = Types.Transform,
+	tfGradesContainer = Types.Transform,
+	tfRankRewards = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	btnClaim = Types.Button,
+	btnRank = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClaim, function ()
+		self:handleClaimBtn()
+	end)
+	self:setClick(self._btnRank, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutRankPanel)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init()
+	if P._playerActivitySparkScout:isBeta() then
+		self._goMilestoneArea:SetActive(false)
+		self._goRankArea:SetActive(false)
+		self._btnClaim.transform:GetChild(1):GetComponent("TMP_Text"):SetLocalize(SID.STR_CONFIRM)
+		self._txtTitle:SetLocalize(SID.TEST_MARK, -SID.SPARK_SCOUT_TITLE_2)
+	else
+		self._txtTitle:SetLocalize(SID.SPARK_SCOUT_TITLE_2)
+	end
+
+	self:updateRankData()
+	self:updateRewards()
+end
+
+function M:updateRankData()
+	local rankData = P:genRankData()
+	rankData.rank = P._playerActivitySparkScout:getFinalRank()
+	rankData.rankValue = P._playerActivitySparkScout:getRankValue()
+
+	self._goSelfRankWidget:init(rankData)
+end
+
+function M:updateRewards()
+	local subType = P._playerActivitySparkScout:getSubType()
+	local star, rewards1 = P._playerActivitySparkScout:getGradeRewards(subType)
+	local gradeId = P._playerActivitySparkScout:getMaxHistoryGradeId()
+
+	V.loadSparkGradeIcon(self._tfGradesContainer, nil, gradeId)
+	V.loadRewardsWidget(self, self._tfMilestoneRewards, rewards1, false, false, 0.9)
+
+	local rankRewards, conf = P._playerActivitySparkScout:getRankRewards()
+
+	V.loadRewardsWidget(self, self._tfRankRewards, rankRewards, false, false, 0.9)
+end
+
+function M:handleClaimBtn()
+	local isBeta = P._playerActivitySparkScout:isBeta()
+	local rewards = P._playerActivitySparkScout:tryClaimSettleRewards()
+
+	if not isBeta then
+		V.showRewardClaimPanel(rewards)
+	end
+
+	self:closePanel()
+end
+
+return M

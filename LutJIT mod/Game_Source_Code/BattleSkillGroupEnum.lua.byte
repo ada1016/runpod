@@ -1,0 +1,19 @@
+local M = {
+	Plasma = 7,
+	Gatlin = 1,
+	PulsedLaser = 2,
+	Aeroblast = 6,
+	FireDrone = 8,
+	GatlinClone = 99,
+	FollowMissile = 3,
+	BeeColony = 12,
+	GravityVortex = 11,
+	Penetrator = 9,
+	Dome = 100,
+	Railgun = 10,
+	SlowfieldDrone = 5,
+	Thunderbolt = 4
+}
+_G.BattleSkillGroupEnum = M
+
+return M

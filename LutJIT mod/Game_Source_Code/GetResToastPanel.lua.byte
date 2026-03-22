@@ -1,0 +1,61 @@
+local M = class("GetResToastPanel", requireLua("BasePanel"))
+M.args = {
+	atorMain = Types.Animator,
+	tfBody = Types.Transform,
+	tmpDesc = Types.TMP_Text,
+	tmpAddNum = Types.TMP_Text,
+	imgIcon = Types.Image
+}
+local typeCG = typeof(UnityEngine.CanvasGroup)
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(cid, baseNum, addNum)
+	baseNum = baseNum or 0
+	addNum = addNum or 0
+
+	lc.stopTimer(self._timer)
+	LuaUnity.setTPSprite(self._imgIcon, D.toSmallSprite(cid))
+
+	if self._isAgain == nil then
+		self._isAgain = true
+	else
+		self._atorMain:SetTrigger("show")
+	end
+
+	self._tmpDesc.text = baseNum
+	self._tmpAddNum.text = "+" .. addNum
+	self._timer = lc.setTimer(function ()
+		self:startScoreChangeAnim(baseNum, addNum)
+	end, 0.75)
+end
+
+function M:startScoreChangeAnim(baseScore, deltaScore)
+	local targetScore = baseScore + deltaScore
+	self._timer = lc.setInterval(function ()
+		baseScore = baseScore + deltaScore / 7
+		self._tmpDesc.text = math.floor(baseScore)
+
+		if targetScore <= baseScore then
+			self._tmpDesc.text = math.floor(targetScore)
+
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+		end
+	end, 0.03333333333333333)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+end
+
+return M

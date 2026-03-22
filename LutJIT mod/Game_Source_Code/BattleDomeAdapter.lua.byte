@@ -1,0 +1,77 @@
+local M = class("BattleDomeAdapter", BLB)
+M.args = {
+	style = 0,
+	tfBaseLeft = Types.Transform,
+	tfBaseRight = Types.Transform,
+	spRendererRoof = Types.SpriteRenderer,
+	vfxHideOnDissolve = Types.GameObject,
+	refDissolveSpriteRenderer = Types.SpriteRenderer,
+	muzzleLeft = Types.GameObject,
+	muzzleRight = Types.GameObject,
+	aniMain = Types.Animation,
+	goStatic = Types.GameObject,
+	goDinamic = Types.GameObject,
+	goReadyAtk = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._positionParams = BattleDefine.POSITION_ENUM[self._style]
+	self._scaleParams = BattleDefine.SCALE_ENUM[self._style]
+	self._sharedDissolveMat = self._refDissolveSpriteRenderer.sharedMaterial
+
+	if self._style == 4 then
+		self._vfxMuzzleLeft = self._muzzleLeft:GetComponent("ParticleSystem")
+		self._vfxMuzzleRight = self._muzzleRight:GetComponent("ParticleSystem")
+	elseif self._style == 11 then
+		self._goStatic:SetActive(false)
+		self._goDinamic:SetActive(true)
+	end
+
+	self:updateStatus()
+end
+
+function M:updateStatus(fieldScaleIndex)
+	fieldScaleIndex = fieldScaleIndex or 1
+
+	if self._scaleParams and self._positionParams then
+		self._tfBaseLeft:DOLocalMoveX(-self._positionParams[fieldScaleIndex], 3):SetEase(V.EASE_OUT_SINE)
+		self._tfBaseRight:DOLocalMoveX(self._positionParams[fieldScaleIndex], 3):SetEase(V.EASE_OUT_SINE)
+		self._tfBaseLeft:DOScale(self._scaleParams[fieldScaleIndex], 3):SetEase(V.EASE_OUT_SINE)
+		self._tfBaseRight:DOScale(self._scaleParams[fieldScaleIndex], 3):SetEase(V.EASE_OUT_SINE)
+	end
+end
+
+function M:playDissolve(callback)
+	if self._goStatic and self._goDinamic then
+		self._goStatic:SetActive(true)
+		self._goDinamic:SetActive(false)
+	end
+
+	if self._style == 7 or self._style == 10 then
+		if self._style == 7 then
+			self._aniMain:Play("Die_Middle_140007")
+		elseif self._style == 10 then
+			self._aniMain:Play("Die_Middle_140010")
+		end
+
+		lc.delayFunc(1.5, callback)
+	else
+		self._spRendererRoof.material = self._sharedDissolveMat
+
+		self._sharedDissolveMat:SetFloat("_DissolveProgress", 0.4)
+		self._sharedDissolveMat:DOFloat(1.2, "_DissolveProgress", 1.5):OnComplete(callback)
+	end
+
+	BattleView:addVFX(string.format("Dome_boom_skin%d", self._style), BattleView._tfEnv)
+
+	if self._vfxHideOnDissolve then
+		self._vfxHideOnDissolve:SetActive(false)
+	end
+end
+
+function M:playCastAni()
+end
+
+return M

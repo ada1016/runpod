@@ -1,0 +1,137 @@
+local mt = {}
+local VarType = LC.Component.VarType
+local VarType_GameObject = VarType.GameObject
+local VarType_Transform = VarType.Transform
+local VarType_Image = VarType.Image
+local VarType_RawImage = VarType.RawImage
+local VarType_Text = VarType.Text
+local VarType_Button = VarType.Button
+local VarType_Animation = VarType.Animation
+local VarType_ParticleSystem = VarType.ParticleSystem
+local VarType_Animator = VarType.Animator
+local VarType_Tmp = VarType.TMP_Text
+local VarType_SMR = VarType.MeshRenderer
+local VarType_MR = VarType.SkinnedMeshRenderer
+local VarType_SFImage = VarType.SlicedFilledImage
+local VarType_CanvasGroup = VarType.CanvasGroup
+local VarType_Camera = VarType.Camera
+local VarType_PlayableGroup = VarType.PlayableGroup
+local VarType_ScrollRect = VarType.ScrollRect
+local VarType_AniEvent = VarType.AnimationEventCallback
+local VarType_InputField = VarType.InputField
+local VarType_TMP_InputField = VarType.TMP_InputField
+local VarTypeValue = {
+	[VarType_GameObject] = function (varObj)
+		return varObj.objValue
+	end,
+	[VarType_Transform] = function (varObj)
+		return varObj.tranValue
+	end,
+	[VarType_Image] = function (varObj)
+		return varObj.imgValue
+	end,
+	[VarType_RawImage] = function (varObj)
+		return varObj.rawImgValue
+	end,
+	[VarType_Text] = function (varObj)
+		return varObj.txtValue
+	end,
+	[VarType_Button] = function (varObj)
+		return varObj.btnValue
+	end,
+	[VarType_Animation] = function (varObj)
+		return varObj.animationValue
+	end,
+	[VarType_ParticleSystem] = function (varObj)
+		return varObj.particleValue
+	end,
+	[VarType_Animator] = function (varObj)
+		return varObj.animatorValue
+	end,
+	[VarType_Tmp] = function (varObj)
+		return varObj.tmpValue
+	end,
+	[VarType_SMR] = function (varObj)
+		return varObj.meshRendererValue
+	end,
+	[VarType_MR] = function (varObj)
+		return varObj.skinnedMeshRendererValue
+	end,
+	[VarType_SFImage] = function (varObj)
+		return varObj.slicedFilledImageValue
+	end,
+	[VarType_CanvasGroup] = function (varObj)
+		return varObj.canvasGroupValue
+	end,
+	[VarType_Camera] = function (varObj)
+		return varObj.cameraValue
+	end,
+	[VarType_PlayableGroup] = function (varObj)
+		return varObj.playableGroupValue
+	end,
+	[VarType_ScrollRect] = function (varObj)
+		return varObj.scrollValue
+	end,
+	[VarType_AniEvent] = function (varObj)
+		return varObj.aniEventValue
+	end,
+	[VarType_InputField] = function (varObj)
+		return varObj.textInputValue
+	end,
+	[VarType_TMP_InputField] = function (varObj)
+		return varObj.tmpInputValue
+	end
+}
+
+function mt.initPrefabVarNumber(obj, exTb)
+	local prefabVar = obj:GetComponent("CPrefabVar")
+
+	if prefabVar == nil then
+		return
+	end
+
+	local varData = prefabVar:GetVarArray()
+	local iter = varData:GetEnumerator()
+
+	while iter:MoveNext() do
+		local varObj = iter.Current
+		local varObjType = varObj.type
+		exTb[tonumber(varObj.name)] = VarTypeValue[varObjType](varObj)
+	end
+end
+
+function mt.initPrefabVar(obj, exTb)
+	local prefabVar = obj:GetComponent("CPrefabVar")
+
+	if prefabVar == nil then
+		return
+	end
+
+	local varData = prefabVar:GetVarArray()
+	local iter = varData:GetEnumerator()
+
+	while iter:MoveNext() do
+		local varObj = iter.Current
+		local varObjType = varObj.type
+		exTb[varObj.name] = VarTypeValue[varObjType](varObj)
+	end
+end
+
+function mt.initPrefabVarArray(obj, exTb)
+	local prefabVar = obj:GetComponent("CPrefabVar")
+
+	if prefabVar == nil then
+		return
+	end
+
+	local varData = prefabVar:GetVarArray()
+	local iter = varData:GetEnumerator()
+
+	while iter:MoveNext() do
+		local varObj = iter.Current
+		local varObjType = varObj.type
+		exTb[#exTb + 1] = VarTypeValue[varObjType](varObj)
+	end
+end
+
+return mt

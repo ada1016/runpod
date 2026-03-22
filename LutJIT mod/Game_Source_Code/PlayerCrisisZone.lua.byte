@@ -1,0 +1,479 @@
+local M = class("PlayerCrisisZone")
+
+function M:ctor()
+end
+
+local BEGIN_MS_ID = 201001
+local CIRCLE_OFFSET = 1755648000
+local CIRCLE_DURATION = 345600
+local BEGIN_MONTH = "2025-08"
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.missionId = self._meta.missionId or BEGIN_MS_ID
+	self._meta.lastMissionId = self._meta.lastMissionId or self._meta.missionId
+	self._missionKillRecords = lc.assignTable(meta, "missionKillRecords")
+	self._monthMissionKillRecords = lc.assignTable(meta, "monthMissionKillRecords")
+	self._settleRewards = {}
+	self._gotRewards = lc.assignTable(meta, "gotRewards")
+	self._circle = meta.circle
+	self._luckyWeapons = lc.assignTable(meta, "luckyWeapons")
+	self._banWeapons = lc.assignTable(meta, "banWeapons")
+	self._circleChance = self._meta.circleChance or 0
+	self._circleChanceAdd = self._meta.circleChanceAdd or 0
+	self._dailyTrainChance = self._meta.dailyTrainChance or 0
+end
+
+function M:start()
+	if self._circle == nil then
+		self._circle = math.ceil((C.getCurTime() - CIRCLE_OFFSET) / CIRCLE_DURATION)
+		self._meta.circle = self._circle
+
+		self:refreshCircle()
+	end
+
+	for i = 1, #self._gotRewards do
+		local reward = self._gotRewards[i]
+		local cid = reward[1]
+		local num = reward[2]
+
+		if D.isRangerEquip(cid) then
+			self._gotRewards[i] = {
+				ConfusedNumber.create(cid, "MissionReward"),
+				num
+			}
+		else
+			self._gotRewards[i] = {
+				ConfusedNumber.create(cid, "MissionReward"),
+				ConfusedNumber.create(num, "MissionReward")
+			}
+		end
+	end
+
+	for k, v in pairs(self._missionKillRecords) do
+		if v > 0 then
+			P._playerGuide:finishGroup(D.GuideGroupId.CrisisZone)
+
+			break
+		end
+	end
+end
+
+function M:dailyReset()
+	local curCircle = math.ceil((C.getCurTime() - CIRCLE_OFFSET) / CIRCLE_DURATION)
+
+	if self._circle < curCircle then
+		self._circle = curCircle
+		self._meta.circle = self._circle
+
+		self:refreshCircle()
+	end
+
+	self._dailyTrainChance = 0
+end
+
+function M:refreshCircle()
+	local seed = self._circle
+	self._circleChance = 0
+	self._meta.circleChance = 0
+	self._circleChanceAdd = 0
+	self._meta.circleChanceAdd = 0
+
+	table.clear(self._luckyWeapons)
+	table.clear(self._banWeapons)
+
+	local loopCount = #D._globalConfig._crisis_zone_lucky_weapon_list
+
+	table.append(self._luckyWeapons, D._globalConfig._crisis_zone_lucky_weapon_list[(seed - 1) % loopCount + 1])
+	table.append(self._banWeapons, D._globalConfig._crisis_zone_unlucky_weapon_list[(seed - 1) % loopCount + 1])
+end
+
+function M:nextSeed(seed)
+	seed = (seed * 12345678923.0 + 12345) % 65536
+
+	return seed
+end
+
+function M:getDifficultyByMissionId(msId)
+	return math.floor(msId / 1000) % 10
+end
+
+function M:getMissionIdByDifficulty(difficulty)
+	return BEGIN_MS_ID + (difficulty - 1) * 1000
+end
+
+function M:getCurDifficulty()
+	return self:getDifficultyByMissionId(self:getMissionId())
+end
+
+function M:getMaxDifficulty()
+	return D.CRISIS_ZONE_MAX_DIFFICULTY
+end
+
+function M:getMissionId()
+	if D.CRISIS_ZONE_MAX_DIFFICULTY < self:getDifficultyByMissionId(self._meta.missionId) then
+		return self:getMissionIdByDifficulty(D.CRISIS_ZONE_MAX_DIFFICULTY)
+	end
+
+	return self._meta.missionId
+end
+
+function M:isMissionUnlocked(msId)
+	return msId <= self._meta.missionId
+end
+
+function M:getLastMissionId()
+	return self._meta.lastMissionId
+end
+
+function M:setLastMissionId(msId)
+	self._meta.lastMissionId = msId
+
+	if msId == self:getMissionId() and self:isNewMissionUnlocked() then
+		self:removeNewMissionUnlockFlag()
+	end
+end
+
+function M:getMissionKillRecord(msId)
+	return self._missionKillRecords[msId] or 0
+end
+
+function M:getLuckWeapon()
+	return self._luckyWeapons[1], self._luckyWeapons[2], self._banWeapons[1], self._banWeapons[2]
+end
+
+function M:getCircleBattleChance()
+	return self._circleChance
+end
+
+function M:getCircleBattleBuyChance()
+	return self._circleChanceAdd
+end
+
+function M:getCircleBattleTotalChance()
+	return D._globalConfig._crisis_zone_circle_chance + self._circleChanceAdd
+end
+
+function M:tryBuyCircleBattleChance()
+	local costCid = D.ResType.diamond
+	local cost = D._globalConfig._crisis_zone_buy_diamond_cost[self._circleChanceAdd + 1] or D._globalConfig._crisis_zone_buy_diamond_cost[#D._globalConfig._crisis_zone_buy_diamond_cost]
+
+	if P._playerAsset:isAssetEnough(costCid, cost) then
+		P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.buy_crisis_zone_chance)
+
+		self._circleChanceAdd = self._circleChanceAdd + 1
+		self._meta.circleChanceAdd = self._circleChanceAdd
+	else
+		return costCid, cost
+	end
+end
+
+function M:getCircleEndTime()
+	return CIRCLE_OFFSET + self._circle * CIRCLE_DURATION
+end
+
+function M:getMissionKillRecord(msId)
+	return self._missionKillRecords[msId] or 0
+end
+
+function M:finishMission(msId, result, battleHp, battleTime, killNum)
+	battleTime = math.floor(math.min(9999, battleTime))
+	local record = nil
+
+	if killNum == D.CRISIS_ZONE_MAX_ENEMY_COUNT then
+		record = D.CRISIS_ZONE_MAX_ENEMY_COUNT + 9999 - battleTime
+	else
+		record = killNum
+	end
+
+	self._lastRecord = record
+
+	if self._isTrain then
+		return
+	end
+
+	if self:getMissionKillRecord(msId) < record then
+		self._missionKillRecords[msId] = record
+		self._isNewRecord = true
+
+		if killNum == D.CRISIS_ZONE_MAX_ENEMY_COUNT then
+			self:uploadRankData(D._missionCrisisConfig[msId]._difficulty, 0, 9999 - battleTime)
+
+			local monthStr = os.date("!%Y-%m", C.getCurTime())
+
+			self:uploadRankData(D._missionCrisisConfig[msId]._difficulty, monthStr, 9999 - battleTime)
+		end
+
+		TaskHelper:updateTaskValueMax(D.TaskType.CRISIS_ZONE_KILL_NUM, killNum, D._missionCrisisConfig[msId]._difficulty)
+	end
+
+	if D._globalConfig._crisis_zone_pass_wave <= killNum and msId == self:getMissionId() then
+		self._meta.missionId = msId + 1000
+		self._meta.newMissionUnlockFlag = true
+	end
+
+	TaskHelper:increaseTaskValue(D.TaskType.CHALLENGE_CRISIS_ZONE, 1)
+end
+
+function M:isNewMissionUnlocked()
+	return self._meta.newMissionUnlockFlag
+end
+
+function M:removeNewMissionUnlockFlag()
+	self._meta.newMissionUnlockFlag = nil
+end
+
+function M:getLastRecord()
+	return self._lastRecord
+end
+
+function M:isNewRecord()
+	return self._isNewRecord
+end
+
+function M:getSettleRewards()
+	return self._settleRewards
+end
+
+function M:getDisplayMissionReward(msId)
+	local cfg = D._missionCrisisConfig[msId]
+	local rewards = {}
+	local drops = DropHelper.readDropsById(cfg._randomRewardDrops[1])
+
+	for i = 1, #drops do
+		local drop = drops[i]
+		local isSubDrop = drop._subDrop ~= nil
+
+		if not isSubDrop and not table.contains(rewards, drop._itemId) then
+			rewards[#rewards + 1] = drop._itemId
+		end
+	end
+
+	table.sort(rewards, function (a, b)
+		return D._itemConfig[b]._quality < D._itemConfig[a]._quality
+	end)
+
+	local insertPos = 1
+
+	for i = 1, #rewards do
+		if D._itemConfig[rewards[i]]._type ~= D.ItemType.Drop then
+			insertPos = i
+
+			break
+		end
+	end
+
+	table.insert(rewards, insertPos, 17201)
+	table.insert(rewards, insertPos, 17202)
+	table.insert(rewards, insertPos, 17203)
+	table.insert(rewards, insertPos, 17204)
+
+	for i = 1, #rewards do
+		rewards[i] = {
+			rewards[i],
+			0
+		}
+	end
+
+	return rewards
+end
+
+function M:dropReward(cfg)
+	local drop = cfg._randomRewardDrops[1]
+	local cid, num = DropHelper.getByDropId(drop)
+
+	if D.isRangerEquip(cid) then
+		num = P._playerRanger:randomRangerEquipByCid(cid)
+
+		return {
+			ConfusedNumber.create(cid, "MissionReward"),
+			num
+		}
+	elseif D.isItem(cid) and D._itemConfig[cid]._type == D.ItemType.Drop then
+		cid = DropHelper.getByDropId(D._itemConfig[cid]._val)
+
+		return {
+			ConfusedNumber.create(cid, "MissionReward"),
+			ConfusedNumber.create(num, "MissionReward")
+		}
+	else
+		return {
+			ConfusedNumber.create(cid, "MissionReward"),
+			ConfusedNumber.create(num, "MissionReward")
+		}
+	end
+end
+
+function M:startBattle(msId, isTrain)
+	local rewardNum = math.random(D._globalConfig._crisis_zone_drop_range[1], D._globalConfig._crisis_zone_drop_range[2])
+	local maxEnemyCount = D.CRISIS_ZONE_MAX_ENEMY_COUNT
+	local dropWeights = {}
+
+	for i = 1, maxEnemyCount do
+		local eliteId = D._missionCrisisConfig[msId + i - 1]._eliteId[1]
+
+		if D._battleEnemyConfig[eliteId]._originId then
+			dropWeights[i] = D._globalConfig._crisis_elite_normal_drop_rate
+		else
+			dropWeights[i] = D._globalConfig._crisis_elite_boss_drop_rate
+		end
+	end
+
+	self._dropRewards = {}
+
+	table.clear(self._gotRewards)
+	table.clear(self._settleRewards)
+
+	if not isTrain then
+		local cfg = D._missionCrisisConfig[msId]
+		local subWeights = {}
+
+		for i = 1, D._globalConfig._crisis_zone_drop_range[1] do
+			local start = 1 + (i - 1) * maxEnemyCount / D._globalConfig._crisis_zone_drop_range[1]
+			local ed = i * maxEnemyCount / D._globalConfig._crisis_zone_drop_range[1]
+
+			for j = start, ed do
+				subWeights[j - start + 1] = dropWeights[j]
+			end
+
+			local enemyDropIdx = DropHelper.randomIndexByWeights(subWeights) + start - 1
+
+			if C._config.testMode then
+				enemyDropIdx = i
+			end
+
+			dropWeights[enemyDropIdx] = 0
+			self._dropRewards[enemyDropIdx] = self:dropReward(cfg)
+		end
+
+		for i = D._globalConfig._crisis_zone_drop_range[1] + 1, rewardNum do
+			local enemyDropIdx = DropHelper.randomIndexByWeights(dropWeights)
+			dropWeights[enemyDropIdx] = 0
+			self._dropRewards[enemyDropIdx] = self:dropReward(cfg)
+		end
+
+		self._circleChance = self._circleChance + 1
+		self._meta.circleChance = self._circleChance
+	else
+		self._dailyTrainChance = self._dailyTrainChance + 1
+		self._meta.dailyTrainChance = self._dailyTrainChance
+	end
+
+	self._lastRecord = nil
+	self._isNewRecord = false
+	self._isTrain = isTrain
+
+	Trace.traceDesign("Critical_Open:%d", self:getDifficultyByMissionId(msId))
+end
+
+function M:hasTrainChance()
+	return self._dailyTrainChance < 1
+end
+
+function M:tryDropReward(enemyDropIdx)
+	local reward = self._dropRewards[enemyDropIdx]
+
+	if reward then
+		self._dropRewards[enemyDropIdx] = nil
+
+		table.insert(self._gotRewards, reward)
+
+		return reward
+	end
+end
+
+function M:tryDropBonusReward(msId)
+	if math.random(100) < D._globalConfig._crisis_zone_bonus_drop_rate then
+		local cfg = D._missionCrisisConfig[msId]
+		local reward = self:dropReward(cfg)
+
+		table.insert(self._gotRewards, reward)
+
+		return reward
+	end
+end
+
+function M:hasGotReward()
+	return #self._gotRewards > 0
+end
+
+function M:getGotRewards()
+	local rewards = {}
+
+	for i = 1, #self._gotRewards do
+		local reward = self._gotRewards[i]
+		local cid = reward[1]()
+
+		if D.isRangerEquip(cid) then
+			rewards[#rewards + 1] = {
+				cid,
+				reward[2],
+				i,
+				reward[4]
+			}
+		else
+			rewards[#rewards + 1] = {
+				cid,
+				reward[2](),
+				i,
+				reward[4]
+			}
+		end
+	end
+
+	return rewards
+end
+
+function M:maskGotRewards(idx)
+	if self._gotRewards[idx][4] then
+		self._gotRewards[idx][4] = nil
+	else
+		self._gotRewards[idx][4] = true
+	end
+end
+
+function M:takeRewards(takeIndexes)
+	table.clear(self._settleRewards)
+
+	for i = 1, #takeIndexes do
+		local idx = takeIndexes[i]
+		local reward = self._gotRewards[idx]
+
+		if reward then
+			local cid = reward[1]()
+
+			if D.isRangerEquip(cid) then
+				table.append(self._settleRewards, P._playerAsset:increaseAssetNum(reward[1](), reward[2], D.LogWay.finish_mission_crisis))
+			else
+				table.append(self._settleRewards, P._playerAsset:increaseAssetNum(reward[1](), reward[2](), D.LogWay.finish_mission_crisis))
+			end
+		end
+	end
+
+	table.clear(self._gotRewards)
+
+	return self._settleRewards
+end
+
+function M:uploadRankData(difficulty, month, record)
+	local now = C.getCurTime() - CIRCLE_OFFSET
+	local rankValue = nil
+
+	if lc._isCN then
+		rankValue = math.floor(record)
+	else
+		rankValue = record * 100000000 + (now and 100000000 - now or 0)
+	end
+
+	P._playerRanker:uploadGlobalRankData(D.RankType.CrisisZoneRank, string.format("%d_%s", difficulty, month), rankValue)
+end
+
+function M:getRankValue(difficulty)
+	return self._missionKillRecords[difficulty] or 0
+end
+
+function M:getRankData(difficulty, month, callback, failCallback)
+	P._playerRanker:getCachedGlobalRankData(D.RankType.CrisisZoneRank, string.format("%d_%s", difficulty, month), callback, failCallback)
+end
+
+return M

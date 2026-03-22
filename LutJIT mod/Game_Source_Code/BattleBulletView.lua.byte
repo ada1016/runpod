@@ -1,0 +1,516 @@
+local M = class("BattleBulletView")
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(bullet)
+	self._bullet = bullet
+	local group = bullet._battleWeapon._group
+	local skillId = bullet._battleSkill._cid
+	self._skillId = skillId
+	local prefab = bullet:prefab()
+
+	if (group == BattleSkillGroupEnum.Gatlin or group == BattleSkillGroupEnum.GatlinClone) and (skillId == 1 or skillId == 101 or skillId == 104) then
+		if bullet._battleWeapon._effect153Actived then
+			if skillId == 1 then
+				prefab = "Bullet_1_forcefield"
+			elseif skillId == 101 then
+				prefab = "Bullet_101_forcefield"
+			end
+		end
+
+		if skillId ~= 104 and bullet._battleWeapon._fireFlag then
+			if skillId == 1 then
+				prefab = "Bullet_1_flame"
+			elseif skillId == 101 then
+				prefab = "Bullet_101_flame"
+			end
+		else
+			local cfg = self._battleView._battleVfxOverrides[skillId]
+
+			if cfg then
+				bullet:changePrefab(cfg.bullet, cfg.hit)
+
+				prefab = bullet:prefab()
+			end
+		end
+	end
+
+	if bullet._battleWeapon._isSuper and bullet._superBulletPrefab then
+		prefab = bullet._superBulletPrefab
+	end
+
+	if skillId == 20700 then
+		if bullet._battleWeapon:getEffect(20701) then
+			prefab = "Ranger_150007_104"
+		end
+	elseif skillId == 20500 and bullet._battleWeapon:getEffect(20502) then
+		prefab = "Ranger_Bullet_150005_1_Advanced"
+	end
+
+	if prefab then
+		local obj = self._sessionView:createBullet(prefab)
+		self._obj = obj
+		self._tf = obj.transform
+	end
+
+	self._trial1 = nil
+	self._trial2 = nil
+	self._trial = nil
+	self._scaleRoot = nil
+	self._ator = nil
+
+	if group == BattleSkillGroupEnum.PulsedLaser then
+		if skillId == 204 then
+			self._laserLine = self._obj:GetChild(0):GetComponent("LineRenderer")
+			self._laserBeganPoint = self._obj:Find("began_point")
+			self._laserEndPoint = self._obj:Find("end_point")
+		elseif skillId == 2 or skillId == 201 or skillId == 202 or skillId == 205 then
+			local dmgRangeAddPer = bullet._battleSkill:getProp(BattlePropEnum.DmgRangeAddPer, 0)
+			local scale = 1 + dmgRangeAddPer / 100
+			local root = self._tf:GetChild(0)
+			self._scaleRoot = root:GetChild(0)
+			self._lineBeganPoint = root:GetChild(1)
+			self._lineEndPoint = root:GetChild(2)
+
+			self._lineBeganPoint:SetActive(false)
+			self._lineEndPoint:SetActive(false)
+			self._lineEndPoint:SetLocalScale(scale, scale, 1)
+
+			if skillId == 2 then
+				if bullet._battleWeapon:getEffect(206) then
+					self._scaleRoot:GetChild(0):SetActive(true)
+				else
+					self._scaleRoot:GetChild(0):SetActive(false)
+				end
+			end
+		end
+	elseif group == BattleSkillGroupEnum.FollowMissile then
+		if skillId == 307 then
+			self._vfxAttack = self._obj:GetChild(1):GetComponent("ParticleSystem")
+		elseif skillId == 310 then
+			self._obj:SetLocalScale(bullet._scale, bullet._scale, bullet._scale)
+		end
+	elseif group == BattleSkillGroupEnum.Thunderbolt then
+		if skillId == 4 then
+			local dmgRangeAddPer = bullet._battleSkill:getProp(BattlePropEnum.DmgRangeAddPer, 0)
+			local scale = 1 + dmgRangeAddPer / 100
+			self._scaleRoot = self._tf:GetChild(0)
+
+			if scale > 1 then
+				self._scaleRoot:SetLocalScale(scale, 1, 1)
+			end
+		elseif skillId == 402 then
+			self._laserLine = self._obj:GetChild(0):GetComponent("LineRenderer")
+		elseif skillId == 410 then
+			self._vfxAttack = self._obj:GetChild(1):GetComponent("ParticleSystem")
+		end
+	elseif group == BattleSkillGroupEnum.SlowfieldDrone then
+		if skillId == 5 or skillId == 502 then
+			local dmgRangeAddPer = bullet._battleSkill:getProp(BattlePropEnum.DmgRangeAddPer, 0)
+			local scale = 1 + dmgRangeAddPer / 100
+			self._scaleRoot = self._obj
+
+			self._scaleRoot:SetLocalScale(self._battleSession:fieldZoomScale(), scale, 1)
+		end
+
+		if skillId == 5 or skillId == 506 then
+			self._sessionView:addUseCameraTexture()
+
+			local distortArea = self._tf:Find("vfx_distortion_area")
+
+			if distortArea then
+				distortArea:SetActive(self._sessionView:canUseCameraTexture())
+			end
+		end
+	elseif group == BattleSkillGroupEnum.Plasma then
+		if skillId == 7 or skillId == 701 or skillId == 703 or skillId == 706 or skillId == 708 then
+			self._laserLine = self._obj:GetChild(0):GetComponent("LineRenderer")
+			self._laserBeganPoint = self._obj:Find("began_point")
+			self._laserEndPoint = self._obj:Find("end_point")
+
+			if bullet._battleWeapon._isSuper and skillId == 7 then
+				self._laserLine1 = self._obj:GetChild(0):GetChild(0):GetComponent("LineRenderer")
+				self._laserLine2 = self._obj:GetChild(0):GetChild(1):GetComponent("LineRenderer")
+			end
+		end
+	elseif group == BattleSkillGroupEnum.Gatlin then
+		if skillId ~= 1 and skillId == 101 then
+			-- Nothing
+		end
+	elseif group == BattleSkillGroupEnum.Railgun then
+		if skillId == 10 then
+			self._scaleRoot = self._obj
+		elseif skillId == 1003 then
+			self._vfxAttack = self._obj:GetChild(1):GetComponent("ParticleSystem")
+		elseif skillId == 1006 then
+			self._laserLine = self._obj:GetChild(0):GetComponent("LineRenderer")
+			self._laserBeganPoint = self._obj:Find("began_point")
+			self._laserEndPoint = self._obj:Find("end_point")
+		end
+	elseif group == BattleSkillGroupEnum.GravityVortex then
+		if skillId == 11 then
+			self._scaleRoot = self._obj
+		elseif skillId == 1103 then
+			self._obj:SetLocalScale(0, 0, 0)
+			self._tf:DOScale(bullet._scale, 0.3)
+		end
+
+		if self._obj then
+			if bullet._scaleType == 2 then
+				self._obj:SetLocalScale(bullet._scale, 1, 1)
+			elseif bullet._scaleType == 3 then
+				self._obj:SetLocalScale(1, bullet._scale, 1)
+			else
+				self._obj:SetLocalScale(bullet._scale, bullet._scale, bullet._scale)
+			end
+		end
+	elseif group == BattleSkillGroupEnum.Dome then
+		if skillId == 10001 or skillId == 10025 or skillId == 10027 then
+			self._ator = self._obj:GetComponent("Animator")
+		end
+	elseif skillId == 20802 then
+		self._vfxAttack = self._obj:GetChild(1):GetComponent("ParticleSystem")
+	elseif self._obj then
+		self._obj:SetLocalScale(bullet._scale, bullet._scale, bullet._scale)
+	end
+
+	self._bullet8Track = nil
+	self._bullet408Track = nil
+	self._bullet8TrackPs = nil
+	self._bullet408TrackPs = nil
+	self._bullet9Track = nil
+	self._bullet9TrackPs = nil
+
+	if group == BattleSkillGroupEnum.FireDrone then
+		if skillId == 8 and bullet._battleWeapon:getEffect(808) then
+			self._bullet8Track = self._sessionView:addVFX("Bullet_8_track")
+
+			self._bullet8Track:SetLocalScale(bullet._scale, 1, 1)
+
+			local duration = bullet._battleWeapon:getSkill(804):getProp(BattlePropEnum.LiveDuration)
+			local ps = self._bullet8Track:GetChild(0):GetComponent("ParticleSystem")
+			local main = ps.main
+			main.duration = duration * 1.5
+			main.startLifetimeMultiplier = duration * 1.5
+
+			ps:Play()
+
+			self._bullet8TrackPs = ps
+		end
+	elseif group == BattleSkillGroupEnum.Thunderbolt then
+		if skillId == 408 then
+			self._bullet408Track = self._sessionView:addVFX("Bullet_8_track")
+
+			self._bullet408Track:SetLocalScale(bullet._scale, 1, 1)
+
+			local duration = bullet._battleWeapon:getSkill(409):getProp(BattlePropEnum.LiveDuration)
+			local ps = self._bullet408Track:GetChild(0):GetComponent("ParticleSystem")
+			local main = ps.main
+			main.duration = duration * 1.5
+			main.startLifetimeMultiplier = duration * 1.5
+
+			ps:Play()
+
+			self._bullet408TrackPs = ps
+		end
+	elseif group == BattleSkillGroupEnum.Penetrator and (skillId == 9 or skillId == 901 or skillId == 902) and bullet._battleWeapon:getEffect(903) then
+		self._bullet9Track = self._sessionView:addVFX("Bullet_9_track")
+		local duration = bullet._battleWeapon:getSkill(906):getProp(BattlePropEnum.LiveDuration)
+		local ps = self._bullet9Track:GetChild(0):GetComponent("ParticleSystem")
+		local main = ps.main
+		main.duration = duration * 1.5
+		main.startLifetimeMultiplier = duration * 1.5
+
+		ps:Play()
+
+		self._bullet9TrackPs = ps
+	end
+end
+
+function M:hitEnemyEvent()
+	if self._bullet then
+		self._battleView:bulletHitEvent(self._bullet)
+	end
+end
+
+function M:explodeEvent()
+	if self._bullet then
+		self._battleView:bulletExplodeEvent(self._bullet)
+	end
+end
+
+function M:destroyedEvent()
+	if self._bullet8Track then
+		self._bullet8TrackPs:Stop()
+		self._battleView:delayRemoveVFX(self._bullet8Track, 5)
+
+		self._bullet8Track = nil
+		self._bullet8TrackPs = nil
+	end
+
+	if self._bullet9Track then
+		self._bullet9TrackPs:Stop()
+		self._battleView:delayRemoveVFX(self._bullet9Track, 5)
+
+		self._bullet9Track = nil
+		self._bullet9TrackPs = nil
+	end
+
+	if self._bullet408Track then
+		self._bullet408TrackPs:Stop()
+		self._battleView:delayRemoveVFX(self._bullet408Track, 5)
+
+		self._bullet408Track = nil
+		self._bullet408TrackPs = nil
+	end
+
+	if self._skillId == 5 or self._skillId == 506 then
+		self._sessionView:removeUseCameraTexture()
+	end
+
+	if self._skillId == 2 or self._skillId == 201 or self._skillId == 202 then
+		self:fadeAway(function ()
+			self._battleView:recycleUnit(self._obj)
+
+			self._obj = nil
+		end)
+	elseif self._skillId == 1103 then
+		self._tf:DOScale(0, 0.3):OnComplete(function ()
+			if self._obj then
+				self._battleView:recycleUnit(self._obj)
+
+				self._obj = nil
+			end
+		end)
+	elseif self._skillId == 7 then
+		self._tf:GetComponent("Animation"):Play("ani_Laser01")
+		self._tf:DOScale(1, 0.25):OnComplete(function ()
+			if self._obj then
+				self._battleView:recycleUnit(self._obj)
+
+				self._obj = nil
+			end
+		end)
+	elseif self._skillId == 10027 then
+		self._ator:SetTrigger("finish")
+		lc.setTimer(function ()
+			if self._obj then
+				self._battleView:recycleUnit(self._obj)
+
+				self._obj = nil
+			end
+		end, 1)
+	elseif self._obj then
+		self._battleView:recycleUnit(self._obj)
+
+		self._obj = nil
+	end
+end
+
+function M:lengthEvent()
+	self._scaleRoot:SetLocalScale(self._bullet._scale, 0, 1)
+
+	if self._bullet._canStrafe then
+		local length = self._bullet._length
+		local t = length / BattleDefine.PULSEDLASER_STEP_SPEED
+
+		self._scaleRoot:DOScaleY(length, t)
+		self._lineBeganPoint:SetActive(true)
+		self._lineEndPoint:SetActive(false)
+
+		return
+	end
+
+	local index = self._bullet._segIndex
+	local p = self._bullet._endPos
+	local x = p.x
+	local y = p.y
+
+	if index == nil or index == 1 then
+		local length = self._bullet._length
+		local t = length / BattleDefine.PULSEDLASER_STEP_SPEED
+
+		self._scaleRoot:DOScaleY(length, t):OnComplete(function ()
+			if index == nil or index == self._bullet:getSegCount() then
+				self._lineEndPoint:SetActive(true)
+				self._lineEndPoint:SetPosition(x, y, 0)
+			end
+		end)
+		self._lineBeganPoint:SetActive(true)
+	else
+		local delay = self._bullet._frontLength / BattleDefine.PULSEDLASER_STEP_SPEED
+		local length = self._bullet._length
+		local t = length / BattleDefine.PULSEDLASER_STEP_SPEED
+		local seq = DOTween.Sequence()
+
+		seq:AppendInterval(delay)
+		seq:AppendCallback(function ()
+			self._lineBeganPoint:SetActive(true)
+		end)
+		seq:Append(self._scaleRoot:DOScaleY(length, t))
+		seq:AppendCallback(function ()
+			if index == self._bullet:getSegCount() then
+				self._lineEndPoint:SetPosition(x, y, 0)
+				self._lineEndPoint:SetActive(true)
+			end
+		end)
+	end
+end
+
+function M:fadeAway(callback)
+	if self._bullet._canStrafe then
+		callback()
+
+		return
+	end
+
+	local index = self._bullet._segIndex
+	local p = self._bullet._endPos
+	local x = p.x
+	local y = p.y
+
+	if index == nil or index == 1 then
+		local length = self._bullet._length
+		local t = length / BattleDefine.PULSEDLASER_STEP_SPEED
+
+		self._tf:DOMove(p, t)
+		self._scaleRoot:DOScaleY(0, t):OnComplete(function ()
+			self._lineEndPoint:SetActive(false)
+			callback()
+		end):OnUpdate(function ()
+			self._lineEndPoint:SetPosition(x, y, 0)
+		end)
+		self._lineBeganPoint:SetActive(false)
+		Vector2.release(p)
+
+		self._bullet._endPos = nil
+	else
+		local delay = self._bullet._frontLength / BattleDefine.PULSEDLASER_STEP_SPEED
+		local length = self._bullet._length
+		local t = length / BattleDefine.PULSEDLASER_STEP_SPEED
+		local seq = DOTween.Sequence()
+
+		seq:InsertCallback(delay, function ()
+			self._lineBeganPoint:SetActive(false)
+		end)
+		seq:Insert(delay, self._scaleRoot:DOScaleY(0, t))
+		seq:Insert(delay, self._tf:DOMove(self._bullet._endPos, t):OnUpdate(function ()
+			self._lineEndPoint:SetPosition(x, y, 0)
+		end))
+
+		if index == self._bullet:getSegCount() then
+			seq:AppendCallback(function ()
+				self._lineEndPoint:SetActive(false)
+				callback()
+			end)
+		else
+			seq:AppendCallback(function ()
+				callback()
+			end)
+		end
+
+		Vector2.release(self._bullet._endPos)
+
+		self._bullet._endPos = nil
+	end
+end
+
+function M:scaleEvent(scale)
+	if self._scaleRoot then
+		scale = scale or self._bullet._scale
+
+		if self._bullet._cid == 5 or self._bullet._cid == 502 then
+			self._scaleRoot:SetLocalScale(self._battleSession:fieldZoomScale(), scale, 1)
+		else
+			self._scaleRoot:SetLocalScale(scale, scale, 1)
+		end
+	elseif self._obj then
+		scale = scale or self._bullet._scale
+
+		self._obj:SetLocalScale(scale, scale, 1)
+	end
+end
+
+function M:posEvent()
+	if self._obj then
+		local position = self._bullet._position
+
+		self._obj:SetPosition(position.x, position.y, 0)
+
+		if BattleDefine.NEED_FIX_PS_TRAIL_BUG[self._bullet._cid] then
+			self._obj:SetActive(true)
+		end
+
+		if self._bullet8Track then
+			self._bullet8Track:SetPosition(position.x, position.y, 0)
+		end
+
+		if self._bullet9Track then
+			self._bullet9Track:SetPosition(position.x, position.y, 0)
+		end
+	end
+
+	if self._bullet408Track then
+		local position = self._bullet._position
+
+		self._bullet408Track:SetPosition(position.x, position.y, 0)
+	end
+end
+
+function M:rotationEvent()
+	if self._bullet._cid == 20400 then
+		return
+	end
+
+	if self._bullet._cid == 21400 then
+		return
+	end
+
+	if self._bullet._cid == 21402 then
+		return
+	end
+
+	if self._obj then
+		local angle = self._bullet._angle
+
+		self._obj:SetLocalRotation(0, 0, angle - 90)
+	end
+end
+
+function M:rotationEvent2(y)
+	if self._obj then
+		local angle = self._bullet._angle
+
+		self._obj:SetLocalRotation(0, y or 0, angle)
+	end
+end
+
+function M:stepMoveEvent()
+	local bullet = self._bullet
+
+	LuaHelper.SetLineRendererPositions(self._laserLine, bullet._count, bullet._lineXs, bullet._lineYs)
+
+	if self._laserLine1 and self._laserLine2 then
+		LuaHelper.SetLineRendererPositions(self._laserLine1, bullet._count, bullet._lineXs, bullet._lineYs)
+		LuaHelper.SetLineRendererPositions(self._laserLine2, bullet._count, bullet._lineXs, bullet._lineYs)
+	end
+
+	if self._laserBeganPoint then
+		self._laserBeganPoint:SetPosition(bullet._lineXs[1], bullet._lineYs[1], 0)
+	end
+
+	self._laserEndPoint:SetPosition(bullet._lineXs[#bullet._lineXs], bullet._lineYs[#bullet._lineYs], 0)
+end
+
+function M:releaseAttackEvent()
+	if self._vfxAttack then
+		self._vfxAttack:Play(true)
+	end
+end
+
+return M

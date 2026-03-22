@@ -1,0 +1,460 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		dup._1307,
+		15000,
+		210,
+		120,
+		6,
+		{
+			c = 2,
+			[-1] = 6424 - lc._encryptOffset,
+			[-2] = 6425 - lc._encryptOffset
+		},
+		{
+			c = 2,
+			[-1] = -3528 - lc._encryptOffset,
+			[-2] = -3627 - lc._encryptOffset
+		},
+		{
+			c = 1,
+			[-1] = 6424 - lc._encryptOffset
+		},
+		{
+			c = 1,
+			[-1] = -3528 - lc._encryptOffset
+		},
+		{
+			20,
+			10,
+			60
+		},
+		-3618 - lc._encryptOffset,
+		-3626 - lc._encryptOffset,
+		220,
+		220,
+		dup._1308,
+		{
+			6,
+			4
+		},
+		{
+			10054,
+			1
+		},
+		-2648 - lc._encryptOffset,
+		420,
+		{
+			c = 7,
+			[-1] = -3628 - lc._encryptOffset,
+			[-2] = -3623 - lc._encryptOffset,
+			[-3] = -3618 - lc._encryptOffset,
+			[-4] = -3613 - lc._encryptOffset,
+			[-5] = -3608 - lc._encryptOffset,
+			[-6] = -3603 - lc._encryptOffset,
+			[-7] = -3598 - lc._encryptOffset
+		},
+		{
+			c = 3,
+			[-1] = -3628 - lc._encryptOffset,
+			[-2] = -3618 - lc._encryptOffset,
+			[-3] = -3598 - lc._encryptOffset
+		},
+		{
+			c = 4,
+			[-1] = -3618 - lc._encryptOffset,
+			[-2] = -3618 - lc._encryptOffset,
+			[-3] = -3608 - lc._encryptOffset,
+			[-4] = -3618 - lc._encryptOffset
+		},
+		{
+			660,
+			645,
+			630,
+			615,
+			530,
+			420,
+			310
+		},
+		dup._333,
+		2000,
+		{
+			{
+				1101,
+				1104,
+				1106,
+				1105,
+				1107,
+				1109
+			},
+			{
+				1201,
+				1203,
+				1204,
+				1207,
+				1205,
+				1208
+			},
+			{
+				1301,
+				1303,
+				1305,
+				1306,
+				1307,
+				1304
+			},
+			{
+				1401,
+				1402,
+				1406,
+				1407,
+				1404,
+				1408
+			},
+			{
+				1501,
+				1502,
+				1504,
+				1505,
+				1506,
+				1507
+			}
+		},
+		{
+			{
+				2182,
+				2183
+			},
+			dup._231,
+			dup._288,
+			dup._269,
+			dup._250
+		},
+		dup._437,
+		dup._1244,
+		{
+			4900,
+			3000,
+			1500,
+			500,
+			100
+		},
+		{
+			0,
+			0,
+			5500,
+			3000,
+			1500
+		},
+		dup._1310,
+		dup._1311,
+		{
+			50,
+			15304
+		},
+		{
+			50,
+			15303
+		},
+		5,
+		1001,
+		1002,
+		{
+			50,
+			10
+		},
+		100,
+		{
+			100,
+			20
+		},
+		{
+			2000,
+			50
+		},
+		{
+			10,
+			10
+		},
+		{
+			100,
+			200
+		},
+		{
+			80,
+			150,
+			220
+		},
+		{
+			50,
+			100,
+			150,
+			200,
+			250
+		},
+		3,
+		{
+			{
+				3,
+				6,
+				5
+			},
+			{
+				10,
+				7,
+				9
+			},
+			{
+				11,
+				4,
+				8
+			},
+			{
+				2,
+				12,
+				9
+			},
+			{
+				10,
+				6,
+				8
+			},
+			dup._1029,
+			{
+				2,
+				12,
+				9
+			},
+			{
+				11,
+				7,
+				8
+			}
+		},
+		{
+			{
+				2,
+				2,
+				2,
+				2,
+				2,
+				2,
+				2,
+				2,
+				2
+			},
+			{
+				2,
+				2,
+				2,
+				2,
+				3,
+				3,
+				3,
+				3,
+				3
+			},
+			{
+				3,
+				3,
+				3,
+				3,
+				2,
+				2,
+				2,
+				2,
+				2
+			},
+			{
+				3,
+				3,
+				3,
+				3,
+				3,
+				3,
+				3,
+				3,
+				3
+			},
+			{
+				2,
+				3,
+				2,
+				3,
+				2,
+				3,
+				2,
+				3,
+				2
+			},
+			{
+				3,
+				2,
+				3,
+				2,
+				3,
+				2,
+				3,
+				2,
+				3
+			}
+		},
+		{
+			10,
+			7,
+			4
+		},
+		{
+			70,
+			90
+		}
+	}
+}
+local mapKeyIndex = {
+	k15255765 = 2,
+	k9061197 = 27,
+	k13448959 = 16,
+	k8138071 = 25,
+	k11176377 = 21,
+	k10964136 = 30,
+	k436664 = 48,
+	k8533051 = 43,
+	k9551624 = 38,
+	k16712963 = 35,
+	k15807139 = 40,
+	k12426765 = 14,
+	k4784704 = 42,
+	k14895089 = 5,
+	k5959795 = 32,
+	k7425663 = 34,
+	k3105683 = 7,
+	k1310044 = 46,
+	k15963789 = 9,
+	k15993154 = 18,
+	k2593249 = 39,
+	k12915863 = 47,
+	k8901782 = 49,
+	k15288172 = 45,
+	k10489112 = 36,
+	k8647977 = 10,
+	k4015704 = 24,
+	k3804533 = 50,
+	k14265796 = 4,
+	k1644150 = 1,
+	k9171796 = 51,
+	k10770954 = 17,
+	k3734608 = 19,
+	k5559117 = 41,
+	k4242215 = 53,
+	k2338293 = 31,
+	k6931670 = 20,
+	k2633310 = 13,
+	k12911750 = 12,
+	k626326 = 6,
+	k13759017 = 22,
+	k8322425 = 8,
+	k912893 = 29,
+	k10489113 = 37,
+	k2795950 = 3,
+	k4332832 = 28,
+	k3033881 = 11,
+	k13084733 = 44,
+	k12251518 = 26,
+	k16144394 = 23,
+	k3081135 = 33,
+	k4233776 = 52,
+	k3794592 = 15
+}
+local mapKeyDimension = {
+	k8322425 = 1,
+	k16144394 = 1,
+	k15963789 = 1,
+	k6931670 = 0,
+	k3033881 = 1,
+	k2633310 = 0,
+	k8647977 = 1,
+	k4015704 = 1,
+	k12426765 = 0,
+	k13759017 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 3628
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_ACTIVITY_SPARK_SCOUT_NAMESID_" .. table[2]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 3628
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

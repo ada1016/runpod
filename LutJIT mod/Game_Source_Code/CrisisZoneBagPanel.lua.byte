@@ -1,0 +1,234 @@
+local M = class("CrisisZoneBagPanel", requireLua("BasePanel"))
+local Types = Types
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+M.args = {
+	btnMask = Types.Button,
+	txtItemNum = Types.TMP_Text,
+	txtRewardTip = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfRewardContainer = Types.Transform
+}
+local CELL_NUM = 5
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+end
+
+function M:init(callback)
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 170,
+		topPadding = 0,
+		cellMargin = 20,
+		cellInitCount = 5
+	})
+	self._allRewards = P._playerCrisisZone:getGotRewards()
+	self._originRewardMap = {}
+
+	for i = 1, #self._allRewards do
+		local reward = self._allRewards[i]
+		self._originRewardMap[reward[3]] = reward
+	end
+
+	self._txtItemNum:SetLocalize(SID.TIP_CRISIS_ZONE_REWARD_NUM, #self._allRewards)
+
+	local maxNum = math.min(D._globalConfig._crisis_zone_reward_select_num + P._playerAsset:getAssetNum(D.ResType.crisis_zone_bag_slot), 6)
+
+	self._txtRewardTip:SetLocalize(SID.TIP_CRISIS_ZONE_REWARD_TIP, maxNum)
+
+	self._rowDisplaying = nil
+
+	self:updateUI()
+	self:sortAndReloadData()
+end
+
+function M:reloadData()
+	self._scrollViewEx:reloadData()
+end
+
+function M:sortAndReloadData()
+	table.sort(self._allRewards, function (a, b)
+		if a[4] ~= b[4] then
+			return a[4] ~= nil
+		end
+
+		local qa = D.toQuality(a[1])
+		local qb = D.toQuality(b[1])
+
+		if qa ~= qb then
+			return qb < qa
+		end
+
+		local na = type(a[2]) == "number" and a[2] or 1
+		local nb = type(b[2]) == "number" and b[2] or 1
+
+		if na ~= nb then
+			return nb < na
+		end
+
+		return a[1] < b[1]
+	end)
+	self._scrollViewEx:reloadData()
+end
+
+function M:updateUI()
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	goCell._index = index
+
+	for i = 1, CELL_NUM do
+		local item = goCell._items[i]
+		local idx = (index - 1) * CELL_NUM + i
+		local reward = self._allRewards[idx]
+
+		if reward then
+			item.idx = reward[3]
+
+			if D.isRangerEquip(reward[1]) then
+				item:init(reward[1], 1, reward[2])
+			else
+				item:init(reward[1], reward[2])
+			end
+
+			item:SetActive(true)
+			item._goTag:SetActive(reward[4] and true or false)
+		else
+			item:SetActive(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local rowCell = LuaUnity.createGameObject("Assets/FW/Prefabs/UI/widget/CrisisZoneRewardRowWidget.prefab", self._tfRewardContainer)
+
+	lc.prefabVarPeer(rowCell)
+
+	rowCell._items = {}
+
+	rowCell._txtTag:SetLocalize(SID.STR_TRANSPORT)
+
+	local function toggleBtns(item, skip)
+		if rowCell._displayingItem ~= item then
+			if self._rowDisplaying and self._rowDisplaying ~= rowCell then
+				self._rowDisplaying._goBubble:SetActive(false)
+
+				self._rowDisplaying._displayingItem = nil
+			end
+
+			self._rowDisplaying = rowCell
+
+			self._scrollViewEx:reloadYRang()
+
+			rowCell._displayingItem = item
+
+			rowCell._goBubble:SetActive(true)
+
+			local x, y, z = lc.getPosition(rowCell._goBubbleArrow)
+			local x1, _, _ = lc.getPosition(item)
+
+			lc.setPosition(rowCell._goBubbleArrow, x1, y, z)
+
+			if D.isRangerEquip(item._cid) then
+				rowCell._txtTitle:SetLocalize(SID.STR_RANGER_EQUIP_NAME, D._rangerEquipConfig[item._cid]._level)
+			else
+				rowCell._txtTitle:SetLocalize(D._itemConfig[item._cid]._nameSid)
+			end
+
+			rowCell._txtTitle.text = rowCell._txtTitle.text .. " x" .. item._num
+			local reward = self._originRewardMap[item.idx]
+
+			rowCell._txtTag:SetLocalize(reward[4] and SID.STR_UNTAG or SID.STR_TAG)
+
+			local _, y, _ = lc.getPosition(rowCell)
+			local tfContainer = self._scroll.transform
+			local _, by, _ = lc.getPosition(tfContainer)
+			local _, height = lc.getSizeDelta(tfContainer)
+
+			if y <= by - height / 2 then
+				self._tfRewardContainer:DOMoveYBy(by - height / 2 - y, 0.3):SetUpdate(0, true)
+			end
+		else
+			self._rowDisplaying = nil
+
+			self._scrollViewEx:reloadYRang()
+
+			rowCell._displayingItem = nil
+
+			rowCell._goBubble:SetActive(false)
+		end
+
+		item.transform.parent:SetAsLastSibling()
+	end
+
+	self:setClick(rowCell._btnDetail, function ()
+		if rowCell._displayingItem then
+			rowCell._displayingItem:rewardclickCallback(self)
+		end
+	end)
+	self:setClick(rowCell._btnTag, function ()
+		if rowCell._displayingItem then
+			self._rowDisplaying = nil
+			local item = rowCell._displayingItem
+			rowCell._displayingItem = nil
+
+			rowCell._goBubble:SetActive(false)
+
+			local reward = self._originRewardMap[item.idx]
+
+			if reward[4] then
+				reward[4] = nil
+			else
+				reward[4] = true
+			end
+
+			P._playerCrisisZone:maskGotRewards(item.idx)
+			self:sortAndReloadData()
+		end
+	end)
+
+	for i = 1, CELL_NUM do
+		local item = rowCell.transform:GetChild(i - 1)
+
+		SimpleItemWidget.noCreate(item)
+
+		rowCell._items[i] = item
+
+		self:setClick(item._btnClick, function ()
+			toggleBtns(item)
+		end)
+	end
+
+	return rowCell
+end
+
+function M:onCellHeight(index)
+	if self._rowDisplaying and self._rowDisplaying._index == index then
+		return 280
+	end
+
+	return 120
+end
+
+function M:onCellNum()
+	return math.ceil(#self._allRewards / CELL_NUM)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._timer)
+	M.super.closePanel(self)
+	BattleManager:revertStopTime()
+end
+
+return M

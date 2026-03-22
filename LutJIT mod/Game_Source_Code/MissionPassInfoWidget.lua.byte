@@ -1,0 +1,63 @@
+local M = class("MissionPassInfoWidget")
+local WeaponPassWidget = requireLua("WeaponPassWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MissionPassInfoWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:updateUI(info)
+	V.setPlayerNameByRankData(self._txtName, info)
+
+	self._txtAtk.text = info.atk
+
+	V.loadAvatar(self._tfAvatar, info.avatar, info.avatarFrame)
+
+	self._txtLevel.text = info.level or 1
+	self._imgExpBar.fillAmount = info.expProgress or 0
+
+	if info.batteryInfo then
+		self._goHint:SetActive(false)
+
+		local splits = string.split(info.batteryInfo, "|")
+		local batterys = {}
+
+		for i = 1, #splits do
+			local subSplits = string.split(splits[i], "-")
+			local id = tonumber(subSplits[1])
+			local star = tonumber(subSplits[2])
+			batterys[#batterys + 1] = {
+				id,
+				star
+			}
+		end
+
+		table.sort(batterys, function (a, b)
+			return b[2] < a[2]
+		end)
+
+		for i = 1, #batterys do
+			local widget = WeaponPassWidget.create(self._tfWeaponContainer)
+
+			widget:updateUI(batterys[i][1], batterys[i][2])
+		end
+	else
+		self._goHint:SetActive(true)
+		self._goCombatArea:SetActive(false)
+		self._btnCards.gameObject:SetActive(false)
+	end
+end
+
+return M

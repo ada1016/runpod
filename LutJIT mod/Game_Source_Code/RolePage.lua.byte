@@ -1,0 +1,926 @@
+local M = class("RolePage", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+local band = bit.band
+M.args = {
+	tfEquipContainer = Types.Transform,
+	tfEquipPrevContainer = Types.Transform,
+	animGemGroupSwitch = Types.Animation,
+	rawImgBg = Types.RawImage,
+	topScroll = Types.ScrollRect,
+	btnEnhance = Types.LCButton,
+	btnGroup = Types.Button,
+	txtGroupId = Types.TMP_Text,
+	txtGroupName = Types.TMP_Text,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	btnTabGem = Types.Button,
+	btnTabEquip = Types.Button,
+	btnTabItem = Types.Button,
+	btnTabMaterial = Types.Button,
+	txtTabEquip = Types.TMP_Text,
+	txtTabGem = Types.TMP_Text,
+	btnRoleSystem = Types.LCButton,
+	btnDome = Types.LCButton,
+	btnRanger = Types.LCButton,
+	btnGemFilter = Types.Button,
+	btnEquipFilter = Types.Button,
+	btnAutoMerge = Types.LCButton,
+	btnDecompose = Types.Button,
+	btnOverview = Types.Button,
+	btnAtkOverview = Types.Button,
+	txtGemFilter = Types.TMP_Text,
+	txtEquipFilter = Types.TMP_Text,
+	goGemFilterEnable = Types.GameObject,
+	goGemFilterContainer = Types.GameObject,
+	goEquipFilterContainer = Types.GameObject,
+	btnTransparentCover = Types.Button,
+	imgScrollMask = Types.Image,
+	txtPlayerAtk = Types.TMP_Text,
+	btnRefineMat = Types.Button,
+	txtRefineMat = Types.TMP_Text,
+	goSpineWidget = Types.GameObject
+}
+local ROW_CELL = 6
+local filterSelectedColor = "4F9989"
+local filterUnSelectedColor = "2D605C"
+local gemGroupSelectedColor = "6089B0"
+local gemGroupUnSelectedColor = "38546D"
+local tabSelectWidth = 450
+local tabUnSelectWidth = 390
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goGems = {}
+	self._availableGems = {}
+	self._gemFilter = nil
+	self._equipFilter = nil
+
+	self._btnTransparentCover:SetActive(false)
+
+	self._imgTabs = {
+		self._btnTabGem.transform:GetComponent("Image"),
+		self._btnTabEquip.transform:GetComponent("Image")
+	}
+	self._chooseTabs = {
+		self._btnTabGem.transform:Find("ImgChoose"),
+		self._btnTabEquip.transform:Find("ImgChoose")
+	}
+	self._txtTabs = {
+		self._txtTabGem,
+		self._txtTabEquip
+	}
+	self._playerGems = {
+		self._tfEquipContainer:GetChild(0).gameObject,
+		self._tfEquipContainer:GetChild(1).gameObject,
+		self._tfEquipContainer:GetChild(2).gameObject,
+		self._tfEquipContainer:GetChild(3).gameObject,
+		self._tfEquipContainer:GetChild(4).gameObject,
+		self._tfEquipContainer:GetChild(5).gameObject
+	}
+	self._playerPrevGems = {
+		self._tfEquipPrevContainer:GetChild(0).gameObject,
+		self._tfEquipPrevContainer:GetChild(1).gameObject,
+		self._tfEquipPrevContainer:GetChild(2).gameObject,
+		self._tfEquipPrevContainer:GetChild(3).gameObject,
+		self._tfEquipPrevContainer:GetChild(4).gameObject,
+		self._tfEquipPrevContainer:GetChild(5).gameObject
+	}
+	self._playerEquips = self._playerGems
+
+	for i = 1, D.PART_NUM do
+		lc.prefabVarPeer(self._playerGems[i])
+		lc.prefabVarPeer(self._playerPrevGems[i])
+		self:setClick(self._playerGems[i]._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.ChipImprovePanel, i, function ()
+				self:updateEquipGemOverview()
+				self:updateGemData()
+				self:reloadData()
+			end)
+		end)
+	end
+
+	self._firstItemWidget = nil
+
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+end
+
+function M:addClicks()
+	self:setClick(self._btnGroup, function ()
+		UIManager.openPanel(PrefabDefine.LoadoutPanel)
+	end)
+	self:setClick(self._btnOverview, function ()
+		UIManager.openPanel(PrefabDefine.ChipAttributePanel, P._playerRole:getGemEffects())
+	end)
+	self:setClick(self._btnAtkOverview, function ()
+		UIManager.openPanel(PrefabDefine.AtkAttributePanel)
+	end)
+	self:setClick(self._btnEnhance, function ()
+		if self._seqFunc then
+			self._seqFunc()
+		end
+
+		UIManager.openPanel(PrefabDefine.EquipImprovePanel)
+	end)
+	self:setClick(self._btnGemFilter, function ()
+		UIManager.openPanel(PrefabDefine.ChipFilterPanel, self._gemFilter, function (value)
+			self._gemFilter = value
+
+			self._goGemFilterEnable:SetActive(self._gemFilter ~= -1)
+			self:updateGemData()
+			self:reloadData()
+		end)
+	end)
+	self:setClick(self._btnEquipFilter, function ()
+		self._goEquipFilterContainer:SetActive(true)
+	end)
+	self:setClick(self._btnAutoMerge, function ()
+		local autoMergeGems = self:calcAutoMergeGems()
+
+		if #autoMergeGems > 0 then
+			local params = {
+				_items = autoMergeGems,
+				_fcConfirm = function (availableGems)
+					local mergeGems = P._playerRole:mergeGems(availableGems)
+					self._autoMerging = false
+
+					V.showRewardClaimPanel(mergeGems)
+				end,
+				_fcCancel = function ()
+					self._autoMerging = false
+				end
+			}
+			self._autoMerging = true
+			self._autoMergePanel = UIManager.openPanel(PrefabDefine.AutoMergePanel, params)
+		else
+			V.showToast(SID.TIP_NO_CHIP_MERGE)
+		end
+	end)
+	self:setClick(self._btnTabGem, function ()
+		self:changeTab(1)
+	end, "ui_Tap_page_1")
+	self:setClick(self._btnTabEquip, function ()
+		self:changeTab(2)
+	end, "ui_Tap_page_1")
+	self:setClickWithoutAction(self._btnTransparentCover, function ()
+		self:clearViewGem()
+	end)
+	self:setClick(self._btnRoleSystem, function ()
+		UIManager.openPanel(PrefabDefine.RoleSystemPanel)
+	end)
+	self:setClick(self._btnDome, function ()
+		UIManager.openPanel(PrefabDefine.DomeSystemPanel)
+	end)
+	self:setClick(self._btnRanger, function ()
+		UIManager.openPanel(PrefabDefine.RangerPanel)
+	end)
+	self:setClick(self._btnDecompose, function ()
+		if self._seqFunc then
+			self._seqFunc()
+		end
+
+		UIManager.openPanel(PrefabDefine.EquipDecomposePanel)
+	end)
+	self:setClick(self._btnRefineMat, function ()
+		V.showItemInfoPanel(D.ResType.equip_refine_mat, P._playerAsset:getAssetNum(D.ResType.equip_refine_mat))
+	end)
+end
+
+function M:addEvents()
+	self:on("gem.locked", function (lock)
+		local viewGem = self:getViewGem(self._viewGemCid)
+
+		if viewGem then
+			viewGem:setLock(lock)
+		end
+	end)
+	self:on("gems.dirty", function ()
+		self._gemsDirty = true
+	end)
+	self:on("equips.dirty", function ()
+		self._equipsDirty = true
+	end)
+	self:on("atk.dirty", function ()
+		self:updatePlayerAtk()
+	end)
+	self:on("skin.equip.dirty", function (id)
+		if id == 0 or id == D.WEAPON_GATLIN then
+			self:updateSkinArea()
+		end
+	end)
+	self:on("groupName.dirty", function ()
+		self:updateGemGroup()
+	end)
+	self:on("group.dirty", function ()
+		self:updateGemGroup()
+		self:updateEquipGemOverview()
+		self:updateGemData()
+		self:updateEquipData()
+		self:reloadData()
+	end)
+end
+
+function M:init()
+	self:updateSkinArea()
+
+	self._availableEquips = {}
+	self._availableGems = {}
+
+	self:updateGemData()
+	self:updateEquipData()
+
+	self._tab = 1
+	self._listData = self._availableGems
+	self._rowCellWidth = self._tfScrollContainer.rect.width
+	self._rowCellHeight = 120
+	self._rowCellMargin = 9
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellInitCount = 7,
+		cellHeight = self._rowCellHeight,
+		cellMargin = self._rowCellMargin
+	})
+
+	self:initUI()
+end
+
+function M:initUI()
+	self:initFilterUI()
+	self:updateEquipGemOverview()
+	self:updateGemGroup()
+	self:updatePlayerAtk()
+	self:reloadData()
+	self:updateDot()
+	self._btnRefineMat:SetActive(false)
+end
+
+function M:initFilterUI()
+	self:initFilter(self._goEquipFilterContainer, function (filterValue, filterText)
+		self._equipFilter = filterValue
+		self._txtEquipFilter.text = filterText
+
+		self:updateEquipData()
+		self:reloadData()
+	end)
+	self._txtEquipFilter:SetLocalize(SID.STR_PART_ALL)
+end
+
+function M:initFilter(go, callback)
+	lc.prefabVarPeer(go)
+	self:setClickWithoutAction(go._btnFilterBg, function ()
+		go:SetActive(false)
+	end)
+
+	go._tfOptions = {}
+	local ALL_OPTION = D.PART_NUM + 1
+	local filterValue = nil
+
+	for i = 1, D.PART_NUM + 1 do
+		local tfOption = go["_tfOption" .. i]
+		go._tfOptions[i] = tfOption
+
+		if i == ALL_OPTION then
+			tfOption:Find("Text"):GetComponent("TMP_Text"):SetLocalize(SID.STR_PART_ALL)
+
+			tfOption:Find("Text"):GetComponent("TMP_Text").color = Color.str2Static(filterSelectedColor)
+
+			self:setClickWithoutAction(tfOption:GetComponent("Button"), function ()
+				filterValue = self:updateOption(go, filterValue, nil, callback)
+			end)
+		else
+			LuaUnity.setTPSprite(tfOption:Find("ImgKind"):GetComponent("Image"), "general/g_icon_center_small_" .. i, true)
+			tfOption:Find("Text"):GetComponent("TMP_Text"):SetLocalize(SID["STR_PART_" .. i])
+			self:setClickWithoutAction(tfOption:GetComponent("Button"), function ()
+				filterValue = self:updateOption(go, filterValue, i, callback)
+			end)
+		end
+	end
+
+	go:SetActive(false)
+end
+
+function M:updateSkinArea()
+	local equipSkinId = P._playerSkin:getEquipedSkin(0) or 1
+
+	self._goSpineWidget:updateUI(equipSkinId, P._playerSkin:getEquipedSkin(D.WEAPON_GATLIN) or 1)
+
+	local skinStage = P._playerSkin:readSkinStageBg(equipSkinId)
+
+	LuaUnity.setTexture(self._rawImgBg, string.format("img_bg_skin_rolepage_%d", skinStage))
+end
+
+function M:updateOption(go, filterValue, newValue, callback)
+	local ALL_OPTION = D.PART_NUM + 1
+	local tfOptions = go._tfOptions
+	local option = tfOptions[filterValue or ALL_OPTION]
+	option:Find("ImgKind"):GetComponent("Image").color = Color.str2Static(filterUnSelectedColor)
+	option:Find("Text"):GetComponent("TMP_Text").color = Color.str2Static(filterUnSelectedColor)
+	filterValue = newValue
+	option = tfOptions[filterValue or ALL_OPTION]
+	option:Find("ImgKind"):GetComponent("Image").color = Color.str2Static(filterSelectedColor)
+	option:Find("Text"):GetComponent("TMP_Text").color = Color.str2Static(filterSelectedColor)
+
+	go:SetActive(false)
+
+	if callback then
+		callback(filterValue, option:Find("Text"):GetComponent("TMP_Text").text)
+	end
+
+	return filterValue
+end
+
+function M:hideTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(V.tabUnSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10_2" or "general/g_bg_11")
+	lc.setSizeDelta(self._imgTabs[tab], tabUnSelectWidth, 81)
+
+	self._txtTabs[tab].color = Color.str2Static(V.tabUnSelectTextColor)
+
+	self._chooseTabs[tab]:SetActive(false)
+
+	if tab == 1 then
+		self._btnGemFilter:SetActive(false)
+		self._btnAutoMerge:SetActive(false)
+	elseif tab == 2 then
+		self._btnEquipFilter:SetActive(false)
+		self._btnDecompose:SetActive(false)
+	end
+end
+
+function M:showTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10" or "general/g_bg_11_2")
+	lc.setSizeDelta(self._imgTabs[tab], tabSelectWidth, 81)
+
+	self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+
+	self._chooseTabs[tab]:SetActive(true)
+
+	if tab == 1 then
+		self._btnGemFilter:SetActive(true)
+		self._btnAutoMerge:SetActive(true)
+		self._btnRefineMat:SetActive(false)
+	elseif tab == 2 then
+		self._btnEquipFilter:SetActive(true)
+		self._btnDecompose:SetActive(true)
+		self._btnRefineMat:SetActive(true)
+	end
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		self:hideTab(self._tab)
+
+		self._tab = tab
+
+		self:showTab(self._tab)
+
+		self._listData = tab == 1 and self._availableGems or self._availableEquips
+
+		self:clearViewGem()
+		self:clearViewEquip()
+		self:reloadData(true)
+	end
+end
+
+function M:updatePlayerAtk()
+	self._txtPlayerAtk.text = P._playerRole:getPlayerAtk()
+end
+
+function M:updateEquipGemOverview(part, index)
+	self:updateEquipGemOverviewInner(self._playerGems, part, index)
+end
+
+function M:updatePrevEquipGemOverview(part, index)
+	self:updateEquipGemOverviewInner(self._playerPrevGems, part, index)
+end
+
+function M:updateEquipGemOverviewInner(playerEquips, part, index)
+	local isExtraSlotUnlocked = D.isSystemUnlocked(D.SystemType.ExtraChipSlot)
+	local equipSlots = P._playerRole:getEquipSlots()
+	local currentEquips = P._playerRole:getCurrentEquips()
+
+	for i = 1, #equipSlots do
+		local equip = P._playerRole:getEquipById(currentEquips[i])
+
+		LuaUnity.setTPSprite(playerEquips[i]._imgIcon, "general/equip1_" .. equip:part(), true)
+		LuaUnity.setTPSprite(playerEquips[i]._imgQuality, "general/g_frame_small_0" .. equip:quality(), true)
+		playerEquips[i]._txtQuality:SetLocalize(SID.STR_GRADE_X, equip:grade())
+
+		local gemSlots = P._playerRole:getEquipedGems(i)
+
+		for j = 1, 6 do
+			if gemSlots[j] then
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[gemSlots[j]]._quality)
+			else
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_empty")
+			end
+		end
+
+		if not isExtraSlotUnlocked then
+			playerEquips[i]._goExtraSlot:SetActive(false)
+		else
+			playerEquips[i]._goExtraSlot:SetActive(true)
+
+			if not P._playerRole:isGemSlotLocked(i) then
+				playerEquips[i]._goExtraSlot:Find("ImgLock"):SetActive(false)
+
+				playerEquips[i]._goExtraSlot:Find("ImgChip"):GetComponent("Image").color = Color.White
+			else
+				local image = playerEquips[i]._goExtraSlot:Find("ImgChip"):GetComponent("Image")
+
+				LuaUnity.setTPSprite(image, "general/chip-g_chip_lock")
+
+				image.color = Color.str2Static("000000_180")
+
+				playerEquips[i]._goExtraSlot:Find("ImgLock"):SetActive(true)
+			end
+		end
+
+		playerEquips[i]._txtLevel:SetLocalize(SID.STR_LEVEL_X, equipSlots[i].level())
+	end
+end
+
+function M:updateGemGroup()
+	local group = P._playerRole._currentGemGroup
+	self._txtGroupId.text = group
+	local groupName = P._playerRole:getGroupName(group)
+
+	if groupName then
+		self._txtGroupName.text = groupName
+	else
+		self._txtGroupName:SetLocalize(SID.STR_LOADOUT_X, group)
+	end
+end
+
+function M:updateGemData()
+	table.clear(self._availableGems)
+
+	local gems = P._playerRole:getAvaliableGems()
+	local dot = false
+
+	for i = 1, #gems do
+		local gem = gems[i]
+
+		if self._gemFilter == nil or band(-2^D.PART_FILTER_NUM, band(gem.filterValue, self._gemFilter)) ~= 0 and band(2^D.PART_FILTER_NUM - 1, band(gem.filterValue, self._gemFilter)) ~= 0 then
+			table.insert(self._availableGems, gem)
+
+			if gem.dot then
+				dot = true
+			end
+		end
+	end
+
+	dot = dot or P._playerRole:canMergeGems()
+	self._gemsDirty = false
+
+	self:updatePlayerAtk()
+	self._btnTabGem.dot:SetActive(dot)
+end
+
+function M:updateEquipData()
+	table.clear(self._availableEquips)
+
+	local equips = P._playerRole:getAvaliableEquips()
+	local canReplace = false
+
+	for i = 1, #equips do
+		local equip = equips[i]
+
+		if self._equipFilter == nil or equip.part == self._equipFilter then
+			table.insert(self._availableEquips, equip)
+
+			if equip.canReplace and equip.usingInOtherGroup == nil then
+				canReplace = true
+			end
+		end
+	end
+
+	self._equipsDirty = false
+
+	self:updatePlayerAtk()
+	self._btnTabEquip.dot:SetActive(canReplace)
+end
+
+function M:doEnhanceAllChipSystem()
+	P._playerRole:tryUpgradeChipAll()
+	V.showEnhanceToast()
+	self:updateEquipGemOverview()
+end
+
+function M:reloadData(resetZero)
+	self._scrollViewEx:reloadData(resetZero)
+end
+
+function M:calcAutoMergeGems()
+	return P._playerRole:calcAutoMergeGems(P._playerRole:getAvaliableGems())
+end
+
+function M:onCellNum()
+	return math.ceil(#self._listData / ROW_CELL)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	for i = 1, ROW_CELL do
+		local item = goCell.items[i]
+
+		if i == 1 and index == 1 then
+			self._firstItemWidget = item
+		end
+
+		local info = self._listData[i + ROW_CELL * (index - 1)]
+
+		if info then
+			item:SetVisible(true)
+			item:viewItemInfo(info)
+			item:setChoose(false)
+
+			local w = self._rowCellWidth / ROW_CELL
+
+			lc.setLocalPosition(item, -self._rowCellWidth / 2 + (i - 0.5) * w, -self._rowCellHeight / 2, 0)
+			self:setClick(item._btnClick, function ()
+				local cid = info.cid or info[1]
+
+				if D.isGem(cid) then
+					if info.new then
+						info.new = false
+
+						P._playerRole:flagNewGem(info.cid, true)
+						item:setNew(false)
+					end
+
+					local viewGem = self:getViewGem(self._viewGemCid)
+
+					if viewGem ~= item then
+						self:setViewGem(cid)
+					else
+						self:clearViewGem()
+					end
+				elseif D.isEquip(cid) then
+					if info.new then
+						info.new = false
+
+						P._playerRole:flagNewEquip(info.cid)
+						item:setNew(false)
+					end
+
+					self:setViewEquip(info.id, info.invalid)
+				end
+			end)
+		else
+			item:SetVisible(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RowWidget.prefab", self._tfScrollContainer)
+
+	lc.setSizeDelta(go, self._rowCellWidth, self._rowCellHeight)
+
+	go.items = {}
+
+	for i = 1, ROW_CELL do
+		go.items[i] = ItemWidget.create(go.transform)
+
+		go.items[i]._goScaleParent:SetLocalScale(0.95, 0.95, 0.95)
+	end
+
+	return go
+end
+
+function M:updateDot()
+	self._btnRoleSystem.dot:SetActive(P._playerArmory:canUpgradeGatlin() or P._playerSkin:canUpgradeSkinByType(D.SkinType.Gatlin) or P._playerSkin:canEquipSkinByType(D.SkinType.Gatlin) or P._playerSkin:canUpgradeSkinByType(D.SkinType.Role) or P._playerSkin:canEquipSkinByType(D.SkinType.Role) or P._playerSkin:hasNewSkillFlag(D.SkinType.Role))
+	self._btnAutoMerge.dot:SetActive(P._playerRole:canMergeGems())
+
+	if P._playerRole:canMergeGems() then
+		self._btnTabGem.dot:SetActive(true)
+	end
+
+	self._btnEnhance:SetActive(D.isSystemUnlocked(D.SystemType.EquipEnhance))
+
+	local canUpgrade = D.isSystemUnlocked(D.SystemType.EquipEnhance) and P._playerRole:canUpgradeEquip()
+	local canRefine = P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine) and P._playerRole:hasRefineFlagEquip()
+
+	self._btnEnhance.dot:SetActive(canUpgrade or canRefine)
+	self._btnDome.dot:SetActive(P._playerArmory:canUpgradeDome() or P._playerArmory:hasNewDomeTech() or P._playerSkin:canUpgradeSkinByType(D.SkinType.Dome) or P._playerSkin:canEquipSkinByType(D.SkinType.Dome) or P._playerSkin:hasNewSkillFlag(D.SkinType.Dome))
+	self._btnAtkOverview:SetActive(P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine))
+	self._btnRanger.dot:SetActive(RedDotManager.getPathFlag("city.role.ranger"))
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:OnFocus()
+	self._btnDome:SetActive(D.isSystemUnlocked(D.SystemType.Dome))
+	self._btnRanger:SetActive(D.isSystemUnlocked(D.SystemType.Ranger))
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+
+	if self._gemFilter then
+		self._gemFilter = nil
+
+		self._goGemFilterEnable:SetActive(false)
+		self:updateGemData()
+		self:reloadData()
+	end
+
+	if self._equipFilter then
+		self:updateOption(self._goEquipFilterContainer, self._equipFilter, nil)
+
+		self._equipFilter = nil
+
+		self._txtEquipFilter:SetLocalize(SID.STR_PART_ALL)
+		self:updateEquipData()
+		self:reloadData()
+	end
+
+	self:clearViewGem()
+	self:clearViewEquip()
+end
+
+function M:OnFocus()
+	if self._isPlayingChipFly then
+		return
+	end
+
+	self:updateGemGroup()
+	self:updateEquipGemOverview()
+
+	if self._gemsDirty then
+		self:updateGemData()
+
+		if self._tab == 1 then
+			self:reloadData()
+		end
+	end
+
+	if self._equipsDirty then
+		self:updateEquipData()
+
+		if self._tab == 2 then
+			self:reloadData()
+		end
+	end
+
+	self:updateDot()
+
+	self._txtRefineMat.text = P._playerAsset:getAssetNum(D.ResType.equip_refine_mat)
+end
+
+local function moveFollowingItems(self, curItem, duration)
+	local w = self._rowCellWidth / ROW_CELL
+	local followingItems = {}
+	local isFollowing = false
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if isFollowing then
+				if item.activeSelf then
+					local x, y = lc.getLocalPosition(item)
+
+					if j == 1 then
+						item.transform:DOLocalMoveX(x - w / 2, duration / 2):OnComplete(function ()
+							lc.setLocalPosition(item, x + self._rowCellWidth - w / 2, y + self._rowCellHeight + self._rowCellMargin, 0)
+							item.transform:DOLocalMoveX(x + self._rowCellWidth - w, duration / 2):SetEase(V.EASE_LINEAR)
+						end):SetEase(V.EASE_LINEAR)
+					else
+						item.transform:DOLocalMoveX(x - w, duration)
+					end
+				end
+			elseif item == curItem then
+				isFollowing = true
+			end
+		end
+	end
+end
+
+function M:getViewGem(cid)
+	if cid == nil then
+		return nil
+	end
+
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if item._cid == cid and item.activeSelf then
+				return item
+			end
+		end
+	end
+end
+
+function M:setViewGem(cid)
+	local prevViewGem = self:getViewGem(self._viewGemCid)
+
+	if prevViewGem then
+		prevViewGem:setChoose(false)
+	end
+
+	self._viewGemCid = cid
+	local viewGem = self:getViewGem(self._viewGemCid)
+
+	if viewGem then
+		viewGem:setChoose(true)
+		viewGem:setNew(false)
+	end
+
+	self._btnTransparentCover:SetActive(true)
+
+	self._imgScrollMask.enabled = false
+	local info = nil
+
+	for i = 1, #self._listData do
+		if self._listData[i].cid == cid then
+			info = self._listData[i]
+
+			break
+		end
+	end
+
+	UIManager.openPanel(PrefabDefine.GemEquipPanel, cid, info, function (index)
+		local gemView = self._playerGems[info.part]._tfGemView
+		local tfChip = gemView:GetChild(index - 1)
+		local quality = D._gemConfig[cid]._quality
+		local duration = V.playChipFlyVfx(self:getViewGem(self._viewGemCid) or self._scroll, tfChip, quality)
+		self._isPlayingChipFly = true
+		local viewGem = self:getViewGem(self._viewGemCid)
+
+		if viewGem then
+			viewGem:setDot(false)
+			self:clearViewGem()
+
+			if info.num <= 1 then
+				lc.setLocalScale(viewGem, 0, 0, 0)
+				moveFollowingItems(self, viewGem, duration - 0.1)
+			else
+				viewGem:setInvalid(true)
+			end
+		else
+			UIManager.closePanel(PrefabDefine.GemEquipPanel)
+		end
+
+		MainGameRoot:showGlobalMask()
+
+		function self._seqFunc()
+			self:updateGemData()
+			self:updateEquipGemOverview(info.part, index)
+			self:reloadData()
+			LuaUnity.setTPSprite(tfChip:Find("ImgChipBig"):GetComponent("Image"), D.toSprite(cid))
+			tfChip:GetComponent("Animator"):Play("anim_chipEquip")
+
+			self._isPlayingChipFly = false
+			self._seqFunc = nil
+
+			MainGameRoot:hideGlobalMask()
+		end
+
+		lc.setTimer(self._seqFunc, duration)
+		self._btnAutoMerge.dot:SetActive(P._playerRole:canMergeGems())
+	end, function ()
+		self:clearViewGem()
+	end)
+end
+
+function M:clearViewGem()
+	self._btnTransparentCover:SetActive(false)
+
+	self._imgScrollMask.enabled = true
+
+	if self._viewGemCid then
+		local viewGem = self:getViewGem(self._viewGemCid)
+
+		if viewGem then
+			viewGem:setChoose(false)
+		end
+
+		self._viewGemCid = nil
+
+		UIManager.closePanel(PrefabDefine.GemEquipPanel)
+	end
+end
+
+function M:getViewEquip(id)
+	if id == nil then
+		return nil
+	end
+
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if item._equipId == id and item.activeSelf then
+				return item
+			end
+		end
+	end
+end
+
+function M:setViewEquip(id, invalid)
+	if P._playerRole:getEquipById(id) == nil then
+		self:updateEquipData()
+		self:reloadData()
+
+		return
+	end
+
+	local prevViewEquip = self:getViewEquip(self._viewEquipId)
+
+	if prevViewEquip then
+		prevViewEquip:setChoose(false)
+	end
+
+	self._viewEquipId = id
+	local viewEquip = self:getViewEquip(self._viewEquipId)
+
+	viewEquip:setChoose(true)
+	viewEquip:setNew(false)
+
+	local lb = UIManager.openPanel(PrefabDefine.EquipReplacePanel, id, function ()
+		local info = nil
+
+		for i = 1, #self._listData do
+			if self._listData[i].id == id then
+				info = self._listData[i]
+
+				break
+			end
+		end
+
+		local tfEquip = self._playerEquips[info.part]._imgIcon.transform
+		local quality = D._equipConfig[info.cid]._quality
+		local duration = V.playEquipFlyVfx(viewEquip, tfEquip, info.part, quality)
+		self._isPlayingChipFly = true
+
+		viewEquip:setDot(false)
+		self:clearViewEquip()
+
+		if info.num <= 1 then
+			lc.setLocalScale(viewEquip, 0, 0, 0)
+			moveFollowingItems(self, viewEquip, duration - 0.1)
+		else
+			viewEquip:setInvalid(true)
+		end
+
+		MainGameRoot:showGlobalMask()
+
+		function self._seqFunc()
+			P._playerRole:repalceSlotEquip(info.id, info.part)
+			self:updateDot()
+			self:updateEquipData()
+			self:updateEquipGemOverview(info.part)
+			self:reloadData()
+
+			self._isPlayingChipFly = false
+			self._seqFunc = nil
+
+			MainGameRoot:hideGlobalMask()
+		end
+
+		lc.setTimer(self._seqFunc, duration)
+	end)
+
+	if invalid then
+		lb:hideAction()
+	end
+end
+
+function M:clearViewEquip()
+	if self._viewEquipId then
+		local viewEquip = self:getViewEquip(self._viewEquipId)
+
+		if viewEquip then
+			viewEquip:setChoose(false)
+		end
+
+		self._viewEquipId = nil
+	end
+end
+
+return M

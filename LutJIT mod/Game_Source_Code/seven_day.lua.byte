@@ -1,0 +1,156 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		100,
+		{
+			c = 1,
+			[-1] = 11629 - lc._encryptOffset
+		},
+		dup._1062
+	},
+	{
+		2,
+		200,
+		dup._1063,
+		{
+			c = 1,
+			[-1] = -1373 - lc._encryptOffset
+		}
+	},
+	{
+		3,
+		300,
+		{
+			c = 1,
+			[-1] = 11630 - lc._encryptOffset
+		},
+		dup._1062
+	},
+	{
+		4,
+		400,
+		dup._1063,
+		{
+			c = 1,
+			[-1] = -1371 - lc._encryptOffset
+		}
+	},
+	{
+		5,
+		500,
+		{
+			c = 1,
+			[-1] = 11631 - lc._encryptOffset
+		},
+		dup._1062
+	},
+	{
+		6,
+		600,
+		dup._1063,
+		{
+			c = 1,
+			[-1] = -1369 - lc._encryptOffset
+		}
+	},
+	{
+		7,
+		700,
+		{
+			c = 1,
+			[-1] = 108627 - lc._encryptOffset
+		},
+		dup._1062
+	},
+	{
+		8,
+		800,
+		{
+			c = 1,
+			[-1] = 12226 - lc._encryptOffset
+		},
+		dup._1062
+	}
+}
+local mapKeyIndex = {
+	k13991182 = 2,
+	k1644150 = 1,
+	k16150784 = 3,
+	k7532470 = 4
+}
+local mapKeyDimension = {
+	k16150784 = 1,
+	k7532470 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 1375
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 1375
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

@@ -1,0 +1,151 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_Rotatable", requireLua("BattleBattery"))
+local SUPER = M.super
+local BattleDefine = BattleDefine
+local BattlePropEnum = BattlePropEnum
+local opt = opt
+local Vector3 = Vector3
+
+function M:ctor()
+	SUPER.ctor(self)
+
+	self._towardDir = Vector3.retain(0, 0, 0)
+	self._shootPos = Vector3.retain(0, 0, 0)
+	self._rotatePos = Vector3.retain(0, 0, 0)
+	self._rotation = Quaternion.retain(0, 0, 0, 0)
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+
+	self._rotatePos.x = self._position.x
+	self._rotatePos.y = BattleDefine.BatteryMuzzleDistance[id][1] + self._position.y
+	self._isChanneling = nil
+
+	if self._battleSession._msType == D.MissionType.ArkRebuild then
+		if index == 2 or index == 4 then
+			self._angle = 80
+			self._targetAngle = 80
+			self._fixAngle = 80
+		else
+			self._angle = 100
+			self._targetAngle = 100
+			self._fixAngle = 100
+		end
+	elseif self._battleSession._msType == D.MissionType.SparkScout then
+		if index == 1 or index == 2 then
+			self._angle = 80
+			self._targetAngle = 80
+			self._fixAngle = 80
+		else
+			self._angle = 100
+			self._targetAngle = 100
+			self._fixAngle = 100
+		end
+	elseif index == 2 or index == 4 then
+		self._angle = 60
+		self._targetAngle = 60
+		self._fixAngle = 60
+	else
+		self._angle = 120
+		self._targetAngle = 120
+		self._fixAngle = 120
+	end
+
+	self:seekingEnemy()
+
+	self._angle = self._targetAngle
+
+	if self._view then
+		self._view:rotationEvent()
+	end
+end
+
+function M:stepSeekingEnemy(dt)
+	if self._isChanneling then
+		return
+	end
+
+	if self._lockToward then
+		return
+	end
+
+	if self._lockTargetEnemy then
+		if self._lockTargetEnemy._position.y > self._atkRange + 0.2 then
+			self._lockTargetEnemy = nil
+		elseif self._lockTargetEnemy._isToBeDestroyed then
+			self._lockTargetEnemy = nil
+		end
+	end
+
+	self:seekingEnemy()
+	self:updateAngle(dt)
+end
+
+function M:updateAngle(dt)
+	self._angle = Mathf.MoveTowardsAngle(self._angle, self._targetAngle, self._rotateSpeed * dt)
+
+	Vector3.angle2dir(self._angle, self._towardDir)
+
+	if self._muuzzleDtY then
+		self._rotation:SetEuler(0, 0, self._angle)
+		self._shootPos:Set(self._rotatePos):AddXYZ(self._rotation:MulVec3XYZ(self._muzzleDistance, self._muuzzleDtY, 0))
+	else
+		self._shootPos:Set(self._towardDir):Mul(self._muzzleDistance):Add(self._rotatePos)
+	end
+
+	if self._view then
+		self._view:rotationEvent()
+	end
+end
+
+function M:towardTargetEnemy(enemy)
+	if enemy then
+		local targetPos = enemy._position
+		local position = self._position
+		local y = targetPos.y
+
+		if self._targetTowardOffset then
+			y = targetPos.y - math.min(enemy._radius, 1)
+		end
+
+		opt.vec3_1:SetXYZ(targetPos.x, y):SubXYZ(position.x, position.y, 0):SetNormalize()
+
+		local angle = math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+		self._targetAngle = angle
+	else
+		self._targetAngle = self._fixAngle
+	end
+end
+
+function M:seekingEnemy()
+	if self._lockTargetEnemy == nil or not self._battleSession:enemyCanBeChoseAsTarget(self._lockTargetEnemy, self) then
+		self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange + 0.2)
+		self._lockTargetEnemy = self._targetEnemy
+	else
+		self._targetEnemy = self._lockTargetEnemy
+	end
+
+	self:towardTargetEnemy(self._targetEnemy)
+end
+
+function M:createMainBullet()
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setDirByAngle(self._angle)
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	return bullet
+end
+
+function M:castSkill()
+	self:createMainBullet()
+end
+
+return M

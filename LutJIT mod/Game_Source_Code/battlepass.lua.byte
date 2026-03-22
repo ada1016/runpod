@@ -1,0 +1,759 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		1,
+		0,
+		dup._1297,
+		dup._1298,
+		dup._1299,
+		{
+			c = 1,
+			[-1] = 550 - lc._encryptOffset
+		},
+		dup._1299,
+		{
+			c = 1,
+			[-1] = 1280 - lc._encryptOffset
+		}
+	},
+	{
+		2,
+		1,
+		1,
+		2,
+		50,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		3,
+		1,
+		1,
+		3,
+		100,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		4,
+		1,
+		1,
+		4,
+		150,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		5,
+		1,
+		1,
+		5,
+		200,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		6,
+		1,
+		1,
+		6,
+		250,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		7,
+		1,
+		1,
+		7,
+		300,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		8,
+		1,
+		1,
+		8,
+		350,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		9,
+		1,
+		1,
+		9,
+		400,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		10,
+		1,
+		1,
+		10,
+		450,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		11,
+		1,
+		1,
+		11,
+		500,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		12,
+		1,
+		1,
+		12,
+		550,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		13,
+		1,
+		1,
+		13,
+		600,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		14,
+		1,
+		1,
+		14,
+		650,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		15,
+		1,
+		1,
+		15,
+		700,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		16,
+		1,
+		1,
+		16,
+		750,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		17,
+		1,
+		1,
+		17,
+		800,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		18,
+		1,
+		1,
+		18,
+		850,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		19,
+		1,
+		1,
+		19,
+		900,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		20,
+		1,
+		1,
+		20,
+		950,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		21,
+		1,
+		1,
+		21,
+		1000,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		22,
+		1,
+		1,
+		22,
+		1050,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		23,
+		1,
+		1,
+		23,
+		1100,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		24,
+		1,
+		1,
+		24,
+		1150,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		25,
+		1,
+		1,
+		25,
+		1200,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		26,
+		1,
+		1,
+		26,
+		1250,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		27,
+		1,
+		1,
+		27,
+		1300,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		28,
+		1,
+		1,
+		28,
+		1350,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		29,
+		1,
+		1,
+		29,
+		1400,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		30,
+		1,
+		1,
+		30,
+		1450,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		31,
+		1,
+		1,
+		31,
+		1500,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		32,
+		1,
+		1,
+		32,
+		1550,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		33,
+		1,
+		1,
+		33,
+		1600,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		34,
+		1,
+		1,
+		34,
+		1650,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		35,
+		1,
+		1,
+		35,
+		1700,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		36,
+		1,
+		1,
+		36,
+		1750,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		37,
+		1,
+		1,
+		37,
+		1800,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		38,
+		1,
+		1,
+		38,
+		1850,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		39,
+		1,
+		1,
+		39,
+		1900,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		40,
+		1,
+		1,
+		40,
+		1950,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		41,
+		1,
+		1,
+		41,
+		2000,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		42,
+		1,
+		1,
+		42,
+		2050,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		43,
+		1,
+		1,
+		43,
+		2100,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		44,
+		1,
+		1,
+		44,
+		2150,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		45,
+		1,
+		1,
+		45,
+		2200,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	},
+	{
+		46,
+		1,
+		1,
+		46,
+		2250,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		47,
+		1,
+		1,
+		47,
+		2300,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		48,
+		1,
+		1,
+		48,
+		2350,
+		dup._1297,
+		dup._1298,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		49,
+		1,
+		1,
+		49,
+		2400,
+		dup._1300,
+		dup._1301,
+		dup._1297,
+		dup._1302,
+		dup._1303,
+		dup._1304
+	},
+	{
+		50,
+		1,
+		1,
+		50,
+		2450,
+		dup._1305,
+		dup._1304,
+		dup._1303,
+		dup._1304,
+		dup._1303,
+		dup._1306
+	}
+}
+local mapKeyIndex = {
+	k13675265 = 7,
+	k1823915 = 6,
+	k13991182 = 5,
+	k1823916 = 8,
+	k15255765 = 3,
+	k1823917 = 10,
+	k10349823 = 2,
+	k13675267 = 11,
+	k9615522 = 4,
+	k13675266 = 9,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k1823916 = 1,
+	k1823915 = 1,
+	k13675265 = 1,
+	k13675266 = 1,
+	k1823917 = 1,
+	k13675267 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -230
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[3] == nil then
+				return nil
+			end
+
+			return SID["SID_BATTLEPASS_NAMESID_" .. table[3]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -230
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

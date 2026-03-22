@@ -1,0 +1,830 @@
+local M = class("DomeHomePanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+local SPINE_PATH = "Assets/FW/Prefabs/UI/element/BossSpine%s.prefab"
+local REWARD_NUM = 9
+M.args = {
+	btnClose = Types.Button,
+	txtName = Types.TMP_Text,
+	btnInfo = Types.Button,
+	btnBP = Types.Button,
+	btnMissionInfo = Types.Button,
+	atorDifficulty = Types.Animator,
+	txtDiff1 = Types.TMP_Text,
+	txtDiff2 = Types.TMP_Text,
+	txtDiff3 = Types.TMP_Text,
+	txtDifficulty = Types.TMP_Text,
+	animTodayRank = Types.Animation,
+	animDifficulty = Types.Animation,
+	btnTodayRank = Types.Button,
+	txtTodayRank = Types.TMP_Text,
+	imgEnemyBuff1 = Types.Image,
+	imgEnemyBuff2 = Types.Image,
+	imgEnemyBuff3 = Types.Image,
+	imgEnemyBuff4 = Types.Image,
+	btnEnemyBuff1 = Types.Button,
+	btnEnemyBuff2 = Types.Button,
+	btnEnemyBuff3 = Types.Button,
+	btnEnemyBuff4 = Types.Button,
+	tfSpineContainer = Types.Transform,
+	goBoss1 = Types.GameObject,
+	goBoss2 = Types.GameObject,
+	goBoss3 = Types.GameObject,
+	goBoss4 = Types.GameObject,
+	btnStartBattle = Types.Button,
+	btnNextDifficulty = Types.Button,
+	txtRemainChance = Types.TMP_Text,
+	btnAddChance = Types.Button,
+	btnFinalReward = Types.Button,
+	tfRewardsContainer = Types.Transform,
+	goRewardPointer = Types.GameObject,
+	goFinalReward = Types.GameObject,
+	goYesterday = Types.GameObject,
+	goToday = Types.GameObject,
+	goTomorrow = Types.GameObject,
+	btnTomorrowMissionInfo = Types.Button,
+	txtTomorrowDifficulty = Types.TMP_Text,
+	tfTomorrowRewardsContainer = Types.Transform,
+	goTomorrowRewardPointer = Types.GameObject,
+	goTomorrowFinalReward = Types.GameObject,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	btnYesterdayReturn = Types.Button,
+	btnTomorrowReturn = Types.Button,
+	txtTimer = Types.TMP_Text,
+	txtScore = Types.TMP_Text,
+	txtTomorrowTip = Types.TMP_Text,
+	img1stAvatar = Types.Image,
+	img2ndAvatar = Types.Image,
+	img3rdAvatar = Types.Image,
+	txt1stName = Types.TMP_Text,
+	txt2ndName = Types.TMP_Text,
+	txt3rdName = Types.TMP_Text,
+	goSelfRankWidget = Types.GameObject,
+	tfRankRewardContainer = Types.Transform,
+	goBuffPop = Types.GameObject,
+	imgGrade = Types.Image,
+	txtGradeName = Types.TMP_Text,
+	btnGrade = Types.Button,
+	btnScoreRule = Types.Button,
+	btnCard = Types.Button,
+	txtCardNum = Types.TMP_Text,
+	goRefreshVfx = Types.GameObject,
+	goBuyChanceArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	Client.playMusic("music_dome")
+end
+
+function M:initPrefabVar()
+	self._data = nil
+	self._goBosses = {}
+	self._goLevelRewards = {}
+
+	for i = 1, self._tfRewardsContainer.childCount do
+		self._goLevelRewards[i] = self._tfRewardsContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goLevelRewards[i])
+		ItemWidget.noCreate(self._goLevelRewards[i]._goItem)
+	end
+
+	lc.prefabVarPeer(self._goFinalReward)
+	ItemWidget.noCreate(self._goFinalReward._goItem)
+
+	self._goTomorrowLevelRewards = {}
+
+	for i = 1, self._tfTomorrowRewardsContainer.childCount do
+		self._goTomorrowLevelRewards[i] = self._tfTomorrowRewardsContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goTomorrowLevelRewards[i])
+		ItemWidget.noCreate(self._goTomorrowLevelRewards[i]._goItem)
+	end
+
+	lc.prefabVarPeer(self._goTomorrowFinalReward)
+	ItemWidget.noCreate(self._goTomorrowFinalReward._goItem)
+	lc.prefabVarPeer(self._goBuffPop)
+	self._goBuffPop:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClick(self._btnInfo, function ()
+		UIManager.openPanel(PrefabDefine.DomeRulePanel)
+	end)
+	self:setClick(self._btnTodayRank, function ()
+		if P._playerDome:getRankValue() == 0 then
+			V.showToast(SID.TIP_DOME_TRIAL_RANK_INVALID)
+
+			return
+		end
+
+		V.checkRankVersion(function ()
+			UIManager.openPanel(PrefabDefine.DomeRankPanel)
+		end)
+	end)
+	self:setClick(self._btnGrade, function ()
+		if P._playerDome:getRankValue() == 0 then
+			V.showToast(SID.TIP_DOME_TRIAL_RANK_INVALID)
+
+			return
+		end
+
+		V.checkRankVersion(function ()
+			UIManager.openPanel(PrefabDefine.DomeRankPanel)
+		end)
+	end)
+	self:setClick(self._btnBP, function ()
+		UIManager.openPanel(PrefabDefine.BattlePassContainerPanel, {
+			"DomeBattlePassPanel"
+		})
+	end)
+	self:setClick(self._btnStartBattle, function ()
+		if P._playerDome:canStartBattle() then
+			P._playerDome:startBattle()
+
+			InputBattleData = {
+				msType = D.MissionType.Dome,
+				msId = self._data._currentMission
+			}
+
+			P:setMsType(D.MissionType.Dome)
+			self._btnStartBattle.dot:SetActive(false)
+			V.switchBetweenMainAndBattleScene("dome", "battle")
+		else
+			self:dealAddChance()
+		end
+	end)
+	self:setClick(self._btnNextDifficulty, function ()
+		if P._playerDome:hasRemainRewards(self._data._map) then
+			V.showToast(SID.TIP_DOME_TRIAL_CLAIM_REWARD)
+		else
+			P._playerDome:nextDifficulty()
+			self:updateDifficulty()
+		end
+	end)
+	self:setClick(self._btnAddChance, function ()
+		self:dealAddChance()
+	end)
+
+	for i = 1, 4 do
+		self:setClick(self["_btnEnemyBuff" .. i], function ()
+			self._goBuffPop:SetActive(true)
+			self._goBuffPop._txtTitle:SetLocalize(SID.WEAPON_NAME_LEVEL, -D._battleEnemyBuffConfig[self._data._buffs[i][1]]._nameSid, self._data._buffs[i][2])
+			self._goBuffPop._txtDesc:SetLocalize(D._battleEnemyBuffConfig[self._data._buffs[i][1]]._descSid, unpack(P._playerDome:genCurBuffValue(i)))
+		end)
+	end
+
+	self:setClick(self._btnLeft, function ()
+		self:changePage(self._page - 1)
+	end)
+	self:setClick(self._btnRight, function ()
+		self:changePage(self._page + 1)
+	end)
+	self:setClick(self._btnTomorrowReturn, function ()
+		self:changePage(2)
+	end)
+	self:setClickWithoutAction(self._goBuffPop._btnBg, function ()
+		self._goBuffPop:SetActive(false)
+	end)
+	self:setClick(self._btnMissionInfo, function ()
+		UIManager.openPanel(PrefabDefine.MissionInfoPanel, self._data._currentMission, D.MissionType.Dome)
+	end)
+	self:setClick(self._btnTomorrowMissionInfo, function ()
+		UIManager.openPanel(PrefabDefine.MissionInfoPanel, P._playerDome:getCurMissionId(self._tomorrowMap), D.MissionType.Dome)
+	end)
+	self:setClick(self._btnCard, function ()
+		P._playerDome:removeNewDomeCardsDot()
+		self._btnCard.dot:SetActive(false)
+		UIManager.openPanel(PrefabDefine.DomeCardsPanel)
+	end)
+	self:setClickWithoutAction(self._btnScoreRule, function ()
+		V.showBubbleTips({
+			desc = SID.SID_TIPS_DESCSID_24
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnScoreRule
+		})
+	end)
+	V.setBuffLinkClick(self._goBuffPop._txtDesc)
+end
+
+function M:addEvents()
+	self._animDifficulty.gameObject:GetComponent("AnimationEventCallback"):AddAnimationEvent(function ()
+		self._data._difficulty = P._playerDome:getCurDifficulty()
+
+		self._txtDifficulty:SetLocalize(SID.STR_DIFFICULTY_X, self._data._difficulty)
+	end)
+	self:on("day.cross", function ()
+		V._domePageData = nil
+
+		self:init()
+		self:updateTodayUI()
+	end)
+	self:on("dome.rank_reward", function ()
+		UIManager.hideWaiting()
+		UIManager.openPanel(PrefabDefine.DomeGradeChangePanel, P._playerDome:getGrade(), P._playerDome:getNewGrade())
+	end)
+	self:on("dome.rank_fail", function ()
+		UIManager.hideWaiting()
+		V.showMessageBox({
+			_type = 1,
+			showDiamond = true,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_confirmCallback = function ()
+				UIManager.closeToPanelOrMain()
+			end
+		})
+	end)
+	self:on("grade.dirty", function ()
+		LuaUnity.setTPSprite(self._imgGrade, "general/domeRank_" .. P._playerDome:getGrade(), true)
+		self._txtGradeName:SetLocalize(D._domeGradeConfig[P._playerDome:getGrade()]._nameSid)
+	end)
+	self:on("dome_card.dirty", function ()
+		self._btnCard.dot:SetActive(P._playerDome:hasNewDomeCardsDot())
+
+		self._txtCardNum.text = string.format("(%d/%d)", #P._playerDome:getDomeCards(), 5)
+	end)
+end
+
+function M:init()
+	if V._domePageData then
+		self._data = V._domePageData
+	else
+		self._data = {}
+
+		self:loadData(self._data)
+
+		V._domePageData = self._data
+	end
+
+	self:changePage(2)
+	self._animTodayRank:Play()
+
+	self._showing = true
+
+	self:OnFocus()
+end
+
+function M:loadData(data)
+	local dome = P._playerDome
+	data._map = dome:getCurMap()
+	data._difficulty = dome:getCurDifficulty()
+	data._level = dome:getCurLevel()
+	data._currentMission = dome:getCurMissionId()
+	data._claimLevel = dome:getCurPassed() and data._level or data._level - 1
+	data._buffs = dome:getCurBuffs()
+	data._curClaimedMsId = dome:getCurClaimedMsId()
+end
+
+function M:changePage(page)
+	if self._page ~= page then
+		self._page = page
+
+		if page == 1 then
+			-- Nothing
+		elseif page == 2 then
+			self._goYesterday:SetActive(false)
+			self._goToday:SetActive(true)
+			self._goTomorrow:SetActive(false)
+			self._btnLeft:SetActive(false)
+			self._btnRight:SetActive(true)
+			self:updateTodayUI()
+		else
+			self._goYesterday:SetActive(false)
+			self._goToday:SetActive(false)
+			self._goTomorrow:SetActive(true)
+			self._btnLeft:SetActive(true)
+			self._goRefreshVfx:SetActive(false)
+			self._btnRight:SetActive(page < 1 + D.DOME_MAP)
+			self:updateTomorrowUI()
+		end
+	end
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+	self:trySettle()
+end
+
+function M:trySettle()
+	if P._playerDome:isDomeSettling() then
+		if P._playerDome:hasSettleRewards() then
+			UIManager.openPanel(PrefabDefine.DomeGradeChangePanel, P._playerDome:getGrade(), P._playerDome:getNewGrade())
+		elseif P._playerDome:hasSettleRewards() then
+			UIManager.openPanel(PrefabDefine.DomeGradeChangePanel, P._playerDome:getGrade(), P._playerDome:getNewGrade())
+		else
+			UIManager.showWaiting(30, SID.NETWORK_NOTREACHABLE)
+			P._playerDome:trySettle()
+		end
+	end
+end
+
+function M:updateBossSpine(map)
+	for i = 1, D.DOME_MAP do
+		if map == i then
+			if not self._goBosses[i] then
+				self._goBosses[i] = LuaUnity.createGameObject(string.format(SPINE_PATH, i), self._tfSpineContainer)
+			else
+				self._goBosses[i]:SetActive(true)
+			end
+		elseif self._goBosses[i] then
+			self._goBosses[i]:SetActive(false)
+		end
+	end
+end
+
+function M:updateTodayUI()
+	self._txtName:SetLocalize(SID[string.format("SID_MISSION_DOME_NAMESID_1%d0101", self._data._map)])
+	self._txtDifficulty:SetLocalize(SID.STR_DIFFICULTY_X, self._data._difficulty)
+
+	self._txtTodayRank.text = 1
+
+	self._txtRemainChance:SetLocalize(SID.TIP_BATTLE_CHANCE_X_Y, P._playerDome:getDailyBattleTotalChance() - P._playerDome:getDailyBattleChance(), P._playerDome:getDailyBattleTotalChance())
+	self:updateBossSpine(self._data._map)
+
+	for i = 1, 4 do
+		if self._data._buffs[i] then
+			LuaUnity.setTPSprite(self["_imgEnemyBuff" .. i], "general/domeBuff-buff-" .. self._data._buffs[i][1], true)
+
+			self["_btnEnemyBuff" .. i].enabled = true
+		else
+			self["_btnEnemyBuff" .. i]:SetActive(false)
+		end
+	end
+
+	self._txtTimer.transform.parent:SetActive(false)
+	self._btnStartBattle.dot:SetActive(P._playerDome:getDailyBattleChance() == 0)
+	self._btnCard.dot:SetActive(P._playerDome:hasNewDomeCardsDot())
+
+	self._txtCardNum.text = string.format("(%d/%d)", #P._playerDome:getDomeCards(), 5)
+
+	LuaUnity.setTPSprite(self._imgGrade, "general/domeRank_" .. P._playerDome:getGrade(), true)
+
+	if P._playerDome:needNextDifficulty(self._data._map) then
+		self._btnStartBattle:SetActive(false)
+		self._btnNextDifficulty:SetActive(true)
+		self._goBuyChanceArea:SetActive(false)
+	else
+		self._btnStartBattle:SetActive(true)
+		self._btnNextDifficulty:SetActive(false)
+		self._goBuyChanceArea:SetActive(true)
+	end
+
+	self._txtGradeName:SetLocalize(D._domeGradeConfig[P._playerDome:getGrade()]._nameSid)
+	self._txtScore:SetLocalizeS(SID.TIP_DOME_TRIAL_SCORE, P._playerDome:getTodayRankValue())
+
+	if self._timeTimer then
+		self._timeTimer.func()
+	end
+
+	self:updateReward()
+end
+
+function M:updateTomorrowUI()
+	local hours = math.floor((C.getTodayZeroTimestamp() + D.DAY_SECONDS - C.getCurTime()) / 3600)
+
+	if hours > 0 then
+		self._txtTomorrowTip:SetLocalize(SID.TIP_HOURS_LATER, hours)
+
+		if self._page >= 4 then
+			self._txtTomorrowTip:SetLocalize(SID.TIP_DAY_HOURS_LATER, self._page - 3, hours)
+		end
+	end
+
+	local offset = self._page - 2
+	local nextMap = (self._data._map + offset) % D.DOME_MAP
+
+	if nextMap == 0 then
+		nextMap = D.DOME_MAP
+	end
+
+	self._tomorrowMap = nextMap
+
+	for i = 1, 4 do
+		LuaUnity.setTPSprite(self["_imgEnemyBuff" .. i], "general/domeBuff-buff_unknown", true)
+
+		self["_btnEnemyBuff" .. i].enabled = false
+	end
+
+	self._txtName:SetLocalize(SID[string.format("SID_MISSION_DOME_NAMESID_1%d0101", nextMap)])
+	self._txtTomorrowDifficulty:SetLocalize(SID.STR_DIFFICULTY_X, P._playerDome:getCurDifficulty(nextMap))
+	self._txtTimer.transform.parent:SetActive(false)
+	self:updateBossSpine(nextMap)
+	self:updateTomorrowReward(nextMap)
+end
+
+function M:updateReward()
+	local dome = P._playerDome
+	local curFinishedMissionId = dome:getCurFinishedMissionId(self._data._map)
+	local curClaimedMsId = dome:getCurClaimedMsId(self._data._map)
+
+	if not D._missionDomeConfig[curClaimedMsId] and not D._missionDomeConfig[curClaimedMsId + 1] then
+		curClaimedMsId = curClaimedMsId - 100
+	end
+
+	curFinishedMissionId = math.min(curFinishedMissionId, math.floor(curClaimedMsId / 100) * 100 + 10)
+
+	for i = 1, REWARD_NUM do
+		local msId = math.floor(curClaimedMsId / 100) * 100 + i
+		local cids, nums = dome:readMissionReward(msId)
+		local goReward = self._goLevelRewards[i]
+		goReward._txtLevel.text = i * 2
+
+		goReward._goItem:init(cids[1], nums[1])
+
+		local claimed = dome:isRewardClaimed(msId)
+
+		goReward._imgClaimed:SetActive(claimed)
+		goReward._imgCover:SetActive(claimed)
+
+		local canClaim = msId <= curFinishedMissionId
+
+		goReward._goItem:setCanClaim(canClaim and not claimed)
+
+		if canClaim and not claimed then
+			goReward._animItem:Play("ItemRewardClaim")
+		else
+			goReward._animItem:Stop()
+			lc.setLocalRotation(goReward._goItem.transform, 0, 0, 0, 0)
+		end
+
+		self:setClick(goReward._goItem._btnClick, function ()
+			if canClaim and not claimed then
+				local rewards = P._playerDome:claimRemainMapRewards(self._data._map)
+
+				V.showRewardClaimPanel(rewards, nil, function ()
+					self:updateReward()
+				end)
+			else
+				self._goLevelRewards[i]._goItem:rewardclickCallback()
+			end
+		end)
+	end
+
+	local finalMsId = math.floor(curClaimedMsId / 100) * 100 + 10
+
+	self:updateProgress(curFinishedMissionId % 100, curClaimedMsId % 100, self._goLevelRewards, self._goFinalReward, self._goRewardPointer, self._tfRewardsContainer)
+	self._goRewardPointer:SetActive(false)
+
+	local cids, nums = dome:readFinalReward()
+
+	self._goFinalReward._goItem:init(cids[1], nums[1])
+
+	local claimed = dome:isRewardClaimed(finalMsId)
+
+	self._goFinalReward._imgClaimed:SetActive(claimed)
+	self._goFinalReward._imgCover:SetActive(claimed)
+
+	local canClaim = finalMsId <= curFinishedMissionId
+
+	self._goFinalReward._goItem:setCanClaim(canClaim and not claimed)
+
+	if canClaim and not claimed then
+		self._goFinalReward._animItem:Play("ItemRewardClaim")
+	else
+		self._goFinalReward._animItem:Stop()
+		lc.setLocalRotation(self._goFinalReward._goItem.transform, 0, 0, 0, 0)
+	end
+
+	self:setClick(self._goFinalReward._goItem._btnClick, function ()
+		if canClaim and not claimed then
+			local rewards = P._playerDome:claimRemainMapRewards(self._data._map)
+
+			V.showRewardClaimPanel(rewards, nil, function ()
+				self:updateReward()
+			end)
+		else
+			self._goFinalReward._goItem:rewardclickCallback()
+		end
+	end)
+end
+
+function M:playProgressAnim(from, to, forceAnim)
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	local curClaimedMsId = P._playerDome:getCurClaimedMsId(self._data._map)
+	local curFinishedMissionId = P._playerDome:getCurFinishedMissionId(self._data._map)
+
+	if not forceAnim and curFinishedMissionId > math.floor(curClaimedMsId / 100) * 100 + 10 then
+		return
+	end
+
+	self._goRewardPointer:SetActive(true)
+
+	for i = math.max(1, from), math.min(REWARD_NUM, to) do
+		self._goLevelRewards[i]._goItem:setCanClaim(false)
+	end
+
+	if to == REWARD_NUM + 1 then
+		self._goFinalReward._goItem:setCanClaim(false)
+
+		to = REWARD_NUM + 0.5
+	end
+
+	local val = from
+	local t = C.getCurTime()
+
+	MainGameRoot:showGlobalMask()
+
+	self._timer = lc.setInterval(function ()
+		val = from + (C.getCurTime() - t) * 2
+
+		self:updateProgress(val, curClaimedMsId % 100, self._goLevelRewards, self._goFinalReward, self._goRewardPointer, self._tfRewardsContainer)
+
+		if to <= val then
+			MainGameRoot:hideGlobalMask()
+			self._goRewardPointer:SetActive(false)
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+		end
+	end, 0.03)
+end
+
+function M:updateProgress(progress, claimedLevel, goLevelRewards, goFinalReward, goRewardPointer, tfRewardsContainer)
+	local num = REWARD_NUM
+
+	for i = 1, num do
+		local goReward = goLevelRewards[i]
+		local subProgress = nil
+
+		if i == 1 then
+			subProgress = math.limit(progress - i + 0.5, 0, 0.5)
+		else
+			subProgress = math.limit(progress - i + 0.5, 0, 0.5)
+		end
+
+		local subNextProgress = math.limit(progress - i, 0, 0.5)
+		goReward._imgLineBar.fillAmount = subProgress + subNextProgress
+		local amount = math.limit(5 * (subProgress - 0.4), 0, 0.5) + math.limit(5 * subNextProgress, 0, 0.5)
+		goReward._imgSquareBar.fillAmount = amount * 2
+
+		if math.abs(progress - i) < 0.1 then
+			goReward._goItem:setCanClaim(claimedLevel < i)
+		end
+
+		if i == num and progress >= num + 0.5 then
+			goFinalReward._goItem:setCanClaim(true)
+		end
+	end
+
+	local pointerX = 130 * (math.max(0.5, progress) - 0.5)
+
+	lc.setLocalPosition(goRewardPointer, math.min(580, pointerX), -144, 0)
+	lc.setLocalPosition(tfRewardsContainer, math.max(-510, -math.max(0, pointerX - 580)), 0, 0)
+end
+
+function M:updateTomorrowReward(map)
+	local dome = P._playerDome
+	local curFinishedMissionId = dome:getCurFinishedMissionId(map)
+	local curClaimedMsId = dome:getCurClaimedMsId(map)
+
+	if not D._missionDomeConfig[curClaimedMsId] and not D._missionDomeConfig[curClaimedMsId + 1] then
+		curClaimedMsId = curClaimedMsId - 100
+	end
+
+	curFinishedMissionId = math.min(curFinishedMissionId, math.floor(curClaimedMsId / 100) * 100 + 10)
+
+	for i = 1, REWARD_NUM do
+		local msId = math.floor(curClaimedMsId / 100) * 100 + i
+		local cids, nums = dome:readMissionReward(msId)
+		local goReward = self._goTomorrowLevelRewards[i]
+		goReward._txtLevel.text = i * 2
+
+		goReward._goItem:init(cids[1], nums[1])
+
+		local claimed = dome:isRewardClaimed(msId)
+
+		goReward._imgClaimed:SetActive(claimed)
+		goReward._imgCover:SetActive(claimed)
+
+		local canClaim = msId <= curFinishedMissionId
+
+		goReward._goItem:setCanClaim(canClaim and not claimed)
+
+		if canClaim and not claimed then
+			goReward._animItem:Play("ItemRewardClaim")
+		else
+			goReward._animItem:Stop()
+			lc.setLocalRotation(goReward._goItem.transform, 0, 0, 0, 0)
+		end
+
+		self:setClick(goReward._goItem._btnClick, function ()
+			if canClaim and not claimed then
+				local rewards = P._playerDome:claimRemainMapRewards(map)
+
+				V.showRewardClaimPanel(rewards, nil, function ()
+					self:updateTomorrowReward(map)
+				end)
+			else
+				self._goLevelRewards[i]._goItem:rewardclickCallback()
+			end
+		end)
+	end
+
+	local finalMsId = math.floor(curClaimedMsId / 100) * 100 + 10
+
+	self:updateProgress(curFinishedMissionId % 100, curClaimedMsId % 100, self._goTomorrowLevelRewards, self._goTomorrowFinalReward, self._goTomorrowRewardPointer, self._tfTomorrowRewardsContainer)
+	self._goTomorrowRewardPointer:SetActive(false)
+
+	local cids, nums = dome:readFinalReward()
+
+	self._goTomorrowFinalReward._goItem:init(cids[1], nums[1])
+
+	local claimed = dome:isRewardClaimed(finalMsId)
+
+	self._goTomorrowFinalReward._imgClaimed:SetActive(claimed)
+	self._goTomorrowFinalReward._imgCover:SetActive(claimed)
+
+	local canClaim = finalMsId <= curFinishedMissionId
+
+	self._goTomorrowFinalReward._goItem:setCanClaim(canClaim and not claimed)
+
+	if canClaim and not claimed then
+		self._goTomorrowFinalReward._animItem:Play("ItemRewardClaim")
+	else
+		self._goTomorrowFinalReward._animItem:Stop()
+		lc.setLocalRotation(self._goTomorrowFinalReward._goItem.transform, 0, 0, 0, 0)
+	end
+
+	self:setClick(self._goTomorrowFinalReward._goItem._btnClick, function ()
+		if canClaim and not claimed then
+			local rewards = P._playerDome:claimRemainMapRewards(map)
+
+			V.showRewardClaimPanel(rewards, nil, function ()
+				self:updateTomorrowReward(map)
+			end)
+		else
+			self._goTomorrowFinalReward._goItem:rewardclickCallback()
+		end
+	end)
+end
+
+function M:updateDifficulty()
+	local newData = {}
+
+	self:loadData(newData)
+	self._txtDifficulty:SetLocalize(SID.STR_DIFFICULTY_X, newData._difficulty)
+	self._txtDiff1:SetLocalize(SID.STR_DIFFICULTY_X, newData._difficulty - 1)
+	self._txtDiff2:SetLocalize(SID.STR_DIFFICULTY_X, newData._difficulty)
+	self._txtDiff3:SetLocalize(SID.STR_DIFFICULTY_X, newData._difficulty)
+	MainGameRoot:showGlobalMask()
+	self:updateProgress(self._data._claimLevel, self._data._claimLevel, self._goLevelRewards, self._goFinalReward, self._goRewardPointer, self._tfRewardsContainer)
+	lc.setTimer(function ()
+		MainGameRoot:hideGlobalMask()
+	end, 2.5)
+	self._atorDifficulty:Play("anim_DomeDifficult1")
+
+	self._data = newData
+	V._domePageData = newData
+
+	self:updateReward()
+	self._btnStartBattle:SetActive(true)
+	self._btnNextDifficulty:SetActive(false)
+	self._goBuyChanceArea:SetActive(true)
+end
+
+function M:startTimeTimer()
+	if self._timeTimer then
+		lc.stopTimer(self._timeTimer)
+
+		self._timeTimer = nil
+	end
+
+	local tomorrowZero = C.getTodayZeroTimestamp() + D.DAY_SECONDS
+
+	local function func()
+		local t = C.getCurTime()
+		local dt = math.floor(tomorrowZero - t)
+
+		if tomorrowZero - t < 0 then
+			self._txtTimer.transform.parent:SetActive(false)
+			lc.stopTimer(self._timeTimer)
+
+			self._timeTimer = nil
+
+			return
+		end
+
+		self._txtTimer.transform.parent:SetActive(self._page == 2 and true)
+
+		if dt >= 3600 then
+			self._txtTimer:SetLocalizeS(SID.STR_LIMIT_TIME_H_M_S, math.floor(dt / 3600), math.floor(dt % 3600 / 60), dt % 60)
+		else
+			self._txtTimer:SetLocalizeS(SID.STR_LIMIT_TIME_M_S, math.floor(dt / 60), dt % 60)
+		end
+
+		if dt > 3600 then
+			self._txtTomorrowTip:SetLocalize(SID.TIP_HOURS_LATER, math.floor(dt / 3600))
+
+			if self._page >= 4 then
+				self._txtTomorrowTip:SetLocalize(SID.TIP_DAY_HOURS_LATER, self._page - 3, math.floor(dt / 3600))
+			end
+		else
+			self._txtTomorrowTip.text = string.format("%02d:%02d", dt / 60, dt % 60)
+		end
+	end
+
+	self._timeTimer = lc.setInterval(func, 1)
+
+	func()
+end
+
+function M:dealAddChance()
+	if P._playerDome:getDailyBattleBuyChance() < D._globalConfig._dome_buy_limit then
+		local costNum = D._globalConfig._dome_buy_diamond_cost * (P._playerDome:getDailyBattleBuyChance() + 1)
+
+		UIManager.openPanel(PrefabDefine.PromptsPanel, {
+			_showResCid = D.ResType.diamond,
+			_title = SID.TITLE_BUY_CHANCE,
+			_content = SID.TIP_BUY_CHANCE,
+			_cParams = string.format("<sprite name=\"item_small_10002\">%d ", costNum),
+			_txtConfirm = SID.STR_CONFIRM,
+			_fcCancel = SID.STR_CANCEL,
+			_confirmCheck = function ()
+				return P._playerDome:tryBuyDailyBattleChance()
+			end,
+			_confirmCallback = function ()
+				V.showToast(SID.TIP_CHANLLENGE_CHANCE_INCREASE)
+				self._txtRemainChance:SetLocalize(SID.TIP_BATTLE_CHANCE_X_Y, P._playerDome:getDailyBattleTotalChance() - P._playerDome:getDailyBattleChance(), P._playerDome:getDailyBattleTotalChance())
+			end,
+			_confirmCheckFail = function ()
+				UIManager.openPanel(PrefabDefine.DiamondPanel)
+			end
+		})
+	else
+		V.showToast(SID.TIP_BATTLE_BUY_CHANCE_NOT_ENOUGH)
+	end
+end
+
+function M:OnFocus()
+	local dome = P._playerDome
+	local newData = {}
+
+	self:loadData(newData)
+
+	if newData._map ~= self._data._map then
+		self._data = newData
+		V._domePageData = newData
+
+		self:updateTodayUI()
+	else
+		if self._data._claimLevel < newData._claimLevel then
+			self:playProgressAnim(self._data._claimLevel, newData._claimLevel)
+		end
+
+		self._data = newData
+		V._domePageData = newData
+	end
+
+	local dailySelectCards = dome:getDailySelectCards()
+
+	if #dailySelectCards > 0 then
+		lc.setTimer(function ()
+			UIManager.openPanel(PrefabDefine.DomeSelectPanel)
+
+			self._openingDomeSelectPanel = false
+		end, 0.3)
+	end
+
+	self._btnBP.dot:SetActive(P._playerDomeBP:isStatusOpen() and P._playerDomeBP:haveUnclaimRewards() or P._playerDomeBP:isStatusExpired() and not P._playerDomeBP:lastPeriodRewardsClaimed())
+	self:startTimeTimer()
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	if self._timeTimer then
+		lc.stopTimer(self._timeTimer)
+
+		self._timeTimer = nil
+	end
+end
+
+function M:closePanel()
+	local goBoss = self._goBosses[self._data._map]
+
+	if goBoss then
+		goBoss:SetActive(false)
+	end
+
+	M.super.closePanel(self)
+	Client.playMusic("music_city")
+end
+
+return M

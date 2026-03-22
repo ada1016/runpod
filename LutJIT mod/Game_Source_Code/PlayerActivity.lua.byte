@@ -1,0 +1,1000 @@
+local M = class("PlayerActivity")
+
+function M:ctor()
+	self._cfg = D._activityTimeConfig
+
+	self:processCfg()
+
+	self._newbieActivityId = 1
+end
+
+function M:processCfg()
+	local ct = C.getCurTime()
+	self._type2WaitingActivities = {}
+
+	for id, cfg in pairs(self._cfg) do
+		local endTime = cfg._endTime
+
+		if ct < endTime then
+			local type = cfg._type
+			local tb = self._type2WaitingActivities[type]
+
+			if not tb then
+				tb = {}
+				self._type2WaitingActivities[type] = tb
+			end
+
+			tb[#tb + 1] = cfg
+		end
+	end
+
+	for k, v in pairs(self._type2WaitingActivities) do
+		table.sort(v, function (a, b)
+			return a._startTime < b._startTime
+		end)
+	end
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.newbieFinished = self._meta.newbieFinished or false
+	self._openedNums = lc.assignTable(meta, "openedNum")
+	self._opening = lc.assignTable(meta, "openingActivity")
+	self._ignoreExchangeDots = lc.assignTable(meta, "ignoreExchangeDots")
+	self._activityOpenTime1 = Client.getZeroTimestamp(P:getCreateTime()) + 7 * D.DAY_SECONDS
+	self._openTime = lc.assignTable(meta, "openTime")
+	self._expireTime = lc.assignTable(meta, "expireTime")
+	self._openingByType = {}
+	self._activityNum = 0
+	self._activityTypeNums = {}
+
+	self:walkOpeningActivity(function (data)
+		local type = data.type
+
+		if not self._openingByType[type] then
+			self._openingByType[type] = {}
+		end
+
+		self._openingByType[type][data.uid] = data
+		self._activityNum = self._activityNum + 1
+		self._activityTypeNums[type] = (self._activityTypeNums[type] or 0) + 1
+
+		if type == D.ActivityType.Anniversary then
+			local cfg = D._activityTimeConfig[data.id]
+
+			if cfg then
+				data.startTime = cfg._startTime
+				data.endTime = cfg._endTime
+			end
+		end
+	end)
+
+	self._openCheckCallback = {}
+	self._openCallback = {}
+	self._expiredCallback = {}
+	self._settleCallback = {}
+	self._waitingIdx = {}
+	local ct = C.getCurTime()
+
+	for k, v in pairs(D.ActivityType) do
+		self:updateFirstWaiting(v, ct)
+	end
+end
+
+function M:start()
+	local ct = C.getCurTime()
+
+	self:tryFixActivity()
+	self:updateAllActivity(ct)
+	self:tryNewbieOpen()
+
+	self._pageDataDirty = true
+
+	self:updatePageDatas()
+end
+
+function M:dailyReset()
+	table.clear(self._ignoreExchangeDots)
+	self:tryNewbieOpen()
+
+	for k, data in pairs(self._opening) do
+		self:tryExpire(data)
+	end
+
+	self._pageDataDirty = true
+
+	self:updatePageDatas()
+end
+
+function M:update(dt, ct)
+	self:updateAllActivity(ct)
+end
+
+function M:tryFixActivity()
+	for k, data in pairs(self._opening) do
+		local type = data.type
+		local callback = self._openCallback[type]
+
+		if callback then
+			callback(data)
+		end
+	end
+end
+
+function M:genUniqueId(activityId)
+	if not D._activityTimeConfig[activityId] then
+		return
+	end
+
+	if activityId == 1 then
+		return 1
+	end
+
+	local cfg = D._activityTimeConfig[activityId]
+
+	if D.ActivityPersistUID[cfg._type] then
+		return D.ActivityPersistUID[cfg._type]
+	end
+
+	return activityId * 100 + cfg._subType * 10 + cfg._startTime + cfg._endTime
+end
+
+function M:isOldActivity(data)
+	local newId = self:genUniqueId(data.id)
+
+	return newId ~= data.uid
+end
+
+function M:getCurrents(type)
+	if type then
+		return self._openingByType[type]
+	end
+
+	return self._opening
+end
+
+function M:getDataByUid(uid)
+	return self._opening[uid]
+end
+
+function M:getArkRebuildData()
+	return self._opening[D.ActivityPersistUID[D.ActivityType.ArkRebuild]]
+end
+
+function M:getSparkScoutData()
+	return self._opening[D.ActivityPersistUID[D.ActivityType.SparkScout]]
+end
+
+function M:getAnniversaryData()
+	return self._opening[D.ActivityPersistUID[D.ActivityType.Anniversary]]
+end
+
+function M:canPreviewAnniversary()
+	local startTime = D._activityTimeConfig[21000001]._startTime
+	local previewDay = P._playerActivityAnniversary:readPreviewDay()
+	local showTime = startTime - previewDay * D.DAY_SECONDS
+	local ct = C.getCurTime()
+
+	return showTime <= ct and ct < startTime, startTime - ct
+end
+
+function M:isAnniversaryOpening()
+	local data = self:getAnniversaryData()
+
+	if not data then
+		return
+	end
+
+	return C.getCurTime() <= data.endTime
+end
+
+function M:isArkRebuildOpening()
+	local data = self:getArkRebuildData()
+
+	if not data then
+		return
+	end
+
+	return C.getCurTime() <= data.endTime
+end
+
+function M:isSparkScoutOpening()
+	local data = self:getSparkScoutData()
+
+	if not data then
+		return
+	end
+
+	return C.getCurTime() <= data.endTime
+end
+
+function M:getMonopolyData()
+	return self._opening[D.ActivityPersistUID[D.ActivityType.Monopoly]]
+end
+
+function M:isMonopolyOpening()
+	local data = self:getMonopolyData()
+
+	if not data then
+		return
+	end
+
+	return C.getCurTime() <= data.endTime
+end
+
+function M:getOpenTimes()
+	return self._openTime
+end
+
+function M:getExpireTimes()
+	return self._expireTime
+end
+
+function M:getActivityNum(type)
+	if type then
+		return self._activityTypeNums[type] or 0
+	else
+		return self._activityNum
+	end
+end
+
+function M:getArkProjActivityNum(type)
+	if P._playerActivityArkRebuild:getCurrentData() and not P._playerActivityArkRebuild:getCurrentData().expireClaimed then
+		return 1
+	end
+
+	return 0
+end
+
+function M:getSparkScoutActivityNum(type)
+	if lc._isCN then
+		return 0
+	end
+
+	if P._playerActivitySparkScout:getCurrentData() and not P._playerActivitySparkScout:getCurrentData().expireClaimed then
+		return 1
+	end
+
+	return 0
+end
+
+function M:getLotteryActivityNum(type)
+	return self:getActivityNum(D.ActivityType.WeekLottery) + self:getActivityNum(D.ActivityType.WeekLottery2) + self:getActivityNum(D.ActivityType.Monopoly)
+end
+
+function M:registerOpenCheck(type, callback)
+	self._openCheckCallback[type] = callback
+end
+
+function M:registerOpen(type, callback)
+	self._openCallback[type] = callback
+end
+
+function M:registerExpired(type, callback)
+	self._expiredCallback[type] = callback
+end
+
+function M:registerSettle(type, callback)
+	self._settleCallback[type] = callback
+end
+
+function M:walkOpeningActivity(func)
+	for k, data in pairs(self._opening) do
+		func(data)
+	end
+end
+
+function M:updateAllActivity(ct)
+	for k, data in pairs(self._opening) do
+		if not data.expired then
+			self:tryExpire(data)
+		end
+
+		if data.expired then
+			self:trySettle(data)
+		end
+	end
+
+	for k, type in pairs(D.ActivityType) do
+		if self:checkOpenCondition(type) and self:isNextExist(type) then
+			self:tryNextActivity(type, ct)
+		end
+	end
+
+	self:updatePageDatas()
+end
+
+function M:getNextActivity(type)
+	if not self:isNextExist(type) then
+		return
+	end
+
+	return self:getNextActivityCfgByIdx(type, self._waitingIdx[type])
+end
+
+function M:canPreview(type)
+	local nextActivityCfg = P._playerActivity:getNextActivity(type)
+
+	if nextActivityCfg == nil then
+		return false
+	end
+
+	if type == D.ActivityType.ArkRebuild or type == D.ActivityType.SparkScout then
+		return true, nextActivityCfg
+	end
+
+	local ct = C.getCurTime()
+
+	return nextActivityCfg._startTime < ct + self:readPreviewSeconds() and ct < nextActivityCfg._endTime, nextActivityCfg
+end
+
+function M:readPreviewSeconds()
+	return D._globalConfig._activity_preview_time * 3600
+end
+
+function M:tryExpire(data)
+	if not self:isTimeExpiredByData(data) then
+		return
+	end
+
+	if data.expired then
+		return
+	end
+
+	self:dealExpire(data)
+
+	if data.handClear then
+		self:trySettle(data)
+	end
+end
+
+function M:trySettle(data)
+	if not data.expired then
+		return
+	end
+
+	if data.settled then
+		return
+	end
+
+	local type = data.type
+
+	if self._settleCallback[type] == nil or self._settleCallback[type](data) then
+		self:dealClose(data)
+	end
+end
+
+function M:dealClose(data)
+	local uid = data.uid
+	local type = data.type
+	local id = data.id
+	data.settled = true
+
+	self:clearActivityData(data)
+end
+
+function M:clearActivityDataByUid(uid)
+	self:clearActivityData(self._opening[uid])
+end
+
+function M:clearActivityData(data)
+	self._activityNum = self._activityNum - 1
+	self._activityTypeNums[data.type] = self._activityTypeNums[data.type] - 1
+	self._opening[data.uid] = nil
+	self._openingByType[data.type][data.uid] = nil
+	self._pageDataDirty = true
+
+	SimpleEvent.emit("activity.page_data_dirty")
+end
+
+function M:getActivityId(uid)
+	if self._opening[uid] then
+		return self._opening[uid].id
+	end
+
+	return nil
+end
+
+function M:updateFirstWaiting(type, ct)
+	if not self:isNewbieLotteryFinished() and type == D.ActivityType.WeekLottery and not self:isOpening(1) then
+		self._waitingIdx[type] = 1
+
+		return
+	end
+
+	local findIdx, findNextId = self:findLatestByEndTime(type, ct)
+	self._waitingIdx[type] = findIdx
+
+	return findIdx
+end
+
+function M:isCircleUnlock()
+	return self:isNewbieLotteryFinished()
+end
+
+function M:isNewbieLotteryFinished()
+	return self._meta.newbieFinished == true
+end
+
+function M:isOpeningByUid(uid)
+	return self._opening[uid] ~= nil and not self._opening[uid].expired
+end
+
+function M:isOpening(id)
+	local uid = self:genUniqueId(id)
+
+	return self:isOpeningByUid(uid) and id == self._opening[uid].id
+end
+
+function M:isOpeningByType(activityType)
+	local uid = self:genUniqueId(activityType)
+	local all = self._openingByType[activityType]
+	local data = next(all)
+
+	if data and not data.expired then
+		return true
+	end
+
+	return false
+end
+
+function M:isTimeExpiredByData(data)
+	local id = data.id
+	local endTime = data.endTime
+	local ct = C.getCurTime()
+
+	return endTime <= ct
+end
+
+function M:isNextExist(type)
+	return self._waitingIdx[type] ~= nil
+end
+
+function M:isInTimeRange(id, ct)
+	local startTime, endTime = self:readTime(id)
+
+	return startTime < ct and ct < endTime
+end
+
+function M:checkOpenCondition(type)
+	if self._openCheckCallback[type] then
+		return self._openCheckCallback[type]()
+	end
+
+	return true
+end
+
+function M:isLaterTimeRange(id, ct)
+	local startTime, endTime = self:readTime(id)
+
+	return endTime < ct
+end
+
+function M:findLatestByEndTime(type, ct)
+	local cfgs = self._type2WaitingActivities[type]
+
+	if not cfgs then
+		return
+	end
+
+	local findId, findIdx = nil
+
+	for i = 1, #cfgs do
+		local cfg = cfgs[i]
+
+		if ct < cfg._endTime then
+			findIdx = i
+			findId = cfg._id
+
+			break
+		end
+	end
+
+	return findIdx, findId
+end
+
+function M:findLatestByStartTime(type, ct)
+	local cfgs = self._type2WaitingActivities[type]
+
+	for i = 1, #cfgs do
+		local cfg = cfgs[i]
+
+		if ct <= cfg._startTime then
+			return cfg._id
+		end
+	end
+end
+
+function M:getNextActivityCfgByIdx(type, nextIdx)
+	return self._type2WaitingActivities[type] and self._type2WaitingActivities[type][nextIdx] or nil
+end
+
+function M:tryNextActivity(type, ct)
+	local nextIdx = self._waitingIdx[type]
+	local nextActivityCfg = self:getNextActivityCfgByIdx(type, nextIdx)
+
+	if not nextActivityCfg then
+		self._waitingIdx[type] = nil
+
+		return
+	end
+
+	local nextActivityId = nextActivityCfg._id
+
+	if self:isLaterTimeRange(nextActivityId, ct) or self:isOpening(nextActivityId) then
+		self._waitingIdx[type] = nextIdx + 1
+	elseif self:isInTimeRange(nextActivityId, ct) then
+		self:dealNext(type, nextActivityId, ct)
+	end
+end
+
+function M:dealNext(type, nextActivityId, ct)
+	local nextIdx = self._waitingIdx[type]
+
+	self:dealOpen(nextActivityId, ct)
+
+	self._waitingIdx[type] = nextIdx + 1
+end
+
+function M:tryNewbieOpen()
+	if self:isNewbieLotteryFinished() then
+		return
+	end
+
+	local ct = C.getCurTime()
+
+	if ct <= self._activityOpenTime1 then
+		return
+	end
+
+	if self:isOpening(self._newbieActivityId) then
+		return
+	end
+
+	self:dealOpen(self._newbieActivityId, ct)
+end
+
+function M:dealOpen(id, ct)
+	local cfg = self:readCfg(id)
+	local type = cfg._type
+	local uid = self:genUniqueId(id)
+	local startTime, endTime = nil
+
+	if id == self._newbieActivityId then
+		local start = C.getZeroTimestamp(C.getCurTime())
+		endTime = start + cfg._endTime
+		startTime = start + cfg._startTime
+	else
+		endTime = cfg._endTime
+		startTime = cfg._startTime
+	end
+
+	self._openedNums[type] = (self._openedNums[type] or 0) + 1
+	local isHandClear = D.ActivityPersistUID[type] ~= nil
+	self._opening[uid] = {
+		uid = uid,
+		id = id,
+		type = type,
+		subType = cfg._subType,
+		startTime = startTime,
+		endTime = endTime,
+		openTime = ct,
+		handClear = isHandClear
+	}
+	local data = self._opening[uid]
+
+	if not self._openingByType[type] then
+		self._openingByType[type] = {}
+	end
+
+	self._openingByType[type][uid] = data
+	self._activityNum = self._activityNum + 1
+	self._activityTypeNums[type] = (self._activityTypeNums[type] or 0) + 1
+
+	if self._openCallback[type] then
+		self._openCallback[type](data)
+	end
+
+	self._pageDataDirty = true
+
+	SimpleEvent.emit("activity.open", type)
+end
+
+function M:dealExpire(data)
+	local uid = data.uid
+	local type = data.type
+	local subType = data.subType
+	local id = data.id
+	local endTime = data.endTime
+
+	if data.id == 1 then
+		self._meta.newbieFinished = true
+	end
+
+	self._opening[uid].expired = true
+	self._expireTime[self:genExchangeShopKey(type, subType)] = endTime
+
+	if self._expiredCallback[type] then
+		self._expiredCallback[type](data)
+	end
+end
+
+function M:isIgnoreExchangeDot(type)
+	return self._ignoreExchangeDots[type]
+end
+
+function M:ignoreExchangeDot(type)
+	self._ignoreExchangeDots[type] = true
+end
+
+function M:hasExchangeDot(type)
+	if self._ignoreExchangeDots[type] then
+		return false
+	end
+
+	local exchangeGroup = 3500
+
+	if type == D.ActivityType.WeekLottery then
+		exchangeGroup = P._playerWeekLottery:getDefaultExchangeGroup()
+	end
+
+	local exchanges = P._playerExchange:getExchangeIdsByType(exchangeGroup)
+
+	for i, exchangeId in ipairs(exchanges) do
+		local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+		local cid, num = P._playerExchange:readExchangeCost(exchangeId)
+		local canExchange = leftExchangeCount > 0 and P._playerAsset:isAssetEnough(cid, num)
+
+		if canExchange then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:getOpenedNum(activityType)
+	return self._openedNums[activityType] or 0
+end
+
+function M:getExchangGroup(type, subType)
+	if type == D.ActivityType.WeekLottery then
+		return P._playerWeekLottery:readExchangeGroup(subType)
+	elseif type == D.ActivityType.Monopoly then
+		return P._playerActivityMonopoly:readExchangeGroup(subType)
+	elseif type == D.ActivityType.ArkRebuild then
+		return P._playerActivityArkRebuild:readExchangeGroup(subType)
+	elseif type == D.ActivityType.SparkScout then
+		return P._playerActivitySparkScout:readExchangeGroup(subType)
+	end
+
+	return nil
+end
+
+function M:updatePageDatas()
+	if not self._pageDataDirty then
+		return
+	end
+
+	self._exchangePageDatas = {}
+	local ct = C.getCurTime()
+	local expireTimes = self:getExpireTimes()
+
+	for k, time in pairs(expireTimes) do
+		local atype, subType = self:parseExchangeShopKey(k)
+		local readRemainT = self:readExchangeRemainTime(atype)
+		local remainTime = time + readRemainT
+
+		if readRemainT == -1 then
+			remainTime = -1
+		end
+
+		if readRemainT == -1 or ct < remainTime then
+			local group = self:getExchangGroup(atype, subType)
+
+			if group then
+				table.insert(self._exchangePageDatas, {
+					type = k,
+					exchangeGroup = group,
+					remainTime = remainTime
+				})
+			end
+		end
+	end
+
+	local currents = self:getCurrents()
+	local ct = C.getCurTime()
+
+	for auid, data in pairs(currents) do
+		local atype = data.type
+		local subType = data.subType
+		local shopKey = self:genExchangeShopKey(atype, subType)
+		local idx = table.findArray(self._exchangePageDatas, function (a)
+			return a.type == shopKey
+		end)
+		local readRemainT = self:readExchangeRemainTime(atype)
+		local remainTime = data.endTime + readRemainT
+
+		if readRemainT == -1 then
+			remainTime = -1
+		end
+
+		if readRemainT == -1 or ct < remainTime then
+			if idx then
+				self._exchangePageDatas[idx].remainTime = remainTime
+			else
+				local group = self:getExchangGroup(atype, subType)
+
+				if group then
+					table.insert(self._exchangePageDatas, {
+						type = shopKey,
+						exchangeGroup = group,
+						remainTime = remainTime
+					})
+				end
+			end
+		end
+	end
+
+	for i = #self._exchangePageDatas, 1, -1 do
+		local data = self._exchangePageDatas[i]
+		local atype, subType = self:parseExchangeShopKey(data.type)
+
+		if atype == D.ActivityType.SparkScout then
+			if P._playerActivitySparkScout:isBeta() or lc._isCN then
+				table.remove(self._exchangePageDatas, i)
+			end
+		elseif atype == D.ActivityType.ArkRebuild and lc._isCN then
+			table.remove(self._exchangePageDatas, i)
+		end
+	end
+
+	table.sort(self._exchangePageDatas, function (a, b)
+		if a.remainTime ~= -1 and b.remainTime ~= -1 then
+			return a.remainTime < b.remainTime
+		else
+			return a.remainTime ~= -1
+		end
+	end)
+
+	self._pageDataDirty = false
+end
+
+function M:readExchangeRemainTime(aType)
+	if aType == D.ActivityType.ArkRebuild then
+		return 4 * D.DAY_SECONDS
+	elseif aType == D.ActivityType.SparkScout then
+		return 5 * D.DAY_SECONDS
+	end
+
+	return D._globalConfig._activity_exchange_remain_time * 3600
+end
+
+function M:getExchangeShopNum()
+	return #self._exchangePageDatas
+end
+
+function M:getExchangeShopPageData()
+	self:updatePageDatas()
+
+	return clone(self._exchangePageDatas)
+end
+
+function M:getExchangeShopPageDataJustRead()
+	return self._exchangePageDatas
+end
+
+function M:genExchangeShopKey(atype, subType)
+	return atype * 100 + subType
+end
+
+function M:parseExchangeShopKey(key)
+	return math.floor(key / 100), key % 100
+end
+
+function M:readNameSid(type, subType)
+	if type == D.ActivityType.WeekLottery then
+		return D._activityWeekLotteryConfig[subType or 1]._nameSid
+	elseif type == D.ActivityType.WeekLottery2 then
+		return D._activityWeekLottery2Config[subType or 1]._nameSid
+	elseif type == D.ActivityType.Monopoly then
+		return D._activityMonopolyConfig[subType or 1]._nameSid
+	elseif type == D.ActivityType.ArkRebuild then
+		return D._activityArkRebuildConfig[subType or 1]._nameSid
+	elseif type == D.ActivityType.ArkRebuildLottery then
+		return D._arkRebuildLotteryConfig[1]._nameSid
+	elseif type == D.ActivityType.SparkScout then
+		return D._activitySparkScoutConfig[subType or 1]._nameSid
+	elseif type == D.ActivityType.Anniversary then
+		return SID.ANNIVERSARY_TITLE
+	else
+		return SID.STR_ACTIVITY
+	end
+end
+
+function M:readCfg(id)
+	return self._cfg[id]
+end
+
+function M:readTime(id)
+	return self._cfg[id]._startTime, self._cfg[id]._endTime
+end
+
+function M:readSubType(id)
+	return self._cfg[id]._subType
+end
+
+function M:parseDrawData(jsonStr)
+	local tbl = nil
+
+	if type(jsonStr) == "string" then
+		jsonStr = string.unicodeToUtf8(jsonStr)
+		tbl = LuaTableJson.decodeFromLuaJson(jsonStr)
+	else
+		tbl = jsonStr
+	end
+
+	local isEmptyMsg = false
+	local drawData = {
+		time = C.getCurTime(),
+		day = Client.getDayOffset(),
+		data = {}
+	}
+
+	if not next(tbl) then
+		isEmptyMsg = true
+
+		return drawData
+	end
+
+	for k, v in pairs(tbl) do
+		drawData.data[tonumber(k)] = v
+	end
+
+	return drawData
+end
+
+local function findOldestOrEmptyIndex(data, limit)
+	local index = 1
+	local oldestTime = nil
+
+	for i = 1, limit do
+		if not data[i] then
+			return i
+		end
+
+		if oldestTime then
+			if data[i].time < oldestTime then
+				oldestTime = data[i].time
+				index = i
+			end
+		else
+			oldestTime = data[i].time
+			index = i
+		end
+	end
+
+	return index
+end
+
+function M:tryUploadDrawData(id, drawNum, drawGetReward, drawGetRewardNum, showInsert)
+	local col = "draw_data"
+	local uploadData = P:genActivityDrawData(drawNum, drawGetReward, drawGetRewardNum)
+
+	if showInsert then
+		SimpleEvent.emit("activity.announcement.self.insert", id, uploadData)
+	end
+
+	local function uploadDrawDataCallback(jsonStr)
+		if jsonStr == "nil" then
+			return
+		end
+
+		if not self._drawData then
+			self._drawData = {}
+		end
+
+		self._drawData[id] = self:parseDrawData(jsonStr)
+		local index = findOldestOrEmptyIndex(self._drawData[id].data, 10)
+		self._drawData[id].data[index] = uploadData
+
+		lc.setTableKeyValue("activity_draw_data" .. id, self._drawData[id])
+		self:doUploadDrawData(id, self._drawData[id].data[index], index)
+	end
+
+	if lc._isCN then
+		Request.sendGetRankData(col, id, nil, 500, uploadDrawDataCallback)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = "activity_" .. id
+
+		Client.queryRankDataV2(col, doc, uploadDrawDataCallback, "nil")
+	end
+end
+
+function M:getDrawData(id, callback)
+	if not self._drawData then
+		self._drawData = {}
+	end
+
+	if not self._drawData[id] then
+		self._drawData[id] = {}
+	end
+
+	local today = Client.getDayOffset()
+
+	if self._drawData[id].day == today then
+		return self._drawData[id].data
+	end
+
+	local data = lc.getTableKeyValue("activity_draw_data" .. id)
+
+	if data then
+		self._drawData[id] = data
+
+		if self._drawData[id].day == today then
+			return self._drawData[id].data
+		end
+	end
+
+	local function getDrawDataCallback(jsonStr)
+		if jsonStr == "nil" then
+			return
+		end
+
+		self._drawData[id] = self:parseDrawData(jsonStr)
+
+		lc.setTableKeyValue("activity_draw_data" .. id, self._drawData[id])
+
+		if callback then
+			callback(self._drawData[id].data)
+		end
+	end
+
+	local col = "draw_data"
+
+	if lc._isCN then
+		Request.sendGetRankData(col, id, nil, 500, getDrawDataCallback)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = "activity_" .. id
+
+		Client.queryRankDataV2(col, doc, getDrawDataCallback, "nil")
+	end
+end
+
+function M:doUploadDrawData(id, data, pos, noRetry)
+	local col = "draw_data"
+
+	if lc._isCN then
+		Request.sendUploadRankData(col, id, nil, LuaTableJson.encodeToCJson(data), pos)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = "activity_" .. id
+
+		if not noRetry then
+			Client.uploadRankDataV2(col, doc, pos, LuaTableJson.encodeToCJson(data), function ()
+				self:doUploadDrawData(id, data, pos, true)
+			end)
+		else
+			Client.uploadRankDataV2(col, doc, pos, LuaTableJson.encodeToCJson(data))
+		end
+	end
+
+	if self._drawData then
+		self._drawData[id] = nil
+	end
+
+	lc.setTableKeyValue("activity_draw_data" .. id, nil)
+end
+
+return M

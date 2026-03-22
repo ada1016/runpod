@@ -1,0 +1,150 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		{
+			10010,
+			10011,
+			10009
+		},
+		13
+	},
+	{
+		2,
+		2,
+		2,
+		{
+			14010,
+			13501
+		},
+		23
+	},
+	{
+		3,
+		3,
+		3,
+		{
+			10104,
+			10006,
+			10002
+		},
+		28
+	},
+	{
+		4,
+		4,
+		4,
+		{
+			17211,
+			10044,
+			10045
+		},
+		30
+	},
+	{
+		5,
+		5,
+		5,
+		{
+			10106,
+			10006,
+			10002
+		},
+		30
+	}
+}
+local mapKeyIndex = {
+	k5372082 = 5,
+	k15255765 = 2,
+	k262317 = 4,
+	k1644150 = 1,
+	k8655535 = 3
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 405
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_CHALLENGE_NAMESID_" .. table[2]]
+		elseif key == "_descSid" then
+			if table[3] == nil then
+				return nil
+			end
+
+			return SID["SID_CHALLENGE_DESCSID_" .. table[3]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 405
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

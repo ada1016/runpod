@@ -1,0 +1,342 @@
+local M = class("AnniversaryRechargePanel", requireLua("BasePanel"))
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnBG = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	btnClose = Types.Button,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	tfContent = Types.Transform,
+	tmpDesc = Types.TMP_Text,
+	btnTurnLeft = Types.Button,
+	btnTurnRight = Types.Button,
+	btnGo = Types.Button,
+	btnClaim = Types.Button,
+	goClaimed = Types.GameObject,
+	goHighlightContainer = Types.GameObject,
+	rawImgBig = Types.RawImage,
+	goWeapon = Types.GameObject,
+	goRole = Types.GameObject,
+	goDome = Types.GameObject,
+	imgIcon1 = Types.Image,
+	imgIconBg1 = Types.Image,
+	imgIconBgLight11 = Types.Image,
+	imgIconBgLight12 = Types.Image,
+	imgIcon2 = Types.Image,
+	imgIconBg2 = Types.Image,
+	imgIconBgLight21 = Types.Image,
+	imgIconBgLight22 = Types.Image,
+	imgExpIcon = Types.Image,
+	slicedFillImage = Types.SlicedFilledImage,
+	tmpBarProgress = Types.TMP_Text
+}
+local MIN_INDEX = 1
+local MAX_INDEX = 6
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goHighlights = {}
+
+	for i = 1, 6 do
+		local child = self._goHighlightContainer:GetChild(i - 1)
+		self._goHighlights[i] = child:GetChild(0)
+
+		self:setClick(child:GetComponent("Button"), function ()
+			self._id = i
+
+			self:updateRewards()
+		end)
+	end
+
+	self._secondFuncs = {}
+	self._secondTimer = lc.setInterval(function ()
+		for i, v in pairs(self._secondFuncs) do
+			v()
+		end
+	end, 0.5)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnIssue, function ()
+		V.showBubbleTips({
+			desc = SID.ANNIVERSARY_RECHARGE_RULE
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnIssue.gameObject
+		})
+	end)
+	self:setClickWithoutAction(self._btnBG, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnGo, function ()
+		V._shop_jumpDiamond = true
+
+		V.jumpTo(D._jumpConfig[9])
+	end)
+	self:setClick(self._btnClaim, function ()
+		Client.checkNetworkAsync(function ()
+			self:handleClaimBtn()
+		end)
+	end)
+	self:setClick(self._btnTurnLeft, function ()
+		self._id = self._id - 1
+
+		self:updateUI()
+	end)
+	self:setClick(self._btnTurnRight, function ()
+		self._id = self._id + 1
+
+		self:updateUI()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init(popStage)
+	self._module = P._playerActivityAnniversary._moduleRecharge
+	self._id = self._module:curStage()
+	self._popStage = popStage
+
+	if popStage then
+		self._id = popStage
+	else
+		for i = 1, MAX_INDEX do
+			if self._module:couldClaim(i) then
+				self._id = i
+
+				break
+			end
+		end
+	end
+
+	self._goHighlightContainer:SetActive(popStage == nil)
+
+	self._itemWidgetsAll = {}
+	self._itemWidgets = {}
+
+	self._tmpTitle:SetLocalize(SID.STR_CHARGE_GIFT)
+	V.loadItemSprite(self._imgExpIcon, D.ResType.anniversary_charge_score, true)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateExpireTime()
+	self:updateRewards()
+end
+
+function M:updateReddots()
+end
+
+local QualityBg = {
+	[3] = {
+		"gift/gift_bg_05",
+		"28EEFF_107"
+	},
+	[4] = {
+		"gift/gift_bg_06",
+		"F528FF_194"
+	},
+	[5] = {
+		"gift/gift_bg_11",
+		"FFE028_194"
+	}
+}
+
+setmetatable(QualityBg, {
+	__index = function (tb, idx)
+		return QualityBg[3]
+	end
+})
+
+function M:updateShowIcons()
+	local cfg = D._anniversaryRechargeConfig[self._id]
+	local cids = cfg._showCids
+	local cid = cids[1]
+	local quality = D.toQuality(cid)
+
+	V.loadItemSprite(self._imgIcon1, cid)
+	LuaUnity.setTPSprite(self._imgIconBg1, QualityBg[quality][1], true)
+
+	self._imgIconBgLight11.color = Color.str2Static(QualityBg[quality][2])
+	self._imgIconBgLight12.color = Color.str2Static(QualityBg[quality][2])
+	local cid = cids[2]
+	local quality = D.toQuality(cid)
+
+	V.loadItemSprite(self._imgIcon2, cid)
+	LuaUnity.setTPSprite(self._imgIconBg2, QualityBg[quality][1], true)
+
+	self._imgIconBgLight21.color = Color.str2Static(QualityBg[quality][2])
+	self._imgIconBgLight22.color = Color.str2Static(QualityBg[quality][2])
+
+	self._goWeapon:SetActive(self._id == 4)
+	self._goDome:SetActive(self._id == 5)
+	self._goRole:SetActive(self._id == 6)
+	self._rawImgBig.gameObject:SetActive(self._id <= 3)
+
+	if self._id == 1 then
+		LuaUnity.setTexture(self._rawImgBig, "anniversary_topup_item3", true)
+	elseif self._id == 2 then
+		LuaUnity.setTexture(self._rawImgBig, "anniversary_topup_item2", true)
+	elseif self._id == 3 then
+		LuaUnity.setTexture(self._rawImgBig, "anniversary_topup_item1", true)
+	end
+end
+
+function M:putItemWidget(itemWiget)
+	self._itemWidgets[#self._itemWidgets + 1] = itemWiget
+
+	itemWiget:SetActive(false)
+end
+
+function M:getItemWidget()
+	local widget = self._itemWidgets[#self._itemWidgets]
+
+	if widget == nil then
+		widget = ItemWidget.create(self._tfContent)
+	else
+		self._itemWidgets[#self._itemWidgets] = nil
+
+		widget:SetActive(true)
+	end
+
+	return widget
+end
+
+function M:updateRewards()
+	if self._module:couldClaim(self._id) then
+		self._btnGo:SetActive(false)
+		self._btnClaim:SetActive(true)
+		self._goClaimed:SetActive(false)
+		V.setBtnStyle(self._btnClaim, V.BTN_STYLE.yellow)
+	elseif self._module:isClaimed(self._id) then
+		self._btnGo:SetActive(false)
+		self._btnClaim:SetActive(false)
+		self._goClaimed:SetActive(true)
+		V.setBtnStyle(self._goClaimed, V.BTN_STYLE.gray)
+	else
+		self._btnGo:SetActive(true)
+		V.setBtnStyle(self._btnGo, V.BTN_STYLE.blue)
+		self._btnClaim:SetActive(false)
+		self._goClaimed:SetActive(false)
+	end
+
+	for i = 1, #self._itemWidgetsAll do
+		self:putItemWidget(self._itemWidgetsAll[i])
+	end
+
+	self._itemWidgetsAll = {}
+	local cfg = D._anniversaryRechargeConfig[self._id]
+	local cids = cfg._cids
+	local nums = cfg._nums
+
+	self._tmpDesc:SetLocalize(cfg._descSid, cfg._exp)
+
+	local num = lc.lenTable(cids)
+
+	for i = 1, num do
+		local go = self:getItemWidget()
+
+		go:init(cids[i], nums[i])
+		self:setClick(go._btnClick, function ()
+			go:rewardclickCallback()
+		end)
+		go.transform:SetSiblingIndex(i - 1)
+
+		self._itemWidgetsAll[#self._itemWidgetsAll + 1] = go
+	end
+
+	for i = 1, 6 do
+		self._goHighlights[i]:SetActive(self._id == i)
+	end
+
+	if self._id == 1 or self._popStage then
+		self._btnTurnLeft:SetActive(false)
+	else
+		self._btnTurnLeft:SetActive(true)
+	end
+
+	if self._id == MAX_INDEX or self._popStage then
+		self._btnTurnRight:SetActive(false)
+	else
+		self._btnTurnRight:SetActive(true)
+	end
+
+	local cur = self._module:getRechargeNum()
+	local total = self._module:stageNeedExp(self._id)
+	self._tmpBarProgress.text = string.format("%d/%d", cur, total)
+	self._slicedFillImage.fillAmount = cur / total
+
+	self:updateShowIcons()
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local endTime = P._playerActivityAnniversary:readActivityEndTime()
+
+	if not endTime or endTime <= 0 then
+		return
+	end
+
+	local targetTime = endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:handleClaimBtn()
+	if not P._playerActivity:isAnniversaryOpening() then
+		self:closePanel()
+
+		return
+	end
+
+	local ret, items = self._module:tryClaimRewards(self._id)
+
+	if ret ~= ResultCode.OK then
+		return
+	end
+
+	V.showRewardClaimPanel(items)
+
+	local k = -1
+
+	for i = 1, MAX_INDEX do
+		if self._module:couldClaim(i) then
+			k = i
+
+			break
+		end
+	end
+
+	if k == -1 then
+		self._id = math.min(self._id + 1, MAX_INDEX)
+	else
+		self._id = k
+	end
+
+	self:updateRewards()
+end
+
+return M

@@ -1,0 +1,22 @@
+local M = class("EmptyPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

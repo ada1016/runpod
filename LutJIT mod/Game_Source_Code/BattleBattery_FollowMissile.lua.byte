@@ -1,0 +1,143 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleWeapon_FollowMissile", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+end
+
+local shootNum2Angle = {
+	36,
+	90,
+	55,
+	43.333333333333336,
+	37.5,
+	34,
+	27.142857142857142,
+	25
+}
+
+setmetatable(shootNum2Angle, {
+	__index = function (tb, idx)
+		return shootNum2Angle[#shootNum2Angle]
+	end
+})
+
+function M:castSkill(castSkill)
+	castSkill = castSkill or self._mainSkill
+	local addNum = castSkill:getProp(BattlePropEnum.Salvo, 0)
+	addNum = math.max(0, addNum)
+	local bulletNum = 1 + addNum
+	local bulletDeltaAngle = shootNum2Angle[bulletNum]
+	local weaponCurrentAngle = self._angle
+	local startAngle = 0
+
+	opt.dict_arg8:clear()
+
+	for i = 1, bulletNum do
+		local bullet = castSkill:createBullet()
+		startAngle = weaponCurrentAngle + bulletDeltaAngle * (-(bulletNum - 1) / 2 + i - 1)
+
+		if self._mainSkill == castSkill then
+			local effPar = self:getEffect(353)
+
+			if effPar and self._battleRandomLib:randomTrue(effPar) then
+				local p = D.getBattleEffectParams(353)
+				bullet._jumpNum = p[1]
+				bullet._damageAddNum = p[1]
+			end
+		end
+
+		bullet._angle = startAngle
+		bullet._defaultAngle = weaponCurrentAngle
+
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+		local lockEnemy = nil
+
+		if i == 1 then
+			lockEnemy = self._targetEnemy
+		elseif i == 3 then
+			local index = -1
+
+			for i = 1, 10 do
+				local j = self._battleRandomLib:randomMN(1, 4)
+
+				if j ~= self._index then
+					index = j
+
+					break
+				end
+			end
+
+			local p = BattleManager:weaponPovit(index)
+
+			opt.vec2_1:Set(p[1], p[2])
+
+			lockEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery2(self, self._atkRange, opt.vec2_1, opt.dict_arg8)
+		end
+
+		if lockEnemy == nil then
+			lockEnemy = self._battleSession:randomOneEnemy(opt.dict_arg8)
+		end
+
+		bullet:lockEnemy(lockEnemy or self._targetEnemy)
+
+		if lockEnemy then
+			opt.dict_arg8[lockEnemy._id] = true
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+
+	opt.dict_arg8:clear()
+end
+
+function M:castTriggerSkill(tEnemy)
+	local triggerSkill = self:getSkill(304)
+	local num = triggerSkill:getProp(BattlePropEnum.Salvo, 0)
+	num = num + 1
+
+	for i = 1, num do
+		local bullet = triggerSkill:createBullet()
+		local lockEnemy = self._battleSession:randomOneEnemy()
+
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+		bullet:lockEnemy(lockEnemy)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+end
+
+function M:castSkin62Effect()
+	local bulletNum = self._skinEffect62Params.out_param
+	local enemys = self._battleSession:getAllEnemys()
+
+	if #enemys == 0 then
+		return
+	end
+
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+
+	self:castSkill(castSkill)
+end
+
+return M

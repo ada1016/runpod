@@ -1,0 +1,150 @@
+local M = class("PlayerSevenDay")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.claimData = self._meta.claimData or {}
+	self._meta.eventTids = self._meta.eventTids or {}
+	self._meta.expired = self._meta.expired or false
+	self._meta.systemCreateTime = self._meta.systemCreateTime or C.getCurTime()
+end
+
+function M:fixV3()
+	if self:isStepClaimed(7) then
+		self:claimStepRewards(7)
+	end
+
+	if self:isStepClaimed(8) then
+		self:claimStepRewards(8)
+	end
+end
+
+function M:dailyReset()
+	self:dealExpired()
+end
+
+function M:isExpired()
+	return self._meta.expired
+end
+
+function M:getSystemCreateTime()
+	return self._meta.systemCreateTime
+end
+
+function M:getSystemCreateDay()
+	return math.ceil((C.getCurTime() - C.getZeroTimestamp(self:getSystemCreateTime())) / D.DAY_SECONDS)
+end
+
+function M:dealExpired()
+	if self._meta.expired then
+		return
+	end
+
+	if self:getSystemCreateDay() <= 7 then
+		return
+	end
+
+	self._meta.expired = true
+	self._meta.cachedRewards = self:cacheAllRewards()
+
+	table.clear(self._meta.eventTids)
+	P._playerTask:clearDisplayTask(D.TaskClass.SevenDay)
+end
+
+function M:claimStepRewards(step)
+	local cids, nums = self:readRewards(step)
+	local ret = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.seven_day)
+	self._meta.claimData[step] = true
+
+	Trace.traceDesign("SevenDayClaim:%d", step)
+
+	return ret
+end
+
+function M:isStepClaimed(step)
+	return self._meta.claimData[step] == true
+end
+
+function M:cacheAllRewards()
+	local rewards = P._playerTask:getAllUnClaimedSevenDayTaskReward()
+	local total = nil
+
+	for step, cfg in ipairs(D._sevenDayConfig) do
+		if not self:isClaimed(step) and self:canClaim(step) then
+			local cids, nums = self:readRewards(step)
+			total = total or {}
+
+			D.foldCidsAndNums2Rewards(total, cids, nums)
+			Trace.traceDesign("SevenDayClaim:%d", step)
+		end
+	end
+
+	return total
+end
+
+function M:haveCachedRewards()
+	return self._meta.cachedRewards ~= nil
+end
+
+function M:claimCachedRewards()
+	local ret = P._playerAsset:increaseAssetNumsByList(self._meta.cachedRewards, D.LogWay.seven_day)
+	self._meta.cachedRewards = nil
+
+	SimpleEvent.emit("sevenday.claim")
+
+	return ret
+end
+
+function M:canClaim(step)
+	return self:readExp(step) <= P._playerAsset:getAssetNum(D.ResType.seven_day_exp)
+end
+
+function M:isClaimed(step)
+	return self._meta.claimData[step] == true
+end
+
+function M:haveRewards()
+	for i = 1, #D._sevenDayConfig do
+		if self:canClaim(i) and not self:isClaimed(i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:readRewards(step)
+	return D._sevenDayConfig[step]._cids, D._sevenDayConfig[step]._nums
+end
+
+function M:readExp(step)
+	return D._sevenDayConfig[step] and D._sevenDayConfig[step]._exp
+end
+
+function M:getDayReddot(day)
+	if self:getSystemCreateDay() < day then
+		return false
+	end
+
+	local ids = TaskHelper:getTasksChapterOrderByClass(D.TaskClass.SevenDay, day)
+
+	for i = 1, #ids do
+		if TaskHelper:canClaim(ids[i][1]) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:recordDesignEvent(tid)
+	self._meta.eventTids[tid] = 1
+end
+
+function M:getRecordedDesignEvents()
+	return self._meta.eventTids
+end
+
+return M

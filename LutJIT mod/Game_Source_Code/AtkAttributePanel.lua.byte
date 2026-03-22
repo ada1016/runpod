@@ -1,0 +1,47 @@
+local M = class("AtkAttributePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init()
+	local classAtks = P._playerRole:getClassAtk()
+	local goCell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+	goCell:SetActive(true)
+	goCell.transform:Find("Text"):GetComponent("TMP_Text"):SetLocalize(SID.STR_BASE_ATK)
+
+	goCell.transform:Find("Text2"):GetComponent("TMP_Text").text = P._playerRole:getPlayerAtk()
+
+	for i = BattlePropEnum.AtkNatureGuard, BattlePropEnum.AtkNature5 do
+		if classAtks[i] then
+			goCell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+			goCell:SetActive(true)
+			V.loadAtkClassText(goCell.transform:Find("Text"):GetComponent("TMP_Text"), i)
+
+			goCell.transform:Find("Text2"):GetComponent("TMP_Text").text = classAtks[i]
+		end
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if classAtks[i] then
+			goCell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+			goCell:SetActive(true)
+			V.loadAtkClassText(goCell.transform:Find("Text"):GetComponent("TMP_Text"), i)
+
+			goCell.transform:Find("Text2"):GetComponent("TMP_Text").text = classAtks[i]
+		end
+	end
+end
+
+return M

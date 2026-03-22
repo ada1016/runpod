@@ -1,0 +1,311 @@
+local M = {}
+local LuaOutF = LuaOut.float
+local LuaHelper = LuaHelper
+local type = type
+
+function M.setLocalPosition(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetLocalPosition(userdata, x, y, z)
+end
+
+function M.setPosition(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetPosition(userdata, x, y, z)
+end
+
+function M.setAnchoredPosition(userdata, x, y)
+	if type(x) == "table" then
+		y = x.y
+		x = x.x
+	end
+
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetAnchoredPosition(userdata, x, y)
+end
+
+function M.setPivot(userdata, x, y)
+	if type(x) == "table" then
+		y = x.y
+		x = x.x
+	end
+
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetPivot(userdata, x, y)
+end
+
+function M.setLocalScale(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	elseif y == nil and z == nil then
+		y = x
+		z = x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetLocalScale(userdata, x, y, z)
+end
+
+function M.setLocalRotation(userdata, x, y, z, w)
+	if type(x) == "table" then
+		w = x.w
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	w = w or 0
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetLocalRotation(userdata, x, y, z, w)
+end
+
+function M.setRotation(userdata, x, y, z, w)
+	if type(x) == "table" then
+		w = x.w
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	w = w or 0
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetRotation(userdata, x, y, z, w)
+end
+
+function M.setForward(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetForward(userdata, x, y, z)
+end
+
+function M.setRight(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetRight(userdata, x, y, z)
+end
+
+function M.setUp(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetUp(userdata, x, y, z)
+end
+
+function M.setEulerAngles(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetEulerAngles(userdata, x, y, z)
+end
+
+function M.setLocalEulerAngles(userdata, x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	z = z or 0
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetLocalEulerAngles(userdata, x, y, z)
+end
+
+function M.setSizeDelta(userdata, x, y)
+	if type(x) == "table" then
+		y = x.y
+		x = x.x
+	end
+
+	y = y or 0
+	x = x or 0
+
+	LuaHelper.SetSizeDelta(userdata, x, y)
+end
+
+function M.getLocalPosition(userdata)
+	return LuaHelper.GetLocalPosition(userdata)
+end
+
+function M.getPosition(userdata)
+	return LuaHelper.GetPosition(userdata)
+end
+
+function M.getAnchoredPosition(userdata)
+	return LuaHelper.GetAnchoredPosition(userdata)
+end
+
+function M.getPivot(userdata)
+	return LuaHelper.GetPivot(userdata)
+end
+
+function M.getLocalScale(userdata)
+	return LuaHelper.GetLocalScale(userdata)
+end
+
+function M.getLossyScale(userdata)
+	return LuaHelper.GetLossyScale(userdata)
+end
+
+function M.getLocalRotation(userdata)
+	return LuaHelper.GetLocalRotation(userdata)
+end
+
+function M.getRotation(userdata)
+	return LuaHelper.GetRotation(userdata)
+end
+
+function M.getForward(userdata)
+	return LuaHelper.GetForward(userdata)
+end
+
+function M.getRight(userdata)
+	return LuaHelper.GetRight(userdata)
+end
+
+function M.getUp(userdata)
+	return LuaHelper.GetUp(userdata)
+end
+
+function M.getEulerAngles(userdata)
+	return LuaHelper.GetEulerAngles(userdata)
+end
+
+function M.getLocalEulerAngles(userdata)
+	return LuaHelper.GetLocalEulerAngles(userdata)
+end
+
+function M.getSizeDelta(userdata)
+	return LuaHelper.GetSizeDelta(userdata)
+end
+
+function M.getPoint(hit)
+	local point = hit.point
+
+	return point:Get()
+end
+
+function M.getMousePosition()
+	return LuaHelper.GetMousePosition()
+end
+
+function M.convertToWorldPoint(x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	return LuaHelper.ConvertToWorldPoint(x, y, z)
+end
+
+function M.convertToScreenPoint(x, y, z)
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	return LuaHelper.ConvertToScreenPoint(x, y, z)
+end
+
+function M.convertToUIPoint(userdata, x, y, z)
+	if type(userdata) == "table" then
+		userdata = userdata.transform or userdata.gameObject
+	end
+
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	return LuaHelper.ConvertToUIPoint(userdata, x, y, z)
+end
+
+function M.convertScreenToUIPoint(userdata, x, y, z)
+	if type(userdata) == "table" then
+		userdata = userdata.transform or userdata.gameObject
+	end
+
+	if type(x) == "table" then
+		z = x.z
+		y = x.y
+		x = x.x
+	end
+
+	return LuaHelper.ConvertScreenToUIPoint(userdata, x, y, z)
+end
+
+function M.worldToRectTransformPoint(go, tf)
+	return LuaHelper.WorldToRectTransformPoint(go, tf)
+end
+
+function M.getMeshBoundSize(userdata)
+	return LuaHelper.GetMeshBoundSize(userdata)
+end
+
+return M

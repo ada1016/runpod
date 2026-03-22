@@ -1,0 +1,629 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		1,
+		0,
+		dup._4,
+		dup._5,
+		dup._6,
+		dup._5,
+		dup._6,
+		dup._5
+	},
+	{
+		2,
+		1,
+		1,
+		2,
+		2,
+		dup._7,
+		dup._8,
+		{
+			c = 1,
+			[-1] = 5643 - lc._encryptOffset
+		},
+		dup._5,
+		{
+			c = 1,
+			[-1] = 5644 - lc._encryptOffset
+		},
+		dup._5
+	},
+	{
+		3,
+		1,
+		1,
+		3,
+		4,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		4,
+		1,
+		1,
+		4,
+		6,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		5,
+		1,
+		1,
+		5,
+		8,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		6,
+		1,
+		1,
+		6,
+		10,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		7,
+		1,
+		1,
+		7,
+		12,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		8,
+		1,
+		1,
+		8,
+		14,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		9,
+		1,
+		1,
+		9,
+		16,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		10,
+		1,
+		1,
+		10,
+		18,
+		dup._14,
+		dup._5,
+		dup._15,
+		dup._5,
+		dup._16,
+		dup._5
+	},
+	{
+		11,
+		1,
+		1,
+		11,
+		20,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		12,
+		1,
+		1,
+		12,
+		22,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		13,
+		1,
+		1,
+		13,
+		24,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		14,
+		1,
+		1,
+		14,
+		26,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		15,
+		1,
+		1,
+		15,
+		28,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		16,
+		1,
+		1,
+		16,
+		30,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		17,
+		1,
+		1,
+		17,
+		32,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		18,
+		1,
+		1,
+		18,
+		34,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		19,
+		1,
+		1,
+		19,
+		36,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		20,
+		1,
+		1,
+		20,
+		38,
+		dup._15,
+		dup._5,
+		dup._16,
+		dup._5,
+		dup._17,
+		dup._5
+	},
+	{
+		21,
+		1,
+		1,
+		21,
+		40,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		22,
+		1,
+		1,
+		22,
+		42,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		23,
+		1,
+		1,
+		23,
+		44,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		24,
+		1,
+		1,
+		24,
+		46,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		25,
+		1,
+		1,
+		25,
+		48,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		26,
+		1,
+		1,
+		26,
+		50,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		27,
+		1,
+		1,
+		27,
+		52,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		28,
+		1,
+		1,
+		28,
+		54,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		29,
+		1,
+		1,
+		29,
+		56,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		30,
+		1,
+		1,
+		30,
+		58,
+		dup._14,
+		dup._5,
+		dup._15,
+		dup._5,
+		dup._16,
+		dup._5
+	},
+	{
+		31,
+		1,
+		1,
+		31,
+		60,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		32,
+		1,
+		1,
+		32,
+		62,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		33,
+		1,
+		1,
+		33,
+		64,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		34,
+		1,
+		1,
+		34,
+		66,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		35,
+		1,
+		1,
+		35,
+		68,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		36,
+		1,
+		1,
+		36,
+		70,
+		dup._7,
+		dup._8,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		37,
+		1,
+		1,
+		37,
+		72,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		38,
+		1,
+		1,
+		38,
+		74,
+		dup._11,
+		dup._9,
+		dup._7,
+		dup._12,
+		dup._11,
+		dup._13
+	},
+	{
+		39,
+		1,
+		1,
+		39,
+		76,
+		dup._4,
+		dup._5,
+		dup._4,
+		dup._9,
+		dup._4,
+		dup._10
+	},
+	{
+		40,
+		1,
+		1,
+		40,
+		78,
+		dup._15,
+		dup._5,
+		dup._16,
+		dup._5,
+		dup._17,
+		dup._5
+	}
+}
+local mapKeyIndex = {
+	k13675265 = 7,
+	k1823915 = 6,
+	k13991182 = 5,
+	k1823916 = 8,
+	k15255765 = 3,
+	k1823917 = 10,
+	k10349823 = 2,
+	k13675267 = 11,
+	k9615522 = 4,
+	k13675266 = 9,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k1823916 = 1,
+	k1823915 = 1,
+	k13675265 = 1,
+	k13675266 = 1,
+	k1823917 = 1,
+	k13675267 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 8958
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[3] == nil then
+				return nil
+			end
+
+			return SID["SID_BATTLEPASS_RANGER_NAMESID_" .. table[3]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 8958
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

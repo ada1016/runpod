@@ -1,0 +1,419 @@
+local M = class("AnniversaryTreasureHuntingPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	txtMissionId = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContent = Types.Transform,
+	goMilestoneArea = Types.GameObject,
+	txtBigReward = Types.TMP_Text,
+	goBigReward = Types.GameObject,
+	tfTreasures = Types.Transform,
+	btnShovel = Types.Button,
+	imgShovelIcon = Types.Image,
+	txtShovelNum = Types.TMP_Text,
+	animTreasureRefresh = Types.Animation,
+	animAll = Types.Animation,
+	btnStore = Types.Button,
+	tfMapObject = Types.Transform,
+	btnExit = Types.Button,
+	tfAnchorDiamond = Types.Transform,
+	tfAnchorShovel = Types.Transform,
+	tfAnchorExchangeRes = Types.Transform
+}
+local TreasureHuntingMapWidget = requireLua("TreasureHuntingMapWidget")
+local RewardWidget = requireLua("TreasureHuntingMissionRewardWidget")
+local TreasureWidget = requireLua("TreasureWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 30,
+		bottomPadding = 0,
+		cellMargin = 0,
+		direction = 2,
+		updateVisibleCells = true,
+		cellHeight = 180,
+		cellInitCount = 5
+	})
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	if self._map then
+		self._map:destroy()
+	end
+
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnIssue, function ()
+		UIManager.openPanel(PrefabDefine.AnniversaryDigRulePanel)
+	end)
+	self:setClick(self._btnShovel, function ()
+		V.showItemInfoPanel(D.ResType.treasure_hunting_shovel)
+	end)
+	self:setClick(self._btnStore, function ()
+		self:handleStoreBtn()
+	end)
+	self:setClick(self._goBigReward._btnClick, function ()
+		self._goBigReward:rewardclickCallback()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.treasure_hunting_shovel then
+			self:updateShovel()
+		end
+	end)
+	self:on("day.cross", function ()
+	end)
+	self:on("anniversary.dig.found", function ()
+		self:updateReddots()
+	end)
+	self:on("anniversary.dig.fastComplete", function ()
+		if self._module:isMissionCleared() then
+			self:doMapCleared()
+		end
+	end)
+	self:on("anniversary.dig.jumpMission", function ()
+		self:updateMilestones()
+		self:doMapRefresh()
+	end)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._timer)
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+	self:updateReddots()
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:tryExpire()
+end
+
+function M:initPrefabVar()
+	SimpleItemWidget.noCreate(self._goBigReward)
+
+	self._goCurrentTreasures = {}
+	local count = self._tfTreasures.childCount
+
+	for i = 1, count do
+		local go = self._tfTreasures:GetChild(i - 1).gameObject
+
+		TreasureWidget.noCreate(go)
+		go:init()
+
+		self._goCurrentTreasures[i] = go
+	end
+end
+
+function M:init(from)
+	self._from = from
+
+	Client.playSound("ui_Annvy_hunting_panel_1")
+
+	self._module = P._playerActivityAnniversary._moduleTreasureHunting
+
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_TREASURE_HUNTING)
+	V.loadItemSprite(self._imgShovelIcon, D.ResType.treasure_hunting_shovel)
+
+	self._txtShovelNum.text = P._playerAsset:getAssetNum(D.ResType.treasure_hunting_shovel)
+	self._secondFuncs = {}
+
+	if not self._secondTimer then
+		self._secondTimer = lc.setInterval(function ()
+			for i, v in pairs(self._secondFuncs) do
+				v()
+			end
+		end, 0.5)
+	end
+
+	self:initMap()
+	self:updateUI()
+end
+
+function M:updateShovel()
+	self._txtShovelNum.text = P._playerAsset:getAssetNum(D.ResType.treasure_hunting_shovel)
+end
+
+function M:initMap()
+	self._map = TreasureHuntingMapWidget.noCreate(self._tfMapObject.gameObject)
+
+	self._map:init(self)
+	self._map:createMap(self._module:getMapEntity())
+	self:updateAllTreasure()
+end
+
+function M:doTreasureFound(treasure)
+	local idx = treasure.idx
+	local tid = treasure.id
+	local treasureWidget = self._goCurrentTreasures[idx]
+
+	treasureWidget:setFlyView()
+	treasureWidget:doFlyTreasure(self._map:getMapTreasureObj(idx), self._map:getTreasureScale(tid), function ()
+		treasureWidget:setFoundView()
+	end)
+end
+
+function M:doTreasureRefresh(treasures)
+end
+
+function M:doMapCleared()
+	local isMaxPgs = self._module:isMaxMission()
+	local retCode, rewards = self._module:tryClaimMissionRewards()
+
+	if retCode ~= ResultCode.OK then
+		return
+	end
+
+	local scrollTime = self:doRewardsScroll() + 0.2
+
+	MainGameRoot:showGlobalMask()
+	lc.setTimer(function ()
+		MainGameRoot:hideGlobalMask()
+		V.showRewardClaimPanel(rewards, nil, function ()
+			for i, v in ipairs(self._goCurrentTreasures) do
+				v:setFoundView()
+			end
+
+			if not isMaxPgs then
+				self._animTreasureRefresh:Play("anim_anniversary_dig_refresh_treasure")
+				self._animAll:Play("anim_anniversary_dig_refresh")
+			end
+
+			MainGameRoot:showGlobalMask()
+			lc.setTimer(function ()
+				Client.playSound("ui_Annvy_hunting_panel_2")
+				self:doMapRefresh()
+			end, 0.6666666666666666)
+			lc.setTimer(function ()
+				MainGameRoot:hideGlobalMask()
+			end, 2)
+		end)
+	end, scrollTime)
+end
+
+function M:doResourceFly(cid, num, startTf)
+	if cid == D.ResType.diamond then
+		ResAnimHelper.flyItem(cid, startTf, self._tfAnchorDiamond, math.min(num, 10), Color.str2Static("F9BFFF"), 1)
+	elseif cid == D.ResType.treasure_hunting_shovel then
+		ResAnimHelper.flyItem(cid, startTf, self._tfAnchorShovel, math.min(num, 10), Color.str2Static("BFFFFF"), 0.5)
+	elseif cid == D.ResType.anniversary_exchange_key then
+		ResAnimHelper.flyItem(cid, startTf, self._tfAnchorExchangeRes, math.min(num, 10), Color.str2Static("FD984E"), 0.5)
+	end
+end
+
+function M:doMapRefresh()
+	self:updateTitle()
+	self._map:refreshMap(self._module:getMapEntity())
+	self:updateAllTreasure()
+end
+
+function M:doRewardsScroll()
+	local msId = self._module:getMissionId()
+
+	self._scrollViewEx:reloadData()
+
+	local isMaxPgs = self._module:isMaxMission() and self._module:isMissionRewardClaimed()
+	local show, goCell = self._scrollViewEx:isIdxShow(msId - (isMaxPgs and 1 or 2))
+	local animTime = 0.618
+
+	if msId == 2 then
+		animTime = 0
+	end
+
+	if show then
+		goCell._imgPgs.fillAmount = 0
+
+		goCell._imgPgs:DOFillAmount(1, animTime)
+	end
+
+	self._scrollViewEx:moveToItemByIndex(math.max(1, msId - (isMaxPgs and 1 or 2)), animTime, nil, , function ()
+		show, goCell = self._scrollViewEx:isIdxShow(msId - (isMaxPgs and 1 or 2))
+
+		if show then
+			goCell:updateItemStatus()
+		end
+
+		self:updateBigReward(true)
+	end)
+
+	return animTime
+end
+
+function M:updateUI()
+	self:updateTitle()
+	self:updateMilestones()
+	self:updateExpireTime()
+	self:updateReddots()
+end
+
+function M:updateTitle()
+	self._txtMissionId:SetLocalize(SID.TITLE_SHORT_MISSION_X, self._module:getMissionId())
+end
+
+function M:updateMilestones()
+	self._scrollViewEx:reloadData()
+	self._scrollViewEx:moveToItemByIndex(math.max(1, self._module:getMissionId() - 2), nil, , , function ()
+	end)
+	self:updateBigReward()
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local endTime = P._playerActivityAnniversary:readActivityEndTime()
+
+	if not endTime or endTime <= 0 then
+		return
+	end
+
+	local targetTime = endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:updateReddots()
+	self._btnStore.dot:SetVisible(self._module:haveShopDot())
+end
+
+function M:updateTreasure(idx)
+	if self._module:isTreasureFound(idx) then
+		self._goCurrentTreasures[idx]:setFoundView()
+	else
+		self._goCurrentTreasures[idx]:setNotFoundView()
+	end
+end
+
+function M:updateAllTreasure()
+	local treasures = self._module:getAllTreasures()
+
+	for i = 1, #self._goCurrentTreasures do
+		self._goCurrentTreasures[i]:SetActive(treasures[i] ~= nil)
+
+		if treasures[i] then
+			local tid = treasures[i].id
+
+			self._goCurrentTreasures[i]:updateUI(tid, self._map:getTreasureScale(tid))
+
+			if treasures[i].found then
+				self._goCurrentTreasures[i]:setFoundView()
+			else
+				self._goCurrentTreasures[i]:setNotFoundView()
+			end
+		end
+	end
+end
+
+function M:onCellNum()
+	local max = self._module:readTotalMilestone()
+	local min = 20
+	local cur = self._module:getMissionId()
+
+	return lc.numberClamp(cur % 10 > 0 and cur - cur % 10 + 10 or cur, min, max) - 1
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RewardWidget.create(self._tfContent)
+
+		goCell:init(self._module)
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self, function ()
+		end)
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+function M:onChangeVisibleCells()
+	self:updateBigReward()
+end
+
+function M:updateBigReward(force)
+	local lastCellIdx = self._scrollViewEx:getLastVisibleCellIdx()
+	lastCellIdx = math.max(lastCellIdx, self._module:getMissionId())
+	local showRewardLevel = nil
+
+	if lastCellIdx > 0 then
+		showRewardLevel = self._module:findBigRewardIdx(lastCellIdx)
+	end
+
+	showRewardLevel = showRewardLevel or self._module:readTotalMilestone()
+
+	if self._showBigRewardIdx == showRewardLevel and not force then
+		return
+	end
+
+	self._showBigRewardIdx = showRewardLevel
+
+	self._txtBigReward:SetLocalize(SID.TITLE_SHORT_MISSION_X, showRewardLevel)
+
+	local cid, num = self._module:readMsReward(showRewardLevel)
+
+	self._goBigReward:init(cid, num)
+
+	local resultCode = self._module:checkClaimMissionReward(self._showBigRewardIdx)
+	local locked = resultCode == ResultCode.LOCKED
+	local isClaimed = resultCode == ResultCode.REWARD_CLAIMED
+
+	self._goBigReward:setClaimed(isClaimed)
+end
+
+function M:showNextRewards()
+end
+
+function M:handleNextMission()
+end
+
+function M:handleRestartMission()
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:handleStoreBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryTreasureHuntingStorePanel)
+end
+
+return M

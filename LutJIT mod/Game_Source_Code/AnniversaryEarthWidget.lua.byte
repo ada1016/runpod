@@ -1,0 +1,57 @@
+local M = class("AnniversaryEarthWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(enemyId)
+	self._tfBlock1 = self._goBlock1.transform:GetChild(0):GetChild(0):GetChild(0)
+	self._tfBlock2 = self._goBlock2.transform:GetChild(0):GetChild(0):GetChild(0)
+	self._tfBlock3 = self._goBlock3.transform:GetChild(0):GetChild(0):GetChild(0)
+	self._tfBlock4 = self._goBlock4.transform:GetChild(0):GetChild(0):GetChild(0):GetChild(1)
+	self._tfBlock5 = self._goBlock5.transform:GetChild(0):GetChild(0):GetChild(0)
+	self._tfBlock6 = self._goBlock6.transform:GetChild(0):GetChild(0):GetChild(0)
+	self._tfBlock7 = self._goBlock7.transform:GetChild(0):GetChild(0):GetChild(0)
+
+	self:updateUI()
+end
+
+function M:updateUI(step)
+	step = step or 1
+
+	self._tfBlock1:GetChild(0):SetActive(step >= 1)
+	self._tfBlock1:GetChild(1):SetActive(step >= 1)
+	self._tfBlock1:GetChild(2):SetActive(step >= 2)
+	self._tfBlock1:GetChild(3):SetActive(step >= 2)
+	self._tfBlock1:GetChild(4):SetActive(step >= 2)
+	self._tfBlock1:GetChild(5):SetActive(step >= 2)
+	self._tfBlock2:GetChild(0):SetActive(step >= 3)
+	self._tfBlock2:GetChild(1):SetActive(step >= 3)
+	self._tfBlock2:GetChild(2):SetActive(step >= 4)
+	self._tfBlock2:GetChild(3):SetActive(step >= 4)
+	self._tfBlock2:GetChild(4):SetActive(step >= 4)
+	self._tfBlock2:GetChild(5):SetActive(step >= 4)
+	self._tfBlock3:GetChild(0):SetActive(step >= 5)
+	self._tfBlock3:GetChild(1):SetActive(step >= 5)
+	self._tfBlock3:GetChild(2):SetActive(step >= 6)
+	self._tfBlock3:GetChild(3):SetActive(step >= 6)
+	self._tfBlock3:GetChild(4):SetActive(step >= 6)
+	self._tfBlock3:GetChild(5):SetActive(step >= 6)
+	self._tfBlock4:GetChild(0):SetActive(step >= 2)
+	self._tfBlock4:GetChild(1):SetActive(step >= 3)
+	self._tfBlock4:GetChild(2):SetActive(step >= 4)
+	self._tfBlock4:GetChild(3):SetActive(step >= 5)
+	self._tfBlock5:GetChild(0):SetActive(step == 6)
+	self._tfBlock6:GetChild(0):SetActive(step >= 7)
+	self._tfBlock6:GetChild(1):SetActive(step >= 9)
+	self._tfBlock6:GetChild(2):SetActive(step >= 10)
+	self._tfBlock7:GetChild(0):SetActive(step >= 8)
+	self._tfBlock7:GetChild(1):SetActive(step >= 10)
+end
+
+return M

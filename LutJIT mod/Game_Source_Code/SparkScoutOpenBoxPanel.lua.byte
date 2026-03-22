@@ -1,0 +1,472 @@
+local M = class("SparkScoutOpenBoxPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	imgBgColor = Types.Image,
+	btnBg = Types.Button,
+	btnReturn = Types.Button,
+	tfBox = Types.Transform,
+	goAnim1 = Types.GameObject,
+	goAnim2 = Types.GameObject,
+	goSkip = Types.GameObject,
+	btnOpenOne = Types.Button,
+	btnOpenCoin = Types.Button,
+	btnConfirm = Types.Button,
+	btnRefresh = Types.Button,
+	goRewardsContainer = Types.GameObject,
+	goRewardSep = Types.GameObject,
+	tfRewardsParent = Types.Transform,
+	tfUnusableRewardsParent = Types.Transform,
+	cgResultBtns = Types.CanvasGroup,
+	goAdBtn = Types.GameObject,
+	cgDrawBtns = Types.CanvasGroup,
+	cgReturn = Types.CanvasGroup,
+	cgTop = Types.CanvasGroup,
+	goForbidClick = Types.GameObject,
+	goChipRemainNum = Types.GameObject,
+	txtChipRemainNum = Types.TMP_Text,
+	txtPool1 = Types.TMP_Text,
+	txtPool2 = Types.TMP_Text,
+	txtPool3 = Types.TMP_Text,
+	txtPool4 = Types.TMP_Text,
+	txtPool5 = Types.TMP_Text,
+	btnRefreshTip = Types.Button
+}
+local ItemWidget = requireLua("SimpleItemWidget")
+local SparkScoutShopChipWidget = requireLua("SparkScoutShopChipWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goRewards = {}
+
+	for i = 1, self._tfRewardsParent.childCount do
+		local go = self._tfRewardsParent:GetChild(i - 1).gameObject
+
+		SparkScoutShopChipWidget.noCreate(go)
+
+		self._goRewards[i] = go
+	end
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:jumpOpen()
+	end)
+	self:setClick(self._btnOpenOne, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawTicket()
+			P:saveGameData()
+		end)
+	end)
+	self:setClick(self._btnOpenCoin, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawGold()
+			P:saveGameData()
+		end)
+	end)
+	self:setClick(self._btnReturn, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnConfirm, function ()
+		self:handleConfirm()
+	end)
+	self:setClick(self._btnRefresh, function ()
+		self:handleRefresh()
+	end)
+
+	for i = 1, 5 do
+		self:setClick(self["_txtPool" .. i].transform.parent:GetComponent("Button"), function ()
+			V.showBubbleTips({
+				desc = SID["SPARK_SCOUT_CHIP_" .. i + D.Quality.Green]
+			}, {
+				alignment = 1,
+				offset = {
+					0,
+					10,
+					0
+				}
+			})
+		end)
+	end
+
+	self:setClick(self._btnRefreshTip, function ()
+		V.showBubbleTips({
+			desc = SID.SPARK_SCOUT_CHIP_TIP
+		}, {
+			offset = {
+				0,
+				10,
+				0
+			},
+			target = self._btnRefreshTip.gameObject
+		})
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:closePanel()
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._delayReShow)
+
+	if self._callback then
+		self._callback()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:init(boxType, rewards, callback)
+	self._tfRewardsParent:GetChild(0):SetActive(false)
+
+	self._alwaysSkipOpenAnim = lc.getIntKeyValue("spark_scout_openbox_skip", 0) == C.getTodayZeroTimestamp()
+	self._alwaysSkipOpenAnim = false
+	self._module = P._playerActivitySparkScout
+	self._boxType = boxType or D.SparkScoutDropType.Pack1Drop
+	self._callback = callback
+	self._rewardsData = rewards or {}
+
+	Client.playSound("ui_Ark_cardpack_come_1")
+
+	self._delayOpenTimer = lc.setTimer(function ()
+		Client.playSound("ui_Ark_cardpack_open_1")
+
+		self._delayOpenTimer = nil
+	end, 1)
+
+	if self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop then
+		self._imgBgColor.color = Color.str2Static("000A24")
+
+		self._goAnim1:SetActive(true)
+		self._goAnim2:SetActive(false)
+
+		self._anim = self._goAnim1:GetComponent("Animator")
+	else
+		self._imgBgColor.color = Color.str2Static("1E1404")
+
+		self._goAnim1:SetActive(false)
+		self._goAnim2:SetActive(true)
+
+		self._anim = self._goAnim2:GetComponent("Animator")
+	end
+
+	self:openBox(true)
+end
+
+function M:handleConfirm()
+	P._playerActivitySparkScout:claimChips()
+	SimpleEvent.emit("sparkScoutPool.dirty")
+	self:showAfterConfirm()
+end
+
+function M:handleRefresh()
+	local freeCount = self._module:getRemainFreeRefreshCount()
+	local adCount = self._module:getRemainAdRefreshCount()
+
+	if freeCount > 0 then
+		self._rewardsData = P._playerActivitySparkScout:refreshChips()
+
+		self:showRewards()
+		self:showAfterAdRefresh()
+
+		return
+	end
+
+	if adCount <= 0 then
+		return
+	end
+
+	P._playerAd:tryStartRewardAd(D.AdType.SparkScout_PackRefresh, function ()
+		self._rewardsData = P._playerActivitySparkScout:refreshChips(true)
+
+		self:showRewards()
+		self:showAfterAdRefresh()
+	end)
+end
+
+function M:trySkipBoxAnim()
+	if not self._alwaysSkipOpenAnim then
+		return
+	end
+
+	self:jumpOpen()
+end
+
+function M:updateResultBtns()
+	local freeCount = self._module:getRemainFreeRefreshCount()
+	local adCount = self._module:getRemainAdRefreshCount()
+
+	if freeCount > 0 then
+		V.loadAdButton2(self._goAdBtn, {
+			showAd = false,
+			btnStyle = V.BTN_STYLE.yellow,
+			txt = string.format("%s %s", D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_10057), LcLocalization.getTextStr(SID.STR_REFRESH))
+		})
+	elseif adCount > 0 then
+		V.loadAdButton2(self._goAdBtn, {
+			showAd = true,
+			txt = SID.STR_REFRESH
+		})
+	end
+
+	self._btnRefreshTip:GetComponent("Image").color = Color.str2Static(P._playerRight:isAdRemoved() and "39408B" or "CFB95B")
+
+	self._btnRefresh:SetActive(freeCount > 0 or adCount > 0)
+	self._btnRefreshTip:SetActive(freeCount > 0 or adCount > 0)
+end
+
+function M:updateCostBtns()
+	local costCid1, costNum1, costCid2, costNum2, goldType = nil
+
+	if self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop then
+		costCid1 = D.ResType.spark_scout_key
+		goldType = D.SparkScoutDropType.GoldDrop
+	elseif self._boxType == D.SparkScoutDropType.Pack2Drop or self._boxType == D.SparkScoutDropType.SPGoldDrop then
+		costCid1 = D.ResType.spark_scout_sp_key
+		goldType = D.SparkScoutDropType.SPGoldDrop
+	end
+
+	local allowCoinOpen = self:allCoinOpen()
+
+	self._btnOpenCoin:SetActive(allowCoinOpen)
+
+	if allowCoinOpen then
+		local cid, cost = self._module:getDropCost(goldType)
+		self._btnOpenCoin.transform:GetChild(1):GetComponent("TMP_Text").text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. cid), cost)
+	end
+
+	self._btnOpenOne.transform:GetChild(1):GetComponent("TMP_Text").text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. costCid1), 1)
+
+	self._btnOpenOne.dot:SetActive(P._playerAsset:isAssetEnough(costCid1, 1))
+end
+
+function M:allCoinOpen()
+	return self._module:readCurrentCfg()._pack3UnlockBattleCount <= self._module:getBattleNum()
+end
+
+function M:openBox(isFirst)
+	self:updateCostBtns()
+	self:resetPanel2Start()
+
+	self._delayOpenTimer = lc.setTimer(function ()
+		Client.playSound("ui_Weekmid_chestopen_1")
+
+		self._delayOpenTimer = nil
+	end, 1)
+
+	self._goSkip:SetActive(true)
+
+	self._rewardIdx = 0
+
+	self._anim:SetInteger("Status", 1)
+	self._goChipRemainNum:SetActive(false)
+
+	self._waitOpenBoxAnim = lc.setTimer(function ()
+		self:showRewards()
+	end, isFirst and 1.9 or 1.4)
+end
+
+function M:showAfterOpen()
+	self._goSkip:SetActive(false)
+	self._cgTop:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._cgTop.blocksRaycasts = true
+
+	self._goForbidClick:SetActive(false)
+	self._cgResultBtns:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._cgResultBtns.blocksRaycasts = true
+
+	self:updateResultBtns()
+end
+
+function M:showAfterConfirm()
+	self._cgReturn:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._cgReturn.blocksRaycasts = true
+	self._cgDrawBtns.blocksRaycasts = true
+
+	self._cgDrawBtns:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._cgResultBtns.alpha = 0
+	self._cgResultBtns.blocksRaycasts = false
+
+	self._goRewardsContainer:SetActive(false)
+	self._anim:SetInteger("Status", 0)
+	self._goChipRemainNum:SetActive(true)
+	self:showChipPool()
+end
+
+function M:showAfterAdRefresh()
+	self._isOpened = true
+	self._isDone = false
+
+	self:updateResultBtns()
+	self:showRewards()
+end
+
+function M:resetPanel2Start()
+	self._isOpened = false
+	self._isDone = false
+
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._delayReShow)
+	self._goRewardsContainer:SetActive(false)
+	self._goForbidClick:SetActive(false)
+	self._cgDrawBtns:DOKill()
+
+	self._cgDrawBtns.alpha = 0
+	self._cgDrawBtns.blocksRaycasts = false
+
+	self._cgReturn:DOKill()
+
+	self._cgReturn.alpha = 0
+	self._cgReturn.blocksRaycasts = false
+
+	self._cgTop:DOKill()
+
+	self._cgTop.alpha = 0
+	self._cgTop.blocksRaycasts = false
+
+	self._cgResultBtns:DOKill()
+
+	self._cgResultBtns.alpha = 0
+	self._cgResultBtns.blocksRaycasts = false
+end
+
+function M:drawOne(boxType)
+	local dropType = boxType
+	local retCode = self._module:checkLottery(dropType)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode)
+
+		return
+	end
+
+	local resultCode, rewards = self._module:tryLottery(dropType)
+
+	if resultCode ~= ResultCode.OK then
+		return
+	end
+
+	self._rewardsData = rewards
+
+	self:openBox()
+	self:trySkipBoxAnim()
+end
+
+function M:showRewards()
+	local hasInvalid = false
+
+	for i = 1, #self._goRewards do
+		local rewardData = self._rewardsData[i]
+
+		if rewardData then
+			self._goRewards[i]:SetActive(true)
+			self._goRewards[i]:updateUI(rewardData[1])
+
+			local invalid = P._playerActivitySparkScout:hasHigherQualityChip(rewardData[1]) or P._playerActivitySparkScout:getChips()[rewardData[1]]
+
+			if invalid then
+				hasInvalid = true
+
+				self._goRewards[i].transform:SetParent(self._tfUnusableRewardsParent)
+			else
+				self._goRewards[i].transform:SetParent(self._tfRewardsParent)
+			end
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+
+	self._goRewardSep:SetActive(hasInvalid)
+	self._goRewardsContainer:SetActive(false)
+	self._goRewardsContainer:SetActive(true)
+	self:showAfterOpen()
+end
+
+function M:isResEnough()
+	if self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop then
+		local cid1, cost1 = self._module:getDropCost(D.SparkScoutDropType.Pack1Drop)
+		local cid2, cost2 = self._module:getDropCost(D.SparkScoutDropType.GoldDrop)
+
+		if P._playerAsset:isAssetEnough(cid1, cost1) or P._playerAsset:isAssetEnough(cid2, cost2) and self:allCoinOpen() then
+			return true
+		end
+	elseif self._boxType == D.SparkScoutDropType.Pack2Drop or self._boxType == D.SparkScoutDropType.SPGoldDrop then
+		local cid1, cost1 = self._module:getDropCost(D.SparkScoutDropType.Pack2Drop)
+		local cid2, cost2 = self._module:getDropCost(D.SparkScoutDropType.SPGoldDrop)
+
+		if P._playerAsset:isAssetEnough(cid1, cost1) or P._playerAsset:isAssetEnough(cid2, cost2) and self:allCoinOpen() then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:drawTicket()
+	local boxType = nil
+
+	if self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop then
+		boxType = D.SparkScoutDropType.Pack1Drop
+	elseif self._boxType == D.SparkScoutDropType.Pack2Drop or self._boxType == D.SparkScoutDropType.SPGoldDrop then
+		boxType = D.SparkScoutDropType.Pack2Drop
+	end
+
+	self:drawOne(boxType)
+end
+
+function M:drawGold()
+	local boxType = nil
+
+	if self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop then
+		boxType = D.SparkScoutDropType.GoldDrop
+	elseif self._boxType == D.SparkScoutDropType.Pack2Drop or self._boxType == D.SparkScoutDropType.SPGoldDrop then
+		boxType = D.SparkScoutDropType.SPGoldDrop
+	end
+
+	self:drawOne(boxType)
+end
+
+function M:jumpOpen()
+	if self._isOpened then
+		return
+	end
+
+	if self._isDone then
+		return
+	end
+
+	self._anim:SetTrigger("Jump")
+	self._anim:SetInteger("Status", 1)
+
+	if self._delayOpenTimer then
+		self._delayOpenTimer:Done()
+	end
+
+	self._waitOpenBoxAnim:Done()
+	self._goRewardsContainer:SetActive(true)
+
+	self._isOpened = true
+end
+
+function M:showChipPool()
+	local isNormalDrop = self._boxType == D.SparkScoutDropType.Pack1Drop or self._boxType == D.SparkScoutDropType.GoldDrop
+	self._txtChipRemainNum.color = Color.str2Static(isNormalDrop and "6EAEFF" or "FFBD49")
+	local chipPools = self._module:calcChipPools()
+	self._txtPool1.text = #chipPools[D.Quality.Blue]
+	self._txtPool2.text = #chipPools[D.Quality.Purple]
+	self._txtPool3.text = #chipPools[D.Quality.Orange]
+	self._txtPool4.text = #chipPools[D.Quality.Red]
+	self._txtPool5.text = #chipPools[D.Quality.COLORFUL]
+end
+
+return M

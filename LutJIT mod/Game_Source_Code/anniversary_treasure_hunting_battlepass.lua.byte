@@ -1,0 +1,429 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		1,
+		1,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		2,
+		1,
+		1,
+		2,
+		2,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		3,
+		1,
+		1,
+		3,
+		3,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		4,
+		1,
+		1,
+		4,
+		4,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		5,
+		1,
+		1,
+		5,
+		5,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		6,
+		1,
+		1,
+		6,
+		6,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		7,
+		1,
+		1,
+		7,
+		7,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		8,
+		1,
+		1,
+		8,
+		8,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		9,
+		1,
+		1,
+		9,
+		9,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		10,
+		1,
+		1,
+		10,
+		10,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		11,
+		1,
+		1,
+		11,
+		11,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		12,
+		1,
+		1,
+		12,
+		12,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		13,
+		1,
+		1,
+		13,
+		13,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		14,
+		1,
+		1,
+		14,
+		14,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		15,
+		1,
+		1,
+		15,
+		15,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		16,
+		1,
+		1,
+		16,
+		16,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		17,
+		1,
+		1,
+		17,
+		17,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		18,
+		1,
+		1,
+		18,
+		18,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		19,
+		1,
+		1,
+		19,
+		19,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		20,
+		1,
+		1,
+		20,
+		20,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		21,
+		1,
+		1,
+		21,
+		21,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		22,
+		1,
+		1,
+		22,
+		22,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		23,
+		1,
+		1,
+		23,
+		23,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		24,
+		1,
+		1,
+		24,
+		24,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		25,
+		1,
+		1,
+		25,
+		25,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		26,
+		1,
+		1,
+		26,
+		26,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		27,
+		1,
+		1,
+		27,
+		27,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		28,
+		1,
+		1,
+		28,
+		28,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		29,
+		1,
+		1,
+		29,
+		29,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	},
+	{
+		30,
+		1,
+		1,
+		30,
+		30,
+		dup._1245,
+		dup._1246,
+		dup._1245,
+		dup._1247
+	}
+}
+local mapKeyIndex = {
+	k13675265 = 7,
+	k1823915 = 6,
+	k13991182 = 5,
+	k1823916 = 8,
+	k15255765 = 3,
+	k10349823 = 2,
+	k9615522 = 4,
+	k13675266 = 9,
+	k1644150 = 1
+}
+local mapKeyDimension = {
+	k13675266 = 1,
+	k1823915 = 1,
+	k1823916 = 1,
+	k13675265 = 1
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 3881
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[3] == nil then
+				return nil
+			end
+
+			return SID["SID_ANNIVERSARY_TREASURE_HUNTING_BATTLEPASS_NAMESID_" .. table[3]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 3881
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

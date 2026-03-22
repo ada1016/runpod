@@ -1,0 +1,36 @@
+local M = class("BattleBullet_Rotate_Rectangle", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._rotateSpeed = battleSkill:getProp(BattlePropEnum.BulletRotateSpeed)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self:stepRotate(dt)
+end
+
+function M:stepRotate(dt)
+	self._angle = self._angle + dt * self._rotateSpeed
+
+	self:setDirByAngle(self._angle)
+
+	if self._view then
+		self._view:rotationEvent()
+	end
+end
+
+return M

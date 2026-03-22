@@ -1,0 +1,12 @@
+local M = {
+	KillOnTargetPos = 3,
+	BulletDestoryOnCurPos = 2,
+	HitFirstOnTargetPos = 1,
+	CastWhenHit = 5,
+	WhenEffect = 6,
+	WhenCast = 7,
+	HitOnTargetPos = 4
+}
+_G.BattleTriggerEnum = M
+
+return M

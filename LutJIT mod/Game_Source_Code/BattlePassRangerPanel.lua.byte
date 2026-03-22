@@ -1,0 +1,68 @@
+local M = class("BattlePassRangerPanel", requireLua("BaseBattlePassPanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	textTitle = Types.TMP_Text,
+	imgExpProgress = Types.SlicedFilledImage,
+	textExpProgress = Types.TMP_Text,
+	textLevel = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goLastReward = Types.GameObject,
+	btnBuyLevel = Types.Button,
+	btnClaimAll = Types.Button,
+	btnBuyStep2 = Types.Button,
+	btnBuyStep3 = Types.Button,
+	goStep2Bought = Types.GameObject,
+	goStep3Bought = Types.GameObject,
+	goLock2 = Types.GameObject,
+	goLock3 = Types.GameObject,
+	textBuyStep2 = Types.TMP_Text,
+	textBuyStep3 = Types.TMP_Text,
+	goTopMask = Types.GameObject,
+	goBottomMask = Types.GameObject,
+	btnExchange = Types.Button,
+	txtDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExchange, function ()
+		UIManager.openPanel(PrefabDefine.ExchangeGroupPanel, D.ResType.ranger_exchange_token, 13000)
+	end)
+end
+
+function M:initOnce()
+	self._module = P._playerBPRanger
+	self._bpCfg = {
+		widgetName = "BPRewardWidget_Ranger",
+		showLastReward_interval = 10,
+		showLastReward = true,
+		e_levelChange = self._module._key_levelEvent,
+		e_expire = self._module._key_expireEvent,
+		reddot = self._module._key_redDot,
+		missRewardTitleId = SID.TITLE_PREV_BP_REWARDS,
+		checkNet = false_check,
+		title = D._systemUnlockConfig[D.SystemType.BPRanger]._nameSid
+	}
+end
+
+function M:updateDesc()
+	self._txtDesc:SetLocalize(SID.RANGER_BP_TIP1, P._playerRanger:readDailyBPExp(), P._playerRanger:readDailyBPExp() - P._playerRanger:getTodayClaimEggNum())
+end
+
+function M:getShowLevel()
+	if V._scrollToTop then
+		V._scrollToTop = nil
+
+		return 1
+	else
+		return M.super.getShowLevel(self)
+	end
+end
+
+return M

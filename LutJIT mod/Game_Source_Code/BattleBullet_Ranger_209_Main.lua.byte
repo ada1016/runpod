@@ -1,0 +1,131 @@
+local M = class("BattleBullet_Ranger_209_Main", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local OFFSET_ANGLE = 10
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	if not self._battleSession:isSkipView() then
+		self._battleView = self._battleSession._battleView
+		local obj = self._sessionView:createBullet(self:prefab())
+		local vfx = self._sessionView:addVFX("Ranger_Bullet_150009_101")
+		self._view = {
+			_obj = obj,
+			_scaleRoot = obj:GetChild(0),
+			_endPoint = obj:GetChild(2),
+			destroyedEvent = function ()
+				self._battleView:recycleUnit(obj)
+				self._battleView:removeVFX(vfx)
+			end
+		}
+	end
+
+	local angle = self._battleRandomLib:randomMN(90 - OFFSET_ANGLE, 90 + OFFSET_ANGLE)
+	local x, y = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS, angle)
+	self._endPosX = x
+	self._endPosY = y + BattleDefine.DOME_CENTER
+
+	self:createSecondSkill()
+
+	self._effect20902 = self._battleWeapon:getEffect(20902)
+	self._effect20902InterVal = self._battleSkill:getProp(BattlePropEnum.BattlePropParam3)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self:updateView()
+
+	if self._effect20902 then
+		self._effect20902InterVal = self._effect20902InterVal - dt
+
+		if self._effect20902InterVal <= 0 then
+			self._effect20902InterVal = self._battleSkill:getProp(BattlePropEnum.BattlePropParam3)
+
+			self._battleSession:recoverBloodPer(self._battleSkill:getProp(BattlePropEnum.BattlePropParam4, 1) / 100, self._battleSkill)
+		end
+	end
+end
+
+function M:updateView()
+	if self._view then
+		local shootPos = self._battleWeapon._shootPos
+
+		self._view._obj:SetPosition(shootPos.x, shootPos.y, 0)
+
+		local angle = BattleMathLib.angle(opt.vec2_1:Set(self._endPosX, self._endPosY), shootPos)
+
+		self._view._obj:SetLocalRotation(0, 0, angle - 90)
+
+		local dis = Vector2.Distance(shootPos, opt.vec2_1:Set(self._endPosX, self._endPosY))
+
+		self._view._scaleRoot:SetLocalScale(1, dis, 1)
+		self._view._endPoint:SetPosition(self._endPosX, self._endPosY, 0)
+	end
+end
+
+function M:releaseAttack()
+	SUPER.releaseAttack(self)
+	self._battleSession:recoverBlood(self._battleSkill:getProp(BattlePropEnum.BattlePropParam1, 1), self._battleSkill)
+end
+
+function M:createSecondSkill()
+	local left = 0
+	local right = 100
+	local count = 2 + self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+	local dt = (right - left) / (count - 1)
+
+	for i = 1, count do
+		self:createSubBullet20901(left - right / 2 + dt * (i - 1))
+	end
+end
+
+function M:createSubBullet20901(angle)
+	local secondSkill = self._battleWeapon._secondSkill
+	local bullet1 = secondSkill:createBullet()
+
+	bullet1:setPos(self._endPosX, self._endPosY)
+	bullet1:setDirByAngle(angle + 90)
+
+	if bullet1._view then
+		bullet1._view:posEvent()
+		bullet1._view:rotationEvent()
+	end
+
+	local combWeapon = self._battleSession:getWeapon(2)
+
+	if combWeapon then
+		local intersectPoint = opt.vec2_1:Set(0, 0)
+
+		self._battleSession:raySegmentIntersectWithLeftTopRight(bullet1._position, bullet1._towardDir, intersectPoint)
+
+		if bullet1._view then
+			local len = Vector2.Distance(bullet1._position, intersectPoint)
+
+			bullet1._view._obj:GetChild(0):SetLocalScale(1, len + 0.05, 1)
+		end
+
+		local bullet2 = secondSkill:createBullet()
+
+		bullet2:setPos(intersectPoint.x, intersectPoint.y)
+		bullet2:setDirByAngle(180 - (angle + 90))
+
+		if bullet2._view then
+			bullet2._view:posEvent()
+			bullet2._view:rotationEvent()
+			bullet2._view._obj:GetChild(0):SetLocalScale(1, 30, 1)
+		end
+	end
+end
+
+return M

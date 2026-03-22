@@ -1,0 +1,114 @@
+local M = class("ScorePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnContact = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	tmpDesc = Types.TMP_Text,
+	cgCloseTips = Types.CanvasGroup,
+	tfStars = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._btnStars = {}
+	self._goStars = {}
+
+	for i = 1, 5 do
+		local btn = self._tfStars:GetChild(i - 1):GetComponent("Button")
+		local star = self._tfStars:GetChild(i - 1):GetChild(0)
+		self._btnStars[i] = btn
+		self._goStars[i] = star
+	end
+
+	for index = 1, 5 do
+		local btn = self._btnStars[index]
+
+		self:setClick(btn, function ()
+			self:dealChooseStar(index)
+		end)
+	end
+end
+
+function M:init(closedCallback)
+	lc.setIntKeyValue("request.review", 1)
+
+	self._closedCallback = closedCallback
+	self._star = 0
+
+	self._btnContact.gameObject:SetActive(false)
+
+	for i = 1, 5 do
+		self._goStars[i]:SetActive(i <= 0)
+	end
+
+	self._tmpDesc:SetLocalize(SID.STR_SCORE_DESC1)
+
+	self._cgCloseTips.alpha = 0
+	self._btnMask.enabled = false
+
+	P:setScored()
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnContact, function ()
+		lc.openUrl(D.URL_EMAIL_TO)
+		self:closePanel()
+	end)
+	self:setClick(self._btnClose, function ()
+		self:closePanel()
+	end)
+end
+
+function M:dealChooseStar(index)
+	local dealed = self._star > 0
+
+	if dealed then
+		return
+	end
+
+	for i = 1, 5 do
+		self._goStars[i]:SetActive(i <= index)
+	end
+
+	self._star = index
+	local choosed = lc.setIntKeyValue("ScoreRate" .. C._userId, 1)
+
+	for i = 1, self._star do
+		local tfStar = self._goStars[i].transform
+
+		self._goStars[i]:SetActive(i <= self._star)
+		lc.setLocalScale(tfStar, 0, 0, 0)
+		tfStar:DOScale(1, 0.3):SetDelay((i - 1) * 0.1):SetLink(self.gameObject):SetEase(V.EASE_OUT_BACK)
+	end
+
+	MainGameRoot:showGlobalMask()
+
+	self._starTimer = lc.setTimer(function ()
+		MainGameRoot:hideGlobalMask()
+
+		if self._star < 5 then
+			self._tmpDesc:SetLocalize(SID.STR_SCORE_DESC2)
+			self._btnContact.gameObject:SetActive(true)
+			lc.setLocalScale(self._btnContact.transform, 0, 0, 0)
+			self._btnContact.transform:DOScale(1, 0.1):SetLink(self.gameObject)
+			self._cgCloseTips:DOFade(1, 0.618):SetLink(self.gameObject)
+
+			self._btnMask.enabled = true
+		else
+			LuaHelper.RequestReview()
+			self:closePanel()
+		end
+	end, 0.3 + 0.1 * (self._star - 1) + 0.5)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

@@ -1,0 +1,112 @@
+local M = class("AnniversaryCheckRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversaryCheckRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:initUI(day)
+end
+
+function M:updateUI(day)
+	self._day = day or self._day
+	self._txtDay.text = self._day
+	local module = P._playerActivityAnniversary._moduleCheckin
+	self._module = module
+	local cid, num = module:readDailyReward(self._day)
+
+	self._goItem:init(cid, num)
+
+	local cid2, num2 = module:readDailyStarReward(self._day)
+	self._txtAddStar.text = "+" .. num2
+	local today = module:getTodayIdx()
+	local resultCode = self._module:checkClaimDailyRewards(self._day)
+	local canClaim = resultCode == ResultCode.OK
+	local needRepair = resultCode == ResultCode.REWARD_MISS
+	local locked = resultCode == ResultCode.LOCKED or resultCode == ResultCode.REWARD_MISS
+	local isClaimed = resultCode == ResultCode.REWARD_CLAIMED
+
+	self._goItem:setCanClaim(canClaim)
+	self._goItem:setClaimed(isClaimed)
+	self._goItem:setInvalid(locked)
+	self._goStar:SetActive(not isClaimed)
+
+	if needRepair then
+		local isAdRemoved = P._playerRight:isAdRemoved()
+		local adTxt = D.getTMPSpriteRichText(isAdRemoved and "ad_removed" or "ad_white")
+
+		self._txtRepairCost:SetLocalizeComplexStr("{0} {1}", {
+			{
+				vs = adTxt
+			},
+			{
+				sid = SID.STR_REPAIR_CHECKIN
+			}
+		})
+	end
+
+	self._goRepair:SetActive(needRepair)
+
+	self._imgPgs.fillAmount = self._day < today and 1 or 0
+end
+
+function M:setRewardsClick(panel)
+	panel:setClickWithoutAction(self._btnStar, function ()
+		V.showItemInfoPanel(D.ResType.anniversary_star)
+	end)
+	panel:setClickWithoutAction(self._goItem._btnClick, function ()
+		if not P._playerActivity:isAnniversaryOpening() then
+			V.showToast(SID.TIP_EVENT_END)
+			panel:closePanel()
+
+			return
+		end
+
+		local resultCode, rewards = self._module:tryClaimDailyRewards(self._day)
+
+		if resultCode ~= ResultCode.OK then
+			if resultCode == ResultCode.REWARD_MISS then
+				P._playerAd:tryStartRewardAd(D.AdType.AnniversaryCheck_Repair, function ()
+					local r1, p1 = self._module:tryRepairDailyRewards(self._day)
+
+					if r1 == ResultCode.OK then
+						V.showRewardClaimPanel(p1)
+						self:updateUI()
+						panel:playStarAnim()
+						panel:updateUI()
+					else
+						V.showResultCode(r1, p1)
+					end
+				end)
+
+				return
+			end
+
+			self._goItem:rewardclickCallback()
+
+			return
+		end
+
+		V.showRewardClaimPanel(rewards)
+		self:updateUI()
+		panel:playStarAnim()
+		panel:updateUI()
+	end)
+end
+
+return M

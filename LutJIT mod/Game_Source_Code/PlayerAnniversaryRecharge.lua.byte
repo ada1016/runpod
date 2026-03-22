@@ -1,0 +1,178 @@
+local M = class("PlayerAnniversaryRecharge")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.isClaimed = lc.assignTable(meta, "isClaimed")
+	self._meta.rechargeNum = self._meta.rechargeNum or 0
+	self._meta.isExtraDiamondRefreshed = self._meta.isExtraDiamondRefreshed or nil
+	self._meta.eventRecordIdx = self._meta.eventRecordIdx or 0
+	self._curStage = 1
+	self._maxStage = #D._anniversaryRechargeConfig
+
+	self:updateStage()
+end
+
+function M:initModule(aid)
+end
+
+function M:curStage()
+	self:updateStage()
+
+	return self._curStage
+end
+
+function M:stageNeedExp(stage)
+	return D._anniversaryRechargeConfig[stage]._exp
+end
+
+function M:isClaimed(id)
+	return self._meta.isClaimed[id]
+end
+
+function M:checkClaimCond(id)
+	local exp = D._anniversaryRechargeConfig[id]._exp
+
+	if exp <= self:getRechargeNum() then
+		return true
+	end
+
+	return false
+end
+
+function M:couldClaim(id)
+	if self:isClaimed(id) then
+		return false
+	end
+
+	return self:checkClaimCond(id)
+end
+
+function M:updateStage()
+	local curNum = self:getRechargeNum()
+
+	if self._cacheCurNum == curNum then
+		return
+	end
+
+	self._cacheCurNum = curNum
+
+	if curNum < D._anniversaryRechargeConfig[1]._exp then
+		self._curStage = 1
+	else
+		for i = 1, self._maxStage do
+			if D._anniversaryRechargeConfig[i]._exp <= curNum then
+				self._curStage = i + 1
+			end
+		end
+
+		self._curStage = math.min(self._curStage, self._maxStage)
+	end
+end
+
+function M:getRechargeNum()
+	return P._playerAsset:getAssetNum(D.ResType.anniversary_charge_score)
+end
+
+function M:tryClaimRewards(id)
+	if not self:couldClaim(id) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	self._meta.isClaimed[id] = true
+	local cids = D._anniversaryRechargeConfig[id]._cids
+	local nums = D._anniversaryRechargeConfig[id]._nums
+	local items = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.anniversary_recharge)
+
+	P:saveGameData()
+
+	return ResultCode.OK, items
+end
+
+function M:getAllUnClaimedRewards()
+	local rewards = {}
+
+	for id = 1, self._maxStage do
+		if self:couldClaim(id) then
+			local cids = D._anniversaryRechargeConfig[id]._cids
+			local nums = D._anniversaryRechargeConfig[id]._nums
+			local batch = D.formatRewards(cids, nums)
+
+			D.foldRewards(rewards, batch)
+		end
+	end
+
+	return rewards
+end
+
+function M:isExtraDiamondRefreshed()
+	return self._meta.isExtraDiamondRefreshed
+end
+
+function M:tryRefreshExtraDiamond(add)
+	if self:isExtraDiamondRefreshed() then
+		return
+	end
+
+	self._meta.isExtraDiamondRefreshed = true
+
+	if add then
+		for iapId = D.IapType.Diamond1, D.IapType.Diamond7 do
+			if P._playerStore:getPurchaseCount(iapId) > 0 then
+				P._playerStore:addFirstExtra(iapId)
+			end
+		end
+
+		P._playerStore:setDiamondRefreshPop()
+		SimpleEvent.emit("iap.diamond.refresh")
+	end
+
+	return self._meta.isExtraDiamondRefreshed
+end
+
+function M:haveUnclaimedRewards()
+	for i = 1, self._maxStage do
+		if self:couldClaim(i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:getPopStage()
+	if self:couldClaim(self._curStage) then
+		return nil
+	end
+
+	if self._curStage == self._maxStage and self:isClaimed(self._curStage) then
+		return nil
+	end
+
+	return self._curStage
+end
+
+function M:recordDesignEvent(newIdx)
+	self._meta.eventRecordIdx = newIdx
+end
+
+function M:getRecordedDesignEventIdx()
+	return self._meta.eventRecordIdx
+end
+
+function M:tryRecordDesignEvent()
+	local idx = self:getRecordedDesignEventIdx()
+
+	for i = idx + 1, self._maxStage do
+		if self:checkClaimCond(i) then
+			self:recordDesignEvent(i)
+			Trace.traceDesign("Annvy_Recharge:%d", i)
+		else
+			break
+		end
+	end
+end
+
+return M

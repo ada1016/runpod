@@ -1,0 +1,79 @@
+local M = class("BattleBullet_Portal_In", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+local band = bit.band
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	if self._imprisonEnemys == nil then
+		self._imprisonEnemys = table.new(16, 0)
+	else
+		table.clear(self._imprisonEnemys)
+	end
+end
+
+function M:destroy()
+	SUPER.destroy(self)
+	table.clear(self._imprisonEnemys)
+
+	self._imprisonEnemys = nil
+	self._bulletPortalOut = nil
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	if self._waitPortalOut and self._bulletPortalOut then
+		self._waitPortalOut = nil
+
+		for i = 1, #self._imprisonEnemys do
+			local enemy = self._imprisonEnemys[i]
+
+			if not enemy._isToBeDestroyed and enemy:hasBuff(14) then
+				self:doPortal(enemy)
+				enemy:removeBuff(14)
+			end
+		end
+
+		table.clear(self._imprisonEnemys)
+	end
+end
+
+function M:hitEnemy(enemy)
+	SUPER.hitEnemy(self, enemy)
+
+	if enemy._ignoreBuff then
+		local mainClass = BattleDefine.BuffMainClass.Portal
+
+		if band(enemy._ignoreBuff, 2^(mainClass - 1)) > 0 then
+			return
+		end
+	end
+
+	local probability = self._battleSkill:getProp(BattlePropEnum.ProtalProbability, 0)
+
+	if not self._battleRandomLib:randomTrue(probability) then
+		return
+	end
+
+	if self._bulletPortalOut then
+		self:doPortal(enemy)
+	else
+		enemy:addBuff(14, 9999)
+
+		self._imprisonEnemys[#self._imprisonEnemys + 1] = enemy
+		self._waitPortalOut = true
+	end
+end
+
+function M:doPortal(enemy)
+	enemy._portalOutPosX = self._battleSession:limitEnemyPositionX(self._bulletPortalOut._position.x)
+	enemy._portalOutPosY = self._battleSession:limitEnemyPositionY(self._bulletPortalOut._position.y)
+
+	enemy:addBuff(20, 0.3)
+end
+
+return M

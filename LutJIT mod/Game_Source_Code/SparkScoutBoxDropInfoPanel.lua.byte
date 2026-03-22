@@ -1,0 +1,106 @@
+local M = class("SparkScoutBoxDropInfoPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContent = Types.Transform,
+	tmpTitle = Types.TMP_Text,
+	tmpTip = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(boxType)
+	local weights, dropId = nil
+
+	if boxType == 1 then
+		self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -SID.SPARK_SCOUT_BOX_COMMON)
+
+		weights = P._playerActivitySparkScout:readPack1ChipDropWeight()
+		dropId = P._playerActivitySparkScout:readPack1ChipNumDropId()
+	else
+		self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -SID.SPARK_SCOUT_BOX_ADVANCE)
+
+		weights = P._playerActivitySparkScout:readPack2ChipDropWeight()
+		dropId = P._playerActivitySparkScout:readPack2ChipNumDropId()
+	end
+
+	local totalDropNumWeight = 0
+	local drops = DropHelper.readDropsById(dropId)
+	local minDropNum = 99
+	local maxDropNum = 1
+	local strWeights = {}
+
+	for i = 1, #drops do
+		totalDropNumWeight = totalDropNumWeight + drops[i]._weight
+
+		if drops[i]._itemId < minDropNum then
+			minDropNum = drops[i]._itemId
+		end
+
+		if maxDropNum < drops[i]._itemId then
+			maxDropNum = drops[i]._itemId
+		end
+	end
+
+	for i = 1, #drops do
+		strWeights[#strWeights + 1] = string.format("%.1f%%", drops[i]._weight * 100 / totalDropNumWeight)
+
+		if i < #drops then
+			strWeights[#strWeights + 1] = ", "
+		end
+	end
+
+	local lenWeight = lc.lenTable(weights)
+	local str = table.concat(strWeights)
+
+	self._tmpTip:SetLocalizeS(SID.SPARK_SCOUT_BOX_DROP_TIP, minDropNum, maxDropNum, str)
+
+	local hideQualitys = {
+		1,
+		2
+	}
+	local showQualitys = {}
+	local totalWeight = 0
+
+	for i = 1, lc.lenTable(weights) do
+		local quality = i + 2
+		totalWeight = totalWeight + weights[i]
+		showQualitys[quality] = weights[i]
+
+		if weights[i] == 0 then
+			hideQualitys[#hideQualitys + 1] = quality
+		end
+	end
+
+	for quality = 1, 7 do
+		local tf = self._tfContent:GetChild(quality - 1 + 1)
+		local show = not table.findArray(hideQualitys, quality)
+
+		tf:SetActive(show == true)
+
+		if show then
+			if showQualitys[quality] then
+				local weight = showQualitys[quality]
+
+				tf:GetChild(1):GetComponent("TextMeshProUGUI"):SetLocalize(SID["SHOP_BOX_ODDS" .. quality])
+				self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+					UIManager.openPanel(PrefabDefine.SparkScoutChipDropWeightOverviewPanel, quality, nil, "SparkScout")
+				end)
+
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", math.floor(weight / totalWeight * 10000) / 100)
+			else
+				local tf = self._tfContent:GetChild(quality - 1)
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", 0)
+
+				self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+					UIManager.openPanel(PrefabDefine.SparkScoutChipDropWeightOverviewPanel, quality, nil, "SparkScout")
+				end)
+			end
+		end
+	end
+end
+
+return M

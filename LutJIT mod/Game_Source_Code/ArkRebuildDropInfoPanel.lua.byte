@@ -1,0 +1,44 @@
+local M = class("ArkRebuildDropInfoPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContent = Types.Transform,
+	tmpTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(boxType)
+	local weights = nil
+
+	if boxType == 1 then
+		weights = P._playerActivityArkRebuild:readCurrentCfg()._pack1CardDropWeights
+
+		self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -SID.ARK_REBUILD_CARDPACK_COMMON)
+	else
+		weights = P._playerActivityArkRebuild:readCurrentCfg()._pack2CardDropWeights
+
+		self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -SID.ARK_REBUILD_CARDPACK_ADVANCE)
+	end
+
+	local totalWeight = 0
+
+	for i = 2, #weights do
+		totalWeight = totalWeight + weights[i]
+	end
+
+	for i = 2, #weights do
+		local tf = self._tfContent:GetChild(i - 2)
+
+		self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+			UIManager.openPanel(PrefabDefine.ArkRebuildCardDropWeightOverviewPanel, i)
+		end)
+
+		tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", math.floor(weights[i] / totalWeight * 10000) / 100)
+	end
+end
+
+return M

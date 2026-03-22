@@ -1,0 +1,510 @@
+local M = class("ActivityCardsEditPanel", requireLua("BasePanel"))
+local ArkRebuildCardWidget = requireLua("ArkRebuildCardWidget")
+M.args = {
+	btnClose = Types.Button,
+	imgWeapon = Types.Image,
+	txtName = Types.TMP_Text,
+	txtLevel = Types.TMP_Text,
+	tfStars = Types.Transform,
+	goLevelArea = Types.GameObject,
+	goMaxArea = Types.GameObject,
+	tfCardsArea = Types.Transform,
+	tfDeckContainer = Types.Transform,
+	tfCardsContainer = Types.Transform,
+	tfNotOwnedCardsContainer = Types.Transform,
+	btnSave = Types.Button,
+	btnAddCards = Types.Button,
+	btnLock = Types.Button,
+	goLock = Types.GameObject,
+	txtUnlockCost = Types.TMP_Text,
+	animBag = Types.Animation,
+	btnBag = Types.Button,
+	btnLoadout = Types.Button,
+	txtLoadoutId = Types.TMP_Text,
+	txtLoadoutName = Types.TMP_Text
+}
+local CardStatus = {
+	PREV_CARD_REQUIRED = 5,
+	SLOT_NOT_UNLOCKED = 7,
+	ADVANCED_CARD_REQUIRED = 4,
+	CARD_NUM_LIMIT = 9,
+	SLOT_MAX = 8,
+	CARD_COMBO_WEAPON_REQUIRED = 6,
+	OK = 1,
+	STAGE_INVALID = 2,
+	NORMAL_CARD_REQUIRED = 3
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goDeckCards = {}
+	self._goAllCards = {}
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBag, function ()
+		self:handleBag()
+	end)
+	self:setClick(self._btnLock, function ()
+		self:handleUnlockWeaponStage()
+	end)
+	self:setClick(self._btnClose, function ()
+		if not self._readOnly then
+			for i = 1, self._len do
+				if not self._deck[i] then
+					V.showToast(SID.TIP_DECK_INVALID)
+					self:updateUI()
+
+					return
+				end
+			end
+
+			P._playerActivityArkRebuild:setWeaponDeck(self._id, self._deck)
+		end
+
+		if self._callback then
+			self._callback()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnLoadout, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildLoadoutPanel, function (i)
+			P._playerActivityArkRebuild:setCurLoadout(i)
+			self:initDeck()
+			self:updateUI()
+			self:updateLoadout()
+		end)
+	end)
+end
+
+function M:init(id, callback, readOnly)
+	self._id = id
+	self._callback = callback
+	self._readOnly = readOnly
+
+	self:initDeck()
+
+	self._cards = P._playerActivityArkRebuild:getCards()
+	self._weaponStages = P._playerActivityArkRebuild:getCurrentWeaponStages()
+	local conf = D._weaponConfig[id]
+
+	LuaUnity.setTPSprite(self._imgWeapon, string.format("weapon/weapon_%d", id), true, true)
+	self._txtName:SetLocalize(conf._skillNameSid)
+	self:initNotOwnedCards()
+	self:updateUI()
+	self._animBag:Play("anim_arkrebuildCardsFold_2")
+
+	self._cardBagOpening = true
+end
+
+function M:initDeck()
+	self._deck = P._playerActivityArkRebuild:getWeaponDeck(self._id)
+
+	if self._deck then
+		self._deck = clone(self._deck)
+	else
+		self._deck = {}
+	end
+
+	self._len = #self._deck
+end
+
+function M:handleUnlockWeaponStage()
+	local currentStage = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id)
+	local result, param = P._playerActivityArkRebuild:checkUnlockWeaponStage(self._id)
+
+	if result ~= ResultCode.OK then
+		V.showResultCode(result, param)
+
+		return
+	end
+
+	local function dealFunc()
+		local result, param = P._playerActivityArkRebuild:tryUnlockWeaponStage(self._id)
+
+		if result ~= ResultCode.OK then
+			V.showResultCode(result, param)
+
+			return
+		end
+
+		Client.playSound("ui_Ark_slot_unlock_1")
+		self:updateUI()
+	end
+
+	local nextStage = currentStage + 1
+	local cost = P._playerActivityArkRebuild:readCardStageUnlockCost(nextStage)
+	local showConfirm = V.tryShowConfirm("ark_rebuild_unlock_weapon_stage", dealFunc, SID.TIP_USE_RESOURCE_UNLOCK_CONFIRM, D.getTMPSpriteRichText(string.format("item_small_%d", D.ResType.ark_rebuild_gold)) .. cost, D.ResType.ark_rebuild_gold)
+
+	if not showConfirm then
+		dealFunc()
+	end
+end
+
+function M:initNotOwnedCards()
+	local rouges = D._weaponAllCards[self._id]
+	local hasCard = false
+	local weaponBanList = P._playerActivityArkRebuild:getBanData()
+
+	for i = 1, 3 do
+		local stageCards = D._weaponCardConfig[self._id][i]
+		local rouges = stageCards
+
+		for j = 1, #rouges do
+			local id = rouges[j]._id
+
+			if id ~= 107 and (i ~= 1 or j ~= 1) and (not self._cards[id] or self._cards[id] == 0) and (rouges[j]._type ~= 3 or not table.contains(weaponBanList, rouges[j]._unlockWeaponCards[4])) then
+				local card = self._goAllCards[id] or ArkRebuildCardWidget.create(self._tfNotOwnedCardsContainer)
+
+				card:SetActive(true)
+				card:updateUI(id)
+				card:setFront()
+				card:showLock(SID.STR_NOT_OWN)
+
+				hasCard = true
+
+				self:setClick(card._btnClick, function ()
+					UIManager.openPanel(PrefabDefine.WeaponTreePanel, id, true, true)
+				end)
+			end
+		end
+	end
+
+	self._tfNotOwnedCardsContainer:SetActive(hasCard)
+end
+
+function M:updateUI()
+	self:updateLoadout()
+
+	local currentStage = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id)
+
+	if currentStage < 3 then
+		local cost = P._playerActivityArkRebuild:readCardStageUnlockCost(currentStage + 1)
+		self._txtUnlockCost.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. D.ResType.ark_rebuild_gold), cost)
+	end
+
+	local remainCards = clone(self._cards)
+
+	for i = 1, self._tfDeckContainer.childCount do
+		self._tfDeckContainer:GetChild(i - 1):SetActive(false)
+	end
+
+	for i = 1, self._tfCardsContainer.childCount do
+		self._tfCardsContainer:GetChild(i - 1):SetActive(false)
+	end
+
+	local unlockedStage = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id)
+	local slot = nil
+
+	for i = 1, math.max(self._len + 1, currentStage * 4) do
+		local id = self._deck[i]
+
+		if id then
+			remainCards[id] = remainCards[id] - 1
+			local card = self._goDeckCards[-i] or ArkRebuildCardWidget.create(self._tfDeckContainer)
+			self._goDeckCards[id] = card
+
+			card:SetActive(true)
+			card:updateUI(id)
+			card:setFront()
+			card:showNum(1)
+			self:setClick(card._btnClick, function ()
+				if self._readOnly then
+					return
+				end
+
+				card:SetActive(false)
+				self:downCard(i)
+			end)
+			card.transform.transform:SetSiblingIndex(i - 1)
+
+			local conf = D._battleRougeCardConfig[id]
+
+			if conf._type == 3 then
+				local needWeapon = conf._unlockWeaponCards[4]
+				local needStage = conf._unlockWeaponCards[5]
+
+				if needStage > (self._weaponStages[needWeapon] or 0) then
+					card:showLock(SID.TIP_ARK_REBUILD_CARD_INVALID_5)
+				else
+					card:showLock(nil)
+				end
+			end
+		else
+			slot = slot or i
+			local card = self._goDeckCards[-i] or ArkRebuildCardWidget.create(self._tfDeckContainer)
+			self._goDeckCards[-i] = card
+
+			card:SetActive(true)
+
+			if i % 4 == 0 then
+				card._goCardBackPurple:SetActive(true)
+				card._goCardBackPurple:Find("ImgOutline"):SetActive(not self._readOnly and i == slot)
+				card._goCardBackPurple:Find("BgText"):SetActive(not self._readOnly and i == slot)
+
+				card._goCardBackPurple:GetComponent("Animation").enabled = not self._readOnly and i == slot
+			else
+				card._goCardBackBlue:SetActive(true)
+				card._goCardBackBlue:Find("ImgOutline"):SetActive(not self._readOnly and i == slot)
+				card._goCardBackBlue:Find("BgText"):SetActive(not self._readOnly and i == slot)
+
+				card._goCardBackBlue:GetComponent("Animation").enabled = not self._readOnly and i == slot
+			end
+
+			card:setBack()
+			card.transform.transform:SetSiblingIndex(i - 1)
+			card:showNum(1)
+			card:showLock(nil)
+
+			if i > unlockedStage * 4 then
+				card:SetActive(false)
+			end
+		end
+	end
+
+	local needUnlock = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id) == self._len / 4 and self._len < 12
+	local h = self._tfDeckContainer.parent.parent.parent.rect.height
+
+	if math.floor((slot + 3) / 4) == 4 then
+		self._goMaxArea:SetActive(true)
+		self._goLevelArea:SetActive(false)
+	else
+		self._goMaxArea:SetActive(false)
+		self._goLevelArea:SetActive(true)
+	end
+
+	local y = (needUnlock and 210 or 340) + 340 * math.floor((math.min(slot, 12) - 1) / 4) - h
+
+	self._tfDeckContainer.parent:DOLocalMoveY(math.max(0, y), 0.3)
+
+	local order = 0
+
+	for i = 1, 3 do
+		local stageCards = D._weaponCardConfig[self._id][i]
+		local rouges = stageCards
+
+		if rouges then
+			for j = 1, #rouges do
+				local id = rouges[j]._id
+
+				if (i ~= 1 or j ~= 1) and remainCards[id] and remainCards[id] > 0 then
+					local card = self._goAllCards[id] or ArkRebuildCardWidget.create(self._tfCardsContainer)
+					self._goAllCards[id] = card
+
+					card:SetActive(true)
+					card:updateUI(id)
+					card:setFront()
+					card:showNew(P._playerActivityArkRebuild:isNewCard(id))
+
+					card._status = self:getUpCardStatus(slot, id)
+
+					if card._status ~= CardStatus.OK then
+						if card._status == CardStatus.STAGE_INVALID then
+							card:showLock(SID["TIP_ARK_REBUILD_CARD_INVALID_" .. card._status - 1], rouges[j]._stage)
+						else
+							card:showLock(SID["TIP_ARK_REBUILD_CARD_INVALID_" .. card._status - 1])
+						end
+					else
+						card:showLock(nil)
+					end
+
+					card:showNum(math.min(rouges[j]._selectMax, remainCards[id]))
+
+					order = order + 1
+
+					self:setClick(card._btnClick, function ()
+						if P._playerActivityArkRebuild:isNewCard(id) then
+							P._playerActivityArkRebuild:removeWeaponNewCardDot(self._id, id)
+							card:showNew(P._playerActivityArkRebuild:isNewCard(id))
+						end
+
+						if card._status == CardStatus.OK then
+							if self._readOnly then
+								return
+							end
+
+							card:SetActive(false)
+							self:upCard(slot, id)
+						else
+							UIManager.openPanel(PrefabDefine.WeaponTreePanel, id, true, true)
+						end
+					end)
+				end
+			end
+		end
+
+		order = math.floor(order / 3) * 3 + 3
+	end
+
+	slot = math.min(slot, 12)
+	self._txtLevel.text = math.floor((slot + 3) / 4)
+	local star = slot % 4 - 1
+
+	if star < 0 then
+		star = star + 4
+	end
+
+	for i = 1, 4 do
+		self._tfStars:GetChild(i - 1):GetChild(0):SetActive(i < star + 1)
+	end
+
+	self._goLock:SetActive(not self._readOnly and slot == currentStage * 4 + 1 and currentStage < 3)
+end
+
+function M:updateLoadout()
+	local curLoadout = P._playerActivityArkRebuild:getCurLoadout()
+	self._txtLoadoutId.text = curLoadout
+	local loadoutName = P._playerActivityArkRebuild:getLoadoutName(curLoadout)
+
+	if loadoutName then
+		self._txtLoadoutName.text = loadoutName
+	else
+		self._txtLoadoutName:SetLocalize(SID.STR_LOADOUT_X, curLoadout)
+	end
+end
+
+function M:getUpCardStatus(slot, cardId)
+	local config = D._battleRougeCardConfig[cardId]
+	local stage = math.floor((slot + 3) / 4)
+	local currentStage = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id)
+
+	if currentStage < stage and P._playerActivityArkRebuild:getWeaponUnlockStage(self._id) == 3 then
+		return CardStatus.SLOT_MAX
+	end
+
+	local isAdvance = slot % 4 == 0
+
+	if isAdvance and config._type ~= 2 then
+		return CardStatus.ADVANCED_CARD_REQUIRED
+	end
+
+	if not isAdvance and config._type == 2 then
+		return CardStatus.NORMAL_CARD_REQUIRED
+	end
+
+	if stage < config._stage then
+		return CardStatus.STAGE_INVALID
+	end
+
+	if config._unlockWeaponCards then
+		local needWeapon = config._unlockWeaponCards[4]
+		local needStage = config._unlockWeaponCards[5]
+
+		if needStage > (self._weaponStages[needWeapon] or 0) then
+			return CardStatus.CARD_COMBO_WEAPON_REQUIRED
+		end
+	end
+
+	local prevIds = config._prevRougeCards
+
+	if prevIds then
+		local prevCount = 0
+		local existsPrev = false
+
+		for prevIdx = 1, #prevIds do
+			local prevId = prevIds[prevIdx]
+
+			for i = 1, self._len do
+				if self._deck[i] == prevId then
+					existsPrev = true
+
+					break
+				end
+			end
+		end
+
+		if not existsPrev then
+			return CardStatus.PREV_CARD_REQUIRED
+		end
+	end
+
+	if currentStage < stage then
+		return CardStatus.SLOT_NOT_UNLOCKED
+	end
+
+	return CardStatus.OK
+end
+
+function M:upCard(slot, cardId)
+	local stage = P._playerActivityArkRebuild:getWeaponUnlockStage(self._id)
+
+	if slot > stage * 4 then
+		return
+	end
+
+	self._deck[slot] = cardId
+
+	if slot == self._len + 1 then
+		self._len = slot
+	end
+
+	Client.playSound("ui_Ark_card_use_1")
+	self:updateUI()
+end
+
+function M:downCard(index)
+	local oldCard = self._deck[index]
+	self._deck[index] = nil
+	local hasCard = false
+
+	for i = 1, self._len do
+		if self._deck[i] then
+			self._len = i
+			hasCard = true
+		end
+	end
+
+	if not hasCard then
+		self._len = 0
+	end
+
+	for i = 1, self._len do
+		local card = self._deck[i]
+
+		if card then
+			local config = D._battleRougeCardConfig[card]
+
+			if config._prevRougeCards then
+				for prevId = 1, #config._prevRougeCards do
+					if config._prevRougeCards[prevId] == oldCard then
+						self:downCard(i)
+					end
+				end
+			end
+		end
+	end
+
+	Client.playSound("ui_Ark_card_use_1")
+	self:updateUI()
+end
+
+function M:handleBag()
+	if self._cardBagOpening then
+		self._animBag:Play("anim_arkrebuildCardsFold")
+
+		self._cardBagOpening = false
+
+		self._tfCardsArea:DOSizeDelta(Vector2.static(0, 0), 0.2)
+	else
+		self._animBag:Play("anim_arkrebuildCardsFold_2")
+
+		self._cardBagOpening = true
+
+		self._tfCardsArea:DOSizeDelta(Vector2.static(0, -580), 0.2)
+	end
+end
+
+function M:closePanel()
+	if not self._readOnly and P._playerActivityArkRebuild:hasNewCardOfWeapon(self._id) then
+		P._playerActivityArkRebuild:removeWeaponNewCardDot(self._id)
+		SimpleEvent.emit("ark_rebuild.weapon.card.dirty", self._id)
+	end
+
+	M.super.closePanel(self)
+end
+
+return M

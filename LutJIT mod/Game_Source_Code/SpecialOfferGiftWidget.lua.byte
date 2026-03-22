@@ -1,0 +1,214 @@
+local M = class("SpecialOfferGiftWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SpecialOfferGiftWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	ItemWidget.noCreate(self._goItem)
+end
+
+local logway = {
+	[3100] = D.LogWay.day_gift,
+	[3200] = D.LogWay.week_gift,
+	[3300] = D.LogWay.month_gift
+}
+
+function M:updateUI(exchangeId, pageIdx)
+	if exchangeId then
+		self._exchangeId = exchangeId
+	end
+
+	self._logway = logway[P._playerExchange:getTypeById(exchangeId)]
+	local cid, num = P._playerExchange:readExchangeGain(self._exchangeId)
+	self._itemCid = cid
+	self._itemNum = num
+	self._pageIdx = pageIdx
+
+	self:updateRewards()
+	self:updateButton()
+	self:updateExtra()
+end
+
+function M:updateRewards()
+	local cid = self._itemCid
+	local num = self._itemNum
+
+	self._tmpTitle:SetLocalize(D.toNameSid(cid))
+	self._goItem:init(cid, num)
+	self._goExchange:SetActive(false)
+end
+
+function M:updateExchange()
+	local itemId = P._playerExchange:getCustomExchangeSelect(self._exchangeId)
+
+	self._goExchange:SetActive(itemId ~= nil)
+end
+
+function M:updateExtra()
+	local discount = P._playerExchange:readDiscount(self._exchangeId)
+
+	self._goExtra:SetActive(discount > 0)
+	self._tmpDiscount:SetLocalize(SID.SHOP_PRICE_OFF, discount)
+end
+
+function M:updateButton()
+	local exchangeId = self._exchangeId
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local cid, num = P._playerExchange:readExchangeCost(exchangeId)
+
+	self._goRedDot:SetActive(cid == 0 and leftExchangeCount > 0)
+
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	self._tmpLimit:SetLocalizeS(SID.SHOP_LIMIT, str)
+
+	local bgGradient = self._imgBtn.transform:GetComponent("UIGradient")
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	bgGradient.enabled = cid == -1 and isAdRemoved and leftExchangeCount > 0
+	self._tmpCost.color = Color.str2Static(V.COMMON_COLOR.btn_text_black)
+
+	if leftExchangeCount == 0 then
+		self._tmpCost:SetLocalize(SID.STR_SOLD_OUT)
+
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+	elseif cid > 0 then
+		self._tmpCost.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. cid), num)
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+	elseif cid == 0 then
+		self._tmpCost:SetLocalize(SID.STR_FREE)
+
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+	elseif cid == -1 then
+		if isAdRemoved then
+			self._tmpCost.text = string.format("%s %s", D.getTMPSpriteRichText("ad_removed"), LcLocalization.getTextStr(SID.STR_FREE))
+			self._tmpCost.color = Color.str2Static(V.COMMON_COLOR.btn_ad_remove_text)
+			self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_remove_light)
+			self._imgBtn.color = Color.White
+		else
+			self._tmpCost.text = string.format("%s %s", D.getTMPSpriteRichText("ad"), LcLocalization.getTextStr(SID.STR_FREE))
+			self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+			self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		end
+	end
+end
+
+function M:setExchangeClick(panel)
+	self._panel = panel
+
+	panel:setClick(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+	panel:setClick(self._btnDeal, function ()
+		if D.ExchangeId2AdId[self._exchangeId] then
+			local resultCode, param = P._playerExchange:checkExchange(self._exchangeId, 1)
+
+			if resultCode ~= ResultCode.OK then
+				V.showResultCode(resultCode, param)
+
+				return
+			end
+
+			P._playerAd:tryStartRewardAd(D.ExchangeId2AdId[self._exchangeId], function ()
+				self:dealExchangLogic()
+			end)
+		else
+			local resultCode, param = P._playerExchange:checkExchange(self._exchangeId, 1)
+
+			if resultCode ~= ResultCode.OK then
+				V.showResultCode(resultCode, param)
+
+				return
+			end
+
+			local costCid, costNum = P._playerExchange:readExchangeCost(self._exchangeId)
+			local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+				self:dealExchangLogic()
+			end)
+
+			if ret then
+				return
+			end
+
+			self:dealExchangLogic()
+		end
+	end)
+end
+
+function M:dealExchangLogic()
+	local resultCode, param = P._playerExchange:checkExchange(self._exchangeId, 1)
+
+	if resultCode ~= ResultCode.OK then
+		V.showResultCode(resultCode, param)
+
+		return
+	end
+
+	if D.isCustomSelectItem(self._itemCid) then
+		local selectedIdx = P._playerAsset:getItemCustomSelectIdx(self._itemCid)
+
+		if not selectedIdx then
+			UIManager.openPanel(PrefabDefine.ItemSelectPanel, self._itemCid, function ()
+				self:updateRewards()
+			end)
+
+			return
+		end
+	end
+
+	C.tryExchangeIfCheckNet(self._exchangeId, 1, nil, handler(self, self.doExchange))
+end
+
+function M:doExchange()
+	if D.isCustomSelectItem(self._itemCid) then
+		local selectedIdx = P._playerAsset:getItemCustomSelectIdx(self._itemCid)
+
+		if not selectedIdx then
+			UIManager.openPanel(PrefabDefine.ItemSelectPanel, self._itemCid, function ()
+				self:updateRewards()
+			end)
+
+			return
+		end
+
+		local valid = P._playerAsset:checkItemCustomSelectIdValid(self._itemCid)
+
+		if not valid then
+			return
+		end
+	end
+
+	local resultCode, param = P._playerExchange:tryExchange(self._exchangeId, 1)
+
+	if resultCode ~= ResultCode.OK then
+		V.showResultCode(resultCode, param)
+	else
+		V.showRewardClaimPanel(param)
+		self:updateRewards()
+		self:updateButton()
+		self._panel:updatePageBtn(self._pageIdx)
+		RedDotManager.update("city.shop.dayweekmonth")
+	end
+end
+
+return M

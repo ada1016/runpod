@@ -1,0 +1,277 @@
+local M = class("ArkRebuildBattleCardsBrowsePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	scroll = Types.ScrollRect,
+	tfCardsArea = Types.Transform,
+	goTemp = Types.GameObject,
+	tfWeaponCards = Types.Transform,
+	tfSelect = Types.Transform,
+	tfNone = Types.Transform,
+	goWin = Types.GameObject,
+	goFail = Types.GameObject,
+	tmpWinTitle = Types.TMP_Text,
+	tmpWinMissionName = Types.TMP_Text,
+	tmpLoseMissionName = Types.TMP_Text,
+	goDiscordShare = Types.GameObject,
+	btnShare = Types.Button
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+local POS_MAP = {
+	3,
+	1,
+	5,
+	2,
+	4
+}
+local DiscordShareWidget = requireLua("DiscordShareWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._widgetGroups = {}
+	local cellHeight = 285
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 20,
+		cellMargin = 20,
+		cellInitCount = 5,
+		cellHeight = cellHeight
+	})
+	self._goWeaponCards = {}
+
+	for i = 1, 5 do
+		local card = self._tfWeaponCards:GetChild(i - 1).gameObject
+
+		WeaponCardWidget.noCreate(card)
+
+		self._goWeaponCards[i] = card
+
+		self:setClick(card._btnClick, function ()
+			if i == 1 then
+				self._clickCount = (self._clickCount or 0) + 1
+			else
+				self._clickCount = nil
+			end
+
+			if card._weaponId then
+				if self._filtering and card._weaponId == self._filteringWeaponId then
+					self:filterByWeaponId(i)
+				else
+					self:filterByWeaponId(i, card._weaponId)
+				end
+			else
+				self:filterByWeaponId(i)
+			end
+		end)
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnShare, function ()
+		self:previewShareDiscord()
+	end)
+end
+
+function M:initPrefabVar()
+	DiscordShareWidget.noCreate(self._goDiscordShare)
+	self._goDiscordShare:setBtnsClick(self)
+end
+
+function M:init(msId, msType, result, stats)
+	self._battleSession = BattleManager:getSession()
+	self._msId = msId
+	self._msType = msType
+	self._stats = stats
+	self._result = result
+
+	self._goTemp:SetActive(false)
+
+	self._filtering = false
+	self._filteringWeaponId = nil
+
+	lc.setLocalScale(self._tfSelect, 0, 0, 0)
+	self._goDiscordShare:SetActive(false)
+	self:updateUI()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self._showDiscordShare = false
+
+	self._btnShare:SetActive(self._showDiscordShare)
+	self:updateResult()
+	self:updateCards()
+end
+
+function M:updateResult()
+	if self._result == D.BattleResult.Win then
+		V.loadMissionTitleText(self._tmpWinMissionName, self._msId, self._msType)
+
+		if self._stats.hpPercent == 100 then
+			self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE_PERFECT)
+		else
+			self._tmpWinTitle:SetLocalize(SID.MISSION_COMPLETE)
+		end
+
+		self._goWin:SetActive(true)
+		self._goFail:SetActive(false)
+	else
+		V.loadMissionTitleText(self._tmpLoseMissionName, self._msId, self._msType)
+		self._goWin:SetActive(false)
+		self._goFail:SetActive(true)
+	end
+end
+
+function M:updateCards()
+	if not BattleManager then
+		return
+	end
+
+	local selectList = self._battleSession._battleRouge:getRougeSelectList() or {}
+	self._cardsData = clone(selectList)
+
+	table.remove(self._cardsData, 1)
+
+	local weapons = self._battleSession._slotWeapons
+
+	for i = 1, 5 do
+		if weapons[i] then
+			local weaponId = weapons[i]._id
+			local starNum = self._battleSession._battleRouge:getWeaponTotalStar(weaponId)
+
+			self._goWeaponCards[POS_MAP[i]]:updateUI(weaponId, starNum, true)
+			table.erase(self._cardsData, weaponId)
+		else
+			self._goWeaponCards[POS_MAP[i]]:updateUI(nil, 0, true)
+		end
+	end
+
+	self._cardsDataByWeaponId = {}
+
+	for i, cardId in ipairs(self._cardsData) do
+		local belong = D._battleRougeCardConfig[cardId]._belongWeapon
+		local datas = self._cardsDataByWeaponId[belong]
+
+		if datas == nil then
+			datas = {}
+			self._cardsDataByWeaponId[belong] = datas
+		end
+
+		table.insert(datas, cardId)
+	end
+
+	self._showCardsData = self._cardsData
+
+	self._scrollViewEx:reloadData(0)
+	self._tfNone:SetVisible(self._showCardsData and #self._showCardsData == 0)
+end
+
+function M:filterByWeaponId(idx, weaponId)
+	if self._filteringWeaponId == weaponId then
+		return
+	end
+
+	if weaponId then
+		lc.setLocalScale(self._tfSelect, 1, 1, 1)
+		lc.setPosition(self._tfSelect, lc.getPosition(self._tfWeaponCards:GetChild(idx - 1)))
+
+		self._filtering = true
+		self._filteringWeaponId = weaponId
+		self._showCardsData = self._cardsDataByWeaponId[weaponId]
+	else
+		lc.setLocalScale(self._tfSelect, 0, 0, 0)
+
+		self._filtering = false
+		self._filteringWeaponId = nil
+		self._showCardsData = self._cardsData
+	end
+
+	self._scrollViewEx:reloadData(0)
+	self._tfNone:SetVisible(not self._showCardsData or #self._showCardsData == 0)
+end
+
+function M:getCardsNum()
+	return self._showCardsData and #self._showCardsData or 0
+end
+
+function M:onCellNum()
+	return math.ceil(self:getCardsNum() / 4)
+end
+
+function M:onAddCell(goCell, index)
+	local startIdx = (index - 1) * 4
+
+	if goCell == nil then
+		if index == 1 then
+			goCell = self._goTemp
+		else
+			goCell = GameObject.Instantiate(self._goTemp, self._tfCardsArea)
+		end
+
+		LuaUnity.setPeer(goCell)
+		goCell:SetActive(true)
+
+		self._widgetGroups[#self._widgetGroups + 1] = goCell
+		goCell.peer._cells = {}
+
+		for i = 1, 4 do
+			local goWidget = goCell.transform:GetChild(i - 1).gameObject
+
+			RogueCardInfoWidget.noCreate(goWidget)
+
+			goCell.peer._cells[i] = goWidget
+
+			goWidget:init()
+			goWidget:setFront()
+		end
+	end
+
+	local cells = goCell.peer._cells
+
+	for i = 1, #cells do
+		local idx = startIdx + i
+
+		if idx <= self:getCardsNum() then
+			local cardId = self._showCardsData[idx]
+
+			cells[i]:updateUI(cardId)
+			cells[i]:setAlpha(1)
+
+			cells[i]._btnClick.enabled = true
+
+			self:setClick(cells[i]._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, cardId)
+			end)
+		else
+			cells[i]:setAlpha(0)
+
+			cells[i]._btnClick.enabled = false
+		end
+	end
+
+	return goCell
+end
+
+function M:previewShareDiscord()
+	self:showShareStatus()
+	self._goDiscordShare:previewShareDiscord(function ()
+		self:hideShareStatus()
+	end)
+end
+
+function M:showShareStatus()
+	self._btnShare:SetActive(false)
+end
+
+function M:hideShareStatus()
+	self._btnShare:SetActive(self._showDiscordShare)
+end
+
+return M

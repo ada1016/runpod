@@ -1,0 +1,73 @@
+local M = class("BoxOddsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContent = Types.Transform,
+	tmpTitle = Types.TMP_Text,
+	tmpBaseTips = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:init(titleSid, dropId, hideQualitys)
+	self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -titleSid)
+
+	dropId = dropId or 1
+	local drops = DropHelper.readDropsById(dropId)
+	local showQualitys = {}
+	local totalWeight = 0
+
+	for i = 1, #drops do
+		local itemId = drops[i]._itemId
+		local quality = itemId
+		totalWeight = totalWeight + drops[i]._weight
+		showQualitys[quality] = {
+			drops[i]._itemId,
+			drops[i]._weight,
+			drops[i]._subDrop
+		}
+	end
+
+	if dropId == 1 then
+		self._tmpBaseTips:SetLocalize(SID.STR_CHANCE_DESC3, -SID["STR_QUALITY_" .. 3])
+	else
+		self._tmpBaseTips:SetLocalize(SID.STR_CHANCE_DESC3, -SID["STR_QUALITY_" .. 4])
+	end
+
+	for quality = 1, 7 do
+		local tf = self._tfContent:GetChild(quality - 1)
+		local show = not hideQualitys or not table.findArray(hideQualitys, quality) and not showQualitys[quality]
+
+		tf:SetActive(show ~= nil)
+
+		if show then
+			if showQualitys[quality] then
+				local itemId = showQualitys[quality][1]
+				local weight = showQualitys[quality][2]
+				local subDrop = showQualitys[quality][3]
+
+				tf:GetChild(1):GetComponent("TextMeshProUGUI"):SetLocalize(SID["SHOP_BOX_ODDS" .. quality])
+				self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+					UIManager.openPanel(PrefabDefine.ChipDropWeightOverviewPanel, quality)
+				end)
+
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", math.floor(weight / totalWeight * 10000) / 100)
+			else
+				local tf = self._tfContent:GetChild(quality - 1)
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", 0)
+
+				self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+					UIManager.openPanel(PrefabDefine.ChipDropWeightOverviewPanel, quality)
+				end)
+			end
+		end
+	end
+end
+
+return M

@@ -1,0 +1,407 @@
+local M = class("ArkRebuildOfflineRewardPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnClaim = Types.Button,
+	btnStat = Types.Button,
+	tmpCommon = Types.TMP_Text,
+	tmpElite = Types.TMP_Text,
+	tmpCurrentTime = Types.TMP_Text,
+	tmpMaxTime = Types.TMP_Text,
+	goNoRewardTip = Types.GameObject,
+	tfRewardArea = Types.Transform,
+	imgIcon1 = Types.Image,
+	tmpTime1 = Types.TMP_Text,
+	imgIcon2 = Types.Image,
+	tmpTime2 = Types.TMP_Text,
+	imgIcon3 = Types.Image,
+	tmpTime3 = Types.TMP_Text,
+	btnSweep = Types.Button,
+	btnAddSweep = Types.Button,
+	btnAdIssue = Types.Button,
+	goSweepRemoveAd = Types.GameObject,
+	goSweepAd = Types.GameObject,
+	txtAdCountdown = Types.TMP_Text,
+	goSweepFree = Types.GameObject,
+	btnChangeSweepRate = Types.Button,
+	tmpSweepRate = Types.TMP_Text,
+	tmpSweepTitle = Types.TMP_Text,
+	tmpSweepCost = Types.TMP_Text
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	lc.stopTimer(self._timerCountdown)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClaim, function ()
+		self:dealClaimRewards()
+	end)
+	self:setClick(self._imgIcon1:GetComponent("Button"), function ()
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, D.ResType.ark_rebuild_gold)
+	end)
+	self:setClick(self._imgIcon2:GetComponent("Button"), function ()
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, D.ResType.ark_rebuild_ticket_common)
+	end)
+	self:setClick(self._btnSweep, function ()
+		self:dealSweepBtn()
+	end)
+	self:setClick(self._btnAdIssue, function ()
+		self:handleAdIssue()
+	end)
+end
+
+function M:addEvents()
+	self:on("rightcard.update", function ()
+		self:updateQuickSweep()
+	end)
+	self:on("day.cross", function ()
+		self:updateQuickSweep()
+	end)
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+
+	if not P._playerArkRebuildOffline:isOfflineTimeFull() then
+		self._timer = lc.setInterval(function ()
+			self:updateTime()
+		end, 0.5)
+	end
+end
+
+function M:OnHide()
+	M.super.OnHide(self)
+end
+
+function M:init(homepage)
+	self._startMsId = 40001
+	self._module = P._playerArkRebuildOffline
+	self._sweepMsType = D.MissionType.ArkRebuild
+
+	if P._playerArkRebuildOffline:isOfflineTimeFull() then
+		P._playerArkRebuildOffline:recordPop()
+	end
+
+	local msId = P._playerActivityArkRebuild:getCurMission() - 1
+	self._msId = msId
+
+	if self._startMsId <= msId then
+		V.loadMissionTitleText(self._tmpCommon, msId, self._sweepMsType)
+	else
+		self._tmpCommon:SetLocalize(SID.STR_NO_MISSION)
+	end
+
+	local isfull = P._playerArkRebuildOffline:isOfflineTimeFull()
+
+	if isfull then
+		self._tmpCurrentTime:SetLocalize(SID.OFFLINE_TIME_REACH_MAX)
+	else
+		self._tmpCurrentTime.text = V.formatTimeS2HMS(P._playerArkRebuildOffline:getOfflineTime())
+	end
+
+	self._tmpMaxTime:SetLocalize(SID.OFFLINE_TIME_MAX, P._playerArkRebuildOffline:getOfflineFullHour())
+
+	local fixCids = {
+		10028,
+		10029
+	}
+	local totalCids = {}
+	local common = {}
+
+	if self._startMsId <= self._msId then
+		local cfgs = P._playerMission:getCfgByType(self._sweepMsType)
+		local cfg = cfgs[msId]
+		local cids = cfg._offlineRewardIds
+		local nums = cfg._offlineRewardNums
+		local randomCids = cfg._randomRewardCids
+		local randomNums2 = cfg._randomRewardNums
+
+		for i = 1, #cids do
+			local cid = cids[i]
+			totalCids[cid] = true
+			common[cid] = nums[i]
+		end
+
+		for i = 1, #randomCids do
+			local cid = randomCids[i]
+			totalCids[cid] = true
+			common[cid] = common[cid] or 0 + randomNums2[i] / 10000
+		end
+	end
+
+	self._common = common
+	self._rewardCids = table.toArray(totalCids)
+
+	LuaUnity.setTPSprite(self._imgIcon1, "itemSmall/item_small_10028")
+	LuaUnity.setTPSprite(self._imgIcon2, "itemSmall/item_small_10029")
+
+	local num1 = self._common[fixCids[1]] or 0
+	local num2 = self._common[fixCids[2]] or 0
+	self._tmpTime1.text = string.format("%s/h", string.formatNumber(num1))
+	self._tmpTime2.text = string.format("%s/h", string.formatNumber(num2))
+	local offlineTime = P._playerArkRebuildOffline:getOfflineTime()
+	self._updateRewardsTime = math.floor(offlineTime / 3600) * 3600
+
+	self:updateRewards()
+	self:updateQuickSweep()
+end
+
+function M:updateTime()
+	local offlineTime = P._playerArkRebuildOffline:getOfflineTime()
+	local isfull = P._playerArkRebuildOffline:isOfflineTimeFull()
+
+	if isfull then
+		self._tmpCurrentTime:SetLocalize(SID.OFFLINE_TIME_REACH_MAX)
+		lc.stopTimer(self._timer)
+	else
+		self._tmpCurrentTime.text = V.formatTimeS2HMS(offlineTime)
+	end
+
+	local nextUpdateTime = math.floor(offlineTime / 3600) * 3600
+
+	if offlineTime > 0 and self._updateRewardsTime < nextUpdateTime then
+		self._updateRewardsTime = nextUpdateTime
+
+		self:updateRewards()
+	end
+end
+
+function M:updateRecover()
+	local leftNum = P._playerArkRebuildOffline:getLeftAdSweepNum()
+
+	lc.stopTimer(self._timerCountdown)
+
+	local maxNum = P._playerActivityArkRebuild:readAdSweepMaxNum()
+
+	self._txtAdCountdown.transform.parent:SetActive(false)
+
+	if leftNum < maxNum then
+		self._timerCountdown = lc.setInterval(function ()
+			local newLeftNum = P._playerArkRebuildOffline:getLeftAdSweepNum()
+			local dt = P._playerArkRebuildOffline:getAdSweepCountdown()
+			self._txtAdCountdown.text = V.formatTimeS2HMS(dt)
+
+			if newLeftNum ~= leftNum then
+				self:updateQuickSweep()
+			end
+		end, 0.5)
+
+		self._timerCountdown.func()
+	end
+end
+
+function M:updateRewards()
+	local dt = P._playerArkRebuildOffline:getOfflineTime()
+	self._rewards = {}
+
+	if self._startMsId <= self._msId and dt > 0 then
+		P._playerArkRebuildOffline:calOfflineRewards(self._rewards, dt)
+	end
+
+	local cids = {}
+	local nums = {}
+
+	for i, v in pairs(self._rewards) do
+		table.insert(cids, i)
+		table.insert(nums, v)
+	end
+
+	local rewards = D.formatRewards(cids, nums)
+	self._rewards = D.sortRewards(rewards)
+
+	self._goNoRewardTip:SetActive(#self._rewards == 0)
+
+	for i = 1, math.max(#self._goRewards, #self._rewards) do
+		if i <= #self._rewards then
+			local reward = self._rewards[i]
+
+			if self._goRewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._goRewards[i] = goItemWidget
+
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			self._goRewards[i]:SetActive(true)
+			self._goRewards[i]:init(reward[1], reward[2])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+end
+
+function M:dealClaimRewards()
+	if #self._rewards == 0 then
+		V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+
+		return
+	end
+
+	local dt = P._playerArkRebuildOffline:getOfflineTime()
+	self._rewards = {}
+
+	if dt > 0 then
+		P._playerArkRebuildOffline:calOfflineRewards(self._rewards, dt)
+	end
+
+	local cids = {}
+	local nums = {}
+	local chipNums = {}
+
+	for i, v in pairs(self._rewards) do
+		if i == D.CHIP_DROP_OFFLINE_NORMAL or i == D.CHIP_DROP_OFFLINE_ELITE then
+			chipNums[i] = v
+		else
+			table.insert(cids, i)
+			table.insert(nums, v)
+		end
+	end
+
+	local showRewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.ark_rebuild_offline)
+
+	V.showRewardClaimPanel(showRewards)
+	P._playerArkRebuildOffline:recordNewOfflineTime()
+	SimpleEvent.emit("offline.claim")
+	self:closePanel()
+end
+
+function M:updateQuickSweep()
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local num1 = 0
+	local num2 = P._playerArkRebuildOffline:getLeftAdSweepNum()
+	local isRemoveAdSweep = isAdRemoved and num1 == 0
+	local isFreeSweep = false
+	local isAdSweep = not isAdRemoved and num1 == 0
+
+	self._goSweepRemoveAd:SetActive(isRemoveAdSweep)
+	self._goSweepAd:SetActive(isAdSweep)
+	self._goSweepFree:SetActive(isFreeSweep)
+	self._tmpSweepTitle:SetLocalizeS(SID.STR_REMAIN_TIMES, V.getLeftStr(num2, P._playerActivityArkRebuild:readAdSweepMaxNum()))
+
+	if isRemoveAdSweep then
+		-- Nothing
+	elseif isAdSweep then
+		if num2 == 0 then
+			self._goSweepAd.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+			self._goSweepAd.transform:GetChild(1):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		else
+			self._goSweepAd.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+			self._goSweepAd.transform:GetChild(1):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+		end
+	end
+
+	self._btnAddSweep.gameObject:SetActive(false)
+	self:updateRecover()
+end
+
+function M:dealSweepBtn()
+	local currentMsId = P._playerActivityArkRebuild:getCurMission()
+
+	if currentMsId == self._startMsId then
+		V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+
+		return
+	end
+
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	local isSVIP = P._playerRight:isSVIP()
+	local num1 = 0
+	local num2 = P._playerArkRebuildOffline:getLeftAdSweepNum()
+	local msId = P._playerActivityArkRebuild:getCurMission() - 1
+
+	if msId < self._startMsId then
+		V.showResultCode(ResultCode.NOT_MEET_CONDITION)
+
+		return
+	end
+
+	if num2 == 0 then
+		V.showResultCode(ResultCode.AD_NUM_MAX)
+
+		return
+	else
+		P._playerAd:tryStartRewardAd(D.AdType.ArkRebuild_Offline, function ()
+			P._playerArkRebuildOffline:recordAdSweep()
+			self:dealAfterSweep(msId)
+		end)
+	end
+end
+
+function M:dealAfterSweep(msId)
+	local rewards = {}
+
+	P._playerArkRebuildOffline:calSweepRewards(rewards)
+
+	local cids = {}
+	local nums = {}
+
+	for i, v in pairs(rewards) do
+		table.insert(cids, i)
+		table.insert(nums, v)
+	end
+
+	V.showRewardClaimPanel(P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.ark_rebuild_sweep), SID.REWARD_TITLE_QUICK_SWEEP)
+	self:updateQuickSweep()
+end
+
+function M:handleAdIssue()
+	local leftNum = P._playerArkRebuildOffline:getLeftAdSweepNum()
+	local maxNum = P._playerActivityArkRebuild:readAdSweepMaxNum()
+
+	if leftNum == maxNum then
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_MAX
+		}, {
+			target = self._btnAdIssue.gameObject
+		})
+	else
+		local dt = P._playerArkRebuildOffline:getAdSweepCountdown()
+		local day, hour, minute, second = Client.getTimeEndArgs(dt)
+		local timeSid = SID.PERIOD_DAY
+		local timeParam = 1
+
+		if day > 0 then
+			timeSid = SID.PERIOD_DAY
+			timeParam = day
+		elseif hour > 0 then
+			timeSid = SID.PERIOD_HOUR
+			timeParam = hour
+		elseif minute > 0 then
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = minute
+		else
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = 1
+		end
+
+		local recoverT = P._playerActivityArkRebuild:readAdSweepRecoverSeconds()
+		local recoverHour = math.ceil(recoverT / 3600)
+		local str = LcLocalization.getTextStr(timeSid)
+		str = string.gsub(str, "{0}", timeParam)
+
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_TIME,
+			descParam = {
+				str,
+				recoverHour
+			}
+		}, {
+			target = self._btnAdIssue.gameObject
+		})
+	end
+end
+
+return M

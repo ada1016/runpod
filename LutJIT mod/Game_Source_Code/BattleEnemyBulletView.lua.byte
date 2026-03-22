@@ -1,0 +1,46 @@
+local M = class("BattleEnemyBulletView")
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(bullet, enemy)
+	self._bullet = bullet
+	self._enemy = enemy
+	local obj = self._sessionView:createBullet(enemy._bulletPrefab)
+	self._obj = obj
+
+	obj:SetLocalScale(enemy._scale)
+end
+
+function M:destroyedEvent()
+	if self._obj then
+		self._battleView:recycleUnit(self._obj)
+
+		self._obj = nil
+	end
+end
+
+function M:posEvent()
+	if self._obj then
+		local position = self._bullet._position
+
+		self._obj:SetPosition(position.x, position.y, 0)
+	end
+end
+
+function M:hitEvent()
+	local bullet = self._bullet
+	local enemy = self._enemy
+
+	if enemy._hitPrefab then
+		local x = bullet._position.x
+		local y = bullet._position.y
+
+		self._battleView:showDomeHit(enemy, x, y, enemy._scale)
+	end
+end
+
+return M

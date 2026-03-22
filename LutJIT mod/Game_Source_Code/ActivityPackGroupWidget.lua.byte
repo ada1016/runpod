@@ -1,0 +1,226 @@
+local M = class("ActivityPackGroupWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ActivityPackGroupWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel, successCallback)
+	self._panel = panel
+	self._successCallback = successCallback
+end
+
+function M:updateUI(cfg, packNameSid)
+	local idx = cfg[1]
+	local buyType = cfg[2]
+	local id = cfg[3]
+	self._packNameSid = packNameSid
+	self._idx = idx
+	self._buyType = buyType
+	self._id = id
+
+	self:refreshUI()
+end
+
+function M:refreshUI()
+	if self._buyType == 1 then
+		self:updateUI_exchange(self._id)
+		self:setExchangeClick()
+	elseif self._buyType == 2 then
+		self:updateUI_purchase(self._id)
+		self:setPurchaseClick()
+	end
+
+	self._tmpTitle:SetLocalize(SID.TITLE_EVENT_PACK_X, -self._packNameSid, self._idx)
+end
+
+function M:updateUI_purchase()
+	self._goExtra:SetActive(false)
+
+	local discount = P._playerStore:readDiscount(self._id)
+
+	self._goExtra:SetActive(discount > 0)
+	self._tmpDiscount:SetLocalize(SID.SHOP_PRICE_OFF, discount)
+	self:updateRewards(D.formatRewards(P._playerStore:readObtainAssets(self._id)))
+	self:updateButton_purchase()
+end
+
+function M:updateUI_exchange()
+	local discount = P._playerExchange:readDiscount(self._id)
+
+	self._goExtra:SetActive(discount > 0)
+	self._tmpDiscount:SetLocalize(SID.SHOP_PRICE_OFF, discount)
+	self:updateRewards(D.formatRewards(P._playerExchange:readAllExchangeGain(self._id)))
+	self:updateButton_exchange()
+end
+
+function M:updateRewards(rewards)
+	V.loadRewardsWidget(self._panel, self._tfItems, rewards)
+end
+
+function M:updateButton_purchase()
+	self._goRedDot:SetActive(false)
+
+	local leftCount = P._playerStore:getLeftBuyCount(self._id)
+	local maxNum = P._playerStore:readBuyLimit(self._id)
+	self._btnDeal.enabled = leftCount > 0
+	self._tmpLimit.enabled = maxNum > 0
+
+	if maxNum ~= -1 then
+		local str = V.getLeftStr(leftCount, maxNum)
+
+		self._tmpLimit:SetLocalizeS(SID.SHOP_LIMIT, str)
+	end
+
+	local bgGradient = self._imgBtn.transform:GetComponent("UIGradient")
+	bgGradient.enabled = false
+	self._tmpCost.color = Color.str2Static(V.COMMON_COLOR.btn_text_black)
+
+	if leftCount == 0 then
+		self._tmpCost:SetLocalize(SID.STR_SOLD_OUT)
+
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+	else
+		self._tmpCost.text = P._playerStore:getDisplayPrice(self._id)
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+	end
+
+	V.addRechargeScoreWidget(self._id, self._btnDeal.transform, 15, -5, 0.8)
+end
+
+function M:updateButton_exchange()
+	local exchangeId = self._id
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local cid, num = P._playerExchange:readExchangeCost(exchangeId)
+
+	self._goRedDot:SetActive(cid == 0 and leftExchangeCount > 0)
+
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	self._tmpLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+
+	local bgGradient = self._imgBtn.transform:GetComponent("UIGradient")
+	local isAdRemoved = P._playerRight:isAdRemoved()
+	bgGradient.enabled = cid == -1 and isAdRemoved and leftExchangeCount > 0
+	self._btnDeal.enabled = leftExchangeCount > 0
+	self._tmpCost.color = Color.str2Static(V.COMMON_COLOR.btn_text_black)
+
+	if leftExchangeCount == 0 then
+		self._tmpCost:SetLocalize(SID.STR_SOLD_OUT)
+
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+	elseif cid > 0 then
+		self._tmpCost.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. cid), num)
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+	elseif cid == 0 then
+		self._tmpCost:SetLocalize(SID.STR_FREE)
+
+		self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+		self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+	elseif cid == -1 then
+		if isAdRemoved then
+			self._tmpCost.text = string.format("%s %s", D.getTMPSpriteRichText("ad_removed"), LcLocalization.getTextStr(SID.STR_FREE))
+			self._tmpCost.color = Color.str2Static(V.COMMON_COLOR.btn_ad_remove_text)
+			self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_remove_light)
+			self._imgBtn.color = Color.White
+		else
+			self._tmpCost.text = string.format("%s %s", D.getTMPSpriteRichText("ad"), LcLocalization.getTextStr(SID.STR_FREE))
+			self._imgLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+			self._imgBtn.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		end
+	end
+end
+
+function M:setExchangeClick()
+	self._panel:setClick(self._btnDeal, function ()
+		if D.ExchangeId2AdId[self._id] then
+			local resultCode, param = P._playerExchange:checkExchange(self._id, 1)
+
+			if resultCode ~= ResultCode.OK then
+				V.showResultCode(resultCode, param)
+
+				return
+			end
+
+			P._playerAd:tryStartRewardAd(D.ExchangeId2AdId[self._id], function ()
+				self:dealExchangLogic()
+			end)
+		else
+			local costCid, costNum = P._playerExchange:readExchangeCost(self._id)
+			local resultCode, param = P._playerExchange:checkExchange(self._id, 1)
+
+			if resultCode ~= ResultCode.OK then
+				V.showResultCode(resultCode, param)
+
+				return
+			end
+
+			local ret = V.tryShowDiamondConfirm(costCid, costNum, function ()
+				self:dealExchangLogic()
+			end)
+
+			if ret then
+				return
+			end
+
+			self:dealExchangLogic()
+		end
+	end)
+end
+
+function M:setPurchaseClick()
+	self._panel:setClick(self._btnDeal, function ()
+		local leftCount = P._playerStore:getLeftBuyCount(self._id)
+
+		if leftCount <= 0 then
+			V.showResultCode(ResultCode.THIS_TIME_NUM_MAX)
+
+			return
+		end
+
+		C.tryPurchase(self._id, function (iapId, rewards)
+			self:refreshUI()
+			V.showRewardClaimPanel(rewards)
+
+			if self._successCallback then
+				self._successCallback()
+			end
+		end, D.PurchaseChannel.Activity)
+	end)
+end
+
+function M:dealExchangLogic()
+	local costCid, costNum = P._playerExchange:readExchangeCost(self._id)
+	local resultCode, param = P._playerExchange:checkExchange(self._id, 1)
+
+	if resultCode ~= ResultCode.OK then
+		V.showResultCode(resultCode, param)
+
+		return
+	end
+
+	P._playerExchange:tryExchange(self._id, 1, function (rewards)
+		V.showRewardClaimPanel(rewards)
+		self:updateButton_exchange()
+
+		if self._successCallback then
+			self._successCallback()
+		end
+	end, self._logway)
+end
+
+function M:setDot(dot)
+	self._goRedDot:SetActive(dot)
+end
+
+return M

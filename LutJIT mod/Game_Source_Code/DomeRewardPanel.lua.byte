@@ -1,0 +1,135 @@
+local M = class("DomeRewardPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("DomeRankWidget")
+local ItemWidget = requireLua("ItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	imgGrade = Types.Image,
+	goSelfRankWidget = Types.GameObject,
+	tfRankRewardContainer = Types.Transform,
+	goGloryWidget = Types.GameObject,
+	btnClaim = Types.Button,
+	btnRank = Types.Button,
+	btnRewardAvatar = Types.Button,
+	imgRewardAvatar = Types.Image,
+	imgRewardAvatarFrame = Types.Image
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goGloryWidget)
+
+	self._txtTopNames = {
+		self._goGloryWidget._txtName1st,
+		self._goGloryWidget._txtName2nd,
+		self._goGloryWidget._txtName3rd
+	}
+	self._goTopSpines = {
+		self._goGloryWidget._goSpine1st,
+		self._goGloryWidget._goSpine2nd,
+		self._goGloryWidget._goSpine3rd
+	}
+	self._btnTops = {
+		self._goGloryWidget._btn1st,
+		self._goGloryWidget._btn2nd,
+		self._goGloryWidget._btn3rd
+	}
+
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine1st)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine2nd)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine3rd)
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTops do
+		self:setClickWithoutAction(self._btnTops[i], function ()
+			for j = 1, math.min(3, #self._rankList) do
+				if self._rankList[j] then
+					local rank = self._rankList[j].rank
+
+					if rank == i then
+						V.viewOtherInfo(self._rankList[j])
+					end
+				end
+			end
+		end)
+	end
+
+	self:setClick(self._btnClaim, function ()
+		V.showRewardClaimPanel(self._resultRewards)
+		self:closePanel()
+	end)
+	self:setClick(self._btnRank, function ()
+		local circleStartTime = P._playerDome:getCircleStartTime()
+		local now = C.getCurTime()
+
+		if now - circleStartTime > 1209600 then
+			V.showToast(SID.TIP_DOME_TRIAL_RANK_EXPIRED)
+
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.DomeRankPanel, self._diaplayRankerGroupId, self._grade)
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(id, subType)
+	self._id = id
+	self._subType = subType
+	self._grade = P._playerDome:getGrade()
+
+	self:initTopPlayers()
+	self:updateRankData()
+	self:updateRankRewards()
+	LuaUnity.setTPSprite(self._imgGrade, "general/domeRank_" .. self._grade, true)
+end
+
+function M:updateRankData()
+	local rankData = P:genRankData()
+	rankData.rank = P._playerDome:getFinalRank()
+	rankData.rankValue = P._playerDome:getRankValue()
+
+	self._goSelfRankWidget:init(rankData)
+end
+
+function M:updateRankRewards()
+	local rewards = P._playerDome:getRankRewards()
+
+	V.loadRewardsWidget(self, self._tfRankRewardContainer, rewards)
+
+	self._diaplayRankerGroupId = P._playerDome:getDisplayRankGroupId(P._playerRanker:getGroup(D.RankType.DomeRank))
+	self._resultRewards = P._playerDome:tryClaimSettleRewards()
+end
+
+function M:initTopPlayers()
+	self._rankList = P._playerDome._tmpSettleRankData[1]
+
+	for i = 1, math.min(3, #self._rankList) do
+		if self._rankList[i] then
+			local rank = self._rankList[i].rank
+
+			if rank <= 3 then
+				self._txtTopNames[rank].text = self._rankList[i].name
+				local bodySkin = self._rankList[i].roleSkin or D.DEFAULT_ROLE_SKIN
+				local weaponSkin = self._rankList[i].weaponSkin or D.DEFAULT_GATLIN_SKIN
+
+				self._goTopSpines[rank]:updateUI(bodySkin, weaponSkin)
+			end
+		end
+	end
+end
+
+function M:closePanel()
+	P._playerDome._tmpSettleRankData = nil
+
+	M.super.closePanel(self)
+end
+
+return M

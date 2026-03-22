@@ -1,0 +1,16 @@
+local M = class("PlayerBattlePassActivityBase", requireLua("PlayerBattlePassBase"))
+
+function M:start()
+	if self:isStatusOpen() then
+		self:updateClaimNum()
+		self:updateRewardLevel()
+	end
+end
+
+function M:tryUnlockSystem()
+end
+
+function M:updateExpire()
+end
+
+return M

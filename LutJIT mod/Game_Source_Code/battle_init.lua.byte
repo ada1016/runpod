@@ -1,0 +1,7 @@
+requireLua("BattlePropEnum")
+requireLua("BattleTriggerEnum")
+requireLua("BattleSkillGroupEnum")
+requireLua("BattleBuffEnum")
+requireLua("BattleDefine")
+requireLua("BattleMathLib")
+requireLua("BattleEntityFactory")

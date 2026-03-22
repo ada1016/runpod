@@ -1,0 +1,847 @@
+local M = class("PlayerActivityMonopoly", requireLua("PlayerActivityInstanceBase"))
+
+function M:initInstance()
+	self._activityType = D.ActivityType.Monopoly
+	self._persistentUid = D.ActivityPersistUID[self._activityType]
+	self._expCid = D.ResType.monopoly_exp
+	self._diceCid = D.ResType.monopoly_dice
+	self._cfg = D._activityMonopolyConfig[1]
+	local milestoneCfgs = D._activityMonopolyMilestoneConfig
+	local milestones = {}
+
+	for i = 1, #milestoneCfgs do
+		local cfg = milestoneCfgs[i]
+
+		if not milestones[cfg._period] then
+			milestones[cfg._period] = {}
+		end
+
+		local tb = milestones[cfg._period]
+		tb[#tb + 1] = cfg
+	end
+
+	self._milestoneRewards = milestones
+	local maxExp = self:getMilestoneRewardMaxExp()
+	local maxStep1 = #milestoneCfgs
+	self._maxClaimIdx = maxStep1 - 1 + math.floor((maxExp - milestoneCfgs[maxStep1 - 1]._exp) / milestoneCfgs[maxStep1]._exp)
+	local cellCfgs = D._activityMonopolyCellConfig
+	local cellDatas = {}
+
+	for i = 1, #cellCfgs do
+		local cfg = cellCfgs[i]
+
+		if not cellDatas[cfg._period] then
+			cellDatas[cfg._period] = {}
+		end
+
+		local tb = cellDatas[cfg._period]
+		tb[#tb + 1] = cfg
+	end
+
+	self._cellCfgs = cellDatas
+
+	self:dealInstanceInit()
+	self:dealSubModuleInit()
+end
+
+function M:unlockInstanceData()
+	self:dealInstanceInit()
+end
+
+function M:dealInstanceInit()
+	if not self:isUnlock() then
+		return
+	end
+
+	self._total.throwValue = self._total.throwValue or 0
+	self._total.throwNum = self._total.throwNum or 0
+	self._total.periodNum = self._total.periodNum or 0
+	self._total.exp = self._total.exp or 0
+end
+
+function M:instanceDailyReset()
+	if not self._data then
+		return
+	end
+
+	P._playerExchange:resetExchangesByExchangeGroup(self:readPackExchangeGroup(self._subType))
+end
+
+function M:haveDot(auid)
+	if not self._data then
+		return false
+	end
+
+	if self:isExpired() then
+		return false
+	end
+
+	if P._playerActivityMonopoly:getDiceNum() > 0 then
+		return true
+	end
+
+	local dot1 = P._playerBPMonopoly:isStatusOpen() and P._playerBPMonopoly:haveUnclaimRewards()
+
+	if dot1 then
+		return true
+	end
+
+	local dot2 = P._playerExchange:getLeftExchangeCount(D.ExchangeId.Monopoly_Pack_Free) > 0
+
+	if dot2 then
+		return true
+	end
+
+	local dot3 = P._playerTask:haveRewards(D.TaskClass.Monopoly)
+
+	if dot3 then
+		return true
+	end
+
+	return false
+end
+
+function M:openCheck()
+	return P._playerActivity:isNewbieLotteryFinished() and (not self._data or self._data.expireClaimed)
+end
+
+function M:createCycleData(activityData)
+	return {
+		exp = 0,
+		recordMilestoneStep = 0,
+		claimIdx = 0,
+		throwRate = 1,
+		throwNum = 0,
+		positionIdx = 1,
+		id = activityData.id,
+		subType = activityData.subType,
+		lastThrowValue = self:encodeThrowValue(math.random(1, 6), math.random(1, 6)),
+		shopBuyCount = {}
+	}
+end
+
+function M:dealInstanceOpen(activityData)
+	self:dealSubModuleInit(true)
+
+	local newInstanceData = self:getCurrentData()
+	newInstanceData.claimIdx = 0
+	newInstanceData.throwNum = 0
+
+	P._playerAsset:resetAssetNum(self._expCid)
+	P._playerBPMonopoly:tryNextPeriod(true, activityData.startTime, activityData.endTime)
+	P._playerStore:resetBuyCount(D.IapType.Monopoly_Pack4)
+	P._playerStore:resetBuyCount(D.IapType.Monopoly_Pack5)
+	P._playerStore:resetBuyCount(D.IapType.Monopoly_Pack6)
+	P._playerStore:resetBuyCount(D.IapType.Monopoly_Pack7)
+	P._playerStore:resetBuyCount(D.IapType.Monopoly_Pack8)
+	P._playerTask:refreshMonopolyTask()
+	P._playerRanker:resetGroup(D.RankType.MonopolyRank)
+	P._playerExchange:resetExchangesByExchangeGroup(self:readExchangeGroup(self._subType))
+end
+
+function M:dealSubModuleInit(isOpenInit)
+	if not self:isUnlock() then
+		return
+	end
+
+	self._data = self:getCurrentData()
+
+	if not self._data then
+		return
+	end
+
+	self._subType = self._data.subType
+	self._rateIdx = 1
+	self._curMilestonePeriod = self:readMilestonePeriod(self._subType)
+	self._curMilestoneCfg = self:readMilestoneCfg(self._curMilestonePeriod)
+	self._data.recordMilestoneStep = self._data.recordMilestoneStep or 0
+
+	P._playerBPMonopoly:init(lc.assignTable(self._data, "bp"))
+	P._playerBPMonopoly:start()
+
+	if isOpenInit then
+		P._playerTask:clearTaskData(D.TaskClass.Monopoly)
+		P._playerTask:initMonopolyTask()
+	elseif not self:isExpired() then
+		P._playerTask:initMonopolyTask()
+	end
+end
+
+function M:dealInstanceExpire()
+	self._total.periodNum = self._total.periodNum + 1
+
+	self:tryClaimLeftStepRewards()
+	P._playerTask:clearDisplayTask(D.TaskClass.Monopoly)
+	TaskHelper:clearTaskData(D.TaskClass.Monopoly)
+	self:trySettle()
+end
+
+function M:trySettle()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._data then
+		return false
+	end
+
+	if not self._data.expired then
+		local isInTimeRange = P._playerActivity:isInTimeRange(self._data.id, C.getCurTime())
+
+		if isInTimeRange then
+			return false
+		else
+			self._data.expired = true
+
+			self:dealInstanceExpire()
+		end
+	end
+
+	if self._data.expireClaimed then
+		return true
+	end
+
+	if self._data.expireSettled then
+		return false
+	end
+
+	if not self._gettingRankData then
+		self._gettingRankData = true
+		local exp = self:getExpNum()
+		local conf = self:readCfg(self._data.subType)
+
+		if exp < conf._limitScore[#conf._limitScore] then
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._data.expireClaimed = true
+
+			return false
+		end
+
+		P._playerRanker:getCachedActivityRankData(D.RankType.MonopolyRank, self._data.id, function (data, selfRank, selfIndex)
+			self:getCurrentData().finalRank = selfRank or 9999
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._tmpSettleRankData = {
+				data,
+				selfRank,
+				selfIndex
+			}
+
+			SimpleEvent.emit("monopoly.rank_reward")
+		end, function ()
+			self._gettingRankData = false
+
+			SimpleEvent.emit("monopoly.rank_fail")
+		end)
+	end
+
+	return false
+end
+
+function M:decodeThrowValue(value)
+	return (value - value % 10) / 10, value % 10
+end
+
+function M:encodeThrowValue(value1, value2)
+	return value1 * 10 + value2
+end
+
+function M:isDiceEnough(throwNum)
+	return P._playerAsset:isAssetEnough(self._diceCid, throwNum)
+end
+
+function M:getDiceNum()
+	return P._playerAsset:getAssetNum(self._diceCid)
+end
+
+function M:getExpNum()
+	return P._playerAsset:getAssetNum(self._expCid)
+end
+
+function M:isCircleStep(step)
+	return self:getMilestoneMaxStep() <= step
+end
+
+function M:isStepComplete(stepIdx)
+	local num = self:getMilestoneNeedExp(stepIdx)
+
+	return P._playerAsset:isAssetEnough(self._expCid, num)
+end
+
+function M:isStepClaimed(stepIdx)
+	return stepIdx <= self:getMilestoneClaimIdx()
+end
+
+function M:isStepMax(stepIdx)
+	return self:getMilestoneRewardMaxStep() <= stepIdx
+end
+
+function M:getMilestoneClaimIdx()
+	return self._data.claimIdx
+end
+
+function M:getStandPositionIdx()
+	return self._data.positionIdx
+end
+
+function M:getLastThrowValues()
+	return self:decodeThrowValue(self._data.lastThrowValue)
+end
+
+function M:getMilestoneNeedExp(step)
+	if step == 0 then
+		return 0
+	end
+
+	if self:isCircleStep(step) then
+		local maxStep = self:getMilestoneMaxStep()
+
+		return self._curMilestoneCfg[maxStep - 1]._exp + self._curMilestoneCfg[maxStep]._exp * (step - maxStep + 1)
+	end
+
+	return self._curMilestoneCfg[step]._exp
+end
+
+function M:readMilestoneExp(step)
+	return self._curMilestoneCfg[step]._exp
+end
+
+function M:getMilestoneRewards(step)
+	if self:isCircleStep(step) then
+		step = self:getMilestoneMaxStep()
+
+		return self._curMilestoneCfg[step]._cids, self._curMilestoneCfg[step]._nums
+	end
+
+	return self._curMilestoneCfg[step]._cids, self._curMilestoneCfg[step]._nums
+end
+
+function M:getMilestoneMaxStep()
+	return #self._curMilestoneCfg
+end
+
+function M:getMilestoneRewardMaxExp()
+	return self._cfg._rewardLimit
+end
+
+function M:getMilestoneRewardMaxStep()
+	return self._maxClaimIdx
+end
+
+function M:canUpRate()
+	local nextRateIdx = self._rateIdx + 1
+	local cfg = self:readRateCfg()
+
+	if nextRateIdx > #cfg then
+		return false
+	end
+
+	local condCfg = self:readRateCondCfg()
+
+	if not self:isDiceEnough(condCfg[nextRateIdx]) then
+		return false
+	end
+
+	return true
+end
+
+function M:changeRate()
+	local nextRateIdx = self._rateIdx + 1
+	local cfg = self:readRateCfg()
+
+	if nextRateIdx > #cfg then
+		nextRateIdx = 1
+	end
+
+	local condCfg = self:readRateCondCfg()
+
+	if not self:isDiceEnough(condCfg[nextRateIdx]) then
+		nextRateIdx = 1
+
+		if nextRateIdx == self._rateIdx then
+			return false
+		end
+	end
+
+	self._rateIdx = nextRateIdx
+
+	return true
+end
+
+function M:getThrowRate()
+	local cfg = self:readRateCfg()
+
+	return cfg[self._rateIdx]
+end
+
+function M:tryClaimNextStepRewards()
+	local data = self:getCurrentData()
+
+	if not data then
+		return ResultCode.RESOURCE_NOT_ENOUGH, self._expCid
+	end
+
+	local nextIdx = data.claimIdx + 1
+
+	return self:tryClaimStepRewards(nextIdx)
+end
+
+function M:tryClaimStepRewards(targetStep)
+	local data = self:getCurrentData()
+
+	if not data then
+		return ResultCode.RESOURCE_NOT_ENOUGH, self._expCid
+	end
+
+	local nextIdx = data.claimIdx
+	local totalRewards = {}
+	local step = 0
+
+	while (targetStep == nil or targetStep >= nextIdx + 1) and step < 100 and self:isStepComplete(nextIdx + 1) and nextIdx + 1 <= self:getMilestoneRewardMaxStep() do
+		nextIdx = nextIdx + 1
+		step = step + 1
+		local cids, nums = self:getMilestoneRewards(nextIdx)
+		local result = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.monopoly_milestone)
+
+		D.foldRewards(totalRewards, result)
+
+		data.claimIdx = nextIdx
+
+		if self:isCircleStep(nextIdx) then
+			break
+		end
+	end
+
+	if step == 0 then
+		return ResultCode.RESOURCE_NOT_ENOUGH, self._expCid
+	end
+
+	SimpleEvent.emit("monopoly.milestone.claim")
+
+	return ResultCode.OK, totalRewards
+end
+
+function M:tryClaimLeftStepRewards()
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	local nextIdx = data.claimIdx
+	local cids = {}
+	local nums = {}
+	local step = 1
+
+	while self:isStepComplete(nextIdx + 1) and step < 100 do
+		nextIdx = nextIdx + 1
+		step = step + 1
+		local cids2, nums2 = self:getMilestoneRewards(nextIdx)
+
+		D.foldCidsAndNums2Separate(cids, nums, cids2, nums2)
+	end
+
+	data.claimIdx = nextIdx
+
+	if #cids > 0 then
+		P._playerMail:addMail(D.MailId.Monopoly_Rewards, nil, cids, nums)
+	end
+
+	return cids, nums
+end
+
+function M:checkThrowDice(throwNum)
+	throwNum = throwNum or 1
+
+	if not self:isDiceEnough(throwNum) then
+		return ResultCode.RESOURCE_NOT_ENOUGH, self._diceCid
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryThrowDice(throwNum)
+	throwNum = throwNum or 1
+
+	self:tryClaimCachedRewards()
+
+	local ret, param = self:checkThrowDice(throwNum)
+
+	if ret ~= ResultCode.OK then
+		return ret, param
+	end
+
+	P._playerAsset:decreaseAssetNum(self._diceCid, throwNum, D.LogWay.monopoly_throw_dice)
+
+	local currentIdx = self._data.positionIdx
+	local finalPositionIdx, drop = self:calProperty(currentIdx)
+	local rate = self:getThrowRate()
+	local throwValue = self:calThrowStep(currentIdx, finalPositionIdx)
+	local throwValue1, throwValue2 = self:randomDicePairBySum(throwValue)
+	throwValue2 = throwValue - throwValue1
+	local encodedThrowValue = self:encodeThrowValue(throwValue1, throwValue2)
+	self._data.lastThrowValue = encodedThrowValue
+	self._data.positionIdx = finalPositionIdx
+	local totalThrowValue = throwValue * throwNum
+	self._total.throwNum = self._total.throwNum + throwNum
+	self._total.throwValue = self._total.throwValue + totalThrowValue
+	local lastThrowNum = self._data.throwNum
+	self._data.throwNum = lastThrowNum + throwNum
+	self._data.throwRate = rate
+
+	P._playerBPMonopoly:addExp(totalThrowValue)
+	TaskHelper:increaseTaskValue(D.TaskType.THROW_DICE, throwNum)
+
+	local drops = self:readCellCfg(self._data.subType)
+	local items, idx = self:getDropRewards(drops[self._data.positionIdx])
+
+	D.rewardMultiRate(items, self._data.throwRate or 1)
+
+	self._data.delayDiceRewards = {
+		idx = idx,
+		items = items
+	}
+	self._data.rankTimestamp = C.getCurTime() - self:readActivityStartTime()
+	local syncRemote = false
+
+	for traceNum = lastThrowNum + 1, lastThrowNum + throwNum do
+		if traceNum % 5 == 0 then
+			syncRemote = true
+		end
+
+		Trace.traceDesign_Activity("MonopolyDice_Used:%s:%d", self._persistentUid, D.ActivityType.Monopoly, self:getSubType(), math.min(traceNum, 500))
+	end
+
+	if C._isNeedCheckNetwork then
+		syncRemote = true
+	end
+
+	P:saveGameData(syncRemote)
+
+	return ResultCode.OK, finalPositionIdx
+end
+
+function M:tryRecordMilestoneReach(maxStep)
+	local nextStep = self._data.recordMilestoneStep + 1
+	maxStep = maxStep or 0
+
+	if maxStep > 50 then
+		return
+	end
+
+	if self:isStepComplete(nextStep) then
+		self._data.recordMilestoneStep = nextStep
+
+		Trace.traceDesign_Activity("MonopolyMilestone_Reach:%s:%d", self._persistentUid, D.ActivityType.Monopoly, self:getSubType(), math.min(self._data.recordMilestoneStep, 100))
+
+		maxStep = maxStep + 1
+
+		self:tryRecordMilestoneReach(maxStep)
+	else
+		return
+	end
+end
+
+function M:getCachedDiceDrop()
+	local drops = self:readCellCfg(self._data.subType)
+
+	return drops[self._data.positionIdx]
+end
+
+function M:tryClaimCachedRewards()
+	if not self:haveUnclaimDiceRewards() then
+		return
+	end
+
+	local items = self._data.delayDiceRewards.items
+	local idx = self._data.delayDiceRewards.idx
+	local rewards = P._playerAsset:increaseAssetNumsByList(items, D.LogWay.monopoly_throw_dice)
+	self._data.delayDiceRewards = nil
+
+	self:uploadRankDataV2(self._data.id)
+
+	return rewards, idx
+end
+
+function M:haveUnclaimDiceRewards()
+	return self._data.delayDiceRewards ~= nil
+end
+
+function M:getCachedDropRewards()
+	if not self:haveUnclaimDiceRewards() then
+		return
+	end
+
+	return self._data.delayDiceRewards.items, self._data.delayDiceRewards.idx
+end
+
+function M:getDropRewards(drop)
+	if drop._type == 1 then
+		return {
+			{
+				drop._cid,
+				drop._num
+			}
+		}, 1
+	else
+		local drops = DropHelper.readDropsById(drop._dropId)
+		local resultDrop, idx = DropHelper.dropFromGroup(drops, nil, true)
+		local itemId = resultDrop._itemId
+		local num = resultDrop._minNum
+
+		return {
+			{
+				itemId,
+				num
+			}
+		}, idx
+	end
+
+	return nil
+end
+
+function M:calThrowStep(last, current)
+	return current - last + (current < last and 24 or 0)
+end
+
+function M:randomDicePairBySum(target_sum)
+	local low = math.max(1, target_sum - 6)
+	local high = math.min(6, target_sum - 1)
+
+	if high < low then
+		return nil, "无效的参数：sum 必须在 2 到 12 之间"
+	end
+
+	local count = high - low + 1
+	local offset = math.random(count) - 1
+	local d1 = low + offset
+	local d2 = target_sum - d1
+
+	return d1, d2
+end
+
+function M:calProperty(currentIdx)
+	local drops = self:readCellCfg(self._data.subType)
+	local finalDrop = DropHelper.dropFromGroup(drops, function (drop)
+		local idx = drop._id % 24
+
+		if idx == 0 then
+			idx = 24
+		end
+
+		if idx < currentIdx then
+			idx = idx + 24
+		end
+
+		return idx <= currentIdx + 12 and idx > currentIdx + 1
+	end, true)
+	local idx = finalDrop._id % 24
+
+	if idx == 0 then
+		idx = 24
+	end
+
+	return idx, finalDrop
+end
+
+function M:getFinalRank()
+	return self:getCurrentData().finalRank
+end
+
+function M:getRankRewards()
+	local rewards = {}
+	local rank = self:getFinalRank()
+	local conf = nil
+
+	if rank ~= 9999 then
+		for i = 1, #D._rankMonopolyConfig do
+			conf = D._rankMonopolyConfig[i]
+
+			if rank <= conf._max then
+				for j = 1, #conf._rewardCids do
+					rewards[#rewards + 1] = {
+						conf._rewardCids[j],
+						conf._rewardNums[j]
+					}
+				end
+
+				break
+			end
+		end
+	end
+
+	return rewards, conf
+end
+
+function M:hasSettleRewards()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self:getCurrentData().finalRank ~= nil
+end
+
+function M:tryClaimSettleRewards()
+	local items = {}
+
+	if not self._data.expired then
+		return
+	end
+
+	if not self._data.expireSettled then
+		return
+	end
+
+	if self._data.expireClaimed then
+		return
+	end
+
+	local rankRewards, conf = self:getRankRewards()
+
+	table.append(items, P._playerAsset:increaseAssetNumsByList(rankRewards, D.LogWay.monopoly_rank))
+
+	self._data.expireClaimed = true
+	self._tmpSettleRankData = nil
+
+	if conf then
+		Trace.traceDesign_Activity("MonopolyRank_Claim:%s:%s", self._persistentUid, D.ActivityType.Monopoly, self:getSubType(), conf._min .. "-" .. conf._max)
+	end
+
+	Trace.AF_traceEvent("Monopoly_PayMoney", {
+		{
+			_key = "id",
+			_value = self._data.id
+		},
+		{
+			_key = "num",
+			_value = P._playerRecord:getActivityPurchase(self._data.id) or 0
+		},
+		{
+			_key = "score",
+			_value = self:getExpNum() or 0
+		},
+		{
+			_key = "rankIdx",
+			_value = self:getFinalRank() or -1
+		}
+	})
+
+	return items
+end
+
+function M:isSettleClaimed()
+	return self._data.expireClaimed
+end
+
+function M:getLeftBuyNum(iapId)
+	local limit = self:getMaxBuyNum(iapId)
+
+	if limit == -1 then
+		return 999
+	end
+
+	return limit - self:getBuyCount(iapId)
+end
+
+function M:getMaxBuyNum(iapId)
+	return P._playerStore:readBuyLimit(iapId)
+end
+
+function M:getBuyCount(iapId)
+	if not self._data.shopBuyCount then
+		self._data.shopBuyCount = {}
+	end
+
+	return self._data.shopBuyCount[iapId] or 0
+end
+
+function M:recordBuyCount(iapId)
+	self._data.shopBuyCount[iapId] = self:getBuyCount(iapId) + 1
+end
+
+function M:readRateCfg()
+	return D._globalConfig._activity_monopoly_rates
+end
+
+function M:readRateCondCfg()
+	return D._globalConfig._activity_monopoly_rates_cond
+end
+
+function M:readCfg(subType)
+	return D._activityMonopolyConfig[subType or 1]
+end
+
+function M:readNameSid(subType)
+	return D._activityMonopolyConfig[subType]._nameSid
+end
+
+function M:readSlotMachineDropId(subType)
+	return D._activityMonopolyConfig[subType]._slotMachineDropId
+end
+
+function M:readCellCfg(period)
+	return self._cellCfgs[period]
+end
+
+function M:readMilestoneCfg(period)
+	return self._milestoneRewards[period or 1]
+end
+
+function M:readMilestonePeriod(subType)
+	return D._activityMonopolyConfig[subType or 1]._milestonePeriod
+end
+
+function M:readCellPeriod(subType)
+	return D._activityMonopolyConfig[subType or 1]._cellPeriod
+end
+
+function M:readExchangeGroup(subType)
+	return D._activityMonopolyConfig[subType or 1]._exchangeGroup
+end
+
+function M:readPackExchangeGroup(subType)
+	return D._activityMonopolyConfig[subType or 1]._packExchangeGroup
+end
+
+function M:readActivityStartTime()
+	local activityTimeData = P._playerActivity:getMonopolyData()
+
+	if not activityTimeData then
+		return 0
+	end
+
+	return activityTimeData.startTime
+end
+
+function M:uploadRankDataV2(auid)
+	local limitScores = self:readCfg(self._subType)._limitScore
+
+	if limitScores[#limitScores] <= self:getExpNum() then
+		P._playerRanker:uploadActivityRankData(D.RankType.MonopolyRank, auid, self:getRankValue())
+	end
+end
+
+function M:getRankData(auid, callback, failCallback)
+	P._playerRanker:getCachedActivityRankData(D.RankType.MonopolyRank, auid, callback, failCallback)
+end
+
+function M:getRankValue()
+	if lc._isCN then
+		return self:getExpNum()
+	else
+		return self:getExpNum() * 1000000 + (self._data.rankTimestamp and 1000000 - self._data.rankTimestamp or 0)
+	end
+end
+
+return M

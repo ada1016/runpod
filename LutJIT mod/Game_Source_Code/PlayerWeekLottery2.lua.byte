@@ -1,0 +1,448 @@
+local M = class("PlayerWeekLottery")
+
+local function generateWeekLotteryData()
+	return {
+		id = 1,
+		endTime = -1,
+		nextId = 1,
+		startTime = -1
+	}
+end
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.unlock = self._meta.unlock or false
+	self._total = self._meta.total
+	self._subTotal = self._meta.subTotal
+	self._current = self._meta.current
+	self._lastLuckDrawNum = 0
+end
+
+function M:tryUnlock()
+	if self:isUnlock() then
+		return false
+	end
+
+	self._meta.unlock = true
+	self._total = lc.assignTable(self._meta, "total")
+	self._total.num = self._total.num or 0
+	self._total.freeNum = self._total.freeNum or 0
+	self._subTotal = lc.assignTable(self._meta, "subTotal")
+	self._current = lc.assignTable(self._meta, "current")
+
+	return true
+end
+
+function M:start()
+	P._playerActivity:registerOpenCheck(D.ActivityType.WeekLottery2, function ()
+		return self:openCheck()
+	end)
+	P._playerActivity:registerOpen(D.ActivityType.WeekLottery2, function (activityData)
+		self:dealOpen(activityData)
+	end)
+	P._playerActivity:registerExpired(D.ActivityType.WeekLottery2, function (activityData)
+		self:dealExpire(activityData)
+	end)
+end
+
+function M:dailyReset()
+	if not self:isUnlock() then
+		return
+	end
+
+	if not self._current then
+		return
+	end
+
+	for k, data in pairs(self._current) do
+		data.todayFreeNum = self:readFreeNum(data.subType)
+	end
+end
+
+function M:updateNewbieOpen()
+end
+
+function M:isUnlock()
+	return self._meta.unlock
+end
+
+function M:haveFree(uid)
+	if uid then
+		if not self._current[uid] then
+			return false
+		end
+
+		return self._current[uid].todayFreeNum > 0
+	else
+		for k, data in pairs(self._current) do
+			if data.todayFreeNum > 0 then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:getData(uid)
+	return self._current[uid]
+end
+
+function M:openCheck()
+	return P._playerActivity:isNewbieLotteryFinished()
+end
+
+function M:dealOpen(data)
+	self:tryUnlock()
+
+	local uniqueId = data.uid
+
+	if self._current[uniqueId] then
+		return
+	end
+
+	table.delete(self._current, function (e)
+		return e.expired == true
+	end)
+
+	local subType = data.subType
+	local newCirleData = {
+		freeNum = 0,
+		numPerCircle = 0,
+		num = 0,
+		refreshedNum = 0,
+		subType = subType,
+		todayFreeNum = self:readFreeNum(subType),
+		upPoolGots = {},
+		downPoolGots = {}
+	}
+	self._current[uniqueId] = newCirleData
+end
+
+function M:dealExpire(activityData)
+	local instanceData = self._current[activityData.uid]
+
+	if not instanceData then
+		return
+	end
+
+	instanceData.expired = true
+end
+
+function M:getRedDot(uid)
+	return self:haveFree(uid)
+end
+
+function M:tryLottery(uid, drawNum)
+	local subType = self._current[uid].subType
+	local costCid, costNum = self:getOneCost(subType)
+	costNum = costNum * drawNum
+
+	if not P._playerAsset:isAssetEnough(costCid, costNum) then
+		return ResultCode.RESOURCE_NOT_ENOUGH
+	end
+
+	if drawNum > 1 then
+		P._playerAsset:decreaseAssetNum(costCid, costNum, D.LogWay.activity_week_lottery2_10)
+	else
+		P._playerAsset:decreaseAssetNum(costCid, costNum, D.LogWay.activity_week_lottery2_1)
+	end
+
+	local rewards, resultIdxs = self:dealLotteryDown(uid, drawNum)
+
+	return ResultCode.OK, rewards, resultIdxs
+end
+
+function M:tryFreeLottery(uid)
+	if not self:haveFree(uid) then
+		return ResultCode.DAILY_NUM_MAX
+	end
+
+	local currentData = self._current[uid]
+	local subType = currentData.subType
+	currentData.freeNum = (currentData.freeNum or 0) + 1
+	local aid = P._playerActivity:getActivityId(uid)
+
+	Trace.traceDesign_Activity("EventWeekDraw_Free:%s:%d", aid, D.ActivityType.WeekLottery2, subType, Mathf.Clamp(currentData.freeNum, 1, 31))
+
+	self._current[uid].todayFreeNum = self._current[uid].todayFreeNum - 1
+	self._total.freeNum = self._total.freeNum + 1
+	local rewards, resultIdxs = self:dealLotteryDown(uid, 1)
+
+	return ResultCode.OK, rewards, resultIdxs
+end
+
+function M:dealLotteryDown(uid, drawNum)
+	self:resetLastLuckDrawNum()
+
+	drawNum = drawNum or 1
+	local aid = P._playerActivity:getActivityId(uid)
+	local currentData = self._current[uid]
+	local subType = currentData.subType
+	local keyCid = self:readKeyCid(subType)
+	local results = {}
+	local resultIdxs = {}
+	local dropId = self:getDrawDropId(subType)
+	local drops = DropHelper.readDropsById(dropId)
+	local subTotal = self:getSubTotal(subType)
+
+	local function filter(drop)
+		return table.findArray(self:getData(uid).downPoolGots, function (e)
+			return e[1] == drop._itemId and e[2] == drop._minNum
+		end) == nil
+	end
+
+	for i = 1, drawNum do
+		dropId = self:getDrawDropId(subType)
+		local fixCounts = self:readFixCounts(subType)
+
+		if fixCounts then
+			local index = table.findArray(fixCounts, (subTotal.num or 0) + 1)
+
+			if index then
+				dropId = self:readFixDrop(subType)[index]
+			end
+		end
+
+		local cid, num = DropHelper.getByDropId(dropId, filter)
+		subTotal.num = (subTotal.num or 0) + 1
+		currentData.num = currentData.num + 1
+		currentData.numPerCircle = (currentData.numPerCircle or 0) + 1
+		self._total.num = self._total.num + 1
+
+		if currentData.num > 100 then
+			if currentData.num % 10 == 0 then
+				Trace.traceDesign_Activity("EventWeekDraw:%s:%d", aid, D.ActivityType.WeekLottery2, subType, Mathf.Clamp(currentData.num, 1, 500))
+			end
+		else
+			Trace.traceDesign_Activity("EventWeekDraw:%s:%d", aid, D.ActivityType.WeekLottery2, subType, Mathf.Clamp(currentData.num, 1, 500))
+		end
+
+		local dropIdx = table.findArray(drops, function (drop)
+			return drop._itemId == cid and drop._minNum == num
+		end)
+		resultIdxs[#resultIdxs + 1] = dropIdx
+
+		if cid == keyCid then
+			Trace.traceDesign_Activity("EventWeekDrop:%s:%d", aid, D.ActivityType.WeekLottery2, subType, keyCid)
+
+			local upResults, upResultIdxs = self:dealLotteryUp(uid)
+
+			table.append(results, upResults)
+			table.append(resultIdxs, upResultIdxs)
+			table.clear(self:getData(uid).downPoolGots)
+		else
+			local tempRes = P._playerAsset:increaseAssetNum(cid, num, D.LogWay.activity_week_lottery1)
+
+			D.foldRewards(results, tempRes)
+			table.insert(self:getData(uid).downPoolGots, {
+				cid,
+				num
+			})
+		end
+	end
+
+	P:saveGameData(true)
+
+	return results, resultIdxs
+end
+
+function M:dealLotteryUp(uid)
+	local drawNum = 1
+	local result = {}
+	local aid = P._playerActivity:getActivityId(uid)
+	local currentData = self._current[uid]
+	local subType = currentData.subType
+	local results = {}
+	local resultIdxs = {}
+	local dropId = self:getUpDrawDropId(subType)
+	local drops = DropHelper.readDropsById(dropId)
+
+	local function filter(drop)
+		return table.findArray(self:getData(uid).upPoolGots, function (e)
+			return e[1] == drop._itemId and e[2] == drop._minNum
+		end) == nil
+	end
+
+	for i = 1, drawNum do
+		local cid, num = DropHelper.getByDropId(dropId, filter)
+		local tempRes = P._playerAsset:increaseAssetNum(cid, num, D.LogWay.activity_week_lottery2)
+
+		D.foldRewards(results, tempRes)
+
+		if table.contains(self:readSpeicalCids(subType), cid) then
+			Trace.traceDesign_Activity("EventWeekDrop:%s:%d", aid, D.ActivityType.WeekLottery2, subType, cid)
+
+			if self._lastLuckDrawNum == 0 then
+				self._lastLuckDrawNum = currentData.numPerCircle
+
+				P._playerActivity:tryUploadDrawData(aid, currentData.numPerCircle, tempRes[1][1], tempRes[1][2], true)
+			end
+
+			currentData.numPerCircle = 0
+		end
+
+		local dropIdx = table.findArray(drops, function (drop)
+			return drop._itemId == cid and drop._minNum == num
+		end)
+		resultIdxs[#resultIdxs + 1] = dropIdx
+
+		table.insert(self:getData(uid).upPoolGots, {
+			cid,
+			num
+		})
+
+		if #self:getData(uid).upPoolGots == #drops then
+			table.clear(self:getData(uid).upPoolGots)
+
+			currentData.refreshedNum = (currentData.refreshedNum or 0) + 1
+		end
+	end
+
+	return results, resultIdxs
+end
+
+function M:canRefreshUpPool(uid)
+	local currentData = self._current[uid]
+	local subType = currentData.subType
+	local specialIds = self:readSpeicalCids(subType)
+	local upPoolGots = self:getData(uid).upPoolGots
+	local remainNum = #specialIds
+
+	for i = 1, #upPoolGots do
+		if table.contains(specialIds, upPoolGots[i][1]) then
+			remainNum = remainNum - 1
+		end
+	end
+
+	return remainNum == 0
+end
+
+function M:tryResetRewards(uid)
+	if self:canRefreshUpPool(uid) then
+		local data = self:getData(uid)
+
+		table.clear(data.upPoolGots)
+
+		data.numPerCircle = 0
+	end
+end
+
+function M:getDrawDropId(subType)
+	return self:readDrop(subType)
+end
+
+function M:getUpDrawDropId(subType)
+	return self:readUpDrop(subType)
+end
+
+function M:getSubTotal(subType)
+	if not self._subTotal[subType] then
+		self._subTotal[subType] = {}
+	end
+
+	return self._subTotal[subType]
+end
+
+function M:getSubType(uid)
+	return self._current[uid].subType
+end
+
+function M:getClaimIdx(uid)
+	return self._current[uid].claimIdx
+end
+
+function M:getCurrentNum(uid)
+	return self._current[uid].num
+end
+
+function M:getRefresedNum(uid)
+	return self._current[uid].refreshedNum
+end
+
+function M:getUpPoolGots(uid)
+	return self._current[uid].upPoolGots
+end
+
+function M:getDownPoolGots(uid)
+	return self._current[uid].downPoolGots
+end
+
+function M:getTotalNum()
+	return self._total.num
+end
+
+function M:getOneCost(subType)
+	return self:readOneCost(subType)
+end
+
+function M:getDefaultExchangeGroup()
+	return self._defaultExchangeGroup
+end
+
+function M:getLastLuckDrawNum()
+	return self._lastLuckDrawNum
+end
+
+function M:resetLastLuckDrawNum()
+	if self._lastLuckDrawNum == 0 then
+		return
+	end
+
+	self._lastLuckDrawNum = 0
+end
+
+function M:readNameSid(id)
+	return D._activityWeekLottery2Config[id]._nameSid
+end
+
+function M:readNextId(id)
+	return D._activityWeekLottery2Config[id]._nextId
+end
+
+function M:readOneCost(id)
+	local cfg = D._activityWeekLottery2Config[id]
+
+	return cfg._costCid, cfg._costNum
+end
+
+function M:readDrop(id)
+	return D._activityWeekLottery2Config[id]._drop
+end
+
+function M:readUpDrop(id)
+	return D._activityWeekLottery2Config[id]._upDrop
+end
+
+function M:readFreeNum(id)
+	return D._activityWeekLottery2Config[id]._freeNum
+end
+
+function M:readFixCounts(id)
+	return D._activityWeekLottery2Config[id]._fixCounts
+end
+
+function M:readFixDrop(id)
+	return D._activityWeekLottery2Config[id]._fixDropIdxs
+end
+
+function M:readSpeicalCids(id)
+	return D._activityWeekLottery2Config[id]._specialCids
+end
+
+function M:readKeyCid(id)
+	return D._activityWeekLottery2Config[id]._keyCid
+end
+
+function M:readScheme(id)
+	return D._activityWeekLottery2Config[id]._scheme
+end
+
+function M:readRefreshNum(id)
+	return D._activityWeekLottery2Config[id]._refreshNum
+end
+
+return M

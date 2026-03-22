@@ -1,0 +1,510 @@
+local M = class("BattleLayoutPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tmpInputRoleLv = Types.TMP_InputField,
+	btnRoleLvMinus = Types.Button,
+	btnRoleLvPlus = Types.Button,
+	tmpInputDomeLv = Types.TMP_InputField,
+	btnDomeLvMinus = Types.Button,
+	btnDomeLvPlus = Types.Button,
+	tmpTechLv = Types.TMP_Text,
+	tfTechInput = Types.GameObject,
+	closeTechInput = Types.Button,
+	chipOverview1 = Types.Transform,
+	chipOverview2 = Types.Transform,
+	chipOverview3 = Types.Transform,
+	chipOverview4 = Types.Transform,
+	chipOverview5 = Types.Transform,
+	chipOverview6 = Types.Transform,
+	tfChipInput = Types.GameObject,
+	closeChipInput = Types.Button,
+	tmpInputChipTitle = Types.TMP_Text,
+	inputChip1 = Types.TMP_InputField,
+	inputChip2 = Types.TMP_InputField,
+	inputChip3 = Types.TMP_InputField,
+	inputChip4 = Types.TMP_InputField,
+	inputChip5 = Types.TMP_InputField,
+	inputChip6 = Types.TMP_InputField,
+	tmpWeaponLv = Types.TMP_Text,
+	tfWeaponInput = Types.GameObject,
+	closeWeaponInput = Types.Button,
+	equipOverview = Types.Transform,
+	tfEquipInput = Types.GameObject,
+	openEquipInput = Types.Button,
+	closeEquipInput = Types.Button,
+	tmpEquipTotalAtk = Types.TMP_Text,
+	imgBuff1 = Types.Image,
+	imgBuff2 = Types.Image,
+	imgBuff3 = Types.Image,
+	goDomeInput = Types.GameObject,
+	closeDomeInput = Types.Button,
+	inputBuff1 = Types.TMP_InputField,
+	inputBuff2 = Types.TMP_InputField,
+	inputBuff3 = Types.TMP_InputField,
+	btnSaveEnv = Types.Button,
+	btnLoadEnv = Types.Button
+}
+local MIN_WEAPON_LV = 1
+local MAX_WEAPON_LV = 32
+local Equip = requireLua("Equip")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._chipOverviews = {
+		self._chipOverview1,
+		self._chipOverview2,
+		self._chipOverview3,
+		self._chipOverview4,
+		self._chipOverview5,
+		self._chipOverview6
+	}
+	self._inputChips = {
+		self._inputChip1,
+		self._inputChip2,
+		self._inputChip3,
+		self._inputChip4,
+		self._inputChip5,
+		self._inputChip6
+	}
+end
+
+function M:Start()
+	self:setClick(self._btnRoleLvMinus, function ()
+		self._env.weaponLevels[1] = math.max(self._env.weaponLevels[1] - 1, 1)
+
+		self:onBtnRoleLv()
+	end)
+	self:setClick(self._btnRoleLvPlus, function ()
+		self._env.weaponLevels[1] = math.min(self._env.weaponLevels[1] + 1, D.MAX_EQUIP_LEVEL)
+
+		self:onBtnRoleLv()
+	end)
+	self:setClick(self._btnDomeLvMinus, function ()
+		self._env.weaponLevels[D.WEAPON_DOME] = math.max((self._env.weaponLevels[D.WEAPON_DOME] or 1) - 1, 1)
+
+		self:onBtnDomeLv()
+	end)
+	self:setClick(self._btnDomeLvPlus, function ()
+		self._env.weaponLevels[D.WEAPON_DOME] = math.min((self._env.weaponLevels[D.WEAPON_DOME] or 1) + 1, #D._domeUpgradeConfig)
+
+		self:onBtnDomeLv()
+	end)
+	self:setClickWithoutAction(self._tmpTechLv:GetComponent("Button"), function ()
+		self._tfTechInput:SetActive(true)
+		self:loadTechInput()
+	end)
+	self:setClick(self._closeTechInput, function ()
+		self._tfTechInput:SetActive(false)
+
+		local text = ""
+
+		for i = 1, 5 do
+			text = text .. (self._env.domeTechLevels[i] or 0) .. "-"
+		end
+
+		text = text .. "(点击设置)"
+		self._tmpTechLv.text = text
+
+		P:loadBattleEnv(self._env)
+	end)
+	self._tmpInputRoleLv.onEndEdit:RemoveAllListeners()
+	self._tmpInputRoleLv.onEndEdit:AddListener(function (pt)
+		if tonumber(pt) == nil then
+			self._tmpInputRoleLv.text = self._env.weaponLevels[1] or 1
+
+			return
+		end
+
+		self._env.weaponLevels[1] = pt
+	end)
+
+	for i = 1, 6 do
+		self:setClickWithoutAction(self._chipOverviews[i]:GetComponent("Button"), function ()
+			self._tfChipInput:SetActive(true)
+			self:loadChipInput(i)
+		end)
+	end
+
+	self:setClick(self._closeChipInput, function ()
+		self._tfChipInput:SetActive(false)
+
+		for i = 1, 6 do
+			self:updateChipOverviews(i)
+		end
+	end)
+	self:setClickWithoutAction(self._tmpWeaponLv:GetComponent("Button"), function ()
+		self._tfWeaponInput:SetActive(true)
+		self:loadWeaponInput()
+	end)
+	self:setClick(self._closeWeaponInput, function ()
+		self._tfWeaponInput:SetActive(false)
+
+		local text = ""
+
+		for i = 2, D.MAX_WEAPON_ID do
+			text = text .. (self._env.weaponLevels[i] or 1) .. "-"
+		end
+
+		text = text .. "(点击设置)"
+		self._tmpWeaponLv.text = text
+
+		P:loadBattleEnv(self._env)
+	end)
+	self:setClickWithoutAction(self._openEquipInput, function ()
+		self._tfEquipInput:SetActive(true)
+		self:loadEquipInput()
+	end)
+	self:setClick(self._closeEquipInput, function ()
+		self._tfEquipInput:SetActive(false)
+		self:updateEquipOverviews()
+		P:loadBattleEnv(self._env)
+	end)
+
+	for i = 1, 3 do
+		self:setClick(self["_imgBuff" .. i].transform.parent:GetComponent("Button"), function ()
+			self._goDomeInput:SetActive(true)
+			self:loadBuffInput()
+		end)
+	end
+
+	self:setClick(self._closeDomeInput, function ()
+		self._goDomeInput:SetActive(false)
+		self:updateBuffOverviews()
+		P:loadBattleEnv(self._env)
+	end)
+	self:setClick(self._btnSaveEnv, function ()
+		GMTools.saveBattleEnv(self._env, function ()
+			V.showToast("导出成功")
+		end, D.BATTLE_UNIT_TEST_DIR .. "out_layout/")
+	end)
+	self:setClick(self._btnLoadEnv, function ()
+		GMTools.loadBattleEnv(function (battleEnv)
+			P:loadBattleEnv(battleEnv)
+
+			GMTools._battleEnv = battleEnv
+			self._env = battleEnv
+
+			self:loadUI()
+		end, D.BATTLE_UNIT_TEST_DIR .. "out_layout/")
+	end)
+end
+
+function M:init()
+	self._env = GMTools._battleEnv
+	self._env.weaponLevels[1] = self._env.weaponLevels[1] or 1
+	local buffs = self._env.buffs
+
+	if #buffs == 0 then
+		self._env.buffs = P._playerDome._buffs
+	end
+
+	P:loadBattleEnv(self._env)
+	self._tfChipInput:SetActive(false)
+	self._tfWeaponInput:SetActive(false)
+	self._tfEquipInput:SetActive(false)
+	self:loadUI()
+end
+
+function M:loadUI()
+	self._tmpInputRoleLv.text = self._env.weaponLevels[1]
+
+	for i = 1, 6 do
+		self:updateChipOverviews(i)
+	end
+
+	local text = ""
+
+	for i = 2, D.MAX_WEAPON_ID do
+		text = text .. (self._env.weaponLevels[i] or 1) .. "-"
+	end
+
+	text = text .. "(点击设置)"
+	self._tmpWeaponLv.text = text
+
+	self:updateEquipOverviews()
+
+	text = ""
+
+	for i = 1, 5 do
+		text = text .. (self._env.domeTechLevels[i] or 0) .. "-"
+	end
+
+	for i = 1, 3 do
+		if self._env.buffs[i] then
+			self["_imgBuff" .. i]:SetActive(true)
+			LuaUnity.setTPSprite(self["_imgBuff" .. i], "general/domeBuff-buff-" .. self._env.buffs[i][1], true)
+		else
+			self["_imgBuff" .. i]:SetActive(false)
+		end
+	end
+end
+
+function M:onBtnRoleLv()
+	self._tmpInputRoleLv.text = self._env.weaponLevels[1]
+end
+
+function M:onBtnDomeLv()
+	self._tmpInputDomeLv.text = self._env.weaponLevels[D.WEAPON_DOME]
+end
+
+function M:updateChipOverviews(part)
+	local chipOverview = self._chipOverviews[part]
+	local roleChips = self._env.gemSlots[part] or {}
+
+	for i = 1, 6 do
+		if roleChips[i] and roleChips[i] > 0 then
+			chipOverview:GetChild(i - 1):GetChild(0):SetActive(true)
+			LuaUnity.setTPSprite(chipOverview:GetChild(i - 1):GetChild(0):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[roleChips[i]]._quality, true)
+		else
+			chipOverview:GetChild(i - 1):GetChild(0):SetActive(false)
+		end
+	end
+end
+
+function M:updateEquipOverviews()
+	self._equips = {}
+
+	for i = 1, 6 do
+		if not self._env.equips[i] then
+			self._env.equips[i] = {
+				level = 0,
+				meta = {
+					cid = D._globalConfig._inital_equips[i]
+				}
+			}
+		end
+
+		self._equips[i] = Equip.create(self._env.equips[i].meta)
+	end
+
+	local total = 0
+
+	for i = 1, 6 do
+		total = total + (self._equips[i] and self._equips[i]:atk() or 0)
+		self._equipOverview:GetChild(i - 1):GetChild(0):GetComponent("TMP_Text").text = self._equips[i] and self._equips[i]:atk() or 0
+	end
+
+	self._tmpEquipTotalAtk.text = "攻击力总和：" .. total
+end
+
+function M:loadWeaponInput()
+	local weapons = self._tfWeaponInput:Find("weapons")
+
+	for i = 1, 8 do
+		local go = weapons:GetChild(i - 1)
+		local input = go:GetComponent("TMP_InputField")
+		input.text = self._env.weaponLevels[i] or 1
+
+		self:setClick(go:Find("minus"):GetComponent("Button"), function ()
+			self._env.weaponLevels[i] = math.max((self._env.weaponLevels[i] or 1) - 1, MIN_WEAPON_LV)
+			input.text = self._env.weaponLevels[i]
+		end)
+		self:setClick(go:Find("plus"):GetComponent("Button"), function ()
+			self._env.weaponLevels[i] = math.min((self._env.weaponLevels[i] or 1) + 1, MAX_WEAPON_LV)
+			input.text = self._env.weaponLevels[i]
+		end)
+		input.onEndEdit:RemoveAllListeners()
+		input.onEndEdit:AddListener(function (pt)
+			self._env.weaponLevels[i] = tonumber(pt) or 1
+			self._env.weaponLevels[i] = math.max(self._env.weaponLevels[i], MIN_WEAPON_LV)
+			self._env.weaponLevels[i] = math.min(self._env.weaponLevels[i], MAX_WEAPON_LV)
+		end)
+	end
+end
+
+function M:loadTechInput()
+	local techs = self._tfTechInput:Find("weapons")
+
+	for i = 1, 5 do
+		local go = techs:GetChild(i - 1)
+		local input = go:GetComponent("TMP_InputField")
+		input.text = self._env.domeTechLevels[i] or 0
+
+		self:setClick(go:Find("minus"):GetComponent("Button"), function ()
+			self._env.domeTechLevels[i] = math.max((self._env.domeTechLevels[i] or 0) - 1, 0)
+			input.text = self._env.domeTechLevels[i]
+		end)
+		self:setClick(go:Find("plus"):GetComponent("Button"), function ()
+			self._env.domeTechLevels[i] = math.min((self._env.domeTechLevels[i] or 0) + 1, 6)
+			input.text = self._env.domeTechLevels[i]
+		end)
+		input.onEndEdit:RemoveAllListeners()
+		input.onEndEdit:AddListener(function (pt)
+			self._env.domeTechLevels[i] = tonumber(pt) or 10
+			self._env.domeTechLevels[i] = math.max(self._env.domeTechLevels[i], MIN_WEAPON_LV)
+			self._env.domeTechLevels[i] = math.min(self._env.domeTechLevels[i], MAX_WEAPON_LV)
+		end)
+	end
+end
+
+function M:loadChipInput(part)
+	self._tmpInputChipTitle.text = "当前所选部位" .. part
+	local roleChips = self._env.gemSlots[part] or {}
+
+	for i = 1, 6 do
+		self._inputChips[i].text = roleChips[i]
+
+		self._inputChips[i].onEndEdit:RemoveAllListeners()
+		self._inputChips[i].onEndEdit:AddListener(function (pt)
+			local id = tonumber(pt) or 0
+
+			if D._gemConfig[id] then
+				roleChips[i] = id
+				self._env.gemSlots[part] = roleChips
+
+				P:loadBattleEnv(self._env)
+			else
+				V.showToast(id .. "芯片不存在")
+			end
+		end)
+	end
+end
+
+function M:loadEquipInput()
+	local container = self._tfEquipInput:Find("container")
+
+	for i = 1, 6 do
+		local go = container:GetChild(i)
+		local inputGrade = go:GetChild(0):GetComponent("TMP_InputField")
+		local inputQuality = go:GetChild(1):GetComponent("TMP_InputField")
+		local inputLevel = go:GetChild(2):GetComponent("TMP_InputField")
+		inputGrade.text = D._equipConfig[self._env.equips[i].meta.cid]._grade
+		inputQuality.text = D._equipConfig[self._env.equips[i].meta.cid]._quality
+		inputLevel.text = self._env.equips[i].level
+
+		self:setClick(go:GetChild(0):Find("minus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text) - 1
+			local quality = tonumber(inputQuality.text)
+			local level = tonumber(inputLevel.text)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputGrade.text = grade
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+		self:setClick(go:GetChild(0):Find("plus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text) + 1
+			local quality = tonumber(inputQuality.text)
+			local level = tonumber(inputLevel.text)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputGrade.text = grade
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+		self:setClick(go:GetChild(1):Find("minus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text)
+			local quality = tonumber(inputQuality.text) - 1
+			local level = tonumber(inputLevel.text)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputQuality.text = quality
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+		self:setClick(go:GetChild(1):Find("plus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text)
+			local quality = tonumber(inputQuality.text) + 1
+			local level = tonumber(inputLevel.text)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputQuality.text = quality
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+		self:setClick(go:GetChild(2):Find("minus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text)
+			local quality = tonumber(inputQuality.text)
+			local level = math.max(0, tonumber(inputLevel.text) - 1)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputLevel.text = level
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+		self:setClick(go:GetChild(2):Find("plus"):GetComponent("Button"), function ()
+			local grade = tonumber(inputGrade.text)
+			local quality = tonumber(inputQuality.text)
+			local level = math.min(50, tonumber(inputLevel.text) + 1)
+			local cid = 30000 + quality * 1000 + i * 100 + grade
+
+			if D._equipConfig[cid] then
+				inputLevel.text = level
+				self._env.equips[i] = {
+					meta = {
+						cid = cid
+					},
+					level = level
+				}
+				self._equips[i] = Equip.create(self._env.equips[i].meta)
+			end
+		end)
+	end
+end
+
+function M:loadBuffInput()
+	local buffs = self._env.buffs
+
+	for i = 1, 3 do
+		if buffs[i] then
+			self["_inputBuff" .. i].text = buffs[i][1]
+		else
+			self["_inputBuff" .. i].text = 0
+		end
+	end
+end
+
+function M:updateBuffOverviews()
+	for i = 1, 3 do
+		local text = self["_inputBuff" .. i].text
+		local id = tonumber(text)
+
+		if id and id > 0 then
+			self._env.buffs[i] = {
+				id,
+				P._playerDome:getCurDifficulty()
+			}
+		end
+	end
+
+	self:loadUI()
+end
+
+return M

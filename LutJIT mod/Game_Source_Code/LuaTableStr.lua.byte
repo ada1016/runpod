@@ -1,0 +1,134 @@
+local M = class("LuaTableStr")
+
+function M.encode(obj)
+	local t = type(obj)
+
+	if t == "number" then
+		return tostring(obj)
+	elseif t == "boolean" then
+		return tostring(obj)
+	elseif t == "string" then
+		return string.format("%q", obj)
+	elseif t == "table" then
+		local lua = "{"
+
+		for k, v in pairs(obj) do
+			lua = lua .. "[" .. M.encode(k) .. "]=" .. M.encode(v) .. ","
+		end
+
+		lua = lua .. "}"
+
+		return lua
+	elseif t == "nil" then
+		return nil
+	elseif t ~= "userdata" then
+		error("can not encode a " .. t .. " type.")
+	end
+end
+
+function M.decode(lua)
+	local t = type(lua)
+
+	if t == "nil" or lua == "" then
+		return nil
+	elseif t == "number" or t == "string" or t == "boolean" then
+		lua = tostring(lua)
+	else
+		error("can not decode a " .. t .. " type.")
+	end
+
+	lua = "return " .. lua
+	local func = loadstring(lua)
+
+	if func == nil then
+		return nil
+	end
+
+	return func()
+end
+
+local T = {}
+
+declare("LcTable", T)
+
+function T.encrypt(_infos)
+	local keyIndex = _infos.getKeyIndex()
+	local index2Key = {}
+	local iInfo_key = next(_infos)
+	local iInfo = _infos[iInfo_key]
+	local iMetaTable = getmetatable(iInfo)
+
+	for k, i in pairs(keyIndex) do
+		index2Key[i] = k
+	end
+
+	local numberCol = {}
+	local arr1d = {}
+	local arr2d = {}
+	local newMetaTable = {
+		__index = function (table, key)
+			local k = keyIndex[key]
+
+			if numberCol[k] then
+				return (iMetaTable.__index(table, key) - 13) / 2
+			elseif arr1d[k] then
+				local data = iMetaTable.__index(table, key)
+
+				for i = 1, #data do
+					arr1d[k][table[1]][i] = (data[i] - 13) / 2
+				end
+
+				return arr1d[k][table[1]] or data
+			elseif arr2d[k] then
+				local data = iMetaTable.__index(table, key)
+
+				for i = 1, #data do
+					for j = 1, #data[i] do
+						arr2d[k][table[1]][i][j] = (data[i][j] - 13) / 2
+					end
+				end
+
+				return arr2d[k][table[1]] or data
+			else
+				return iMetaTable.__index(table, key)
+			end
+		end
+	}
+
+	for id, info in pairs(_infos) do
+		for k = 2, #info do
+			local val = info[k]
+
+			if type(val) == "number" then
+				numberCol[k] = true
+				info[k] = val * 2 + 13
+			elseif type(val) == "table" and type(val[1]) == "number" then
+				arr1d[k] = arr1d[k] or {}
+				arr1d[k][info[1]] = {}
+
+				for i = 1, #val do
+					info[k][i] = val[i] * 2 + 13
+				end
+			elseif type(val) == "table" and type(val[1]) == "table" and type(val[1][1]) == "number" and not index2Key[k]:hasSuffix("Cond") then
+				arr2d[k] = arr2d[k] or {}
+				arr2d[k][info[1]] = {}
+
+				for i = 1, #val do
+					arr2d[k][info[1]][i] = {}
+
+					for j = 1, #val[i] do
+						if type(val[i][j]) == "table" then
+							-- Nothing
+						end
+
+						info[k][i][j] = val[i][j] * 2 + 13
+					end
+				end
+			end
+		end
+
+		setmetatable(info, newMetaTable)
+	end
+end
+
+return M, T

@@ -1,0 +1,214 @@
+local M = class("BattleBullet_PlasmaTest", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local TablePool = TablePool
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local BattleMathLib = BattleMathLib
+local MAX_LOCKON_COUNT = 2
+local BASE_RADIUS = 0.75
+local STEP_LENGTH = 0.1
+local MAX_STEP_COUNT = 200
+local pointCount = 22
+local RopeSimulator = requireLua("RopeSimulator", true)
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._pBegan = Vector2.retain(0, 0)
+	self._pEnd = Vector2.retain(0, 0)
+	self._pTempEnd = Vector2.retain(0, 0)
+	self._p1 = Vector2.retain(0, 0)
+	self._p2 = Vector2.retain(0, 0)
+	self._lineXs = table.new(32, 0)
+	self._lineYs = table.new(32, 0)
+	self._ropeSimulator = RopeSimulator.new(pointCount)
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+	self._pBegan:Set(0, 0)
+	self._pEnd:Set(0, 0)
+	self._pTempEnd:Set(0, 0)
+	self._p1:Set(0, 0)
+	self._p2:Set(0, 0)
+	table.clear(self._lineXs)
+	table.clear(self._lineYs)
+
+	self._damageAddPer = 0
+	self._beganType = 1
+	self._beganTarget = nil
+	self._targetEnemy = nil
+	self._isMain = nil
+	self._subType = 0
+
+	self._pEnd:Set(self._battleWeapon._shootPos.x, self._battleWeapon._shootPos.y)
+	self._pTempEnd:Set(self._battleWeapon._shootPos.x, self._battleWeapon._shootPos.y)
+	self._ropeSimulator:init(self._battleWeapon._shootPos.x, self._battleWeapon._shootPos.y)
+	self._ropeSimulator:setGravityDirection(self._dir[1], self._dir[2])
+
+	self._battleWeapon._tttttt = self
+end
+
+local STEP = 5
+
+function M:setLineBeganTarget(target)
+	self._beganType = 2
+	self._beganTarget = target
+	local x = self._battleWeapon._tttttt._pTempEnd.x
+	local y = self._battleWeapon._tttttt._pTempEnd.y
+
+	self._ropeSimulator:init(x, y)
+end
+
+function M:setLineBegan(x1, y1)
+	self._beganType = 1
+	self._pBegan.x = x1
+	self._pBegan.y = y1
+	self._ctrlFlag = self._battleRandomLib:randomTrue()
+
+	self._ropeSimulator:changeStartPoint(x1, y1)
+	self._ropeSimulator:resetAllPoints2Start()
+end
+
+function M:setTargetEnemy(enemy)
+	self._targetEnemy = enemy
+	local x_e, y_e = enemy:hitPosition()
+
+	self._pEnd:Set(x_e, y_e)
+end
+
+function M:stepMove(dt)
+	local targetEnemy = self._targetEnemy
+
+	if targetEnemy == nil then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	if self._subType == 2 and (targetEnemy._isToBeDestroyed or self._beganTarget._isToBeDestroyed) then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	if targetEnemy._isToBeDestroyed then
+		if self._isMain then
+			local targetEnemy = self._battleWeapon:onMainEnemyKilled(self, targetEnemy)
+			self._targetEnemy = targetEnemy
+
+			if targetEnemy == nil then
+				self:markToBeDestroyed()
+
+				return
+			end
+
+			self:tryResetDamageAddPer(targetEnemy)
+		else
+			local targetEnemy = self._battleWeapon:onSubEnemyKilled(self, targetEnemy)
+			self._targetEnemy = targetEnemy
+
+			if targetEnemy == nil then
+				self:markToBeDestroyed()
+
+				return
+			end
+
+			return
+		end
+	end
+
+	local x_e, y_e = targetEnemy:hitPosition()
+
+	self._pEnd:Set(x_e, y_e)
+
+	local hardNess = 1
+	local targetMoveSpeed = 0.16666666666666666
+	local ctrlMoveSpeed = 0.08333333333333333
+	local ctrlFactor = 1
+	self._pTempEnd.x = Mathf.SmoothStep(self._pTempEnd.x or self._pTempEnd.x, self._pEnd.x, targetMoveSpeed)
+	self._pTempEnd.y = Mathf.SmoothStep(self._pTempEnd.y or self._pTempEnd.y, self._pEnd.y, targetMoveSpeed)
+
+	self._ropeSimulator:changeEndPoint(self._pTempEnd.x, self._pTempEnd.y)
+
+	local dir = self._battleWeapon._towardDir
+
+	self._ropeSimulator:simulateVerlet(dt)
+
+	if self._beganType == 2 then
+		self._ropeSimulator:changeStartPoint(self._battleWeapon._tttttt._pTempEnd.x, self._battleWeapon._tttttt._pTempEnd.y)
+	end
+
+	local c = 1
+
+	for t = 0, STEP * (pointCount - 2), STEP do
+		local point = self._ropeSimulator:getPoint(c)
+
+		if point == nil then
+			local aa = 1
+		end
+
+		local x, y = point.pos:Get()
+		self._lineXs[c] = x
+		self._lineYs[c] = y
+		c = c + 1
+	end
+
+	self._count = c - 1
+
+	if self._view then
+		self._view:stepMoveEvent()
+	end
+end
+
+function M:checkEnemyCollision()
+	if self._targetEnemy == nil then
+		return
+	end
+
+	if self._targetEnemy._isToBeDestroyed then
+		return
+	end
+
+	local enemy = self._targetEnemy
+
+	enemy:onHit(self)
+	self:hitEnemy(enemy)
+	self:tryResetDamageAddPer(enemy)
+
+	if self._damageNum == 1 then
+		self:tryTriggerWhenFirstHitEnemy(enemy)
+	end
+
+	self:tryTriggerWhenHitEnemy(enemy)
+end
+
+function M:tryResetDamageAddPer(enemy)
+	local effect = self._battleWeapon:getEffect(701)
+
+	if not effect and enemy._isToBeDestroyed then
+		self._damageAddPer = 0
+	end
+end
+
+function M:markToBeDestroyed()
+	if self._subType == 2 then
+		SUPER.markToBeDestroyed(self)
+
+		return
+	end
+
+	if not self._isMain then
+		self._isToBeDestroyed = true
+
+		if self._view then
+			self._view:destroyedEvent()
+		end
+
+		return
+	end
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

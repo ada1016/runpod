@@ -1,0 +1,52 @@
+local M = class("ArkRebulidModuleListWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ArkModuleListWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init()
+end
+
+function M:updateUI(id, status)
+	self._id = id
+
+	LuaUnity.setTPSprite(self._imgIcon, string.format("weekend/Module-%d", id), true)
+	self._txtName:SetLocalize(D._arkRebuildModuleConfig[id]._nameSid)
+	self._txtDesc:SetLocalize(D._arkRebuildModuleConfig[id]._descSid)
+
+	if status == 1 then
+		self._imgNotOwn:SetActive(false)
+		self._imgBan:SetActive(false)
+	elseif status == 2 then
+		self._imgNotOwn:SetActive(true)
+		self._imgBan:SetActive(false)
+	else
+		self._imgNotOwn:SetActive(true)
+		self._imgBan:SetActive(true)
+	end
+end
+
+function M:showSwitch(panel)
+	self._isOff = P._playerActivityArkRebuild:isModuleOff(self._id)
+
+	self._goSwitch:SetActive(true)
+	self._goSwitchOff:SetActive(self._isOff)
+	self._goSwitchOn:SetActive(not self._isOff)
+	self._imgBan:SetActive(false)
+	panel:setClickWithoutAction(self._btnSwitch, function ()
+		P._playerActivityArkRebuild:setModuleOff(self._id, not self._isOff)
+
+		self._isOff = not self._isOff
+
+		self._goSwitchOff:SetActive(self._isOff)
+		self._goSwitchOn:SetActive(not self._isOff)
+		self._imgBan:SetActive(false)
+	end)
+end
+
+return M

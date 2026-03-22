@@ -1,0 +1,327 @@
+local M = class("SparkScoutStorePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	goResDiamond = Types.GameObject,
+	goResSPGold = Types.GameObject,
+	tfTabs = Types.Transform,
+	scroll = Types.ScrollRect,
+	tfPageContainer = Types.Transform,
+	btnPageBP = Types.Button,
+	btnPageShop = Types.Button,
+	btnPageExchange = Types.Button,
+	imgArrow = Types.Image,
+	imgBottomBg = Types.Image
+}
+local PAGE_PREFAB_PATH_HOLDER = "Assets/FW/Prefabs/UI/page/%s.prefab"
+local BottomColors = {
+	cyan = {
+		IconBg = "397667",
+		TitleUnselect = "2f736c",
+		ReturnBg = "162121",
+		IconBottom = "6BFFD9",
+		ReturnArrow = "52978A",
+		IconTop = "4ECCAC",
+		Title = "7CFFF1"
+	},
+	purple = {
+		IconBg = "4d2c8e",
+		TitleUnselect = "7a4f99",
+		ReturnBg = "190D22",
+		IconBottom = "C488FF",
+		ReturnArrow = "704480",
+		IconTop = "975DFF",
+		Title = "c17cff"
+	},
+	red = {
+		IconBg = "572B33",
+		TitleUnselect = "905368",
+		ReturnBg = "211515",
+		IconBottom = "EC98BB",
+		ReturnArrow = "954D58",
+		IconTop = "CA6084",
+		Title = "EE88AA"
+	},
+	blue = {
+		IconBg = "3F4DA1",
+		TitleUnselect = "406198",
+		ReturnBg = "141823",
+		IconBottom = "73AAFF",
+		ReturnArrow = "5E7CF1",
+		IconTop = "4F94FF",
+		Title = "83B2FF"
+	},
+	sparkRed = {
+		IconBg = "A6637C",
+		TitleUnselect = "B0718A",
+		ReturnBg = "211620",
+		IconBottom = "D493B0",
+		ReturnArrow = "9C568C",
+		IconTop = "B95D8B",
+		Title = "FFACD2"
+	}
+}
+local PageCfg = {
+	{
+		PanelName = "SparkScoutShopPage",
+		Color = BottomColors.sparkRed,
+		BtnShowCond = function ()
+			if P._playerActivitySparkScout:isBeta() then
+				return false
+			end
+
+			return true
+		end,
+		RedCond = function ()
+			return P._playerActivitySparkScout:hasOpenPackDot()
+		end
+	},
+	{
+		PanelName = "BattlePassSparkScoutPanel",
+		Color = BottomColors.sparkRed,
+		BtnShowCond = function ()
+			if P._playerActivitySparkScout:isBeta() then
+				return false
+			end
+
+			return P._playerBPSparkScout:isStatusOpen() or P._playerBPSparkScout:isStatusExpired()
+		end,
+		RedCond = function ()
+			if P._playerActivitySparkScout:isBeta() then
+				return false
+			end
+
+			return P._playerBPSparkScout:isStatusOpen() and P._playerBPSparkScout:haveUnclaimRewards()
+		end
+	},
+	{
+		PanelName = "ExchangeGroupPage_SparkScout",
+		Color = BottomColors.sparkRed,
+		ParamsFunc = function ()
+			return P._playerActivitySparkScout:readExchangeGroup()
+		end,
+		BtnShowCond = function ()
+			if P._playerActivitySparkScout:isBeta() then
+				return false
+			end
+
+			return true
+		end,
+		RedCond = function ()
+			if P._playerActivitySparkScout:isBeta() then
+				return false
+			end
+
+			return false
+		end
+	}
+}
+local PageNum = #PageCfg
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._pages = {}
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.spark_scout_key or cid == D.ResType.spark_scout_sp_key or cid == D.ResType.spark_scout_wafer then
+			self:updateReddots()
+		end
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	self._btnPages = {
+		self._btnPageShop,
+		self._btnPageBP,
+		self._btnPageExchange
+	}
+
+	for i = 1, PageNum do
+		self:setClick(self._btnPages[i], function ()
+			self:changePage(i)
+		end)
+	end
+end
+
+function M:init(showPage)
+	self._pageIdx = 0
+	showPage = showPage or 1
+	self._jumpBP = showPage == 2
+
+	self:changePage(showPage, true)
+	self:updateBottomArea()
+end
+
+function M:closePanel()
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnPanelOpened()
+	local lb = self._pages[self._pageIdx]
+
+	if lb.OnPageOpened then
+		lb:OnPageOpened()
+	end
+end
+
+function M:updateUI()
+end
+
+function M:changePage(pageIdx, isStartPage)
+	if pageIdx == self._pageIdx then
+		return
+	end
+
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage then
+		lastPage:hideInternal()
+	end
+
+	self._pageIdx = pageIdx
+	local lb = self:getOrCreatePage(pageIdx)
+	self._lastPage = lb
+
+	Client.playSound("ui_Open_Gift_1")
+
+	if not isStartPage then
+		self:OnPanelOpened()
+	end
+
+	self:updateBottomArea()
+
+	if isStartPage then
+		LuaUnity.forceRebuildLayoutImmediate(self._scroll.transform:GetChild(0):GetChild(0))
+	end
+
+	self:focusTab(isStartPage)
+
+	if PageCfg[pageIdx].PanelName == "BattlePassArkRebuildPanel" then
+		self._goResDiamond:SetActive(true)
+		self._goResSPGold:SetActive(false)
+	else
+		self._goResDiamond:SetActive(false)
+		self._goResSPGold:SetActive(true)
+	end
+
+	self._goResSPGold.transform.parent:SetActive(PageCfg[pageIdx].PanelName ~= "ExchangeGroupPage")
+end
+
+function M:getOrCreatePage(index)
+	local lb = self._pages[index]
+
+	if lb == nil then
+		local go = LuaUnity.createGameObject(string.format(PAGE_PREFAB_PATH_HOLDER, PageCfg[index].PanelName), self._tfPageContainer)
+		lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self, PageCfg[index].ParamsFunc and PageCfg[index].ParamsFunc() or nil, self._jumpBP)
+
+		self._pages[index] = lb
+	else
+		lb:showInternal(PageCfg[index].ParamsFunc and PageCfg[index].ParamsFunc() or nil)
+	end
+
+	return lb
+end
+
+function M:updateReddots()
+	for i = 1, PageNum do
+		local btn = self._btnPages[i]
+		local showRed = PageCfg[i].RedCond and PageCfg[i].RedCond()
+
+		btn.dot:SetVisible(showRed)
+	end
+end
+
+function M:updateBottomArea()
+	local colors = PageCfg[self._pageIdx].Color
+
+	for i = 1, PageNum do
+		local canShow = true
+		local btn = self._btnPages[i]
+
+		btn.transform:Find("ImgLock"):SetActive(self._pageIdx ~= i)
+
+		local tmp = btn.transform:Find("tmp"):GetComponent("TMP_Text")
+		local gradient = btn.transform:Find("ImgIcon"):GetComponent("UIGradient")
+		local imgBtnBg = btn.transform:GetComponent("Image")
+		imgBtnBg.color = Color.str2Static(colors.IconBg)
+		gradient.m_color1 = Color.str2Static(colors.IconTop)
+		gradient.m_color2 = Color.str2Static(colors.IconBottom)
+		gradient.enabled = false
+		gradient.enabled = true
+		tmp.color = self._pageIdx == i and Color.str2Static(colors.Title) or Color.str2Static(colors.TitleUnselect)
+		btn.interactable = canShow
+
+		if PageCfg[i].BtnShowCond then
+			btn.transform:SetActive(canShow and PageCfg[i].BtnShowCond())
+		else
+			btn.transform:SetActive(canShow)
+		end
+	end
+
+	self._imgArrow.color = Color.str2Static(colors.ReturnArrow)
+	self._imgBottomBg.color = Color.str2Static(colors.ReturnBg)
+
+	self:updateReddots()
+end
+
+function M:focusTab(ignoreAnim)
+	local btn = self._btnPages[self._pageIdx]
+	local tf = btn.transform
+	local tfContainer = tf.parent
+	local tfViewport = tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tf)
+	local w1 = tfContainer.rect.width
+	local w2 = tfViewport.rect.width
+	local x2, y2, z2 = lc.getAnchoredPosition(tfContainer)
+	local halfBtn = 65
+	local distanceToLeft = w1 - x2 - w2 - x1
+	local notInRange = w2 < w1 and (distanceToLeft + halfBtn >= 0 or distanceToLeft + w2 - halfBtn <= 0)
+
+	if notInRange then
+		local moveSpeed = 400
+		local moveDistance, targetX = nil
+
+		if distanceToLeft + halfBtn >= 0 then
+			moveDistance = math.abs(distanceToLeft + halfBtn)
+			targetX = Mathf.Clamp(x2 + distanceToLeft + halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+
+				return
+			end
+
+			tfContainer:DOAnchorPosX(targetX, moveDistance / moveSpeed):SetLink(self.gameObject)
+		else
+			moveDistance = math.abs(distanceToLeft + w2 - halfBtn)
+			targetX = Mathf.Clamp(x2 + distanceToLeft + w2 - halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+
+				return
+			end
+
+			tfContainer:DOAnchorPosX(targetX, moveDistance / moveSpeed):SetLink(self.gameObject)
+		end
+	end
+end
+
+return M

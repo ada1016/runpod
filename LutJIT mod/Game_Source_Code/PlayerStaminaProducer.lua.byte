@@ -1,0 +1,317 @@
+local M = class("PlayerStaminaProducer")
+
+local function genData(type, genTime, num)
+	return {
+		type = type,
+		time = genTime,
+		num = num
+	}
+end
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.cached = self._meta.cached or {}
+	self._meta.lastSendTime = self._meta.lastSendTime or C.getCurTime()
+	self._meta.lastSendType = self._meta.lastSendType or 0
+	self._cached = self._meta.cached
+	self._typesNum = lc.lenTable(D._globalConfig._stamina_producer_daily_send_time)
+	self._nextSendIdx = nil
+	self._expireDeltaTime = D._globalConfig._stamina_producer_expire_time * D.DAY_SECONDS
+	self._showReddot = false
+end
+
+function M:start()
+	self:handleExpire()
+	self:handleGenNext()
+	self:updateGenNext()
+
+	if self:getCacheNum() > 0 then
+		self._showReddot = true
+	end
+end
+
+function M:dailyReset()
+end
+
+function M:showRedDot()
+	return self._showReddot and self:getCacheNum() > 0
+end
+
+function M:resetRedDot()
+	if not self._showReddot then
+		self._showReddot = true
+
+		SimpleEvent.emit("stamina.produce.reddot")
+	end
+end
+
+function M:clearRedDot()
+	if self._showReddot then
+		self._showReddot = false
+
+		SimpleEvent.emit("stamina.produce.reddot")
+	end
+end
+
+function M:updateGenNext()
+	GameClock:removeTimeCallback("stamina.produce.next")
+
+	local ct = C.getCurTime()
+	local idx = self:findNextSendTimeIdx(ct)
+	self._nextSendIdx = idx
+	local genTime = self:getGenTime(ct, idx)
+
+	GameClock:registerTimeCallback("stamina.produce.next", genTime, function ()
+		self:handleExpire()
+		self:handleGenNext()
+		self:updateGenNext()
+		SimpleEvent.emit("stamina.produce.change")
+	end)
+end
+
+function M:updateExpire()
+	GameClock:removeTimeCallback("stamina.produce.expire")
+
+	local data = self:getCachedData(1)
+	local haveExpire = data ~= nil
+
+	if not haveExpire then
+		return
+	end
+
+	local expireTime = data.time + self:readExpireTime()
+
+	GameClock:registerTimeCallback("stamina.produce.expire", expireTime, function ()
+		self:handleExpire(expireTime)
+		self:updateExpire()
+		SimpleEvent.emit("stamina.produce.change")
+	end)
+end
+
+function M:claim(idx)
+	if not self._meta.cached[idx] then
+		return
+	end
+
+	local data = self._meta.cached[idx]
+	local num = data.num
+	local rewards = P._playerAsset:increaseAssetNum(D.ResType.energy, num, D.LogWay.canteen)
+
+	table.remove(self._meta.cached, idx)
+	TaskHelper:increaseTaskValue(D.TaskType.CLAIM_STAMINA_PRODUCER, 1)
+
+	if self:getCacheNum() == 0 then
+		self:clearRedDot()
+	end
+
+	SimpleEvent.emit("stamina.produce.change")
+
+	return rewards
+end
+
+function M:claimAll()
+	local totalNum = 0
+	local claimNum = 0
+
+	for k, v in pairs(self._meta.cached) do
+		claimNum = claimNum + 1
+		totalNum = totalNum + v.num
+		self._meta.cached[k] = nil
+	end
+
+	TaskHelper:increaseTaskValue(D.TaskType.CLAIM_STAMINA_PRODUCER, claimNum)
+
+	local rewards = P._playerAsset:increaseAssetNum(D.ResType.energy, totalNum, D.LogWay.canteen)
+
+	self:clearRedDot()
+	SimpleEvent.emit("stamina.produce.change")
+
+	return rewards
+end
+
+function M:handleGenNext()
+	local max = self:readMax()
+	local len = #self._cached
+
+	if max <= len then
+		return
+	end
+
+	local canGenNum = max - len
+	local ct = C.getCurTime()
+	local lastSend = self._meta.lastSendTime
+	local lastSendZeroTime = C.getZeroTimestamp(lastSend)
+	local lastSendType = self._meta.lastSendType
+	local newSendTime = ct
+	local newZeroTime = C.getZeroTimestamp(newSendTime)
+	local newSendType = self:findLastSendTimeIdx(newSendTime)
+	local addNum = 0
+	local crossDay = D.DAY_SECONDS < ct - lastSendZeroTime
+	local day = 0
+	local expireTime = ct - self:readExpireTime()
+	self._meta.lastSendType = newSendType
+	self._meta.lastSendTime = newSendTime
+
+	for i = 1, 33 do
+		if canGenNum <= addNum then
+			break
+		end
+
+		local deltaTime = self:getSendTimeByIdx(newSendType)
+		local sendTime = newZeroTime + deltaTime - day * D.DAY_SECONDS
+
+		if lastSend > sendTime or sendTime < expireTime then
+			break
+		end
+
+		if sendTime <= ct then
+			self._cached[#self._cached + 1] = genData(newSendType, sendTime, self:readSendNum(newSendType))
+			addNum = addNum + 1
+		end
+
+		newSendType = newSendType - 1
+
+		if newSendType < 1 then
+			newSendType = self._typesNum
+
+			if crossDay then
+				day = day + 1
+			else
+				break
+			end
+		end
+	end
+
+	if addNum > 0 then
+		self:resetRedDot()
+	end
+
+	if addNum > 1 then
+		table.sort(self._cached, function (a, b)
+			return a.time < b.time
+		end)
+	end
+end
+
+function M:handleExpire(expireTime)
+	if self:getCacheNum() == 0 then
+		return
+	end
+
+	local ct = expireTime or C.getCurTime()
+	local remove2Idx = 0
+
+	for i, data in ipairs(self._cached) do
+		if ct >= data.time + self:readExpireTime() then
+			remove2Idx = i
+		else
+			break
+		end
+	end
+
+	if remove2Idx > 2 then
+		local newTable = {}
+
+		for i, data in ipairs(self._cached) do
+			if i > remove2Idx then
+				newTable[#newTable + 1] = data
+			end
+		end
+
+		self._meta.cached = newTable
+		self._cached = self._meta.cached
+	else
+		for i = 1, remove2Idx do
+			table.remove(self._cached, 1)
+		end
+	end
+
+	if self:getCacheNum() == 0 then
+		self:clearRedDot()
+	end
+end
+
+function M:getCacheNum()
+	return #self._cached
+end
+
+function M:getCachedData(idx)
+	return self._cached[idx]
+end
+
+function M:findLastSendTimeIdx(ct)
+	ct = ct or C.getCurTime()
+	local zeroTime = C.getZeroTimestamp(ct)
+	local idx = 1
+	local len = lc.lenTable(D._globalConfig._stamina_producer_daily_send_time)
+
+	for i = 1, len do
+		local v = D._globalConfig._stamina_producer_daily_send_time[i]
+		local sendTime = zeroTime + 3600 * v
+
+		if ct < sendTime then
+			break
+		end
+
+		idx = i
+	end
+
+	return idx
+end
+
+function M:findNextSendTimeIdx(ct)
+	ct = ct or C.getCurTime()
+	local zeroTime = C.getZeroTimestamp(ct)
+	local idx = 1
+	local len = lc.lenTable(D._globalConfig._stamina_producer_daily_send_time)
+
+	for i = 1, len do
+		local v = D._globalConfig._stamina_producer_daily_send_time[i]
+		local sendTime = zeroTime + 3600 * v
+
+		if ct < sendTime then
+			idx = i
+
+			break
+		end
+	end
+
+	return idx
+end
+
+function M:getLastSendTime()
+	return self._meta.lastSendTime
+end
+
+function M:getNextSendIdx()
+	return self._nextSendIdx
+end
+
+function M:getGenTime(timestamp, idx)
+	return C.getZeroTimestamp(timestamp) + self:getSendTimeByIdx(idx)
+end
+
+function M:getSendTimeByIdx(idx)
+	return 3600 * D._globalConfig._stamina_producer_daily_send_time[idx]
+end
+
+function M:readMax()
+	return D._globalConfig._stamina_producer_cache_max
+end
+
+function M:readSendNum(idx)
+	return D._globalConfig._stamina_producer_daily_send_num[idx]
+end
+
+function M:readExpireTime()
+	return self._expireDeltaTime
+end
+
+function M:readSendLen()
+	return lc.lenTable(D._globalConfig._stamina_producer_daily_send_time)
+end
+
+return M

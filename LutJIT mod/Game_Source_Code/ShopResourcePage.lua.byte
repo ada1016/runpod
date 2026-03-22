@@ -1,0 +1,827 @@
+local M = class("ShopResourcePage", requireLua("BasePanel"))
+local Types = Types
+local MissionGiftWidget = requireLua("MissionGiftWidget")
+M.args = {
+	tfScroll = Types.Transform,
+	tfContent = Types.Transform,
+	goRectMask = Types.GameObject,
+	textDrawDesc1 = Types.TMP_Text,
+	textDrawDesc2 = Types.TMP_Text,
+	goDrawBoxArea = Types.GameObject,
+	btnRareChip = Types.Button,
+	btnAdDrawPurple = Types.Button,
+	btnDrawPurple1 = Types.Button,
+	btnDrawPurple10 = Types.Button,
+	tfDrawPurple1 = Types.Transform,
+	tfDrawPurple10 = Types.Transform,
+	btnOpenBoxRatePurple = Types.Button,
+	txtAdCountdownPurple = Types.TMP_Text,
+	txtAdCountdownGold = Types.TMP_Text,
+	btnAdDrawGold = Types.Button,
+	btnDrawGold1 = Types.Button,
+	btnDrawGold10 = Types.Button,
+	tfDrawGold1 = Types.Transform,
+	tfDrawGold10 = Types.Transform,
+	btnOpenBoxRateGold = Types.Button,
+	goMaterialArea = Types.GameObject,
+	goMsGiftArea = Types.GameObject,
+	atorMsGift = Types.Animator,
+	goMsGiftReal = Types.GameObject,
+	goMsGiftFake = Types.GameObject,
+	goLastMs = Types.GameObject,
+	goNextMs = Types.GameObject,
+	btnLastMsGift = Types.Button,
+	btnNextMsGift = Types.Button,
+	btnBuyMsGift = Types.Button,
+	btnDrawExtraRewards = Types.Button,
+	pgsDrawExtra = Types.Image,
+	imgDrawExtraIcon = Types.Image,
+	txtDrawExtra = Types.TMP_Text,
+	goMaterials = Types.GameObject,
+	tfMaterials = Types.Transform,
+	goDiamondArea = Types.GameObject,
+	tfDiamonds = Types.Transform,
+	tfDiamondBig = Types.Transform,
+	tfGolds = Types.Transform,
+	btnAdGold = Types.Button,
+	btnFreeGold = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRectMask:GetComponent("RectMask2D").enabled = true
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnAdDrawPurple, function ()
+		local num = P._playerShop:getAdDrawLeftNum(D.BoxType.Purple)
+
+		if num == 0 then
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.Shop_Ad_Draw_Purple, function ()
+			self:drawBox(D.BoxType.Purple, 1, true)
+			self:updateAdDrawBoxBtn()
+		end)
+	end)
+	self:setClick(self._btnRareChip, function ()
+		UIManager.openPanel(PrefabDefine.ChipRareOverviewPanel)
+	end)
+	self:setClick(self._btnDrawPurple1, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawBox(D.BoxType.Purple, 1)
+		end)
+	end)
+	self:setClick(self._btnDrawPurple10, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawBox(D.BoxType.Purple, 10)
+		end)
+	end)
+	self:setClick(self._btnOpenBoxRatePurple, function ()
+		UIManager.openPanel(PrefabDefine.BoxOddsPanel, SID.SHOP_BOX_TITLE1, P._playerShop:getDrawShowDropId(D.BoxType.Purple))
+	end)
+	self:setClick(self._btnAdDrawGold, function ()
+		local num = P._playerShop:getAdDrawLeftNum(D.BoxType.Gold)
+
+		if num == 0 then
+			V.showResultCode(ResultCode.AD_NUM_MAX)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.Shop_Ad_Draw_Gold, function ()
+			self:drawBox(D.BoxType.Gold, 1, true)
+			self:updateAdDrawBoxBtn()
+		end)
+	end)
+	self:setClick(self._btnDrawGold1, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawBox(D.BoxType.Gold, 1)
+		end)
+	end)
+	self:setClick(self._btnDrawGold10, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawBox(D.BoxType.Gold, 10)
+		end)
+	end)
+	self:setClick(self._btnOpenBoxRateGold, function ()
+		UIManager.openPanel(PrefabDefine.BoxOddsPanel, SID.SHOP_BOX_TITLE2, P._playerShop:getDrawShowDropId(D.BoxType.Gold))
+	end)
+	self:setClick(self._btnNextMsGift, function ()
+		self:showNextMsGift()
+	end)
+	self:setClick(self._btnLastMsGift, function ()
+		self:showLastMsGift()
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateAdDrawBoxBtn()
+		self:updateGoldArea()
+		self:updateMaterialArea()
+	end)
+	self:on("rightcard.update", function ()
+		self:updateAdDrawBoxBtn()
+		self:updateGoldArea()
+		self:updateShopTop()
+	end)
+	self:on("drawbox.update", function ()
+		self:updateDrawArea()
+	end)
+	self:on("exchange.success", function (exchangeId)
+		if math.floor(exchangeId / 100) * 100 == D.ExchangeId.MaterialType then
+			self:updateMaterialArea()
+		end
+	end)
+	self:on("iap.purchase.success", function (iapId)
+		if D.isDiamondIap(iapId) then
+			local idx = iapId - D.IapType.Diamond1 + 1
+
+			self:updateDiamondWidget(self._tfDiamonds:GetChild(idx - 1), idx)
+		end
+
+		self:updateDiamondBigArea()
+	end)
+	self:on("iap.diamond.refresh", function ()
+		self:updateDiamondArea()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.key_gold or cid == D.ResType.key_purple then
+			self:updateDrawText()
+		end
+	end)
+end
+
+function M:init(parentPage)
+	self._parentPage = parentPage
+
+	self:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+
+	if V._shop_jumpDiamond then
+		V._shop_jumpDiamond = nil
+
+		lc.setAnchoredPosition(self._tfContent, 0, 1000)
+	else
+		lc.setAnchoredPosition(self._tfContent, 0, -100)
+	end
+
+	self:updateShopTop()
+	self:updateUI()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._timer)
+	M.super.hideInternal(self)
+end
+
+function M:updateShopTop()
+	local isForever = P._playerRight:isForever(D.RightCardType.SVIP)
+
+	if C.isInReview() then
+		isForever = true
+	end
+
+	if isForever then
+		lc.setSizeDelta(self._tfScroll, 0, 0)
+		lc.setAnchoredPosition(self._tfScroll, 0, 0)
+	else
+		lc.setSizeDelta(self._tfScroll, 0, -222)
+		lc.setAnchoredPosition(self._tfScroll, 0, -111)
+	end
+end
+
+function M:updateTime()
+	local ct = C.getCurTime()
+	local dt = self._zeroTime - ct
+	local leftNum1 = P._playerShop:getAdDrawLeftNum(D.BoxType.Purple)
+
+	if leftNum1 == 0 then
+		self._txtAdCountdownPurple.text = V.formatTimeS2HMS(dt)
+	end
+
+	local leftNum2 = P._playerShop:getAdDrawLeftNum(D.BoxType.Gold)
+
+	if leftNum2 == 0 then
+		self._txtAdCountdownGold.text = V.formatTimeS2HMS(dt)
+	end
+end
+
+function M:drawBox(boxType, num, isAd)
+	if lc.isNetworkNotReachable() then
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+
+		return
+	end
+
+	local useDiamond = false
+	local diamondCost = D._globalConfig._draw_box_cost_diamonds[boxType] * num
+	local ret = P._playerShop:checkDrawBox(boxType, num)
+
+	if not isAd and ret ~= ResultCode.OK then
+		useDiamond = true
+		local ret = P._playerShop:checkDrawBox(boxType, num, true)
+
+		if ret ~= ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+				self:updateDrawText()
+			end)
+
+			return
+		end
+	end
+
+	if useDiamond then
+		local ret = V.tryShowDiamondConfirm(D.ResType.diamond, diamondCost, function ()
+			self:drawBoxLogic(boxType, num, isAd)
+		end)
+
+		if ret then
+			return
+		end
+	end
+
+	self:drawBoxLogic(boxType, num, isAd)
+end
+
+function M:drawBoxLogic(boxType, num, isAd)
+	local diamondCost = D._globalConfig._draw_box_cost_diamonds[boxType] * num
+	local ret = P._playerShop:checkDrawBox(boxType, num)
+
+	if not isAd and ret ~= ResultCode.OK then
+		local ret = P._playerShop:checkDrawBox(boxType, num, true)
+
+		if ret ~= ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+				self:updateDrawText()
+			end)
+
+			return
+		end
+	end
+
+	local rewards = P._playerShop:drawBox(boxType, num, isAd)
+
+	if boxType == D.BoxType.Purple then
+		UIManager.openPanel(PrefabDefine.OpenBoxPanel, boxType, rewards)
+	else
+		UIManager.openPanel(PrefabDefine.OpenBoxNewPanel, boxType, rewards)
+	end
+end
+
+function M:jump2Content(type)
+end
+
+function M:updateUI()
+	self:updateDrawArea()
+	self:updateMsGiftArea()
+	self:updateMaterialArea()
+	self:updateDiamondArea()
+	self:updateGoldArea()
+end
+
+function M:updateDrawArea()
+	local num1 = P._playerShop:getLeftMustDrawNum(D.BoxType.Purple)
+	local num2 = P._playerShop:getLeftMustDrawNum(D.BoxType.Gold)
+
+	self._textDrawDesc1:SetLocalize(SID.SHOP_BOX_DESC_NUM1, num1, -SID.SHOP_BOX_DESC1)
+	self._textDrawDesc2:SetLocalize(SID.SHOP_BOX_DESC_NUM2, num2, -SID.SHOP_BOX_DESC2)
+
+	self._zeroTime = C.getZeroTimestamp(C.getCurTime(), 1)
+
+	lc.stopTimer(self._timer)
+
+	if num1 > 0 or num2 > 0 then
+		self._timer = lc.setInterval(function ()
+			self:updateTime()
+		end, 0.1)
+
+		self._timer.func()
+	end
+
+	self:updateAdDrawBoxBtn()
+	self:updateDrawText()
+end
+
+function M:updateAdDrawBoxBtn()
+	local leftNum1 = P._playerShop:getAdDrawLeftNum(D.BoxType.Purple)
+	local leftNum2 = P._playerShop:getAdDrawLeftNum(D.BoxType.Gold)
+	local goBtnPurple = self._btnAdDrawPurple.gameObject
+
+	goBtnPurple:GetChild(0):SetActive(leftNum1 > 0 and not P._playerRight:isAdRemoved())
+	goBtnPurple:GetChild(1):SetActive(leftNum1 > 0 and P._playerRight:isAdRemoved())
+	goBtnPurple:GetChild(2):SetActive(leftNum1 == 0)
+
+	local goBtnGold = self._btnAdDrawGold.gameObject
+
+	goBtnGold:GetChild(0):SetActive(leftNum2 > 0 and not P._playerRight:isAdRemoved())
+	goBtnGold:GetChild(1):SetActive(leftNum2 > 0 and P._playerRight:isAdRemoved())
+	goBtnGold:GetChild(2):SetActive(leftNum2 == 0)
+end
+
+function M:updateDrawText()
+	local costCid = D.ResType.key_purple
+	local costNum = 1
+	local resultCode = P._playerShop:checkDrawBox(D.BoxType.Purple, 1)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfDrawPurple1, costCid, 1)
+	else
+		costCid = D.ResType.diamond
+		costNum = D._globalConfig._draw_box_cost_diamonds[D.BoxType.Purple]
+
+		V.loadItemNum(self._tfDrawPurple1, costCid, costNum)
+	end
+
+	local costCid = D.ResType.key_purple
+	local costNum = 1
+	local resultCode = P._playerShop:checkDrawBox(D.BoxType.Purple, 10)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfDrawPurple10, costCid, 10)
+	else
+		costCid = D.ResType.diamond
+		costNum = D._globalConfig._draw_box_cost_diamonds[D.BoxType.Purple]
+
+		V.loadItemNum(self._tfDrawPurple10, costCid, costNum * 10)
+	end
+
+	local costCid = D.ResType.key_gold
+	local costNum = 1
+	local resultCode = P._playerShop:checkDrawBox(D.BoxType.Gold, 1)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfDrawGold1, costCid, 1)
+	else
+		costCid = D.ResType.diamond
+		costNum = 1 * D._globalConfig._draw_box_cost_diamonds[D.BoxType.Gold]
+
+		V.loadItemNum(self._tfDrawGold1, costCid, costNum)
+	end
+
+	local costCid = D.ResType.key_gold
+	local costNum = 1
+	local resultCode = P._playerShop:checkDrawBox(D.BoxType.Gold, 10)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfDrawGold10, costCid, 10)
+	else
+		costCid = D.ResType.diamond
+		costNum = 1 * D._globalConfig._draw_box_cost_diamonds[D.BoxType.Gold]
+
+		V.loadItemNum(self._tfDrawGold10, costCid, costNum * 10)
+	end
+end
+
+function M:handleBuyMsGift()
+	local giftId = self._showMsGiftId
+
+	if not giftId or P._playerGift:isBought(giftId) then
+		return
+	end
+
+	if P._playerGift:isIapBuy(giftId) then
+		C.tryPurchase(P._playerGift:readIapId(giftId), function (iapId, rewards)
+			V.showRewardClaimPanel(rewards)
+			self:updateMsGiftArea()
+		end, D.PurchaseChannel.Shop)
+	elseif P._playerGift:isDiamondBuy(giftId) then
+		if P._playerGift:isBought(giftId) then
+			return
+		end
+
+		local needNum = P._playerGift:readBuyValue(giftId)
+		local enough = P._playerAsset:isAssetEnough(D.ResType.diamond, needNum)
+
+		if not enough then
+			UIManager.openPanel(PrefabDefine.DiamondPanel)
+
+			return
+		end
+
+		P._playerAsset:decreaseAssetNum(D.ResType.diamond, -needNum, D.LogWay.mission_gift)
+		P._playerGift:recordBuy(giftId)
+
+		local ret, rewards = P._playerGift:tryClaimRewards(giftId)
+
+		if ret == ResultCode.OK then
+			V.showRewardClaimPanel(rewards)
+		end
+
+		self:updateMsGiftArea()
+	end
+end
+
+function M:updateMsGiftArea()
+	local gifts = P._playerGift:getShowMSGifts()
+
+	if #gifts == 0 then
+		self._goMsGiftArea:SetActive(false)
+
+		return
+	end
+
+	self._goMsGiftArea:SetActive(true)
+
+	self._msGiftNum = #gifts
+	self._showMsGiftIdx = Mathf.Clamp(self._showMsGiftIdx or 1, 1, self._msGiftNum)
+	local giftId = gifts[self._showMsGiftIdx]
+	self._showMsGiftId = giftId
+
+	if not self._msAreaInited then
+		MissionGiftWidget.noCreate(self._goMsGiftReal)
+		MissionGiftWidget.noCreate(self._goMsGiftFake)
+
+		local tfRewards = self._goMsGiftReal._tfMsRewards
+		self._goMsItems = {}
+
+		for i = 1, tfRewards.childCount do
+			local go = tfRewards:GetChild(i - 1).gameObject
+			self._goMsItems[i] = go
+
+			self:setClick(go._btnClick, function ()
+				go:rewardclickCallback()
+			end)
+		end
+
+		self:setClick(self._goMsGiftReal._btnBuyMsGift, function ()
+			self:handleBuyMsGift()
+		end)
+
+		self._msAreaInited = true
+	end
+
+	self._goMsGiftReal:updateUI(self._showMsGiftId)
+	self._goLastMs:SetActive(self._showMsGiftIdx > 1)
+	self._goNextMs:SetActive(self._showMsGiftIdx < self._msGiftNum)
+end
+
+function M:showNextMsGift()
+	self._goMsGiftFake:updateUI(self._showMsGiftId)
+
+	self._showMsGiftIdx = Mathf.Clamp(self._showMsGiftIdx + 1, 1, self._msGiftNum)
+
+	self._goMsGiftReal:updateUI(self._showMsGiftId)
+	self._atorMsGift:ResetTrigger("Right")
+	self._atorMsGift:SetTrigger("Right")
+	self:updateMsGiftArea()
+end
+
+function M:showLastMsGift()
+	self._goMsGiftFake:updateUI(self._showMsGiftId)
+
+	self._showMsGiftIdx = Mathf.Clamp(self._showMsGiftIdx - 1, 1, self._msGiftNum)
+
+	self._goMsGiftReal:updateUI(self._showMsGiftId)
+	self._atorMsGift:ResetTrigger("Left")
+	self._atorMsGift:SetTrigger("Left")
+	self:updateMsGiftArea()
+end
+
+function M:updateMaterialArea()
+	local showIds = P._playerExchange:getUnlockedExchangeIdsByType(2100)
+	local showNum = #showIds
+
+	self._goMaterialArea:SetActive(showNum > 0)
+
+	local copyGO = self._tfMaterials:GetChild(0).gameObject
+	local curCount = self._tfMaterials.childCount
+
+	for i = 1, math.max(curCount, showNum) do
+		local tf = nil
+
+		if curCount < i then
+			local go = GameObject.Instantiate(copyGO, self._tfMaterials)
+			tf = go.transform
+		else
+			tf = self._tfMaterials:GetChild(i - 1)
+		end
+
+		if i <= showNum then
+			local exchangeId = showIds[i]
+
+			self:updateMaterialWidget(self._tfMaterials:GetChild(i - 1), exchangeId)
+			tf:SetActive(true)
+		else
+			tf:SetActive(false)
+		end
+	end
+end
+
+function M:updateMaterialWidget(tfWidget, exchangeId)
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:Find("textLimit"):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local imgGetIcon = tf1:Find("Image"):GetComponent("Image")
+	local tfBtn = tfWidget:GetChild(1)
+	local tfImgAd = tfBtn:Find("icon")
+	local imgAd = tfImgAd:GetComponent("Image")
+	local clickbtn = tfWidget:GetComponent("Button")
+
+	tfImgAd:SetActive(true)
+
+	local textBtn = tfBtn:GetChild(2):GetComponent("TextMeshProUGUI")
+	imgAd.color = Color.White
+	local costCid, cost = P._playerExchange:readExchangeCost(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+	LuaUnity.setTPSprite(imgGetIcon, D.toSprite(getCid), true)
+
+	local limitNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local currentNum = P._playerExchange:getCurExchangeCount(exchangeId)
+	local str = V.getLeftStr(limitNum - currentNum, limitNum)
+
+	textLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+
+	if currentNum < limitNum then
+		tfBtn:GetChild(1):SetActive(true)
+
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+
+		V.loadItemNumWithLight(tfBtn, costCid, cost)
+
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_green)
+	else
+		tfBtn:GetChild(1):SetActive(false)
+
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+
+		textBtn:SetLocalize(SID.STR_SOLD_OUT)
+	end
+
+	self:setClick(clickbtn, function ()
+		if currentNum < limitNum then
+			UIManager.openPanel(PrefabDefine.ExchangeResourcePanel, exchangeId)
+		else
+			V.showResultCode(ResultCode.DAILY_NUM_MAX)
+
+			return
+		end
+	end)
+end
+
+function M:updateDiamondArea()
+	for i = 1, 6 do
+		self:updateDiamondWidget(self._tfDiamonds:GetChild(i - 1), i)
+	end
+
+	self:updateDiamondBigArea()
+
+	if C.isInReview() then
+		self._goDiamondArea:SetActive(false)
+	end
+end
+
+function M:updateDiamondBigArea()
+	local tfWidget = self._tfDiamondBig
+	local showBigDiamond = D._globalConfig._big_diamond_need_pay <= P._playerStore:getPayMoney()
+
+	tfWidget:SetActive(showBigDiamond)
+
+	if not showBigDiamond then
+		return
+	end
+
+	local iapId = D.IapType.Diamond7
+	local tf1 = tfWidget:GetChild(0):GetChild(0)
+	local tfExtra = tfWidget:GetChild(0):GetChild(1)
+	local textNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+
+	textNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(D._iapConfig[iapId]._cids[1]), D._iapConfig[iapId]._nums[1])
+
+	local isFirst = P._playerStore:getFirstPurchaseExtra(iapId)
+
+	tfExtra:SetActive(true)
+
+	local textExtra = tfExtra:GetChild(0):GetChild(0):GetComponent("TextMeshProUGUI")
+
+	if isFirst then
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._firstNums[1])
+	else
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._afterNums[1])
+	end
+
+	self:setClick(tfWidget:GetChild(0):GetComponent("Button"), function ()
+		C.tryPurchase(iapId, function (iapId, rewards)
+			self:updateDiamondBigArea()
+			V.showRewardClaimPanel(rewards)
+		end, D.PurchaseChannel.Shop)
+	end)
+
+	local tfBtn = tfWidget:GetChild(0):GetChild(3)
+	tfBtn:Find("text"):GetComponent("TextMeshProUGUI").text = P._playerStore:getDisplayPrice(iapId)
+
+	V.addRechargeScoreWidget(iapId, tfBtn)
+end
+
+function M:updateDiamondWidget(tfWidget, idx)
+	local iapId = D.IapType.Diamond1 + idx - 1
+	local tf1 = tfWidget:GetChild(0)
+	local tfExtra = tfWidget:GetChild(1)
+	local imgIcon = tf1:GetChild(1):GetComponent("Image")
+	local textNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+
+	textNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(D._iapConfig[iapId]._cids[1]), D._iapConfig[iapId]._nums[1])
+
+	local isFirst = P._playerStore:getFirstPurchaseExtra(iapId)
+
+	tfExtra:SetActive(true)
+
+	local textExtra = tfExtra:GetChild(0):GetChild(0):GetComponent("TextMeshProUGUI")
+
+	if isFirst then
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._firstNums[1])
+	else
+		textExtra:SetLocalize(SID.SHOP_EXTRA, D._iapConfig[iapId]._afterNums[1])
+	end
+
+	self:setClick(tfWidget:GetComponent("Button"), function ()
+		C.tryPurchase(iapId, function (iapId, rewards)
+			self:updateDiamondWidget(tfWidget, idx)
+			V.showRewardClaimPanel(rewards)
+		end, D.PurchaseChannel.Shop)
+	end)
+
+	local tfBtn = tfWidget:GetChild(2)
+	tfBtn:Find("text"):GetComponent("TextMeshProUGUI").text = P._playerStore:getDisplayPrice(iapId)
+
+	V.addRechargeScoreWidget(iapId, tfBtn)
+end
+
+function M:updateGoldArea()
+	self:updateGoldAd(self._tfGolds:GetChild(0))
+	self:updateGoldFree(self._tfGolds:GetChild(1))
+	self:updateGoldDiamond(self._tfGolds:GetChild(2), 1)
+	self:updateGoldDiamond(self._tfGolds:GetChild(3), 2)
+end
+
+function M:updateGoldAd(tfWidget)
+	local exchangeId = D.ExchangeId.AdFreeCoin
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:GetChild(1):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:GetChild(2):GetComponent("TextMeshProUGUI")
+	local tfBtn = tfWidget:GetChild(1)
+	local clickbtn = tfWidget:GetComponent("Button")
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	textLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+	V.loadAdButton1(tfBtn.gameObject, leftExchangeCount == 0)
+	self:setClick(clickbtn, function ()
+		local resultCode = P._playerExchange:checkExchange(exchangeId, 1)
+
+		if resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.Shop_Ad_Gold, function ()
+			local resultCode = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+				V.showRewardClaimPanel(rewards)
+				self:updateGoldAd(self._tfGolds:GetChild(0))
+			end)
+		end)
+	end)
+end
+
+function M:updateGoldFree(tfWidget)
+	local exchangeId = D.ExchangeId.FreeCoin
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:Find("textLimit"):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local tfBtn = tfWidget:GetChild(1)
+	local imgAd = tfBtn:Find("icon"):GetComponent("Image")
+	local textFree = tfBtn:Find("text"):GetComponent("TextMeshProUGUI")
+	local clickbtn = tfWidget:GetComponent("Button")
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	textLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+	clickbtn.dot:SetActive(leftExchangeCount > 0)
+	imgAd.gameObject:SetActive(false)
+
+	if leftExchangeCount == 0 then
+		textFree:SetLocalize(SID.STR_CLAIMED)
+
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+	else
+		textFree:SetLocalize(SID.STR_FREE)
+
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+	end
+
+	self:setClick(clickbtn, function ()
+		local resultCode = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+			V.showRewardClaimPanel(rewards)
+			self:updateGoldFree(tfWidget)
+			RedDotManager.update("city.shop.resource")
+		end)
+
+		if resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode)
+		end
+	end)
+end
+
+function M:updateGoldDiamond(tfWidget, idx)
+	local exchangeId = D.ExchangeId.DiamondExchangeCoin1 - 1 + idx
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:Find("textLimit"):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local tfExtra = tfWidget:GetChild(3)
+	local tfBtn = tfWidget:GetChild(1)
+	local tfImgAd = tfBtn:Find("icon")
+	local imgAd = tfImgAd:GetComponent("Image")
+	local clickbtn = tfWidget:GetComponent("Button")
+
+	tfImgAd:SetActive(true)
+
+	imgAd.color = Color.White
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+
+	V.loadItemNumWithLight(tfBtn, costCid, costNum)
+
+	tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+	tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+	textLimit.gameObject:SetActive(false)
+	self:setClick(clickbtn, function ()
+		local retCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+		if retCode ~= ResultCode.OK then
+			V.showResultCode(retCode, param)
+
+			return
+		end
+
+		local ret = V.tryShowDiamondConfirm(D.ResType.diamond, costNum, function ()
+			self:dealExchangeLogic(exchangeId)
+		end)
+
+		if not ret then
+			self:dealExchangeLogic(exchangeId)
+		end
+	end)
+	tfExtra:SetActive(true)
+	tfExtra:GetChild(0):GetComponent("TextMeshProUGUI"):SetLocalize(SID.SHOP_PRICE_OFF, P._playerExchange:readDiscount(exchangeId))
+end
+
+function M:dealExchangeLogic(exchangeId)
+	local retCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode, param)
+
+		return
+	end
+
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+	local resultCode = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+		V.showRewardClaimPanel(rewards)
+	end)
+
+	if resultCode ~= ResultCode.OK then
+		if resultCode == ResultCode.RESOURCE_NOT_ENOUGH and costCid == D.ResType.diamond then
+			UIManager.openPanel(PrefabDefine.DiamondPanel)
+
+			return
+		end
+
+		V.showResultCode(resultCode)
+	end
+end
+
+return M

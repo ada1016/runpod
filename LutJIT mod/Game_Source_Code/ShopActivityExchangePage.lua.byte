@@ -1,0 +1,430 @@
+local M = class("ShopActivityExchangePage", requireLua("BasePanel"))
+M.args = {
+	textExpireTime = Types.TMP_Text,
+	goExpireTime = Types.GameObject,
+	scrollTabs = Types.ScrollRect,
+	scroll = Types.ScrollRect,
+	tfTabContainer = Types.Transform,
+	tfContainer = Types.Transform,
+	goTemplate = Types.GameObject,
+	txtItemNum = Types.TMP_Text,
+	imgIcon = Types.Image,
+	goTipLeft = Types.GameObject,
+	goTipRight = Types.GameObject,
+	btnTipLeft = Types.Button,
+	btnTipRight = Types.Button
+}
+local CellWidget = requireLua("ExchangeGroupWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._exchangeIds = {}
+	self._module = P._playerExchange
+	local cellHeight = 150
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		cellHeight = cellHeight,
+		cellInitCount = showCount + 1
+	})
+	self._btnPages = {}
+
+	self._scrollTabs.onValueChanged:AddListener(function ()
+		self:onTabScroll()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		self:updatePageData()
+
+		if #self._pageData == 0 then
+			return
+		end
+
+		if not self._pageData[self._pageIdx] then
+			return
+		end
+
+		self:updateUI()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == self._exchangeCid then
+			self._txtItemNum.text = P._playerAsset:getAssetNum(cid)
+		end
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._imgIcon.transform:GetComponent("Button"), function ()
+		V.showItemInfoPanel(self._exchangeCid)
+	end)
+	self:setClick(self._btnTipLeft, function ()
+		self:jumpTipLeft()
+	end)
+	self:setClick(self._btnTipRight, function ()
+		self:jumpTipRight()
+	end)
+end
+
+function M:init()
+	self._pageIdx = 1
+
+	self:updatePageData()
+
+	if #self._pageData == 0 then
+		return
+	end
+
+	self:updateUI()
+	LuaUnity.forceRebuildLayoutImmediate(self._tfTabContainer)
+	self:onTabScroll()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+
+	self._pageIdx = 1
+
+	self:updatePageData()
+
+	if #self._pageData == 0 then
+		return
+	end
+
+	self:updateUI()
+	self:addEvents()
+	self:onTabScroll()
+end
+
+local SKIN_PASS_SHOP_TYPE = 10001
+
+function M:updatePageData()
+	self._pageData = P._playerActivity:getExchangeShopPageData()
+
+	if P._playerBPSkin:isStatusOpen() then
+		table.insert(self._pageData, {
+			type = SKIN_PASS_SHOP_TYPE,
+			exchangeGroup = D.ExchangeId.BP_Skin_Group,
+			remainTime = P._playerBPSkin:getExpireTime()
+		})
+	end
+
+	self._pageNum = #self._pageData
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:onTabScroll()
+	local showTab = self._pageNum > 3
+	local leftHideTab = 0
+	local rightHideTab = 0
+	self._leftTab = nil
+	self._rightTab = nil
+
+	if showTab then
+		for i = 1, self._pageNum do
+			local pageData = self._pageData[i]
+			local showDot = P._playerExchange:haveExchangeGroupDot(pageData.exchangeGroup) == true
+			local tfBtn = self._btnPages[i].transform
+			local ret = self:checkTabVisible(tfBtn)
+
+			if showDot then
+				if ret == 1 then
+					self._leftTab = tfBtn
+					leftHideTab = leftHideTab + 1
+				elseif ret == 2 then
+					self._rightTab = tfBtn
+					rightHideTab = rightHideTab + 1
+				end
+			end
+		end
+	end
+
+	self:showLeftTab(leftHideTab > 0)
+	self:showRightTab(rightHideTab > 0)
+end
+
+function M:showLeftTab(show)
+	if show == nil then
+		self._leftShow = show or false
+
+		self._goTipLeft:SetActive(self._leftShow)
+	else
+		if self._leftShow == show then
+			return
+		end
+
+		self._leftShow = show
+
+		self._goTipLeft:SetActive(show or false)
+	end
+end
+
+function M:showRightTab(show)
+	if show == nil then
+		self._rightShow = show
+
+		self._goTipRight:SetActive(self._rightShow)
+	else
+		if self._rightShow == show then
+			return
+		end
+
+		self._rightShow = show or false
+
+		self._goTipRight:SetActive(show or false)
+	end
+end
+
+function M:changePage(pageIdx)
+	if self._pageIdx == pageIdx then
+		return
+	end
+
+	if not self._pageData[self._pageIdx] then
+		return
+	end
+
+	self._pageIdx = pageIdx
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if #self._pageData == 0 then
+		return
+	end
+
+	local exchangeGroup = self._pageData[self._pageIdx].exchangeGroup
+	local ret = P._playerExchange:removeExchangeGroupDot(exchangeGroup)
+
+	if ret then
+		RedDotManager.update("city.shop.activityexchange")
+	end
+
+	local ids = self._module:getUnlockedExchangeIdsByType(exchangeGroup)
+	self._exchangeIds[self._pageIdx] = clone(ids)
+	local cid1, num1 = P._playerExchange:readExchangeCost(ids[1])
+	self._exchangeCid = cid1
+	self._txtItemNum.text = P._playerAsset:getAssetNum(cid1)
+
+	LuaUnity.setTPSprite(self._imgIcon, "item/item_" .. cid1, true)
+	self:updateBtns()
+	self._scrollViewEx:reloadData(0)
+	self:updateExpireTime()
+end
+
+function M:updateBtns()
+	for i = 1, math.max(self._pageNum, #self._btnPages) do
+		if i <= self._pageNum then
+			if not self._btnPages[i] then
+				local go = GameObject.Instantiate(self._goTemplate.gameObject, self._goTemplate.transform.parent)
+
+				go:SetActive(true)
+
+				self._btnPages[i] = go:GetComponent("Button")
+			end
+
+			self:setClick(self._btnPages[i], function ()
+				self:changePage(i)
+			end)
+
+			local type = self._pageData[i].type
+			local btn = self._btnPages[i]
+			local tmp = btn.transform:Find("tmp"):GetComponent("TMP_Text")
+
+			if type == SKIN_PASS_SHOP_TYPE then
+				tmp:SetLocalize(SID.SKINPASS_TITLE4)
+			else
+				local atype, subType = P._playerActivity:parseExchangeShopKey(type)
+
+				tmp:SetLocalize(P._playerActivity:readNameSid(atype, subType))
+			end
+
+			self:updatePageBtn(i)
+		else
+			local btn = self._btnPages[i]
+
+			btn.transform:SetActive(false)
+		end
+	end
+end
+
+function M:updatePageBtn(pageIdx)
+	local btn = self._btnPages[pageIdx]
+	local showDot = P._playerExchange:haveExchangeGroupDot(self._pageData[pageIdx].exchangeGroup) == true
+
+	btn.dot:SetVisible(showDot)
+
+	btn.transform:GetComponent("Image").color = Color.str2Static(pageIdx == self._pageIdx and "1C3E40" or "142C2E")
+
+	btn.transform:GetChild(0):SetActive(pageIdx == self._pageIdx)
+
+	btn.transform:GetChild(1):GetComponent("TMP_Text").color = Color.str2Static(pageIdx == self._pageIdx and "6DFFDD" or "4A8E7E")
+end
+
+function M:updateExpireTime(isInterval)
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime(true)
+		end, 0.5)
+	end
+
+	local pageData = self._pageData[self._pageIdx]
+
+	if not pageData then
+		return
+	end
+
+	local targetTime = pageData.remainTime
+	local atype, subType = P._playerActivity:parseExchangeShopKey(pageData.type)
+
+	if not isInterval then
+		self._goExpireTime:SetActive(targetTime ~= -1)
+
+		if targetTime == -1 then
+			return
+		end
+	end
+
+	local seconds = targetTime - C.getCurTime()
+	local d, h, m, s = C.getTimeEndArgs(seconds)
+
+	if atype == D.ActivityType.ArkRebuild or atype == D.ActivityType.SparkScout or pageData.type == SKIN_PASS_SHOP_TYPE then
+		if d >= 2 then
+			self._textExpireTime:SetLocalize(SID.STR_REFRESH_IN_D_H_M, d, h, m)
+		else
+			self._textExpireTime:SetLocalize(SID.STR_REFRESH_IN_H_M_S, d * 24 + h, m, s)
+		end
+	elseif d >= 2 then
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:onCellNum()
+	return #self._exchangeIds[self._pageIdx]
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = CellWidget.create(self._tfContainer)
+
+		goCell:init()
+	end
+
+	local list = self._exchangeIds[self._pageIdx]
+	local exchangeId = list[index]
+
+	goCell:updateUI(exchangeId, self._pageIdx)
+	goCell:setExchangeClick(self)
+
+	return goCell
+end
+
+function M:jumpTipLeft()
+	self:focusTab(self._leftTab)
+end
+
+function M:jumpTipRight()
+	self:focusTab(self._rightTab)
+end
+
+function M:updateTips()
+	self._leftTab = nil
+	self._rightTab = nil
+end
+
+function M:checkTabVisible(tfTab)
+	local tf = tfTab
+	local tfContainer = self._tfTabContainer
+	local tfViewport = tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tf)
+	local w1 = tfContainer.rect.width
+	local w2 = tfViewport.rect.width
+	local x2, y2, z2 = lc.getAnchoredPosition(tfContainer)
+	local halfBtn = 132.5
+	local distanceToLeft = x2 + x1
+
+	if w2 < w1 then
+		if distanceToLeft + halfBtn <= 0 then
+			return 1
+		elseif distanceToLeft - w2 + halfBtn - 20 >= 0 then
+			return 2
+		end
+	end
+
+	return 0
+end
+
+function M:focusTab(tfTab, ignoreAnim)
+	if not tfTab then
+		return
+	end
+
+	ignoreAnim = true
+	local tf = tfTab
+	local tfContainer = self._tfTabContainer
+	local tfViewport = tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tf)
+	local w1 = tfContainer.rect.width
+	local w2 = tfViewport.rect.width
+	local x2, y2, z2 = lc.getAnchoredPosition(tfContainer)
+	local halfBtn = 132.5
+	local distanceToLeft = x2 + x1
+
+	if w2 < w1 then
+		local moveSpeed = 400
+		local moveDistance, targetX = nil
+
+		if distanceToLeft + halfBtn <= 0 then
+			moveDistance = math.abs(distanceToLeft + halfBtn)
+			targetX = -Mathf.Clamp(x2 + distanceToLeft + halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+			else
+				tfContainer:DOAnchorPosX(targetX, math.min(moveDistance / moveSpeed, 0.5)):SetLink(self.gameObject)
+			end
+		elseif distanceToLeft - w2 + halfBtn >= 0 then
+			moveDistance = math.abs(distanceToLeft - w2 + halfBtn)
+			targetX = -Mathf.Clamp(x2 + distanceToLeft - w2 + halfBtn, 0, w1)
+
+			if ignoreAnim then
+				lc.setAnchoredPosition(tfContainer, targetX, y2, z2)
+			else
+				tfContainer:DOAnchorPosX(targetX, math.min(moveDistance / moveSpeed, 0.5)):SetLink(self.gameObject)
+			end
+		end
+
+		if ignoreAnim then
+			-- Nothing
+		end
+	end
+end
+
+return M

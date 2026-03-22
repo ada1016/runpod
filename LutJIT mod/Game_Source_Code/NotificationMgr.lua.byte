@@ -1,0 +1,82 @@
+local M = {}
+
+declare("NotificationMgr", M)
+
+local NotificationNode = requireLua("NotificationNode")
+local NotificationGroup = requireLua("NotificationGroup")
+M.NotificationType = {
+	red_animate = 3,
+	green_animate = 5,
+	red = 2,
+	green = 4,
+	none = 1
+}
+M.NodeType = {
+	daily_bonus_claimable = 2,
+	avatar_unlocked = 4,
+	prelude_mission_claimable = 3,
+	mission_claimable = 1
+}
+M.GroupType = {
+	unlock_avatar = 2,
+	navbar_season = 1
+}
+M[M.NodeType.mission_claimable] = {
+	notificationType = M.NotificationType.green_animate,
+	func = function ()
+		return P._playerMission:isMissionClaimable()
+	end
+}
+M[M.NodeType.daily_bonus_claimable] = {
+	notificationType = M.NotificationType.red_animate,
+	func = function ()
+		return P._playerMission:isDailyBonusClaimable()
+	end
+}
+M[M.NodeType.prelude_mission_claimable] = {
+	notificationType = M.NotificationType.green_animate,
+	func = function ()
+		local count = P._playerPreludeSeason:claimableMissionCount()
+
+		return count > 0, count
+	end
+}
+M[M.NodeType.avatar_unlocked] = {
+	notificationType = M.NotificationType.red,
+	func = function ()
+		return P._playerProfile:hasNew()
+	end
+}
+
+function M.initNodes()
+	M._nodes = {}
+
+	for k, v in pairs(M.NodeType) do
+		local t = M[v]
+		M._nodes[v] = NotificationNode.create(t.func, t.notificationType, t.textSid)
+	end
+end
+
+function M.newGroup(groupType, rootImage, ...)
+	M._notificationGroups = M._notificationGroups or {}
+	M._notificationGroups[groupType] = NotificationGroup.create(rootImage)
+	local args = {
+		...
+	}
+
+	for i = 1, #args do
+		M._notificationGroups[groupType]:addNode(M._nodes[args[i]])
+	end
+
+	M._notificationGroups[groupType]:updateNotificationGroup()
+end
+
+function M.readGroup(groupType)
+	M._notificationGroups[groupType]:setRead()
+end
+
+function M.updateNode(nodeType)
+	M._nodes[nodeType]:updateNotificationNode()
+end
+
+return M

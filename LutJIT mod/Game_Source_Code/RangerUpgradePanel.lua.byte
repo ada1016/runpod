@@ -1,0 +1,178 @@
+local M = class("RangerUpgradePanel", requireLua("BasePanel"))
+local Types = Types
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	atorMain = Types.Animator,
+	txtTitle = Types.TMP_Text,
+	tfGatlinSkinContainer = Types.Transform,
+	imgSkin = Types.RawImage,
+	txtName = Types.TMP_Text,
+	txtProp1 = Types.TMP_Text,
+	txtProp2 = Types.TMP_Text,
+	txtProp3 = Types.TMP_Text,
+	txtSkillLevel = Types.TMP_Text,
+	goStarContainer = Types.GameObject,
+	goSpineWidget = Types.GameObject,
+	goGetVfx = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._timers = {}
+end
+
+function M:initPrefabVar()
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+end
+
+function M:init(rangerId, closeCallback, forceUnlock)
+	self._rangerId = rangerId
+	local level = P._playerRanger:getRangerLevel(rangerId)
+	local cfg = D._rangerConfig[rangerId]
+
+	self._txtName:SetLocalize(cfg._nameSid)
+
+	self._closeCallback = closeCallback
+
+	if forceUnlock then
+		self._txtTitle:SetLocalize(SID.REWARD_CONGRATULATE)
+		self._atorMain:Play("anim_GunUnlock1")
+
+		self._btnMask.enabled = false
+
+		lc.delayFunc(1.4, function ()
+			self._btnMask.enabled = true
+		end, self.gameObject)
+		lc.delayFunc(0.5, function ()
+			self._goGetVfx:SetActive(true)
+			Client.playSound("ui_Skin_unlock_schon_1")
+		end, self.gameObject)
+		Client.playSound("ui_Skin_unlock_1")
+	elseif level == 1 then
+		self._txtTitle:SetLocalize(SID.TITLE_UNLOCK_SUCCESS)
+		self._atorMain:Play("anim_GunUnlock1")
+
+		self._btnMask.enabled = false
+
+		lc.delayFunc(1.4, function ()
+			self._btnMask.enabled = true
+		end, self.gameObject)
+		Client.playSound("ui_Skin_unlock_1")
+	else
+		self._txtTitle:SetLocalize(SID.TITLE_ASCEND_SUCCESS)
+		V.setRangerQualityStar(self._goStarContainer, cfg._quality, level - 1)
+
+		local animIndex = level % 5
+
+		if animIndex == 0 then
+			animIndex = 5
+		end
+
+		local anim = self._goStarContainer:GetChild(animIndex - 1):GetComponent("Animation")
+
+		LuaUnity.setTPSprite(self._goStarContainer:GetChild(animIndex - 1):GetChild(1):GetComponent("Image"), V.RANGER_STAR_COLOR_IMG[math.ceil(level / 5)])
+
+		local state = anim:get_Item("anim_StarsUp")
+
+		anim:Play("anim_StarsUp")
+
+		state.time = 0
+
+		anim:Sample()
+		anim:Stop()
+
+		if level % 5 == 0 then
+			self._txtProp1:SetLocalize(SID.TIP_RANGER_EQUIP_SLOT_UNLOCK)
+		else
+			self._txtProp1.gameObject:SetActive(false)
+		end
+
+		self._atorMain:Play("anim_GunStarsUp")
+
+		self._btnMask.enabled = false
+
+		self._txtProp2:SetLocalize(SID.TIP_RANGER_EXTEND_ATK_PERCENT, cfg._atkPercents[level - 1])
+		self._txtProp3:SetLocalizeS(SID.SID_GEM_EFFECT_DESCSID_18, tostring(cfg._eliteDamageAdd[level - 1]))
+		self._atorMain:GetComponent("AnimationEventCallback"):AddAnimationEvent(function (param)
+			if param == "1" then
+				anim:Play()
+				self:startDmgChangeAnim(self._txtProp2, SID.TIP_RANGER_EXTEND_ATK_PERCENT, nil, cfg._atkPercents[level - 1], cfg._atkPercents[level] - cfg._atkPercents[level - 1], cfg._atkPercents[level])
+				self:startDmgChangeAnim(self._txtProp3, SID.SID_GEM_EFFECT_DESCSID_18, nil, cfg._eliteDamageAdd[level - 1], cfg._eliteDamageAdd[level] - cfg._eliteDamageAdd[level - 1], cfg._eliteDamageAdd[level])
+			elseif param == "2" then
+				self._btnMask.enabled = true
+			end
+		end)
+		Client.playSound("ui_Skin_ascend_1")
+	end
+
+	self._goSpineWidget:updateUI(self._rangerId)
+end
+
+local function loadText(tmp, isInterger, sid, param1, value)
+	if isInterger then
+		if param1 then
+			tmp:SetLocalize(sid, param1, math.floor(value))
+		else
+			tmp:SetLocalize(sid, math.floor(value))
+		end
+	elseif param1 then
+		tmp:SetLocalizeS(sid, tostring(param1), string.format("%.1f", value))
+	else
+		tmp:SetLocalizeS(sid, string.format("%.1f", value))
+	end
+end
+
+function M:startDmgChangeAnim(tmp, sid, param1, baseDmg, deltaDmg, targetDmg)
+	local idx = #self._timers + 1
+	local isInterger = targetDmg == math.floor(targetDmg)
+	self._timers[idx] = lc.setInterval(function ()
+		baseDmg = baseDmg + deltaDmg / 7
+
+		loadText(tmp, isInterger, sid, param1, baseDmg)
+
+		if sid == SID.STR_LEVEL_X then
+			tmp:SetLocalize(sid, math.random(1, 9))
+		end
+
+		if targetDmg <= baseDmg then
+			loadText(tmp, isInterger, sid, param1, targetDmg)
+			lc.stopTimer(self._timers[idx])
+		end
+	end, 0.03333333333333333)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	for i = 1, #self._timers do
+		lc.stopTimer(self._timers[i])
+	end
+
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+end
+
+function M:closePanel()
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goSpineWidget:clearSpine()
+
+	if self._closeCallback then
+		self._closeCallback()
+	end
+
+	M.super.closePanel(self)
+end
+
+return M

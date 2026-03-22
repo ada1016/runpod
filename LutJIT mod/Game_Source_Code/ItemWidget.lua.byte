@@ -1,0 +1,319 @@
+local M = class("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ItemWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+local txtColor = V.QUALITY_TRIANGLE
+
+function M:init(cid, num, data)
+	self._cid = cid
+	self._num = num or 0
+	self._data = data
+
+	if D.isSpecialItem(cid) then
+		local type = math.floor(cid / 1000) + 1
+
+		if type == D.SPItemType.ArkRebulidModule then
+			LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d_2", D.Quality.Red))
+			LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out_2", D.Quality.Red))
+			LuaUnity.setTPSprite(self._imgIcon, string.format("weekend/Module-%d_small", cid % 1000), true)
+		end
+	elseif D.isSkin(cid) then
+		local quality = D.toQuality(cid)
+
+		if quality == D.Quality.COLORFUL then
+			LuaUnity.setTPSprite(self._imgBg, "item/frame-frame_07")
+			LuaUnity.setTPSprite(self._imgFrame, "item/frame-frame_07_out")
+		else
+			LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d_2", quality))
+			LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out_2", quality))
+		end
+
+		LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+
+		local grade = P._playerSkin:readSkinStage(cid)
+
+		if grade > 1 then
+			self:setSkinGrade(grade - 1)
+		end
+	else
+		local quality = D.toQuality(cid)
+
+		if D.Quality.COLORFUL <= quality and D.isItem(cid) and D._itemConfig[cid]._type == D.ItemType.SkinCommonToken then
+			self:setSkinGrade(quality - D.Quality.COLORFUL + 1)
+
+			quality = D.Quality.COLORFUL
+		end
+
+		LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", quality))
+		LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", quality))
+		LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+	end
+
+	if D.isGem(self._cid) then
+		self:setPart(D._gemConfig[cid]._part)
+	else
+		self:setPart(false)
+	end
+
+	if D.isRandomEquip(self._cid) then
+		local grade = self._cid % 100
+
+		self:setEquipQuality(nil, grade)
+	else
+		self._goGrade:SetActive(false)
+	end
+
+	if num and num > 0 then
+		self:setNum(true)
+		self:setNumText(num)
+	else
+		self:setNum(false)
+	end
+end
+
+function M:rewardclickCallback()
+	if D.isGem(self._cid) then
+		UIManager.openPanel(PrefabDefine.ChipInfoPanel, self._cid)
+	elseif D.isEquip(self._cid) then
+		local id = P._playerRole:searchNearestId(self._cid)
+		local lb = UIManager.openPanel(PrefabDefine.EquipInfoPanel, id)
+
+		lb:hideAction()
+	elseif D.isRangerEquip(self._cid) then
+		UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, self._data)
+	elseif D.isSpecialItem(self._cid) then
+		local type = math.floor(self._cid / 1000) + 1
+
+		if type == D.SPItemType.ArkRebulidModule then
+			UIManager.openPanel(PrefabDefine.ModuleDetailPanel, self._cid % 1000)
+		end
+	else
+		V.showItemInfoPanel(self._cid, self._num)
+	end
+end
+
+function M:setLock(lock)
+	self._imgLock:SetActive(lock)
+end
+
+function M:setNew(new)
+	self._goNew:SetActive(new)
+end
+
+function M:setPart(part)
+	if not part then
+		self._imgPart:SetActive(false)
+
+		return
+	end
+
+	self._imgPart:SetActive(true)
+
+	local quality = D.toQuality(self._cid)
+
+	if part < 10 then
+		LuaUnity.setTPSprite(self._imgPart, "general/g_icon_center_small_" .. part, true, true)
+
+		self._imgPart.color = Color.White
+	else
+		LuaUnity.setTPSprite(self._imgPart, "general/mini_weapon_" .. part - 100, true, true)
+
+		self._imgPart.color = Color.White
+	end
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+function M:setImprove(dot)
+	self._imgImprove:SetActive(dot)
+end
+
+function M:setChoose(choose)
+	self._imgChoose:SetActive(choose)
+end
+
+function M:setChoose2(choose)
+	self._imgChoose2:SetActive(choose)
+end
+
+function M:setStar(otherGroup)
+	if otherGroup ~= nil then
+		self._imgStar:SetActive(true)
+
+		self._txtGroup.text = otherGroup
+	else
+		self._imgStar:SetActive(false)
+	end
+end
+
+function M:setInvalid(invalid)
+	self._imgInvalid:SetActive(invalid)
+end
+
+function M:setEquipReplace(canReplace)
+	self._imgDot:SetActive(canReplace)
+end
+
+function M:setNum(show)
+	self._goNum:SetActive(show)
+end
+
+function M:setClaimed(show)
+	self._goClaimed:SetActive(show)
+end
+
+function M:setDouble(show)
+	self._goDouble:SetActive(show)
+end
+
+function M:setGetAnim(show, loop)
+	self._goAnimGet:SetActive(show)
+
+	if loop then
+		local ator = self._goAnimGet:GetComponent("Animator")
+
+		ator:SetBool("loop", true)
+	end
+end
+
+function M:setCanClaim(show)
+	self._goSweep:SetActive(show)
+
+	if show then
+		V.playAnimitonClipFrameSync(self._animSweep, "anim_ItemSweeping_02")
+		self:setGetAnim(true, true)
+	else
+		self:setGetAnim(false)
+	end
+end
+
+function M:setBgLight(show, colorStr)
+	self._tfLight:SetVisible(show)
+
+	if colorStr then
+		self._imgLight.color = Color.str2Static(colorStr)
+	end
+end
+
+function M:setPropNum(show, prop, showExtra)
+	self._tfPropArea:SetActive(true)
+
+	if prop then
+		self._txtProp.text = string.format("%.2f%%", prop * 10000 / 100)
+	end
+
+	self._txtExtraDesc.gameObject:SetActive(showExtra or false)
+end
+
+function M:setNumText(num)
+	local quality = D.toQuality(self._cid)
+	self._txtNum.enableVertexGradient = quality == D.Quality.COLORFUL
+	self._txtNum.color = Color.str2Static(txtColor[quality])
+	self._txtNum.text = num
+end
+
+function M:setEquipQuality(quality, grade)
+	self._goGrade:SetActive(true)
+	self._txtEquipGrade:SetLocalize(SID.STR_GRADE_X, grade)
+	self._txtSkinGrade.gameObject:SetActive(false)
+end
+
+function M:setSkinGrade(grade)
+	self._goGrade:SetActive(true)
+	self._txtSkinGrade:SetLocalize(SID.STR_GRADE_X, grade)
+	self._txtEquipGrade.gameObject:SetActive(false)
+end
+
+function M:viewItemInfo(info)
+	self:recycle()
+
+	local cid = info.cid or info[1]
+
+	if D.isGem(cid) then
+		self:viewGemInfo(info)
+	elseif D.isEquip(cid) then
+		self:viewEquipInfo(info)
+	elseif D.isItem(cid) then
+		self:viewEquipInfo(info)
+	end
+end
+
+function M:viewGemInfo(info)
+	self:init(info.cid, info.num)
+	self:setLock(info.lock)
+	self:setNew(info.new)
+	self:setPart(info.part)
+
+	local dot = info.dot
+
+	self:setDot(dot)
+	self:setStar(info.usingInOtherGroup)
+	self:setInvalid(info.replaceQuality > 0 and info.quality <= info.replaceQuality)
+end
+
+function M:viewEquipInfo(info)
+	self._equipId = info.id
+
+	self:init(info.cid, info.num)
+	self:setEquipQuality(info.quality, info.grade)
+	self:setDot(info.canReplace and not info.usingInOtherGroup)
+	self:setInvalid(info.invalid or false)
+	self:setStar(info.usingInOtherGroup)
+	self:setLock(info.lock)
+end
+
+function M:recycle()
+	self._goNew.gameObject:SetActive(false)
+	self._imgLock.gameObject:SetActive(false)
+	self._imgDot.gameObject:SetActive(false)
+	self._imgStar.gameObject:SetActive(false)
+	self._imgPart.gameObject:SetActive(false)
+	self._imgInvalid.gameObject:SetActive(false)
+	self._txtEquipGrade.transform.parent:SetActive(false)
+	self._goClaimed:SetActive(false)
+	self._goDouble:SetActive(false)
+	self._txtDebugId.gameObject:SetActive(false)
+end
+
+function M:playDoubleAnim()
+	self._txtNum:DODigitScrollComma(self._num, self._num * 2, 0.6, 0.4)
+end
+
+local valuableTextColors = {
+	[D.Quality.Red] = "FF9EA6",
+	[D.Quality.Orange] = "FFD884",
+	[D.Quality.Purple] = "E7AAFF"
+}
+
+function M:showValuable(show)
+	if show then
+		self._goValuable:SetActive(true)
+
+		self._txtValuable.color = Color.str2Static(valuableTextColors[D._gemConfig[self._cid]._quality])
+	else
+		self._goValuable:SetActive(false)
+	end
+end
+
+function M:setExchange(show)
+	self._goExchange:SetActive(show)
+end
+
+return M

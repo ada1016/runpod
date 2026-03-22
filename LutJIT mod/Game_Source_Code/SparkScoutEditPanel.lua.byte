@@ -1,0 +1,950 @@
+local M = class("SparkScoutEditPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	goRes10050 = Types.GameObject,
+	btnTabWeaponChip = Types.Button,
+	btnTabCommonChip = Types.Button,
+	txtTabWeaponChip = Types.TMP_Text,
+	txtTabCommonChip = Types.TMP_Text,
+	btnFilter = Types.Button,
+	goFilterHighlight = Types.GameObject,
+	btnChipView = Types.Button,
+	btnDeploy = Types.Button,
+	btnGroup1ComboCardsView = Types.Button,
+	btnGroup2ComboCardsView = Types.Button,
+	btnGroup3ComboCardsView = Types.Button,
+	goContentWeapon = Types.GameObject,
+	goWeapon1 = Types.GameObject,
+	goWeapon2 = Types.GameObject,
+	goWeapon3 = Types.GameObject,
+	goWeapon4 = Types.GameObject,
+	goWeapon5 = Types.GameObject,
+	goWeapon6 = Types.GameObject,
+	goWeapon7 = Types.GameObject,
+	goWeapon8 = Types.GameObject,
+	goWeapon9 = Types.GameObject,
+	goContentRole = Types.GameObject,
+	goSpine = Types.GameObject,
+	goEquip1 = Types.GameObject,
+	goEquip2 = Types.GameObject,
+	goEquip3 = Types.GameObject,
+	goEquip4 = Types.GameObject,
+	goEquip5 = Types.GameObject,
+	goEquip6 = Types.GameObject,
+	tfWeaponContainer = Types.Transform,
+	animWeaponEdit = Types.Animation,
+	btnCompleteEdit = Types.Button,
+	goDragWeapon = Types.GameObject,
+	goDragContainer = Types.GameObject,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	imgScrollMask = Types.Image,
+	btnTransparentCover = Types.Button,
+	btnTransparentCoverBottom = Types.Button,
+	goBottom = Types.GameObject,
+	goChipNone = Types.GameObject
+}
+local ROW_CELL = 6
+local tabSelectedColor = "452D44"
+local tabUnSelectedColor = "150B13"
+local tabSelectedTextColor = "D197CE"
+local tabUnSelectedTextColor = "5A3E59"
+local SparkScoutWeaponChipWidget = requireLua("SparkScoutWeaponChipWidget")
+local SparkScoutWeaponWidget = requireLua("SparkScoutWeaponWidget")
+local ItemWidget = requireLua("ItemWidget")
+local band = bit.band
+
+function M:Awake()
+	M.super.Awake(self)
+	self._btnTransparentCover:SetActive(false)
+	self._btnTransparentCoverBottom:SetActive(false)
+
+	self._btnFirstAvaliableWeapon = nil
+end
+
+function M:initPrefabVar()
+	self._imgTabs = {
+		self._btnTabWeaponChip.transform:GetComponent("Image"),
+		self._btnTabCommonChip.transform:GetComponent("Image")
+	}
+	self._chooseTabs = {
+		self._btnTabWeaponChip.transform:Find("ImgChoose"),
+		self._btnTabCommonChip.transform:Find("ImgChoose")
+	}
+	self._txtTabs = {
+		self._txtTabWeaponChip,
+		self._txtTabCommonChip
+	}
+	self._goWeapons = {
+		self._goWeapon1,
+		self._goWeapon2,
+		self._goWeapon3,
+		self._goWeapon4,
+		self._goWeapon5,
+		self._goWeapon6,
+		self._goWeapon7,
+		self._goWeapon8,
+		self._goWeapon9
+	}
+
+	for i = 1, #self._goWeapons do
+		SparkScoutWeaponChipWidget.noCreate(self._goWeapons[i])
+	end
+
+	self._goBottomWeapons = {}
+
+	SparkScoutWeaponWidget.noCreate(self._goDragWeapon)
+
+	self._goEquips = {
+		self._goEquip1,
+		self._goEquip2,
+		self._goEquip3,
+		self._goEquip4,
+		self._goEquip5,
+		self._goEquip6
+	}
+
+	for i = 1, #self._goEquips do
+		lc.prefabVarPeer(self._goEquips[i])
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnTabWeaponChip, function ()
+		self:changeTab(1)
+	end, "ui_Tap_page_1")
+	self:setClick(self._btnTabCommonChip, function ()
+		self:changeTab(2)
+	end, "ui_Tap_page_1")
+
+	for i = 1, #self._goWeapons do
+		self:setClick(self._goWeapons[i]._btnClick, function ()
+			if self._longPressing then
+				return
+			end
+
+			if self._editingWeapon then
+				if P._playerActivitySparkScout:getPvpWeapon(i) ~= nil and not self._draggingWeapon then
+					P._playerActivitySparkScout:setPvpWeapon(i, nil)
+					self:updateWeapons()
+					self:updateBottomWeapons()
+					self:updateChips()
+					self:shakeWeapon()
+				end
+
+				return
+			end
+
+			if P._playerActivitySparkScout:getPvpWeapon(i) == nil then
+				self:enterEditMode()
+
+				return
+			end
+
+			UIManager.openPanel(PrefabDefine.SparkScoutWeaponInfoPanel, P._playerActivitySparkScout:getPvpWeapon(i), function ()
+				self:updateWeapons()
+				self:updateChips()
+			end)
+		end)
+
+		local listener = self._goWeapons[i]._goContent:GetComponent("LongPressEventListener")
+
+		listener.onLongPress:AddListener(function ()
+			self._longPressing = true
+
+			if not self._editingWeapon then
+				self:enterEditMode()
+			end
+		end)
+		listener.onPointExit:AddListener(function ()
+			self._longPressing = false
+		end)
+		self:setClick(self._goWeapons[i]._btnUnlock, function ()
+			self:dealUnlockSlot(i)
+		end)
+		lc.addListeners(self._goWeapons[i]._goContent, self, -i)
+	end
+
+	for i = 1, #self._goEquips do
+		self:setClick(self._goEquips[i]._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.SparkScoutWeaponDetailPanel, i, function ()
+				self:updateEquips()
+				self:updateChips()
+			end)
+		end)
+	end
+
+	self:setClick(self._btnCompleteEdit, function ()
+		self:stopShakeWeapon()
+		self._animWeaponEdit:Play("anim_midweekWeaponEdit_2")
+
+		self._editingWeapon = false
+
+		self._goBottom:SetActive(true)
+	end)
+	self:setClickWithoutAction(self._btnTransparentCover, function ()
+		self:clearViewGem()
+	end)
+	self:setClickWithoutAction(self._btnTransparentCoverBottom, function ()
+		self:clearViewGem()
+	end)
+	self:setClick(self._btnFilter, function ()
+		if self._tab == 1 then
+			UIManager.openPanel(PrefabDefine.ChipFilterPanel, self._weaponChipFilter, function (value)
+				self._weaponChipFilter = value
+
+				self:updateChips()
+			end, 1)
+		else
+			UIManager.openPanel(PrefabDefine.ChipFilterPanel, self._commonChipFilter, function (value)
+				self._commonChipFilter = value
+
+				self:updateChips()
+			end, 2)
+		end
+	end)
+	self:setClick(self._btnChipView, function ()
+		local chipSlots = P._playerActivitySparkScout:getChipSlots()
+
+		UIManager.openPanel(PrefabDefine.SparkScoutChipAttributePanel, P._playerActivitySparkScout:calcGemEffects(chipSlots), self._tab)
+	end)
+	self:setClick(self._btnDeploy, function ()
+		self:enterEditMode()
+	end)
+	self:setClick(self._btnGroup1ComboCardsView, function ()
+		local cards = {}
+
+		for i = 1, 3 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+	self:setClick(self._btnGroup2ComboCardsView, function ()
+		local cards = {}
+
+		for i = 4, 6 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+	self:setClick(self._btnGroup3ComboCardsView, function ()
+		local cards = {}
+
+		for i = 7, 9 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+end
+
+function M:addEvents()
+	self:on("sparkScout.chipSlot.unlock", function ()
+		self:updateWeapons()
+		self:updateEquips()
+		self:updateChips()
+	end)
+end
+
+function M:init()
+	self._tab = 1
+
+	self._goContentWeapon:SetActive(self._tab == 1)
+	self._goContentRole:SetActive(self._tab == 2)
+
+	self._rowCellWidth = self._tfScrollContainer.rect.width
+	self._rowCellHeight = 120
+	self._rowCellMargin = 9
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellInitCount = 7,
+		cellHeight = self._rowCellHeight,
+		cellMargin = self._rowCellMargin
+	})
+	self._weaponChipFilter = -1
+	self._commonChipFilter = -1
+
+	self:updateUI()
+end
+
+function M:closePanel()
+	self._goSpine:SetActive(false)
+	M.super.closePanel(self)
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		self:hideTab(self._tab)
+
+		self._tab = tab
+
+		self:showTab(self._tab)
+		self._goContentWeapon:SetActive(self._tab == 1)
+		self._goContentRole:SetActive(self._tab == 2)
+		self._goRes10050:SetActive(self._tab == 1)
+		self._btnDeploy.transform.parent:SetActive(self._tab == 1)
+		self:updateChips()
+	end
+end
+
+function M:hideTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(tabUnSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10_2" or "general/g_bg_11")
+
+	self._txtTabs[tab].color = Color.str2Static(tabUnSelectedTextColor)
+
+	self._chooseTabs[tab]:SetActive(false)
+end
+
+function M:showTab(tab)
+	self._imgTabs[tab].color = Color.str2Static(tabSelectedColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[tab], tab == 1 and "general/g_bg_10" or "general/g_bg_11_2")
+
+	self._txtTabs[tab].color = Color.str2Static(tabSelectedTextColor)
+
+	self._chooseTabs[tab]:SetActive(true)
+end
+
+function M:updateUI()
+	self:updateWeapons()
+	self:updateEquips()
+	self:updateBottomWeapons()
+	self:updateChips()
+end
+
+function M:updateWeapons()
+	for i = 1, #self._goWeapons do
+		local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+		self._goWeapons[i]:init(weapon, i)
+	end
+end
+
+function M:updateEquips()
+	for i = 1, #self._goEquips do
+		local goEquip = self._goEquips[i]
+
+		LuaUnity.setTPSprite(goEquip._imgEquip, "general/equip1_" .. i, true)
+
+		local chips = P._playerActivitySparkScout:getEquipedChips(i) or {}
+
+		for j = 1, 6 do
+			if P._playerActivitySparkScout:isChipSlotLocked(i, j) then
+				local image = goEquip._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image")
+
+				LuaUnity.setTPSprite(image, "general/chip-g_chip_lock")
+
+				image.color = Color.str2Static("000000_180")
+
+				goEquip._tfGemView:GetChild(j - 1):Find("ImgLock"):SetActive(true)
+			else
+				goEquip._tfGemView:GetChild(j - 1):Find("ImgLock"):SetActive(false)
+
+				goEquip._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image").color = Color.White
+
+				if chips[j] then
+					LuaUnity.setTPSprite(goEquip._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[chips[j]]._quality)
+				else
+					LuaUnity.setTPSprite(goEquip._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_empty")
+				end
+			end
+		end
+	end
+end
+
+function M:updateBottomWeapons()
+	local usedWeapons = {}
+
+	for i = 1, #self._goWeapons do
+		local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+		if weapon then
+			usedWeapons[#usedWeapons + 1] = weapon
+		end
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if P._playerActivitySparkScout:getWeaponDeck(i) then
+			if not self._goBottomWeapons[i] then
+				self._goBottomWeapons[i] = SparkScoutWeaponWidget.create(self._tfWeaponContainer)
+
+				self._goBottomWeapons[i]:init(i)
+				lc.addListeners(self._goBottomWeapons[i]._goContent, self, i)
+				self:setClick(self._goBottomWeapons[i]._btnClick, function ()
+					if not self._draggingWeapon then
+						for j = 1, 9 do
+							if P._playerActivitySparkScout:getPvpWeapon(j) == nil and P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(j) then
+								P._playerActivitySparkScout:setPvpWeapon(j, i)
+								self:updateWeapons()
+								self:updateBottomWeapons()
+								self:updateChips()
+								self:shakeWeapon()
+
+								break
+							end
+						end
+					end
+				end)
+			end
+
+			if not table.contains(usedWeapons, i) and i ~= self._draggingWeapon then
+				if self._editingWeapon then
+					self._goBottomWeapons[i]:stopShake()
+					self._goBottomWeapons[i]:shake()
+				else
+					self._goBottomWeapons[i]:stopShake()
+				end
+
+				self._goBottomWeapons[i]:SetActive(true)
+
+				if not self._btnFirstAvaliableWeapon then
+					self._btnFirstAvaliableWeapon = self._goBottomWeapons[i]._btnClick
+				end
+			elseif self._goBottomWeapons[i] then
+				self._goBottomWeapons[i]:SetActive(false)
+			end
+		end
+	end
+end
+
+function M:updateChips()
+	local chips = P._playerActivitySparkScout:getAvailableChips()
+	self._chips = {}
+
+	for i = 1, #chips do
+		if self._tab == 1 then
+			if band(-2^D.PART_FILTER_NUM, band(chips[i].filterValue, self._weaponChipFilter)) ~= 0 and chips[i].weapon ~= 0 then
+				table.insert(self._chips, chips[i])
+			end
+
+			self._goFilterHighlight:SetActive(self._weaponChipFilter ~= -1)
+		else
+			if band(2^D.PART_FILTER_NUM - 1, band(chips[i].filterValue, self._commonChipFilter)) ~= 0 and chips[i].weapon == 0 then
+				table.insert(self._chips, chips[i])
+			end
+
+			self._goFilterHighlight:SetActive(self._commonChipFilter ~= -1)
+		end
+	end
+
+	table.sort(self._chips, function (a, b)
+		if a.quality ~= b.quality then
+			return b.quality < a.quality
+		end
+
+		if a.part ~= b.part then
+			return a.part < b.part
+		end
+
+		return b.cid < a.cid
+	end)
+	self._scrollViewEx:reloadData()
+	self:updateRedDots()
+	self._goChipNone:SetActive(#self._chips == 0)
+end
+
+function M:updateRedDots()
+	self._btnTabWeaponChip.dot:SetActive(P._playerActivitySparkScout:hasWeaponChipEquipDot())
+	self._btnTabCommonChip.dot:SetActive(P._playerActivitySparkScout:hasCommonChipEquipDot())
+end
+
+function M:shakeWeapon()
+	for i = 1, #self._goWeapons do
+		if self._goWeapons[i]._weapon then
+			self._goWeapons[i]:stopShake()
+			self._goWeapons[i]:shake()
+		else
+			self._goWeapons[i]:stopShake()
+		end
+	end
+
+	for _, goWeapon in pairs(self._goBottomWeapons) do
+		goWeapon:shake()
+	end
+end
+
+function M:stopShakeWeapon()
+	for i = 1, #self._goWeapons do
+		self._goWeapons[i]:stopShake()
+		self._goWeapons[i]:showChip()
+	end
+
+	for _, goWeapon in pairs(self._goBottomWeapons) do
+		goWeapon:stopShake()
+	end
+end
+
+function M:enterEditMode()
+	self._animWeaponEdit:Play("anim_midweekWeaponEdit")
+
+	self._editingWeapon = true
+
+	self._goBottom:SetActive(false)
+
+	for i = 1, #self._goWeapons do
+		self._goWeapons[i]:hideChip()
+	end
+
+	lc.setTimer(function ()
+		self:shakeWeapon()
+	end, 0.5)
+end
+
+function M:onCellNum()
+	return math.ceil(#self._chips / ROW_CELL)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	for i = 1, ROW_CELL do
+		local item = goCell.items[i]
+
+		if i == 1 and index == 1 then
+			self._firstItemWidget = item
+		end
+
+		local info = self._chips[i + ROW_CELL * (index - 1)]
+
+		if info then
+			item:SetVisible(true)
+			item:init(info.cid)
+			item:setChoose(false)
+			item:setDot(info.dot)
+			item:setPart(info.part)
+			item:setInvalid(info.invalid)
+			item:setNew(info.new)
+
+			local w = self._rowCellWidth / ROW_CELL
+
+			lc.setLocalPosition(item, -self._rowCellWidth / 2 + (i - 0.5) * w, -self._rowCellHeight / 2, 0)
+			self:setClick(item._btnClick, function ()
+				if info.new then
+					info.new = false
+
+					P._playerActivitySparkScout:removeChipNew(info.cid)
+					item:setNew(false)
+				end
+
+				local viewGem = self:getViewGem(self._viewGemCid)
+
+				if viewGem ~= item then
+					self:setViewGem(info.cid)
+				else
+					self:clearViewGem()
+				end
+			end)
+		else
+			item:SetVisible(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RowWidget.prefab", self._tfScrollContainer)
+
+	lc.setSizeDelta(go, self._rowCellWidth, self._rowCellHeight)
+
+	go.items = {}
+
+	for i = 1, ROW_CELL do
+		go.items[i] = ItemWidget.create(go.transform)
+
+		go.items[i]._goScaleParent:SetLocalScale(0.95, 0.95, 0.95)
+	end
+
+	return go
+end
+
+local function moveFollowingItems(self, curItem, duration)
+	local w = self._rowCellWidth / ROW_CELL
+	local followingItems = {}
+	local isFollowing = false
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if isFollowing then
+				if item.activeSelf then
+					local x, y = lc.getLocalPosition(item)
+
+					if j == 1 then
+						item.transform:DOLocalMoveX(x - w / 2, duration / 2):OnComplete(function ()
+							lc.setLocalPosition(item, x + self._rowCellWidth - w / 2, y + self._rowCellHeight + self._rowCellMargin, 0)
+							item.transform:DOLocalMoveX(x + self._rowCellWidth - w, duration / 2):SetEase(V.EASE_LINEAR)
+						end):SetEase(V.EASE_LINEAR)
+					else
+						item.transform:DOLocalMoveX(x - w, duration)
+					end
+				end
+			elseif item == curItem then
+				isFollowing = true
+			end
+		end
+	end
+end
+
+function M:getViewGem(cid)
+	if cid == nil then
+		return nil
+	end
+
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i = 1, #cells do
+		local cell = cells[i]
+
+		for j = 1, cell.transform.childCount do
+			local item = cell.transform:GetChild(j - 1).gameObject
+
+			if item._cid == cid and item.activeSelf then
+				return item
+			end
+		end
+	end
+end
+
+function M:setViewGem(cid)
+	local prevViewGem = self:getViewGem(self._viewGemCid)
+
+	if prevViewGem then
+		prevViewGem:setChoose(false)
+	end
+
+	self._viewGemCid = cid
+	local viewGem = self:getViewGem(self._viewGemCid)
+
+	if viewGem then
+		viewGem:setChoose(true)
+		viewGem:setNew(false)
+	end
+
+	self._btnTransparentCover:SetActive(true)
+	self._btnTransparentCoverBottom:SetActive(true)
+
+	self._imgScrollMask.enabled = false
+	local chipWeaponId = D._gemEffectConfig[D._gemConfig[cid]._effect]._weaponId
+
+	if chipWeaponId == 0 then
+		UIManager.openPanel(PrefabDefine.SparkScoutGemEquipPanel, cid, function (index)
+			local gemView = self._goEquips[D._gemConfig[cid]._part]._tfGemView
+			local tfChip = gemView:GetChild(index - 1)
+			local quality = D._gemConfig[cid]._quality
+			local duration = V.playChipFlyVfx(self:getViewGem(self._viewGemCid) or self._scroll, tfChip, quality)
+			self._isPlayingChipFly = true
+			local viewGem = self:getViewGem(self._viewGemCid)
+
+			if viewGem then
+				viewGem:setDot(false)
+				self:clearViewGem()
+				lc.setLocalScale(viewGem, 0, 0, 0)
+				moveFollowingItems(self, viewGem, duration - 0.1)
+			else
+				UIManager.closePanel(PrefabDefine.SparkScoutGemEquipPanel)
+			end
+
+			MainGameRoot:showGlobalMask()
+
+			function self._seqFunc()
+				self:updateEquips()
+				self:updateChips()
+				LuaUnity.setTPSprite(tfChip:Find("ImgChipBig"):GetComponent("Image"), D.toSprite(cid))
+				tfChip:GetComponent("Animator"):Play("anim_chipEquip")
+
+				self._isPlayingChipFly = false
+				self._seqFunc = nil
+
+				MainGameRoot:hideGlobalMask()
+			end
+
+			lc.setTimer(self._seqFunc, duration)
+		end, function ()
+			self:clearViewGem()
+		end)
+	else
+		UIManager.openPanel(PrefabDefine.SparkScoutChipEquipPanel, cid, function (index)
+			local goWeapon = nil
+
+			for i = 1, #self._goWeapons do
+				local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+				if weapon == chipWeaponId then
+					goWeapon = self._goWeapons[i]
+				end
+			end
+
+			if goWeapon then
+				local gemView = goWeapon._tfGemView
+				local tfChip = gemView:GetChild(index - 1)
+				local quality = D._gemConfig[cid]._quality
+				local duration = V.playChipFlyVfx(self:getViewGem(self._viewGemCid) or self._scroll, tfChip, quality)
+				self._isPlayingChipFly = true
+				local viewGem = self:getViewGem(self._viewGemCid)
+
+				if viewGem then
+					viewGem:setDot(false)
+					self:clearViewGem()
+					lc.setLocalScale(viewGem, 0, 0, 0)
+					moveFollowingItems(self, viewGem, duration - 0.1)
+				else
+					UIManager.closePanel(PrefabDefine.SparkScoutChipEquipPanel)
+				end
+
+				MainGameRoot:showGlobalMask()
+
+				function self._seqFunc()
+					goWeapon:init(chipWeaponId, 1)
+					self:updateChips()
+					LuaUnity.setTPSprite(tfChip:Find("ImgChipBig"):GetComponent("Image"), D.toSprite(cid))
+					tfChip:GetComponent("Animator"):Play("anim_chipEquip")
+
+					self._isPlayingChipFly = false
+					self._seqFunc = nil
+
+					MainGameRoot:hideGlobalMask()
+				end
+
+				lc.setTimer(self._seqFunc, duration)
+
+				return
+			end
+
+			self:clearViewGem()
+			self:updateChips()
+		end, function ()
+			self:clearViewGem()
+		end)
+	end
+end
+
+function M:clearViewGem()
+	self._btnTransparentCover:SetActive(false)
+	self._btnTransparentCoverBottom:SetActive(false)
+
+	self._imgScrollMask.enabled = true
+
+	if self._viewGemCid then
+		local viewGem = self:getViewGem(self._viewGemCid)
+
+		if viewGem then
+			viewGem:setChoose(false)
+		end
+
+		self._viewGemCid = nil
+
+		if UIManager.getPanel(PrefabDefine.SparkScoutChipEquipPanel.id) then
+			UIManager.closePanel(PrefabDefine.SparkScoutChipEquipPanel)
+		end
+
+		if UIManager.getPanel(PrefabDefine.SparkScoutGemEquipPanel.id) then
+			UIManager.closePanel(PrefabDefine.SparkScoutGemEquipPanel)
+		end
+	end
+end
+
+function M:onTouchBegan(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if not self._editingWeapon then
+		return
+	end
+
+	if id < 0 then
+		local index = -id
+		id = P._playerActivitySparkScout:getPvpWeapon(index)
+
+		if id == nil then
+			return
+		end
+
+		self._goWeapons[index]:init(nil, index)
+	end
+
+	self._goDragWeapon = self._goBottomWeapons[id]
+	self._dragSiblingIndex = self._goDragWeapon.transform:GetSiblingIndex()
+
+	self._goDragWeapon:SetActive(true)
+	self._goDragWeapon:SetParent(self.transform)
+
+	self._goDragWeapon._goContent:GetComponent("Image").raycastTarget = false
+	self._draggingWeapon = id
+	local pos = eventData.position
+
+	lc.setPosition(self._goDragWeapon, pos.x, pos.y, 0)
+end
+
+function M:onTouchMoved(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if not self._editingWeapon then
+		return
+	end
+
+	if id < 0 then
+		id = P._playerActivitySparkScout:getPvpWeapon(-id)
+
+		if id == nil then
+			return
+		end
+	end
+
+	local pos = eventData.position
+
+	lc.setPosition(self._goDragWeapon, pos.x, pos.y, 0)
+end
+
+function M:onTouchEnded(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if not self._editingWeapon then
+		return
+	end
+
+	if not self._draggingWeapon then
+		return
+	end
+
+	local weapon = id
+
+	if id < 0 then
+		weapon = P._playerActivitySparkScout:getPvpWeapon(-id)
+
+		if weapon == nil then
+			return
+		end
+	end
+
+	self._draggingWeapon = nil
+
+	self._goDragWeapon:SetActive(false)
+	Client.playSound("2d_tap")
+
+	local go = eventData.pointerCurrentRaycast.gameObject
+
+	if go then
+		local weaponChanged = false
+
+		if go == self._goDragContainer then
+			if id < 0 then
+				P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+
+				weaponChanged = true
+			end
+		else
+			for i = 1, #self._goWeapons do
+				if go == self._goWeapons[i]._goContent then
+					if P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(i) then
+						local newWeapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+						if newWeapon == nil then
+							P._playerActivitySparkScout:setPvpWeapon(i, weapon)
+
+							if id < 0 then
+								P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+							end
+						else
+							P._playerActivitySparkScout:setPvpWeapon(i, weapon)
+							P._playerActivitySparkScout:setPvpWeapon(-id, newWeapon)
+						end
+
+						weaponChanged = true
+					end
+
+					break
+				end
+			end
+
+			for _, goWeapon in pairs(self._goBottomWeapons) do
+				if go == goWeapon._goContent then
+					if id < 0 then
+						P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+
+						weaponChanged = true
+					end
+
+					break
+				end
+			end
+		end
+
+		if weaponChanged then
+			self:updateChips()
+			self:shakeWeapon()
+		end
+
+		self._goDragWeapon:SetActive(true)
+		self._goDragWeapon:SetParent(self._tfWeaponContainer)
+		self._goDragWeapon.transform:SetSiblingIndex(self._dragSiblingIndex)
+
+		self._goDragWeapon._goContent:GetComponent("Image").raycastTarget = true
+
+		self:updateWeapons()
+		self:updateBottomWeapons()
+	end
+end
+
+function M:dealUnlockSlot(i)
+	local code, param = P._playerActivitySparkScout:checkUnlockPvpWeaponSlot(i)
+
+	if code ~= ResultCode.OK then
+		if code ~= ResultCode.NOT_MEET_CONDITION then
+			V.showResultCode(code, param)
+		end
+
+		return
+	end
+
+	local function dealFunc()
+		local code, param = P._playerActivitySparkScout:tryUnlockPvpWeaponSlot(i)
+
+		if code ~= ResultCode.OK then
+			if code ~= ResultCode.NOT_MEET_CONDITION then
+				V.showResultCode(code, param)
+			end
+
+			return
+		end
+
+		self:updateWeapons()
+	end
+
+	local cost = P._playerActivitySparkScout:getPvpWeaponUnlockCost(i)
+	local showConfirm = V.tryShowConfirm("spark_scout_unlock_weapon", dealFunc, SID.TIP_USE_RESOURCE_UNLOCK_CONFIRM, D.getTMPSpriteRichText(string.format("item_small_%d", D.ResType.spark_scout_wafer)) .. cost, D.ResType.spark_scout_wafer)
+
+	if not showConfirm then
+		dealFunc()
+	end
+end
+
+return M

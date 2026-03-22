@@ -1,0 +1,32 @@
+local M = class("PlayerBattlePassAnniversaryTreasureHunting", requireLua("PlayerBattlePassActivityBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.DigLottery
+	self._bpLevelCfg = D._anniversaryTreasureHuntingBPConfig
+	self._bpLogWay = D.LogWay.anniversary_battle_pass_treasureHunting
+end
+
+function M:getExpireTime()
+	return P._playerActivityAnniversary:readActivityEndTime()
+end
+
+function M:cacheLastPeriodRewards()
+	self._meta.status = M.Status.Expired
+	local rewards = self:claimAll(true)
+
+	if rewards and #rewards > 0 then
+		if not self._meta.lastPeriodRewards then
+			self._meta.lastPeriodRewards = {}
+		end
+
+		D.foldRewards(self._meta.lastPeriodRewards, rewards)
+	end
+
+	if self._meta.lastPeriodRewards == nil or #self._meta.lastPeriodRewards == 0 then
+		self._meta.lastPeriodRewardsClaimed = true
+	else
+		self._meta.lastPeriodRewardsClaimed = false
+	end
+end
+
+return M

@@ -1,0 +1,66 @@
+local M = {}
+
+declare("NetPack", M)
+
+M.MemberInfoPack = {
+	score = 0,
+	name = "",
+	name_color = 0,
+	level = 1,
+	role = 0,
+	medal = 1,
+	avatar = 1,
+	atk = 0,
+	id = "",
+	avatar_frame = 1
+}
+M.UnionCreateReqPack = {
+	language = 1,
+	name = "",
+	avatar_base = 1,
+	require_level = 0,
+	avatar_badge = 1,
+	desc = "",
+	require_atk = 0,
+	need_apply = false,
+	my_info = M.MemberInfoPack
+}
+M.UnionSetupReqPack = {
+	require_level = 0,
+	name = "",
+	avatar_base = 1,
+	require_atk = 0,
+	need_apply = false,
+	language = 1,
+	avatar_badge = 1,
+	desc = ""
+}
+M.UnionSearchReqPack = {
+	require_level = 0,
+	enable_filter = false,
+	key = "",
+	require_atk = 0,
+	language = 1,
+	need_apply = false
+}
+M.UnionApplyReqPack = {
+	union_id = 1,
+	my_info = M.MemberInfoPack
+}
+M.UnionApplyDealReq = {
+	applied = false,
+	applier_ids = 1
+}
+M.UnionAppointReq = {
+	member = 1,
+	role = 0
+}
+M.ChatJoinReq = {
+	channel = 1,
+	channel_id = 1
+}
+M.ChatReq = {
+	message = "",
+	channel_id = 1,
+	channel = 1
+}

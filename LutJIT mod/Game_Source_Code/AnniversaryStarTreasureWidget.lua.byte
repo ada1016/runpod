@@ -1,0 +1,77 @@
+local M = class("AnniversaryStarTreasureWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversaryStarTreasureWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:updateUI(idx)
+	self._idx = idx or self._idx
+	local module = P._playerActivityAnniversary._moduleCheckin
+	self._module = module
+	local cid, num = module:readStarReward(self._idx)
+
+	self._goItem:init(cid, num)
+
+	local require1, require2 = module:readStarRequire(self._idx)
+	self._txtPerson.text = require1
+
+	self._txtGlobal:FormatComma(require2)
+
+	local resultCode = self._module:checkClaimStarRewards(self._idx)
+	local canClaim = resultCode == ResultCode.OK
+	local locked = resultCode == ResultCode.NOT_MEET_CONDITION
+	local isClaimed = resultCode == ResultCode.REWARD_CLAIMED
+
+	self._goItem:setCanClaim(canClaim)
+	self._goItem:setClaimed(isClaimed)
+	self._goItem:setInvalid(locked)
+
+	local maxIdx = self._module:readMaxStarReward()
+
+	self._goBar1:SetActive(self._idx ~= 1)
+	self._goBar2:SetActive(self._idx ~= maxIdx)
+	self._goBarUnlock:SetActive(not locked)
+	self._goMask:SetActive(locked)
+
+	self._imgBar1.fillAmount = self._idx == 1 and 0 or self._module:isStarRewardRequireSatisfied(self._idx - 1) and 1 or 0
+	self._imgBar2.fillAmount = locked and 0 or 1
+	local currentStarValue = self._module:getStarValue()
+	local currentGlobalStarValue = self._module:getTotalGlobalStars()
+	self._txtPerson.color = Color.str2Static(require1 <= currentStarValue and "FFFFFF" or "846698")
+	self._txtPerson.enableVertexGradient = require1 <= currentStarValue
+	self._txtGlobal.color = Color.str2Static(require2 <= currentGlobalStarValue and "FFFFFF" or "846698")
+	self._txtGlobal.enableVertexGradient = require2 <= currentGlobalStarValue
+end
+
+function M:setRewardsClick(panel)
+	panel:setClickWithoutAction(self._goItem._btnClick, function ()
+		Client.checkNetworkAsync(function ()
+			if not P._playerActivity:isAnniversaryOpening() then
+				V.showToast(SID.TIP_EVENT_END)
+				panel:closePanel()
+
+				return
+			end
+
+			local resultCode, rewards = self._module:tryClaimStarRewards(self._idx)
+
+			if resultCode ~= ResultCode.OK then
+				self._goItem:rewardclickCallback()
+
+				return
+			end
+
+			V.showRewardClaimPanel(rewards)
+			self:updateUI()
+		end)
+	end)
+end
+
+return M

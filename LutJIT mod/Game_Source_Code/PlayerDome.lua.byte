@@ -1,0 +1,775 @@
+local M = class("PlayerDome")
+
+function M:ctor()
+end
+
+local MISSION_PREFIX = 100000
+local BUFF_NUM = 4
+local CIRCLE_OFFSET = 1749772800
+
+function M:init(meta)
+	self._meta = meta
+	self._mapData = lc.assignTable(meta, "mapData")
+	self._claimList = lc.assignTable(meta, "claimList")
+	self._dailyChance = meta.dailyChance or 0
+	self._dailyChanceAdd = meta.dailyChanceAdd or 0
+	self._rankGroup = meta.rankGroup
+	self._mergedRankGroup = nil
+	self._buffs = table.new(0, BUFF_NUM)
+	self._settleRewards = {}
+	self._newRecord = false
+	self._preRecordLevel = nil
+	self._todayRankValue = meta.todayRankValue
+	self._dailyDomeCards = lc.assignTable(meta, "dailyDomeCards")
+	self._dailySelectCards = lc.assignTable(meta, "dailySelectCards")
+	self._dailySelectRefreshCards = lc.assignTable(meta, "dailySelectRefreshCards")
+	self._remainAdRefreshCount = self._meta.remainAdRefreshCount
+	self._grade = self._meta.grade
+	self._maxAvatarGrade = self._meta.maxAvatarGrade
+	self._weekRankValue = self._meta.weekRankValue or 0
+	self._curWeek = self._meta.curWeek
+	self._weekHistoryScore = lc.assignTable(meta, "weekHistoryScore")
+	self._meta.domeCardsDot = self._meta.domeCardsDot or false
+
+	self:switchMap()
+end
+
+function M:start()
+	if self._curWeek == nil then
+		self._curWeek = math.floor((C.getCurTime() - CIRCLE_OFFSET) / 7 / 86400)
+		self._meta.curWeek = self._curWeek
+	end
+
+	if self._grade == nil then
+		local maxDifficulty = 1
+
+		for map, data in pairs(self._mapData) do
+			if data.difficulty and maxDifficulty < data.difficulty then
+				maxDifficulty = data.difficulty
+			end
+		end
+
+		maxDifficulty = math.min(7, maxDifficulty)
+		self._grade = maxDifficulty
+		self._meta.grade = maxDifficulty
+		self._maxAvatarGrade = 1
+		self._meta.maxAvatarGrade = 1
+
+		if D.isSystemUnlocked(D.SystemType.DomeMission) then
+			self:initDomeGradeAvatar()
+		end
+
+		self._todayRankValue = 0
+		self._meta.todayRankValue = 0
+	end
+
+	for map, data in pairs(self._mapData) do
+		if not data.curClaimedMsId then
+			data.curClaimedMsId = self:getCurMissionId(map) + data.level - 2
+		end
+	end
+end
+
+function M:initDomeGradeAvatar()
+	P._playerAsset:increaseAssetNum(D.DOME_GRADE_AVATAR_BEGIN - 1 + self._grade, 1, D.LogWay.dome_trial_grade_up)
+end
+
+function M:dailyReset()
+	if self._battling then
+		SimpleEvent.emit("battle.quit", D.MissionType.Dome)
+	end
+
+	self._dailyChance = 0
+	self._meta.dailyChance = self._dailyChance
+	self._dailyChanceAdd = 0
+	self._meta.dailyChanceAdd = self._dailyChanceAdd
+	self._tmpYesterdayRankValue = self._todayRankValue
+	self._todayRankValue = nil
+	self._meta.todayRankValue = nil
+
+	self:removeNewDomeCardsDot()
+	table.clear(self._dailyDomeCards)
+	table.clear(self._dailySelectCards)
+	table.clear(self._dailySelectRefreshCards)
+	self:switchMap(true)
+
+	if self._curWeek < math.floor((C.getCurTime() - CIRCLE_OFFSET) / 7 / 86400) then
+		self._meta.settling = true
+
+		self:trySettle()
+	end
+end
+
+function M:trySettle()
+	if not self._gettingRankData then
+		if self._weekRankValue > 0 then
+			self._gettingRankData = true
+
+			self:getRankData(function (data, selfRank, selfIndex)
+				self._finalRank = selfRank or 9999
+				self._gettingRankData = false
+				self._tmpSettleRankData = {
+					data,
+					selfRank,
+					selfIndex
+				}
+				local gradeConf = D._domeGradeConfig[self._grade]
+
+				if gradeConf._upRank and selfRank <= gradeConf._upRank then
+					self._newGrade = self._grade + 1
+				elseif gradeConf._downRank and gradeConf._downRank < selfRank then
+					self._newGrade = self._grade - 1
+				else
+					self._newGrade = self._grade
+				end
+
+				SimpleEvent.emit("dome.rank_reward")
+			end, function ()
+				self._gettingRankData = false
+
+				SimpleEvent.emit("dome.rank_fail")
+			end)
+		else
+			self._finalRank = 9999
+			local gradeConf = D._domeGradeConfig[self._grade]
+
+			if gradeConf._downRank then
+				self._newGrade = self._grade - 1
+			else
+				self._newGrade = self._grade
+			end
+
+			SimpleEvent.emit("dome.rank_reward")
+		end
+	end
+end
+
+function M:switchMap(dailyReset)
+	local beginDate = D._globalConfig._dome_begin_date
+	local year = (beginDate - beginDate % 10000) / 10000
+	local month = (beginDate % 10000 - beginDate % 100) / 100
+	local day = beginDate % 100
+	local beginTime = Client.getDateTimestamp(year, month, day)
+	local totalDay = math.floor((C.getCurTime() - beginTime) / 86400)
+	local curMap = totalDay % D.DOME_MAP + 1
+	self._curMap = curMap
+	local randSeed = totalDay
+	local weights = {}
+	local difficulty = self:getCurDifficulty()
+
+	table.clear(self._buffs)
+
+	for i = 1, BUFF_NUM do
+		for j = 1, #D._battleEnemyBuffConfig do
+			if D._battleEnemyBuffConfig[j]._group == i then
+				weights[j] = D._battleEnemyBuffConfig[j]._weight
+			else
+				weights[j] = 0
+			end
+		end
+
+		randSeed = self:nextSeed(randSeed)
+		local index = DropHelper.randomIndexByWeightSeed(weights, randSeed)
+
+		table.insert(self._buffs, {
+			index,
+			D._missionDomeConfig[self:getCurMissionId()]._buffLevel[i]
+		})
+	end
+
+	self._preRecordLevel = self:getCurLevel()
+end
+
+function M:nextSeed(seed)
+	seed = (seed * 12345678923.0 + 12345) % 65536
+
+	return seed
+end
+
+function M:getCurMap()
+	return self._curMap
+end
+
+function M:getCurDifficulty(map)
+	return self._mapData[map or self._curMap] and self._mapData[map or self._curMap].difficulty or 1
+end
+
+function M:getCurBuffs()
+	return self._buffs
+end
+
+function M:genCurBuffValue(index)
+	local vals = {}
+	local conf = D._battleEnemyBuffConfig[self._buffs[index][1]]
+
+	for i = 1, #conf._vals do
+		vals[i] = conf._vals[i] + (self._buffs[index][2] - 1) * conf._valsUp[i]
+	end
+
+	return vals
+end
+
+function M:getPreClaimLevel()
+	return self._preRecordLevel - 1
+end
+
+function M:getCurLevel(map)
+	return self._mapData[map or self._curMap] and self._mapData[map or self._curMap].level or 1
+end
+
+function M:getCurPassed(map)
+	return self._mapData[map or self._curMap] and self._mapData[map or self._curMap].result == D.BattleResult.Win or false
+end
+
+function M:getCurClaimedMsId(map)
+	return self._mapData[map or self._curMap] and self._mapData[map or self._curMap].curClaimedMsId or self:getCurMissionId(map) - 1
+end
+
+function M:readMissionName(msId)
+	return D._missionDomeConfig[msId]._nameSid
+end
+
+function M:readMissionReward(msId)
+	return D._missionDomeConfig[msId]._rewardCids, D._missionDomeConfig[msId]._rewardNums
+end
+
+function M:readMissionBaseReward(msId)
+	return D._missionDomeConfig[msId]._battleRewardCids, D._missionDomeConfig[msId]._battleRewardNums
+end
+
+function M:readFinalReward(map)
+	map = map or self._curMap
+	local msId = MISSION_PREFIX + map * 10000 + self:getCurDifficulty(map) * 100 + 10
+
+	return D._missionDomeConfig[msId]._rewardCids, D._missionDomeConfig[msId]._rewardNums
+end
+
+function M:getDailyBattleChance()
+	return self._dailyChance
+end
+
+function M:getDailyBattleBuyChance()
+	return self._dailyChanceAdd
+end
+
+function M:getDailyBattleTotalChance()
+	return D._globalConfig._dome_daily_chance + self._dailyChanceAdd
+end
+
+function M:tryBuyDailyBattleChance()
+	local costCid = D.ResType.diamond
+	local cost = D._globalConfig._dome_buy_diamond_cost * (self._dailyChanceAdd + 1)
+
+	if P._playerAsset:isAssetEnough(costCid, cost) then
+		P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.buy_dome_chance)
+
+		self._dailyChanceAdd = self._dailyChanceAdd + 1
+		self._meta.dailyChanceAdd = self._dailyChanceAdd
+	else
+		return costCid, cost
+	end
+end
+
+function M:isRewardClaimed(id)
+	return table.contains(self._claimList, id)
+end
+
+function M:isFinalRewardClaimed(map, difficulty)
+	local msId = MISSION_PREFIX + map * 10000 + difficulty * 100 + 10
+
+	return self:isRewardClaimed(msId)
+end
+
+function M:tryClaimeReward(id, rewards)
+	if self:isRewardClaimed(id) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local cids, nums = self:readMissionReward(id)
+
+	for i = 1, #cids do
+		P._playerAsset:increaseAssetNum(cids[i], nums[i], D.LogWay.finish_dome)
+
+		if rewards then
+			rewards[cids[i]] = (rewards[cids[i]] or 0) + nums[i]
+		end
+	end
+
+	table.insert(self._claimList, id)
+end
+
+function M:canStartBattle()
+	return self._dailyChance < D._globalConfig._dome_daily_chance + self._dailyChanceAdd
+end
+
+function M:startBattle()
+	self._battling = true
+	self._dailyChance = self._dailyChance + 1
+	self._meta.dailyChance = self._dailyChance
+
+	if not self._mapData[self._curMap] then
+		self._mapData[self._curMap] = {
+			time = 0,
+			difficulty = 1,
+			level = 1,
+			curClaimedMsId = MISSION_PREFIX + self._curMap * 10000 + 100
+		}
+	end
+
+	self._preRecordLevel = self._mapData[self._curMap].level
+
+	P._playerDomeBP:addExp(1)
+	Trace.traceDesign("DungeonDomeBattleNum:%d", self._dailyChance)
+end
+
+function M:getCurMissionId(map)
+	map = map or self._curMap
+
+	return MISSION_PREFIX + map * 10000 + self:getCurDifficulty(map) * 100 + 1
+end
+
+function M:getCurFinishedMissionId(map)
+	map = map or self._curMap
+
+	return MISSION_PREFIX + map * 10000 + self:getCurDifficulty(map) * 100 + self:getCurLevel(map) - 1
+end
+
+function M:finishMission(level, msType, result, battleHp, battleTime, rougeList)
+	battleTime = math.floor(math.min(999, battleTime))
+	self._battling = false
+	level = level / 2
+
+	if result ~= D.BattleResult.Win then
+		level = math.min(level, 10)
+	end
+
+	local data = self._mapData[D._missionDomeConfig[self:getCurMissionId()]._map]
+	self._newRecord = false
+
+	table.clear(self._settleRewards)
+
+	local curMissionId = self:getCurMissionId()
+	local cids, nums = self:readMissionBaseReward(curMissionId)
+
+	for i = 1, #cids do
+		self._settleRewards[cids[i]] = nums[i]
+
+		P._playerAsset:increaseAssetNum(cids[i], nums[i], D.LogWay.finish_dome)
+	end
+
+	if data.level < level or level == data.level and battleTime > (data.time or 0) then
+		data.level = level
+	end
+
+	data.time = battleTime
+	self._meta.passTimestamp = C.getCurTime() - CIRCLE_OFFSET - self._curWeek * 7 * 86400
+	local score = nil
+
+	if level <= 10 then
+		score = data.difficulty * 100000 + math.min(10, level) * 1000 + battleTime
+	else
+		score = (data.difficulty + 1) * 100000 + 0 + 0
+	end
+
+	self._newScore = score
+	self._newRecord = self._newScore > (self._todayRankValue or 0)
+
+	self:tryUploadTodayRecord(score)
+	Trace.traceDesign("DungeonDomeSuccess:%d_%d_%d", self._curMap, data.difficulty, level)
+
+	if #self._dailyDomeCards < 5 then
+		local shuffleList = self:filterRougeCards(rougeList)
+
+		if #shuffleList > 0 then
+			local randomer = math.randomer()
+
+			table.shuffle(shuffleList, randomer)
+			table.clear(self._dailySelectCards)
+
+			for i = 1, math.min(3, #shuffleList) do
+				self._dailySelectCards[#self._dailySelectCards + 1] = shuffleList[i]
+			end
+
+			table.shuffle(shuffleList, randomer)
+			table.clear(self._dailySelectRefreshCards)
+
+			for i = 1, math.min(3, #shuffleList) do
+				self._dailySelectRefreshCards[#self._dailySelectRefreshCards + 1] = shuffleList[i]
+			end
+
+			self._remainAdRefreshCount = 1
+			self._meta.remainAdRefreshCount = 1
+		end
+	end
+end
+
+function M:getBattleScores()
+	return self._newScore, self._todayRankValue
+end
+
+function M:claimRemainMapRewards(map)
+	local rewards = {}
+	local data = self._mapData[map]
+	local curClaimedMsId = data.curClaimedMsId
+	local curFinishedMsId = self:getCurFinishedMissionId(map)
+
+	for i = curClaimedMsId + 1, math.floor(curClaimedMsId / 100) * 100 + 10 do
+		if i <= curFinishedMsId and not self:isRewardClaimed(i) then
+			self:tryClaimeReward(i, rewards)
+
+			data.curClaimedMsId = i
+		end
+	end
+
+	local displayRewards = {}
+
+	for cid, num in pairs(rewards) do
+		displayRewards[#displayRewards + 1] = {
+			cid,
+			num
+		}
+	end
+
+	return displayRewards
+end
+
+function M:hasRemainRewards(map)
+	map = map or self._curMap
+	local data = self._mapData[map]
+	local curClaimedMsId = data.curClaimedMsId
+	local curFinishedMsId = self:getCurFinishedMissionId(map)
+
+	for i = curClaimedMsId + 1, math.floor(curClaimedMsId / 100) * 100 + 10 do
+		if i <= curFinishedMsId and not self:isRewardClaimed(i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:needNextDifficulty(map)
+	map = map or self._curMap
+	local data = self._mapData[map]
+
+	if data and data.level == 11 and D._missionDomeConfig[self:getCurMissionId(map) + 100] then
+		return true
+	else
+		return false
+	end
+end
+
+function M:filterRougeCards(rougeList)
+	local shuffleList = {}
+
+	for i = 1, #self._dailyDomeCards do
+		table.erase(rougeList, self._dailyDomeCards[i])
+	end
+
+	for i = 1, #rougeList do
+		if rougeList[i] > 100 and not table.contains(shuffleList, rougeList[i]) then
+			shuffleList[#shuffleList + 1] = rougeList[i]
+		end
+	end
+
+	return shuffleList
+end
+
+function M:getDailySelectCards()
+	return self._dailySelectCards
+end
+
+function M:selectDailyCard(index)
+	if self._dailySelectCards[index] then
+		self:appendDomeCards(self._dailySelectCards[index])
+	else
+		self:appendDomeCards(self._dailySelectCards[1])
+	end
+
+	SimpleEvent.emit("dome_card.dirty")
+	table.clear(self._dailySelectCards)
+	table.clear(self._dailySelectRefreshCards)
+end
+
+function M:getRemainAdRefreshCount()
+	return self._remainAdRefreshCount or 1
+end
+
+function M:refreshSelectCards()
+	table.clear(self._dailySelectCards)
+
+	for i = 1, #self._dailySelectRefreshCards do
+		self._dailySelectCards[i] = self._dailySelectRefreshCards[i]
+	end
+
+	self._remainAdRefreshCount = 0
+	self._meta.remainAdRefreshCount = 0
+
+	return self._dailySelectCards
+end
+
+function M:getDomeCards()
+	return self._dailyDomeCards
+end
+
+function M:appendDomeCards(cardId)
+	self._dailyDomeCards[#self._dailyDomeCards + 1] = cardId
+	self._meta.domeCardsDot = true
+end
+
+function M:hasNewDomeCardsDot()
+	return self._meta.domeCardsDot
+end
+
+function M:removeNewDomeCardsDot()
+	self._meta.domeCardsDot = false
+end
+
+function M:getExtraDrawCardCount()
+	local count = 0
+
+	for i = 1, #self._dailyDomeCards do
+		if self._dailyDomeCards[i] == 0 then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
+function M:getHistoryScore()
+	return self._weekHistoryScore
+end
+
+function M:getCircleStartTime()
+	return self._curWeek * 7 * 86400 + CIRCLE_OFFSET
+end
+
+function M:hasNextDifficulty()
+	return D._missionDomeConfig[MISSION_PREFIX + self._curMap * 10000 + (self:getCurDifficulty() + 1) * 100 + 1] ~= nil
+end
+
+function M:nextDifficulty(map)
+	local data = self._mapData[map or self._curMap]
+
+	TaskHelper:updateTaskValueMax(D.TaskType.FINISH_DOME_DIFF, data.difficulty)
+
+	data.level = 1
+	data.time = nil
+	data.difficulty = data.difficulty + 1
+	data.curClaimedMsId = MISSION_PREFIX + self._curMap * 10000 + data.difficulty * 100
+
+	for i = 1, #self._buffs do
+		self._buffs[i][2] = D._missionDomeConfig[self:getCurMissionId()]._buffLevel[i]
+	end
+
+	if map == self._curMap then
+		SimpleEvent.emit("dome.difficulty.change")
+	end
+end
+
+function M:tryUploadTodayRecord(rankValue)
+	rankValue = math.floor(rankValue)
+
+	if not self._todayRankValue or self._todayRankValue < rankValue then
+		self._weekRankValue = self._weekRankValue - (self._todayRankValue or 0)
+		self._weekRankValue = self._weekRankValue + rankValue
+		self._meta.weekRankValue = self._weekRankValue
+		local day = math.floor(self._meta.passTimestamp / 86400) + 1
+		self._weekHistoryScore[day] = rankValue
+		self._todayRankValue = rankValue
+		self._meta.todayRankValue = rankValue
+		self._retryUploadCount = 1
+
+		self:uploadRankValue()
+	end
+end
+
+function M:getSettleRewards(msId)
+	if msId then
+		table.clear(self._settleRewards)
+
+		local curMissionId = self:getCurMissionId()
+		local cids, nums = self:readMissionBaseReward(curMissionId)
+
+		for i = 1, #cids do
+			self._settleRewards[cids[i]] = (self._settleRewards[cids[i]] or 0) + nums[i]
+		end
+	end
+
+	local rewards = {}
+
+	for k, v in pairs(self._settleRewards) do
+		table.insert(rewards, {
+			k,
+			v
+		})
+	end
+
+	return rewards
+end
+
+function M:genBattleEnemeyProps(input)
+	input.enemyProps = input.enemyProps or {}
+
+	for i = 1, BUFF_NUM do
+		local conf = D._battleEnemyBuffConfig[self._buffs[i][1]]
+		local vals = {}
+
+		for j = 1, #conf._vals do
+			vals[j] = conf._vals[j] + (self._buffs[i][2] - 1) * conf._valsUp[j]
+		end
+
+		input.enemyProps[conf._effect] = vals
+	end
+
+	return input
+end
+
+function M:isDomeSettling()
+	return self._meta.settling
+end
+
+function M:isSettleClaimed()
+	return not self._meta.settling
+end
+
+function M:hasSettleRewards()
+	return self._finalRank ~= nil
+end
+
+function M:getFinalRank()
+	return self._finalRank
+end
+
+function M:tryClaimSettleRewards()
+	local items = {}
+	local finalRank = self:getFinalRank()
+
+	if finalRank ~= 9999 then
+		local rankRewards, conf = self:getRankRewards()
+
+		table.append(items, P._playerAsset:increaseAssetNumsByList(rankRewards, D.LogWay.dome_trial_rank .. self._grade))
+	end
+
+	self._weekRankValue = 0
+	self._meta.weekRankValue = 0
+	self._meta.settling = nil
+	self._curWeek = math.floor((C.getCurTime() - CIRCLE_OFFSET) / 7 / 86400)
+	self._meta.curWeek = self._curWeek
+
+	table.clear(self._weekHistoryScore)
+
+	local gradeConf = D._domeGradeConfig[self._grade]
+
+	if gradeConf._upRank and finalRank <= gradeConf._upRank then
+		self._grade = self._grade + 1
+		self._meta.grade = self._grade
+
+		SimpleEvent.emit("grade.dirty")
+	elseif gradeConf._downRank and gradeConf._downRank < finalRank then
+		self._grade = self._grade - 1
+		self._meta.grade = self._grade
+
+		SimpleEvent.emit("grade.dirty")
+	end
+
+	Trace.traceDesign("DungeonDomeRank:%d", self._grade)
+
+	return items
+end
+
+function M:getRankRewards()
+	local rewards = {}
+	local rank = self:getFinalRank()
+	local conf = nil
+
+	if rank ~= 9999 then
+		for i = 1, #D._rankDomeConfig do
+			conf = D._rankDomeConfig[i]
+
+			if conf._grade == self._grade and rank <= conf._max then
+				for j = 1, #conf._rewardCids do
+					rewards[#rewards + 1] = {
+						conf._rewardCids[j],
+						conf._rewardNums[j]
+					}
+				end
+
+				break
+			end
+		end
+	end
+
+	return rewards, conf
+end
+
+function M:getDisplayRankGroupId(groupId)
+	local encryptStr = math.encrypt_numbers(100 + self._curWeek, self._grade * 100 + (groupId or 1))
+
+	return encryptStr
+end
+
+function M:getRealActivityId()
+	return string.format("%d-%d", self._grade, self._lastWeek or self._curWeek)
+end
+
+function M:getGrade()
+	return self._grade
+end
+
+function M:getNewGrade()
+	return self._newGrade
+end
+
+function M:getRankId()
+	return C._userId
+end
+
+function M:getTodayRankValue()
+	return self._todayRankValue or 0
+end
+
+function M:getSelfRankData()
+	local playerData = P:genRankData()
+	playerData.rankValue = self:getRankValue()
+	playerData.atk = P._playerRole:getPlayerAtk()
+
+	return playerData
+end
+
+function M:getRankValue()
+	if self._weekRankValue > 0 then
+		if lc._isCN then
+			return self._weekRankValue
+		else
+			return self._weekRankValue * 1000000 + (self._meta.passTimestamp and 1000000 - self._meta.passTimestamp or 0)
+		end
+	else
+		return 0
+	end
+end
+
+function M:isNewRecord()
+	return self._newRecord
+end
+
+function M:loadBattleEnv(env)
+	self._buffs = env.buffs
+end
+
+function M:getRankData(callback, failCallback)
+	P._playerRanker:getCachedActivityRankData(D.RankType.DomeRank, self:getRealActivityId(), callback, failCallback)
+end
+
+function M:uploadRankValue()
+	P._playerRanker:uploadActivityRankData(D.RankType.DomeRank, self:getRealActivityId(), self:getRankValue(), {
+		atk = P._playerRole:getPlayerAtk()
+	})
+end
+
+function M:getRankCfg()
+	return D._domeGradeConfig[self._grade]
+end
+
+return M

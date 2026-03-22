@@ -1,0 +1,116 @@
+local M = class("ChatWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ChatWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._left = go:GetChild(0).transform
+	go._right = go:GetChild(1).transform
+
+	lc.prefabVarPeer(go._left)
+	lc.prefabVarPeer(go._right)
+
+	go._logText = go:Find("Log"):GetComponent("TMP_Text")
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+end
+
+function M:update(data, size)
+	self._left:SetActive(false)
+	self._right:SetActive(false)
+	self._logText.gameObject:SetActive(false)
+
+	if data.sender then
+		local sender = data.sender
+		local go = nil
+
+		if data.sender.id == C._firebaseId then
+			go = self._right
+		else
+			go = self._left
+		end
+
+		local width = 460
+		local text_height = size[2]
+		local bg_height = math.max(size[2] + 80, 120)
+		go._rtText.sizeDelta = Vector2.static(width, text_height)
+		go._rtBg.sizeDelta = Vector2.static(width + 40, bg_height)
+		go._textContent.text = data.message
+
+		go:SetActive(true)
+		V.setPlayerName(go._tmpName, sender.name, sender.name_color, "81EEE0")
+		V.loadAvatar(go._goAvatar, sender.avatar, sender.avatar_frame)
+		V.setTextTimeAgo(go._tmpTimeAgo, math.floor(data.timestamp / 1000))
+		self._panel:setClick(go._btnAvatar, function ()
+			if data.sender.id == C._userId then
+				V.showToast(SID.UNION_OPERATION_TIPS2)
+
+				return
+			end
+
+			V.viewOtherInfo({
+				firebaseId = data.sender.id
+			})
+		end)
+
+		local member = P._playerUnion._membersMap[data.sender.id]
+
+		if member then
+			if member.role == D.UnionRole.PRESIDENT then
+				go._goRoleContent:SetActive(true)
+				go._tmpRole:SetLocalize(SID.UNION_ROLE_1)
+				go._imgRoleFlag:SetActive(true)
+
+				local gradient = go._imgRoleFlag:GetComponent("UIGradient")
+				gradient.m_color1 = Color.str2Static("FFC634")
+				gradient.m_color2 = Color.str2Static("FFEE8F")
+				gradient.enabled = false
+				gradient.enabled = true
+				go._tmpRole.color = Color.str2Static("FFD15A")
+			elseif member.role == D.UnionRole.VICE_PRESIDENT then
+				go._goRoleContent:SetActive(true)
+				go._tmpRole:SetLocalize(SID.UNION_ROLE_2)
+
+				local gradient = go._imgRoleFlag:GetComponent("UIGradient")
+				gradient.m_color1 = Color.str2Static("39D4FF")
+				gradient.m_color2 = Color.str2Static("8AF7FF")
+				gradient.enabled = false
+				gradient.enabled = true
+				go._tmpRole.color = Color.str2Static("54E0FF")
+			elseif member.role == D.UnionRole.COORDINATOR then
+				go._goRoleContent:SetActive(true)
+				go._tmpRole:SetLocalize(SID.UNION_ROLE_3)
+				go._imgRoleFlag:SetActive(true)
+
+				local gradient = go._imgRoleFlag:GetComponent("UIGradient")
+				gradient.m_color1 = Color.str2Static("3DFFC8")
+				gradient.m_color2 = Color.str2Static("A0FFE")
+				gradient.enabled = false
+				gradient.enabled = true
+				go._tmpRole.color = Color.str2Static("67FFD6")
+			else
+				go._goRoleContent:SetActive(false)
+
+				go._tmpRole.color = Color.str2Static("529594")
+
+				go._tmpRole:SetLocalize(SID.UNION_ROLE_0)
+			end
+		else
+			go._goRoleContent:SetActive(false)
+
+			go._tmpRole.color = Color.str2Static("529594")
+
+			go._tmpRole:SetLocalize(SID.UNION_ROLE_0)
+		end
+	else
+		self._logText.gameObject:SetActive(true)
+	end
+end
+
+return M

@@ -1,0 +1,69 @@
+local M = class("BattleWeaponView_SlowfieldDroneGroup")
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(weapon, group)
+	self._weapon = weapon
+	self._group = group
+	local skinId = self._battleSession:getEquipedSkin(BattleSkillGroupEnum.SlowfieldDrone)
+
+	if skinId then
+		self._drone1 = self._sessionView:createWeapon("Weapon_5_sub_left_skin_" .. skinId, group._index)
+		self._drone2 = self._sessionView:createWeapon("Weapon_5_sub_right_skin_" .. skinId, group._index)
+	else
+		self._drone1 = self._sessionView:createWeapon("Weapon_5_sub_left", group._index)
+		self._drone2 = self._sessionView:createWeapon("Weapon_5_sub_right", group._index)
+	end
+
+	self._rotateRoot1 = self._drone1:GetChild(0)
+	self._rotateRoot2 = self._drone2:GetChild(0)
+	self._l1_1 = self._rotateRoot1:GetChild(1).transform
+	self._l1_2 = self._rotateRoot1:GetChild(2).transform
+	self._l2_1 = self._rotateRoot2:GetChild(1).transform
+	self._l2_2 = self._rotateRoot2:GetChild(2).transform
+
+	self._drone1:SetActive(false)
+	self._drone2:SetActive(false)
+end
+
+function M:posEvent()
+	local group = self._group
+
+	self._drone1:SetPosition(group._dronePos1.x, group._dronePos1.y, 0)
+	self._drone2:SetPosition(group._dronePos2.x, group._dronePos2.y, 0)
+end
+
+function M:channelingBeginEvent()
+	self._drone1:SetActive(true)
+	self._drone2:SetActive(true)
+end
+
+function M:channelingEndEvent()
+	self._drone1:SetActive(false)
+	self._drone2:SetActive(false)
+	self._l1_1:SetLocalRotation(0, 0, 0)
+	self._l1_2:SetLocalRotation(0, 0, 0)
+	self._l2_1:SetLocalRotation(0, 0, 0)
+	self._l2_2:SetLocalRotation(0, 0, 0)
+end
+
+function M:aniEvent(t)
+	self._l1_1:DOLocalRotate(opt.vec3_1:SetXYZ(0, 0, 80), t)
+	self._l1_2:DOLocalRotate(opt.vec3_1:SetXYZ(0, 0, -80), t)
+	self._l2_1:DOLocalRotate(opt.vec3_1:SetXYZ(0, 0, -80), t)
+	self._l2_2:DOLocalRotate(opt.vec3_1:SetXYZ(0, 0, 80), t)
+end
+
+function M:rotateEvent()
+	local group = self._group
+
+	self._rotateRoot1:SetLocalRotation(0, 0, group._angle1)
+	self._rotateRoot2:SetLocalRotation(0, 0, group._angle2)
+end
+
+return M

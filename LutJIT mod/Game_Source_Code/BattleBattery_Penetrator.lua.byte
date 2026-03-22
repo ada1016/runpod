@@ -1,0 +1,50 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_Penetrator", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._targetTowardOffset = true
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:castSkill()
+	local num = self._mainSkill:getProp(BattlePropEnum.Salvo, 0)
+	local offsetAngle = 5
+	num = num + 1
+
+	for i = 1, num do
+		local dtAngle = offsetAngle * (i - (1 + num) / 2)
+
+		self:createBullet(self._angle + dtAngle)
+	end
+
+	local effPar = self:getEffect(951)
+
+	if effPar and self._skillCastedCount % effPar == 0 then
+		self._delayFireBulletCD = 0.2
+	end
+end
+
+function M:createBullet(angle, x, y)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(x or self._shootPos.x, y or self._shootPos.y)
+	bullet:setDirByAngle(angle or self._angle)
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	return bullet
+end
+
+return M

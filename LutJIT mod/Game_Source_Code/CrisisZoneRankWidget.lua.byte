@@ -1,0 +1,108 @@
+local gradientColors = {
+	{
+		"FFE651_50",
+		"FFE651_0"
+	},
+	{
+		"7AE6FF_50",
+		"7AE6FF_0"
+	},
+	{
+		"FF9979_50",
+		"FF9979_0"
+	}
+}
+local bgColors = {
+	"FFF153_118",
+	"AFF2FF_118",
+	"FFB29E_118"
+}
+local M = class("CrisisZoneRankWidget")
+local RANK_IMG = {
+	"general/g_icon_28",
+	"general/g_icon_29",
+	"general/g_icon_30"
+}
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/CrisisZoneRankWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtName, data)
+
+	local rank = data.rank
+
+	if rank <= 3 then
+		self._txtRank.gameObject:SetActive(false)
+		self._imgBgRank:SetActive(true)
+		LuaUnity.setTPSprite(self._imgBgRank, RANK_IMG[rank])
+	else
+		self._txtRank.gameObject:SetActive(true)
+		self._imgBgRank:SetActive(false)
+
+		if data.rank == 9999 then
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		elseif data.rank <= 100 then
+			self._txtRank.text = data.rank
+		else
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		end
+	end
+
+	if rank ~= 9999 then
+		self._txtTitle:SetLocalize(SID.STR_CRISIS_ZONE_COMPLETE_RECORD)
+
+		local time = nil
+
+		if lc._isCN then
+			time = 9999 - data.rankValue
+		else
+			time = 9999 - math.floor(data.rankValue / 100000000)
+		end
+
+		V.loadAvatar(self._tfAvatar, data.avatar, data.avatarFrame)
+
+		if self._goBgGradient then
+			if rank < 4 then
+				local gradient = self._goBgGradient:GetComponent("UIGradient")
+				gradient.m_color1 = Color.str2Static(gradientColors[rank][1])
+				gradient.m_color2 = Color.str2Static(gradientColors[rank][2])
+
+				self._goBgGradient:SetActive(false)
+				self._goBgGradient:SetActive(true)
+
+				self._imgBg.color = Color.str2Static(bgColors[rank])
+			else
+				self._goBgGradient:SetActive(false)
+			end
+		end
+
+		self._txtTime.text = string.format("%02d:%02d", math.floor(time / 60), time % 60)
+
+		if self._goTime then
+			self._goTime:SetActive(true)
+		end
+	else
+		self._txtTitle:SetLocalize(SID.STR_CRISIS_ZONE_COMPLETE_TO_RANK)
+
+		if self._goTime then
+			self._goTime:SetActive(false)
+		end
+	end
+end
+
+return M

@@ -1,0 +1,39 @@
+local M = class("SparkScoutWeaponCardsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	tfCardContainer = Types.Transform,
+	txtCardNum = Types.TMP_Text
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goCards = {}
+	local count = self._tfCardContainer.childCount
+
+	for i = 1, count do
+		self._goCards[i] = self._tfCardContainer:GetChild(i - 1).gameObject
+
+		RogueCardInfoWidget.noCreate(self._goCards[i])
+	end
+end
+
+function M:addClicks()
+end
+
+function M:init(cards)
+	local rogueIds = cards
+
+	for i = 1, #self._goCards do
+		self._goCards[i]:updateUI(rogueIds[i] or 101)
+	end
+end
+
+function M:updateUI()
+end
+
+return M

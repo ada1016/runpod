@@ -1,0 +1,55 @@
+local M = class("SyncWaitingPanel", requireLua("BasePanel"))
+M.args = {
+	goMain = Types.GameObject,
+	goMsgBox = Types.GameObject,
+	btnRetry = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goMsgBox:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClick(self._btnRetry, function ()
+		self._goMsgBox:SetActive(false)
+		self._goMain:SetActive(true)
+		self:timeoutTimer()
+	end)
+end
+
+function M:init()
+end
+
+function M:closePanel()
+	self:cancelAction()
+	M.super.closePanel(self)
+end
+
+function M:doAction(timeout, callback)
+	self._timeout = timeout or 10
+	self._callback = callback
+
+	self:timeoutTimer()
+end
+
+function M:timeoutTimer()
+	lc.stopTimer(self._timeoutTimer)
+
+	self._timeoutTimer = lc.setTimer(function ()
+		self._goMsgBox:SetActive(true)
+		self._goMain:SetActive(false)
+
+		if self._callback then
+			self._callback()
+		end
+	end, self._timeout)
+end
+
+function M:cancelAction()
+	lc.stopTimer(self._timeoutTimer)
+
+	self._timeoutTimer = nil
+end
+
+return M

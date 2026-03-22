@@ -1,0 +1,132 @@
+local M = class("SingleVfxPool")
+
+declare("SingleVfxPool", M)
+
+local GameObject = GameObject
+local table = table
+local lc = lc
+
+local function _instantiate_obj(self)
+	local obj = GameObject.Instantiate(self._prefab, self._parent)
+
+	obj:SetActive(false)
+
+	return obj
+end
+
+function M:ctor(prefab, parent)
+	self._prefab = prefab
+	self._parent = parent
+	self._objectsPool = table.new(16, 0)
+	self._usingCount = 0
+	self._activeTimers = table.new(0, 16)
+end
+
+function M:playAt(delayTime, position, eulerAngle, dealFunc)
+	local go = self:getObj(delayTime)
+
+	lc.setPosition(go, position.x, position.y, position.z)
+
+	if eulerAngle then
+		lc.setLocalEulerAngles(go, eulerAngle.x, eulerAngle.y, eulerAngle.z)
+	else
+		lc.setLocalEulerAngles(go, 0, 0, 0)
+	end
+
+	if dealFunc then
+		dealFunc(go)
+	end
+end
+
+function M:getObj(delayTime, initialSize)
+	if not delayTime or delayTime <= 0 then
+		error("delayTime must be provided and greater than 0 for auto-recycling pool.")
+	end
+
+	if initialSize and initialSize <= self._usingCount then
+		return nil, false
+	end
+
+	local obj = self._objectsPool[#self._objectsPool]
+
+	if obj then
+		self._objectsPool[#self._objectsPool] = nil
+
+		obj:SetActive(true)
+	end
+
+	local new = false
+
+	if obj == nil then
+		obj = _instantiate_obj(self)
+
+		obj:SetActive(true)
+
+		new = true
+	end
+
+	self._usingCount = self._usingCount + 1
+	local timerHandle = self._activeTimers[obj]
+
+	if timerHandle then
+		lc.stopTimer(timerHandle)
+	end
+
+	local function timerCallback()
+		self._activeTimers[obj] = nil
+
+		self:_doPutObj(obj)
+	end
+
+	local newTimerHandle = lc.setTimer(timerCallback, delayTime)
+	self._activeTimers[obj] = newTimerHandle
+
+	return obj, new
+end
+
+function M:putObj(obj)
+	local timerHandle = self._activeTimers[obj]
+
+	if timerHandle then
+		lc.stopTimer(timerHandle)
+
+		self._activeTimers[obj] = nil
+	end
+
+	self:_doPutObj(obj)
+end
+
+function M:_doPutObj(obj)
+	if not obj then
+		return
+	end
+
+	obj:SetActive(false)
+
+	self._objectsPool[#self._objectsPool + 1] = obj
+	self._usingCount = self._usingCount - 1
+end
+
+function M:clean()
+	for obj, timerHandle in pairs(self._activeTimers) do
+		lc.stopTimer(timerHandle)
+	end
+
+	table.clear(self._activeTimers)
+
+	for _, obj in ipairs(self._objectsPool) do
+		-- Nothing
+	end
+
+	table.clear(self._objectsPool)
+end
+
+function M:onDestroy()
+	for obj, timerHandle in pairs(self._activeTimers) do
+		lc.stopTimer(timerHandle)
+	end
+
+	table.clear(self._activeTimers)
+end
+
+return M

@@ -1,0 +1,588 @@
+local math = math
+local sin = math.sin
+local cos = math.cos
+local pi = math.pi
+local rad = math.rad
+local ceil = math.ceil
+local floor = math.floor
+local abs = math.abs
+local min = math.min
+local M = {
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil(math.sqrt(mn))
+		local n = ceil(mn / m)
+
+		if n < 5 then
+			y2 = y1 + (y2 - y1) / 5 * n
+		end
+
+		for i = 1, n do
+			local y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			for j = 1, m do
+				local x = x1 + (x2 - x1) * (j - 1) / (m - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			end
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil(math.sqrt(2 * mn + 0.25) - 0.5)
+		local n = m
+
+		if n < 5 then
+			y2 = y1 + (y2 - y1) / 5 * n
+		end
+
+		for i = 1, n do
+			local y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			for j = i, m do
+				local x = x1 + (x2 - x1) * (j - (i + 1) / 2) / (m - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			end
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local xc = x1 / 2 + x2 / 2
+		local yc = y1 / 2 + y2 / 2
+		local r = min(x2 / 2 - x1 / 2, y2 / 2 - y1 / 2)
+
+		for i = 1, mn do
+			local angle = (i - 1) * 2 * pi / mn
+			formation[#formation + 1] = {
+				xc + r * sin(angle),
+				yc + r * cos(angle)
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local xc = x1 / 2 + x2 / 2
+		local yc = y1 / 2 + y2 / 2
+		local r = min(x2 / 2 - x1 / 2, y2 / 2 - y1 / 2)
+		local mn1 = ceil(mn / 3)
+
+		for i = 1, mn1 do
+			local angle = (i - 1) * 2 * pi / mn1
+			formation[#formation + 1] = {
+				xc + r / 2 * sin(angle),
+				yc + r / 2 * cos(angle)
+			}
+		end
+
+		local mn2 = mn - mn1
+
+		for i = 1, mn2 do
+			local angle = (i - 1) * 2 * pi / mn2
+			formation[#formation + 1] = {
+				xc + r * sin(angle),
+				yc + r * cos(angle)
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil((mn - 4) / 4 + 2)
+		local n = ceil((mn - m * 2) / 2 + 2)
+
+		for i = 1, n do
+			local y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			local a = floor((n - 2) / 2)
+
+			if a < i and i <= 2 + a then
+				for j = 1, m do
+					local x = x1 + (x2 - x1) * (j - 1) / (m - 1)
+					formation[#formation + 1] = {
+						x,
+						y
+					}
+				end
+			else
+				for j = floor((m - 2) / 2) + 1, floor((m - 2) / 2) + 2 do
+					local x = x1 + (x2 - x1) * (j - 1) / (m - 1)
+					formation[#formation + 1] = {
+						x,
+						y
+					}
+				end
+			end
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil(mn / 4)
+		local n = 4
+		local x, y = nil
+
+		if n < 5 then
+			y2 = y1 + (y2 - y1) / 5 * n
+		end
+
+		local needBreak = false
+
+		for i = 1, n do
+			for j = 1, m do
+				x = x1
+
+				if m > 1 then
+					x = x + (x2 - x1) * (j - 1) / (m - 1)
+				end
+
+				y = y1 + (y2 - y1) * (i - 1 + j % 2 * 0.5) / (n - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+
+				if mn <= #formation then
+					needBreak = true
+
+					break
+				end
+			end
+
+			if needBreak then
+				break
+			end
+		end
+
+		table.sort(formation, function (a, b)
+			if a[1] < b[1] then
+				return true
+			elseif b[1] < a[1] then
+				return false
+			else
+				return b[2] < a[2]
+			end
+		end)
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local n = ceil(mn / 3)
+		local m = mn - 2 * n + 3
+
+		if n < 5 then
+			y2 = y1 + (y2 - y1) / 5 * n
+		end
+
+		local xc = x1 / 2 + x2 / 2
+		local x, y = nil
+
+		for i = 1, n do
+			y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			if i == 1 then
+				formation[#formation + 1] = {
+					xc,
+					y
+				}
+			elseif i == n then
+				for j = 1, m do
+					x = x1 + (x2 - x1) * (j - 1) / (m - 1)
+					formation[#formation + 1] = {
+						x,
+						y
+					}
+				end
+			else
+				x = xc + (x1 - xc) * (i - 1) / (n - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+				x = xc + (x2 - xc) * (i - 1) / (n - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			end
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local r = (x2 - x1) / 3
+		local xc1 = x1 + r
+		local yc1 = y1 / 2 + y2 / 2
+		local xc2 = x1 + 2 * r
+		local yc2 = y1 / 2 + y2 / 2
+		local mn1 = ceil(mn / 2)
+
+		for i = 1, mn1 do
+			local angle = (i - 1) * 2 * pi / mn1
+			formation[#formation + 1] = {
+				xc1 + r * sin(angle),
+				yc1 + r * cos(angle)
+			}
+		end
+
+		local mn2 = mn - mn1
+
+		for i = 1, mn2 do
+			local angle = (i - 1) * 2 * pi / mn2
+			formation[#formation + 1] = {
+				xc2 + r * sin(angle),
+				yc2 + r * cos(angle)
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local k = 0.5
+		local p1x = x1 / 2 + x2 / 2
+		local p1y = y1
+		local p2x = x1 / 2 + x2 / 2
+		local p2y = y1 + 0.25 * (y2 - y1)
+		local p3x = x1 / 2 + x2 / 2
+		local p3y = y1 + 0.5 * (y2 - y1)
+		local p4x = x1 / 2 + x2 / 2
+		local p4y = y1 + 0.75 * (y2 - y1)
+		local n = ceil(mn / 4)
+		local x, y = nil
+
+		for i = 1, n do
+			x = p1x + (i - 1) / (n - 1) * (x1 - p1x)
+			y = p1y + k * (i - 1) / (n - 1) * (x1 - p1x)
+			formation[#formation + 1] = {
+				x,
+				y
+			}
+		end
+
+		for i = 1, n do
+			x = p2x + (i - 1) / (n - 1) * (x2 - p2x)
+			y = p2y - k * (i - 1) / (n - 1) * (x2 - p2x)
+			formation[#formation + 1] = {
+				x,
+				y
+			}
+		end
+
+		for i = 1, n do
+			x = p3x + (i - 1) / (n - 1) * (x1 - p2x)
+			y = p3y + k * (i - 1) / (n - 1) * (x1 - p2x)
+			formation[#formation + 1] = {
+				x,
+				y
+			}
+		end
+
+		for i = 1, n do
+			x = p4x + (i - 1) / (n - 1) * (x2 - p2x)
+			y = p4y - k * (i - 1) / (n - 1) * (x2 - p2x)
+			formation[#formation + 1] = {
+				x,
+				y
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = floor(mn / 7)
+		local r = x2 / 2 - x1 / 2
+		local xc = x1 / 2 + x2 / 2
+		local yc = y1 / 2 + y2 / 2
+		local l = r * sin(rad(18)) / sin(rad(36))
+
+		for i = 1, 5 do
+			if m == 1 then
+				local subTriangle = {}
+				local rr = r * 0.75
+				subTriangle[1] = {
+					xc + rr * sin(rad(72 * i)),
+					yc + rr * cos(rad(72 * i))
+				}
+				formation[#formation + 1] = subTriangle[1]
+			else
+				local n = nil
+
+				for i = 1, 20 do
+					if m <= i * (i + 1) / 2 then
+						n = i
+
+						break
+					end
+				end
+
+				local dx = l * sin(rad(36)) / sin(rad(72)) / (n - 1)
+				local dy = l * sin(rad(72)) / (n - 1)
+				local c = 0
+				local needBreak = false
+
+				for j = 1, n do
+					local y = y1 + dy * (j - 1)
+					local yr = y - yc
+
+					for k = 1, j do
+						local x = xc + dx * (k - (n + 1) / 2)
+						local xr = x - xc
+						local rr = math.sqrt(xr * xr + yr * yr) * 0.8
+						local theta = math.atan(yr, xr)
+						formation[#formation + 1] = {
+							xc + rr * sin(theta + rad(72 * i - 72)),
+							yc + rr * cos(theta + rad(72 * i - 72))
+						}
+						c = c + 1
+
+						if m <= c then
+							needBreak = true
+
+							break
+						end
+					end
+
+					if needBreak then
+						break
+					end
+				end
+			end
+		end
+
+		local n = mn - m * 5
+
+		for i = 1, n do
+			formation[#formation + 1] = {
+				xc + r * 0.4 * sin(rad(360 * i / n)),
+				yc + r * 0.4 * cos(rad(360 * i / n))
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local n = 3
+		local m = ceil(mn / n)
+		local x, y = nil
+
+		if n < 5 then
+			y2 = y2 + (y1 - y1) / 5 * n
+		end
+
+		local mid = (m + 1) / 2
+		local dy = (y1 - y2) / (m - 1)
+		local needBreak = false
+
+		for i = 1, n do
+			local yBase = y2 + (y1 - y2) * (i - 1) / 5
+
+			for j = 1, m do
+				x = x1
+
+				if m > 1 then
+					x = x + (x2 - x1) * (j - 1) / (m - 1)
+				end
+
+				y = yBase + abs(j - mid) * dy
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+
+				if mn <= #formation then
+					needBreak = true
+
+					break
+				end
+			end
+
+			if needBreak then
+				break
+			end
+		end
+
+		table.sort(formation, function (a, b)
+			if a[1] < b[1] then
+				return true
+			elseif b[1] < a[1] then
+				return false
+			else
+				return b[2] < a[2]
+			end
+		end)
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+
+		for i = 1, mn do
+			local x = x1 + (x2 - x1) * (i - 1) / (mn - 1)
+			formation[#formation + 1] = {
+				x,
+				y1
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local x = x1 / 2 + x2 / 2
+
+		for i = 1, mn do
+			local y = y1 + (y2 - y1) * (i - 1) / (mn - 1)
+			formation[#formation + 1] = {
+				x,
+				y
+			}
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil((mn - 1) / 2 + 1)
+		local n = mn - m + 1
+
+		for i = 1, n do
+			local y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			if i == ceil(n / 2) then
+				for j = 1, m do
+					local x = x1 + (x2 - x1) * (j - 1) / (m - 1)
+					formation[#formation + 1] = {
+						x,
+						y
+					}
+				end
+			else
+				local x = x1 + (x2 - x1) * (ceil(n / 2) - 1) / (m - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			end
+		end
+
+		return formation
+	end,
+	function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local m = ceil((mn - 1) / 2 + 1)
+		local n = m
+
+		for i = 1, n do
+			local y = y1
+
+			if n > 1 then
+				y = y + (y2 - y1) * (i - 1) / (n - 1)
+			end
+
+			if i == ceil(n / 2) then
+				local x = x1 / 2 + x2 / 2
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			else
+				local x = x1 + (x2 - x1) * (i - 1) / (m - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+				local x = x1 + (x2 - x1) * (m - i) / (m - 1)
+				formation[#formation + 1] = {
+					x,
+					y
+				}
+			end
+		end
+
+		return formation
+	end,
+	[41] = function (x1, x2, y1, y2, mn)
+		local formation = {}
+		local xc = x1 / 2 + x2 / 2
+		local yc = y1 / 2 + y2 / 2
+		local r = min(x2 / 2 - x1 / 2, y2 / 2 - y1 / 2)
+		local mn1 = ceil(mn / (3 * pi + 1) * pi)
+
+		for i = 1, mn1 do
+			local angle = (i - 1) * 2 * pi / mn1
+			formation[#formation + 1] = {
+				xc + r / 2 * sin(angle),
+				yc + r / 2 * cos(angle)
+			}
+		end
+
+		local line = ceil(mn / (3 * pi + 1) * 1)
+		local halfLine = ceil(line / 2)
+		line = halfLine * 2
+
+		for i = 1, line do
+			if i <= line / 2 then
+				formation[#formation + 1] = {
+					xc - r * (0.5 + 0.5 * i / (halfLine + 1)),
+					yc
+				}
+			else
+				formation[#formation + 1] = {
+					xc + r * (0.5 + 0.5 * (line + 1 - i) / (halfLine + 1)),
+					yc
+				}
+			end
+		end
+
+		local mn2 = mn - mn1 - line
+
+		for i = 1, mn2 do
+			local angle = (i - 1) * 2 * pi / mn2
+			formation[#formation + 1] = {
+				xc + r * sin(angle),
+				yc + r * cos(angle)
+			}
+		end
+
+		return formation
+	end
+}
+
+return M

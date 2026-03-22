@@ -1,0 +1,100 @@
+local M = class("ActivityLotteryHistroyPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goLoading = Types.GameObject,
+	tfContainer = Types.Transform
+}
+local ActivityLotteryHistroyWidget = requireLua("ActivityLotteryHistroyWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addEvents()
+end
+
+function M:init(id, selfData)
+	self._id = id or 0
+	self._widgets = {}
+	local datas = P._playerActivity:getDrawData(self._id, function (datas)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		if not datas or #datas == 0 then
+			return
+		end
+
+		self._goLoading:SetActive(false)
+		self:updateUI(datas, selfData)
+	end)
+
+	if datas and #datas > 0 then
+		self._goLoading:SetActive(false)
+		self:updateUI(datas, selfData)
+	end
+end
+
+function M:updateUI(datas, selfData)
+	local showList = {}
+
+	if selfData then
+		showList[#showList + 1] = selfData
+	end
+
+	for k, v in pairs(datas) do
+		local cid = v.drawGetReward
+
+		if cid and D._itemConfig[cid] then
+			local t = v.time
+			local selfId = v.firebaseId
+			local ret = table.findArray(showList, function (a)
+				return a.firebaseId == selfId and math.abs(a.time - t) < 1
+			end)
+
+			if not ret then
+				showList[#showList + 1] = v
+			end
+		end
+	end
+
+	table.sort(showList, function (a, b)
+		return b.time < a.time
+	end)
+
+	local num = #showList
+
+	for i = 1, 10 do
+		if i <= num then
+			local widget = nil
+
+			if self._widgets[i] then
+				widget = self._widgets[i]
+			else
+				widget = ActivityLotteryHistroyWidget.create(self._tfContainer)
+				self._widgets[i] = widget
+			end
+
+			self:setClickWithoutAction(widget._btnClick, function ()
+				V.viewOtherInfo(showList[i])
+			end)
+			self:setClickWithoutAction(widget._goItem._btnClick, function ()
+				widget._goItem:rewardclickCallback()
+			end)
+			widget:updateUI(showList[i])
+		elseif self._widgets[i] then
+			self._widgets[i]:SetActive(false)
+		end
+	end
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

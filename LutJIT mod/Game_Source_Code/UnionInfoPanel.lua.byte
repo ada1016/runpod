@@ -1,0 +1,249 @@
+local M = class("UnionInfoPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goFlagWidget = Types.GameObject,
+	textUnionName = Types.Text,
+	textUnionDesc = Types.Text,
+	tmpId = Types.TMP_Text,
+	tmpTotalAtk = Types.TMP_Text,
+	tmpMemberCount = Types.TMP_Text,
+	svContent = Types.ScrollRect,
+	tfContent = Types.Transform,
+	btnJoin = Types.Button,
+	btnApply = Types.Button,
+	goApplyed = Types.GameObject,
+	btnCopyId = Types.Button,
+	goSyncWaiting = Types.GameObject,
+	tmpNotTips = Types.TMP_Text
+}
+local UnionMemberListWidget = requireLua("UnionMemberListWidget")
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+	self._goSyncWaiting:SetActive(true)
+	P._playerUnion:tryGetUnionDetailReq(self._union_id)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._closeTimer)
+end
+
+function M:initPrefabVar()
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+end
+
+function M:addClicks()
+	self:on("network.error", function ()
+		self:closePanel()
+	end)
+	self:on("union.view.detail.resp", function (result)
+		if result.union then
+			self._goSyncWaiting:SetActive(false)
+			self:fillDataToUI(result.union)
+		else
+			self._goSyncWaiting:SetActive(false)
+			V.showToast(SID.UNION_NOT_EXIST)
+			MainGameRoot:showGlobalMask()
+
+			self._closeTimer = lc.setTimer(function ()
+				MainGameRoot:hideGlobalMask()
+				self:closePanel()
+			end, 0.3)
+		end
+	end)
+	self:on("union.join.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+		self:closePanel()
+	end)
+	self:on("union.apply.resp.not.exist", function ()
+		self._goSyncWaiting:SetActive(false)
+		self:closePanel()
+	end)
+	self:on("union.apply.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+		self._btnJoin:SetActive(false)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(true)
+	end)
+	self:on("union.hide.sync.wait", function ()
+		self._goSyncWaiting:SetActive(false)
+	end)
+	self:setClick(self._btnJoin, function ()
+		if not P._playerUnion:couldJoinUnion() then
+			local h = math.floor((P._playerUnion._meta.join_union_next_timestamp - C.getCurTime()) / 3600)
+			h = math.max(1, h)
+
+			V.showToast({
+				SID.UNION_JOIN_TIPS1,
+				h
+			})
+
+			return
+		end
+
+		if P._playerProfile:getLevel() < self._data.require_level then
+			V.showToast({
+				SID.UNION_APPLY_TIPS1,
+				self._data.require_level
+			})
+
+			return
+		end
+
+		if P._playerRole:getPlayerAtk() < self._data.require_atk then
+			V.showToast({
+				SID.UNION_APPLY_TIPS2,
+				self._data.require_atk
+			})
+
+			return
+		end
+
+		if self._data.max_member_num <= self._data.member_num then
+			V.showToast(SID.UNION_APPLY_TIPS3)
+
+			return
+		end
+
+		self._goSyncWaiting:SetActive(true)
+		P._playerUnion:tryJoinUnionReq(self._union_id)
+	end)
+	self:setClick(self._btnApply, function ()
+		if not P._playerUnion:couldJoinUnion() then
+			local h = math.floor((P._playerUnion._meta.join_union_next_timestamp - C.getCurTime()) / 3600)
+			h = math.max(1, h)
+
+			V.showToast({
+				SID.UNION_JOIN_TIPS1,
+				h
+			})
+
+			return
+		end
+
+		if P._playerProfile:getLevel() < self._data.require_level then
+			V.showToast({
+				SID.UNION_APPLY_TIPS1,
+				self._data.require_level
+			})
+
+			return
+		end
+
+		if P._playerRole:getPlayerAtk() < self._data.require_atk then
+			V.showToast({
+				SID.UNION_APPLY_TIPS2,
+				self._data.require_atk
+			})
+
+			return
+		end
+
+		if self._data.max_member_num <= self._data.member_num then
+			V.showToast(SID.UNION_APPLY_TIPS3)
+
+			return
+		end
+
+		self._goSyncWaiting:SetActive(true)
+		P._playerUnion:tryJoinUnionReq(self._union_id, true)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(true)
+	end)
+	self:setClickWithoutAction(self._btnCopyId, function ()
+		UniClipboard.SetText("#" .. math.intToHex(self._union_id))
+		V.showToast(SID.CONT_COPY_SUCCEED)
+	end)
+end
+
+function M:init(union_id)
+	self._union_id = union_id
+	self._tmpId.text = string.format("ID:#%s", math.intToHex(union_id))
+
+	self._goFlagWidget:init(1, 1)
+
+	self._textUnionName.text = ""
+	self._textUnionDesc.text = ""
+	self._tmpTotalAtk.text = 0
+
+	self._tmpMemberCount:SetLocalize(SID.UNION_MEMBER_COUNT, 0, 0)
+	self._btnJoin:SetActive(false)
+	self._btnApply:SetActive(false)
+	self._goApplyed:SetActive(false)
+	self._tmpNotTips.gameObject:SetActive(false)
+end
+
+function M:fillDataToUI(union)
+	self._data = union
+
+	self._goFlagWidget:init(union.avatar_base, union.avatar_badge)
+
+	self._textUnionName.text = union.name
+
+	if union.desc:len() == 0 then
+		self._textUnionDesc.text = LcLocalization.getTextStr(SID.UNION_DESC_EMPTY)
+	else
+		self._textUnionDesc.text = union.desc
+	end
+
+	local atk = 0
+
+	for i = 1, #union.members do
+		atk = atk + union.members[i].atk
+	end
+
+	self._tmpTotalAtk.text = atk
+
+	self._tmpMemberCount:SetLocalize(SID.UNION_MEMBER_COUNT, union.member_num, union.max_member_num)
+
+	self._listData = union.members
+
+	P._playerUnion:sortMemersByAtk(self._listData)
+
+	if self._scrollViewEx == nil then
+		self._scrollViewEx = ScrollViewEx.create(self._svContent, self, {
+			cellInitCount = 8,
+			cellHeight = 120
+		})
+	end
+
+	self._scrollViewEx:reloadData(0)
+
+	if P._playerRole:getPlayerAtk() < union.require_atk or P._playerProfile:getLevel() < union.require_level then
+		self._tmpNotTips.gameObject:SetActive(true)
+		self._tmpNotTips:SetLocalize(SID.UNION_REQUIRE_TIPS, union.require_level, union.require_atk)
+		self._btnJoin:SetActive(false)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(false)
+	else
+		self._btnJoin:SetActive(not union.need_apply)
+		self._btnApply:SetActive(union.need_apply)
+		self._goApplyed:SetActive(false)
+		self._tmpNotTips.gameObject:SetActive(false)
+	end
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = UnionMemberListWidget.create(self._tfContent)
+
+		goCell:init(self, true)
+	end
+
+	goCell:update(self._listData[index])
+
+	return goCell
+end
+
+function M:onCellNum()
+	return #self._listData
+end
+
+return M

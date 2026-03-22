@@ -1,0 +1,94 @@
+local gradientColors = {
+	{
+		"FFE651_50",
+		"FFE651_0"
+	},
+	{
+		"7AE6FF_50",
+		"7AE6FF_0"
+	},
+	{
+		"FF9979_50",
+		"FF9979_0"
+	}
+}
+local bgColors = {
+	"FFF153_118",
+	"AFF2FF_118",
+	"FFB29E_118"
+}
+local M = class("StageRankWidget")
+local RANK_IMG = {
+	"general/g_icon_28",
+	"general/g_icon_29",
+	"general/g_icon_30"
+}
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StageRankWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtName, data)
+
+	local rank = data.rank
+
+	if rank <= 3 then
+		self._txtRank.gameObject:SetActive(false)
+		self._imgBgRank:SetActive(true)
+		LuaUnity.setTPSprite(self._imgBgRank, RANK_IMG[rank])
+	else
+		self._txtRank.gameObject:SetActive(true)
+		self._imgBgRank:SetActive(false)
+
+		if data.rank == 9999 then
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		elseif data.rank <= 500 then
+			self._txtRank.text = data.rank
+		else
+			self._txtRank.text = "500+"
+		end
+	end
+
+	local rankValue = nil
+
+	if lc._isCN then
+		rankValue = data.rankValue
+	else
+		rankValue = math.floor(data.rankValue / 10000000000.0)
+	end
+
+	V.loadAvatar(self._tfAvatar, data.avatar, data.avatarFrame)
+
+	self._txtStageNum.text = rankValue
+
+	if self._goBgGradient then
+		if rank < 4 then
+			local gradient = self._goBgGradient:GetComponent("UIGradient")
+			gradient.m_color1 = Color.str2Static(gradientColors[rank][1])
+			gradient.m_color2 = Color.str2Static(gradientColors[rank][2])
+
+			self._goBgGradient:SetActive(false)
+			self._goBgGradient:SetActive(true)
+
+			self._imgBg.color = Color.str2Static(bgColors[rank])
+		else
+			self._goBgGradient:SetActive(false)
+		end
+	end
+end
+
+return M

@@ -1,0 +1,57 @@
+local M = class("DomeCardsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	tfCardContainer = Types.Transform,
+	txtCardNum = Types.TMP_Text
+}
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goCards = {}
+	local count = self._tfCardContainer.childCount
+
+	for i = 1, count do
+		self._goCards[i] = self._tfCardContainer:GetChild(i - 1).gameObject
+
+		RogueCardInfoWidget.noCreate(self._goCards[i])
+	end
+end
+
+function M:addClicks()
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	local cards = P._playerDome:getDomeCards()
+	local rogueList = BattleManager and BattleManager:getSession()._battleRouge:getRougeSelectList() or {}
+
+	for i = 1, #self._goCards do
+		if cards[i] and cards[i] ~= 0 then
+			if table.contains(rogueList, cards[i]) then
+				self._goCards[i]._goDomeActived:SetActive(true)
+			end
+
+			self._goCards[i]:updateUI(cards[i])
+			self:setClick(self._goCards[i]._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, cards[i], true)
+			end)
+			self._goCards[i]._goCardFront:SetActive(true)
+			self._goCards[i]._goEmpty:SetActive(false)
+		else
+			self._goCards[i]._goCardFront:SetActive(false)
+			self._goCards[i]._goEmpty:SetActive(true)
+		end
+	end
+
+	self._txtCardNum.text = string.format("%d/%d", #cards, 5)
+end
+
+return M

@@ -1,0 +1,514 @@
+local M = class("BattleEnemyFinder")
+local BattleMathLib = BattleMathLib
+local BattleDefine = BattleDefine
+local opt = opt
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+end
+
+function M:randomOneEnemy(excludeEnemys, battleWeapon, findLv)
+	local battleEnemys = self._battleSession._battleEnemys
+
+	for k = 1, 10 do
+		local i = self._battleRandomLib:randomN(#battleEnemys)
+		local enemy = battleEnemys[i]
+
+		if enemy and not enemy._isToBeDestroyed and (excludeEnemys == nil or excludeEnemys[enemy._id] == nil) and self._battleSession:enemyCanBeChoseAsTarget(enemy, battleWeapon) then
+			return enemy
+		end
+	end
+
+	if findLv == nil then
+		return
+	end
+
+	if findLv == 2 then
+		for i = 1, #battleEnemys do
+			local enemy = battleEnemys[i]
+
+			if enemy and not enemy._isToBeDestroyed and (excludeEnemys == nil or excludeEnemys[enemy._id] == nil) and self._battleSession:enemyCanBeChoseAsTarget(enemy, battleWeapon) then
+				return enemy
+			end
+		end
+	end
+end
+
+function M:findNearestEnemy(battleWeapon)
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minY = 999
+	local cnt = #battleEnemys
+
+	for i = 1, cnt do
+		local enemy = battleEnemys[i]
+
+		if self._battleSession:enemyCanBeChoseAsTarget(enemy, battleWeapon) then
+			local _, y = enemy:hitPosition()
+
+			if self._battleSession._lockEliteFlag and (enemy._type == BattleDefine.EnemyType.Elite or enemy._type == BattleDefine.EnemyType.Boss) then
+				if y <= self._battleSession._battleFieldEdgeY2 / 2 then
+					result = enemy
+
+					break
+				elseif battleWeapon and battleWeapon._id == 7 and y <= battleWeapon._atkRange then
+					result = enemy
+
+					break
+				end
+			end
+
+			if enemy._position.y < minY then
+				result = enemy
+				minY = enemy._position.y
+			end
+		end
+	end
+
+	return result
+end
+
+function M:findNearestEnemysWithCount(count, maxLen, result)
+	local battleEnemys = self._battleSession._battleEnemys
+	local c = 0
+	local cnt = #battleEnemys
+
+	for i = 1, cnt do
+		local enemy = battleEnemys[i]
+
+		if self._battleSession:enemyCanBeChoseAsTarget(enemy) then
+			local _, y = enemy:hitPosition()
+
+			if enemy._position.y < maxLen then
+				result[#result + 1] = enemy
+				c = c + 1
+
+				if c == 16 then
+					break
+				end
+			end
+		end
+	end
+
+	if count < c then
+		table.sort(result, function (a, b)
+			if a._position.y < b._position.y then
+				return true
+			elseif b._position.y < a._position.y then
+				return false
+			else
+				return b._id < a._id
+			end
+		end)
+	end
+end
+
+function M:findNearestEnemyWithBattery_Plasma(battleWeapon, ignoreAtkRange)
+	local result = nil
+	local minY = 999
+
+	if self._battleSession._lockEliteFlag then
+		local eliteOrBossEnemys = self._battleSession._eliteOrBossEnemys
+		local cnt = #eliteOrBossEnemys
+
+		for i = 1, cnt do
+			local enemy = eliteOrBossEnemys[i]
+
+			if self._battleSession:enemyCanBeChoseAsTarget(enemy, battleWeapon) then
+				local _, y = enemy:hitPosition()
+
+				if (ignoreAtkRange or y <= battleWeapon._atkRange) and y <= self._battleSession._battleFieldEdgeY2 / 2 and enemy._position.y < minY then
+					result = enemy
+					minY = enemy._position.y
+				end
+			end
+		end
+	end
+
+	if result then
+		return result
+	end
+
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minY = 999
+	local cnt = #battleEnemys
+
+	for i = 1, cnt do
+		local enemy = battleEnemys[i]
+
+		if self._battleSession:enemyCanBeChoseAsTarget(enemy, battleWeapon) then
+			local _, y = enemy:hitPosition()
+
+			if (ignoreAtkRange or y <= battleWeapon._atkRange) and enemy._position.y < minY then
+				result = enemy
+				minY = enemy._position.y
+			end
+		end
+	end
+
+	return result
+end
+
+function M:findEliteOrBossOne(weapon, excludeEnemys)
+	local eliteOrBossEnemys = self._battleSession._eliteOrBossEnemys
+	local cnt = #eliteOrBossEnemys
+
+	if cnt > 1 then
+		self._battleRandomLib:randomShuffle(eliteOrBossEnemys)
+	end
+
+	for i = 1, cnt do
+		local enemy = eliteOrBossEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if y <= weapon._atkRange and y <= self._battleSession._battleFieldEdgeY2 / 2 and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				return enemy
+			end
+		end
+	end
+end
+
+function M:randomEliteOrBossOne(weapon, excludeEnemys)
+	local eliteOrBossEnemys = self._battleSession._eliteOrBossEnemys
+	local cnt = #eliteOrBossEnemys
+
+	if cnt > 1 then
+		self._battleRandomLib:randomShuffle(eliteOrBossEnemys)
+	end
+
+	for i = 1, cnt do
+		local enemy = eliteOrBossEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				return enemy
+			end
+		end
+	end
+end
+
+function M:findEnemyCommon(weapon, excludeEnemys)
+	if self._battleSession._lockEliteFlag then
+		local eliteOrBossEnemys = self._battleSession._eliteOrBossEnemys
+		local cnt = #eliteOrBossEnemys
+
+		if cnt > 1 then
+			self._battleRandomLib:randomShuffle(eliteOrBossEnemys)
+		end
+
+		for i = 1, cnt do
+			local enemy = eliteOrBossEnemys[i]
+			local _, y = enemy:hitPosition()
+
+			if y <= weapon._atkRange and y <= self._battleSession._battleFieldEdgeY2 / 2 and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				return enemy
+			end
+		end
+	end
+
+	local result = nil
+	local minDis = 9999
+	local attackFlag = false
+
+	opt.array_arg64:clear()
+
+	local battleEnemys = self._battleSession._battleEnemys
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if y <= weapon._atkRange and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				if enemy._attacked and #opt.array_arg64 < 64 then
+					attackFlag = true
+					opt.array_arg64[#opt.array_arg64 + 1] = enemy
+				end
+
+				if not attackFlag then
+					local dis = BattleMathLib.dis_square(enemy._position, weapon._position)
+
+					if dis < minDis then
+						result = enemy
+						minDis = dis
+					end
+				end
+			end
+		end
+	end
+
+	if #opt.array_arg64 > 0 then
+		result = self._battleRandomLib:randomOne(opt.array_arg64)
+
+		opt.array_arg64:clear()
+
+		return result
+	end
+
+	return result
+end
+
+function M:randomOneEnemyWithExcludeOne(excludeEnemy, battleWeapon)
+	opt.dict_arg8:clear()
+
+	if excludeEnemy then
+		opt.dict_arg8[excludeEnemy._id] = true
+	end
+
+	local enemy = self:randomOneEnemy(opt.dict_arg8, battleWeapon)
+
+	opt.dict_arg8:clear()
+
+	return enemy
+end
+
+function M:findNearestEnemyWithBattery(weapon, range, excludeEnemys)
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minDis = 9999
+
+	if self._battleSession._lockEliteFlag then
+		local eliteOrBossEnemys = self._battleSession._eliteOrBossEnemys
+		local cnt = #eliteOrBossEnemys
+
+		for i = 1, cnt do
+			local enemy = eliteOrBossEnemys[i]
+
+			if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+				local _, y = enemy:hitPosition()
+
+				if y <= range and y <= BattleDefine.BATTLE_FIELD_EDGE_Y2 / 2 and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+					local dis = BattleMathLib.dis_square(enemy._position, weapon._position)
+
+					if dis < minDis then
+						result = enemy
+						minDis = dis
+					end
+				end
+			end
+		end
+
+		if result then
+			return result
+		end
+	end
+
+	local battleEnemys = self._battleSession._battleEnemys
+	local lockEliteFlag = false
+	local attackFlag = false
+
+	if weapon._id ~= 1 then
+		opt.array_arg64:clear()
+	end
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if y <= range and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				if self._battleSession._lockEliteFlag and (enemy._type == BattleDefine.EnemyType.Elite or enemy._type == BattleDefine.EnemyType.Boss) and y <= self._battleSession._battleFieldEdgeY2 / 2 then
+					result = enemy
+					lockEliteFlag = true
+
+					break
+				end
+
+				if weapon._id ~= 1 and enemy._attacked and #opt.array_arg64 < 64 then
+					attackFlag = true
+					opt.array_arg64[#opt.array_arg64 + 1] = enemy
+				end
+
+				if not attackFlag then
+					local dis = BattleMathLib.dis_square(enemy._position, weapon._position)
+
+					if dis < minDis then
+						result = enemy
+						minDis = dis
+					end
+				end
+			end
+		end
+	end
+
+	if not lockEliteFlag and weapon._id ~= 1 and #opt.array_arg64 > 0 then
+		result = self._battleRandomLib:randomOne(opt.array_arg64)
+
+		opt.array_arg64:clear()
+
+		return result
+	end
+
+	return result
+end
+
+function M:findNearestEnemyWithBattery2(weapon, range, position, excludeEnemys)
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minDis = 9999
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if y <= range and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				local dis = BattleMathLib.dis_square(enemy._position, position)
+
+				if dis < minDis then
+					result = enemy
+					minDis = dis
+				end
+			end
+		end
+	end
+
+	return result
+end
+
+function M:findNearestEnemyWithBattery4(weapon, range, excludeEnemys)
+	local battleEnemys = self._battleSession._battleEnemys
+	local count = 0
+
+	opt.array_arg32:clear()
+
+	local result = nil
+	local minDis = 9999
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+			local _, y = enemy:hitPosition()
+
+			if y <= range and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+				opt.array_arg32[#opt.array_arg32 + 1] = enemy
+
+				if count == 32 then
+					break
+				end
+			end
+		end
+	end
+
+	if #opt.array_arg32 > 0 then
+		result = self._battleRandomLib:randomOne(opt.array_arg32)
+
+		opt.array_arg32:clear()
+
+		return result
+	end
+
+	return result
+end
+
+function M:findNearestEnemyWithBattery3(weapon, excludeEnemys)
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minDis = 9999
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+		local _, y = enemy:hitPosition()
+
+		if self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+			if self._battleSession._lockEliteFlag and (enemy._type == BattleDefine.EnemyType.Elite or enemy._type == BattleDefine.EnemyType.Boss) and y <= self._battleSession._battleFieldEdgeY2 / 2 then
+				result = enemy
+
+				break
+			end
+
+			if excludeEnemys == nil or excludeEnemys[enemy._id] == nil then
+				local dis = BattleMathLib.dis_square(enemy._position, weapon._position)
+
+				if dis < minDis then
+					result = enemy
+					minDis = dis
+				end
+			end
+		end
+	end
+
+	return result
+end
+
+function M:findNearestToEnemyFromEnemy(tenemy, excludeEnemys)
+	local battleEnemys = self._battleSession._battleEnemys
+	local result = nil
+	local minDis = 9999
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if (excludeEnemys == nil or excludeEnemys[enemy._id] == nil) and self._battleSession:enemyCanBeChoseAsTarget(enemy) then
+			local dis = BattleMathLib.dis_square(enemy._position, tenemy._position)
+
+			if dis < minDis then
+				result = enemy
+				minDis = dis
+			end
+		end
+	end
+
+	return result
+end
+
+function M:getEnemysInBetweenY(y1, y2)
+	local battleEnemys = self._battleSession._battleEnemys
+	local insertCount = 0
+
+	opt.array_arg64:clear()
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if not enemy._isToBeDestroyed and self._battleSession:enemyCanBeChoseAsTarget(enemy) and y1 <= enemy._position.y and enemy._position.y <= y2 then
+			opt.array_arg64[#opt.array_arg64 + 1] = enemy
+			insertCount = insertCount + 1
+
+			if insertCount == 64 then
+				break
+			end
+		end
+	end
+
+	return opt.array_arg64
+end
+
+function M:getEnemysInRange(center, range, weapon)
+	local battleEnemys = self._battleSession._battleEnemys
+	range = range^2
+	local insertCount = 0
+
+	opt.array_arg64:clear()
+
+	for i = 1, #battleEnemys do
+		local enemy = battleEnemys[i]
+
+		if not enemy._isToBeDestroyed and self._battleSession:enemyCanBeChoseAsTarget(enemy, weapon) then
+			local dis = BattleMathLib.dis_square(enemy._position, center)
+
+			if dis <= range then
+				opt.array_arg64[#opt.array_arg64 + 1] = enemy
+				insertCount = insertCount + 1
+
+				if insertCount == 64 then
+					break
+				end
+			end
+		end
+	end
+
+	return opt.array_arg64
+end
+
+return M

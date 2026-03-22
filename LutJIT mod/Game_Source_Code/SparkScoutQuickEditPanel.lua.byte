@@ -1,0 +1,367 @@
+local M = class("SparkScoutEditPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnGroup1ComboCardsView = Types.Button,
+	btnGroup2ComboCardsView = Types.Button,
+	btnGroup3ComboCardsView = Types.Button,
+	goWeapon1 = Types.GameObject,
+	goWeapon2 = Types.GameObject,
+	goWeapon3 = Types.GameObject,
+	goWeapon4 = Types.GameObject,
+	goWeapon5 = Types.GameObject,
+	goWeapon6 = Types.GameObject,
+	goWeapon7 = Types.GameObject,
+	goWeapon8 = Types.GameObject,
+	goWeapon9 = Types.GameObject,
+	tfWeaponContainer = Types.Transform,
+	goDragWeapon = Types.GameObject,
+	goDragContainer = Types.GameObject,
+	imgEnemy1 = Types.Image,
+	imgEnemy2 = Types.Image,
+	imgEnemy3 = Types.Image
+}
+local SparkScoutQuickEditWidget = requireLua("SparkScoutQuickEditWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goWeapons = {
+		self._goWeapon1,
+		self._goWeapon2,
+		self._goWeapon3,
+		self._goWeapon4,
+		self._goWeapon5,
+		self._goWeapon6,
+		self._goWeapon7,
+		self._goWeapon8,
+		self._goWeapon9
+	}
+
+	for i = 1, #self._goWeapons do
+		SparkScoutQuickEditWidget.noCreate(self._goWeapons[i])
+	end
+
+	self._goBottomWeapons = {}
+
+	SparkScoutQuickEditWidget.noCreate(self._goDragWeapon)
+
+	self._imgEnemies = {
+		self._imgEnemy1,
+		self._imgEnemy2,
+		self._imgEnemy3
+	}
+end
+
+function M:addClicks()
+	for i = 1, #self._goWeapons do
+		self:setClick(self._goWeapons[i]._btnClick, function ()
+			if self._longPressing then
+				return
+			end
+
+			if P._playerActivitySparkScout:getPvpWeapon(i) ~= nil and not self._draggingWeapon then
+				P._playerActivitySparkScout:setPvpWeapon(i, nil)
+				self:updateWeapons()
+				self:updateBottomWeapons()
+				self:shakeWeapon()
+			end
+		end)
+		lc.addListeners(self._goWeapons[i]._goContent, self, -i)
+	end
+
+	self:setClick(self._btnGroup1ComboCardsView, function ()
+		local cards = {}
+
+		for i = 1, 3 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+	self:setClick(self._btnGroup2ComboCardsView, function ()
+		local cards = {}
+
+		for i = 4, 6 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+	self:setClick(self._btnGroup3ComboCardsView, function ()
+		local cards = {}
+
+		for i = 7, 9 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon then
+				cards[#cards + 1] = weapon
+			end
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutCardPreviewPanel, cards)
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateWeapons()
+	self:updateBottomWeapons()
+	self:updateEnemy()
+end
+
+function M:updateWeapons()
+	for i = 1, #self._goWeapons do
+		local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+		self._goWeapons[i]:init(weapon, i)
+	end
+end
+
+function M:updateBottomWeapons()
+	local usedWeapons = {}
+
+	for i = 1, #self._goWeapons do
+		local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+		if weapon then
+			usedWeapons[#usedWeapons + 1] = weapon
+		end
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if P._playerActivitySparkScout:getWeaponDeck(i) then
+			if not self._goBottomWeapons[i] then
+				self._goBottomWeapons[i] = SparkScoutQuickEditWidget.create(self._tfWeaponContainer)
+
+				self._goBottomWeapons[i]:init(i)
+				lc.addListeners(self._goBottomWeapons[i]._goContent, self, i)
+				self:setClick(self._goBottomWeapons[i]._btnClick, function ()
+					if not self._draggingWeapon then
+						for j = 1, 9 do
+							if P._playerActivitySparkScout:getPvpWeapon(j) == nil and P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(j) then
+								P._playerActivitySparkScout:setPvpWeapon(j, i)
+								self:updateWeapons()
+								self:updateBottomWeapons()
+								self:shakeWeapon()
+
+								break
+							end
+						end
+					end
+				end)
+			end
+
+			if not table.contains(usedWeapons, i) and i ~= self._draggingWeapon then
+				if self._editingWeapon then
+					self._goBottomWeapons[i]:stopShake()
+					self._goBottomWeapons[i]:shake()
+				else
+					self._goBottomWeapons[i]:stopShake()
+				end
+
+				self._goBottomWeapons[i]:SetActive(true)
+
+				if not self._btnFirstAvaliableWeapon then
+					self._btnFirstAvaliableWeapon = self._goBottomWeapons[i]._btnClick
+				end
+			elseif self._goBottomWeapons[i] then
+				self._goBottomWeapons[i]:SetActive(false)
+			end
+		end
+	end
+end
+
+function M:shakeWeapon()
+	for i = 1, #self._goWeapons do
+		if self._goWeapons[i]._weapon then
+			self._goWeapons[i]:stopShake()
+			self._goWeapons[i]:shake()
+		else
+			self._goWeapons[i]:stopShake()
+		end
+	end
+
+	for _, goWeapon in pairs(self._goBottomWeapons) do
+		goWeapon:shake()
+	end
+end
+
+function M:stopShakeWeapon()
+	for i = 1, #self._goWeapons do
+		self._goWeapons[i]:stopShake()
+	end
+
+	for _, goWeapon in pairs(self._goBottomWeapons) do
+		goWeapon:stopShake()
+	end
+end
+
+function M:onTouchBegan(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if id < 0 then
+		local index = -id
+		id = P._playerActivitySparkScout:getPvpWeapon(index)
+
+		if id == nil then
+			return
+		end
+
+		self._goWeapons[index]:init(nil, index)
+	end
+
+	self._goDragWeapon = self._goBottomWeapons[id]
+	self._dragSiblingIndex = self._goDragWeapon.transform:GetSiblingIndex()
+
+	self._goDragWeapon:SetActive(true)
+	self._goDragWeapon:SetParent(self.transform)
+
+	self._goDragWeapon._goContent:GetComponent("Image").raycastTarget = false
+	self._draggingWeapon = id
+	local pos = eventData.position
+
+	lc.setPosition(self._goDragWeapon, pos.x, pos.y, 0)
+end
+
+function M:onTouchMoved(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if id < 0 then
+		id = P._playerActivitySparkScout:getPvpWeapon(-id)
+
+		if id == nil then
+			return
+		end
+	end
+
+	local pos = eventData.position
+
+	lc.setPosition(self._goDragWeapon, pos.x, pos.y, 0)
+end
+
+function M:onTouchEnded(eventData, id)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	if not self._draggingWeapon then
+		return
+	end
+
+	local weapon = id
+
+	if id < 0 then
+		weapon = P._playerActivitySparkScout:getPvpWeapon(-id)
+
+		if weapon == nil then
+			return
+		end
+	end
+
+	self._draggingWeapon = nil
+
+	self._goDragWeapon:SetActive(false)
+	Client.playSound("2d_tap")
+
+	local go = eventData.pointerCurrentRaycast.gameObject
+
+	if go then
+		local weaponChanged = false
+
+		if go == self._goDragContainer then
+			if id < 0 then
+				P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+
+				weaponChanged = true
+			end
+		else
+			for i = 1, #self._goWeapons do
+				if go == self._goWeapons[i]._goContent then
+					if P._playerActivitySparkScout:isPvpWeaponSlotUnlocked(i) then
+						local newWeapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+						if newWeapon == nil then
+							P._playerActivitySparkScout:setPvpWeapon(i, weapon)
+
+							if id < 0 then
+								P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+							end
+						else
+							P._playerActivitySparkScout:setPvpWeapon(i, weapon)
+							P._playerActivitySparkScout:setPvpWeapon(-id, newWeapon)
+						end
+
+						weaponChanged = true
+					end
+
+					break
+				end
+			end
+
+			for _, goWeapon in pairs(self._goBottomWeapons) do
+				if go == goWeapon._goContent then
+					if id < 0 then
+						P._playerActivitySparkScout:setPvpWeapon(-id, nil)
+
+						weaponChanged = true
+					end
+
+					break
+				end
+			end
+		end
+
+		if weaponChanged then
+			self:shakeWeapon()
+		end
+
+		self._goDragWeapon:SetActive(true)
+		self._goDragWeapon:SetParent(self._tfWeaponContainer)
+		self._goDragWeapon.transform:SetSiblingIndex(self._dragSiblingIndex)
+
+		self._goDragWeapon._goContent:GetComponent("Image").raycastTarget = true
+
+		self:updateWeapons()
+		self:updateBottomWeapons()
+	end
+end
+
+function M:updateEnemy()
+	local enemies = P._playerActivitySparkScout:getBattleEnemies()
+
+	for i = 1, #enemies do
+		local enemyGroup = enemies[i]
+		local normalEnemy = enemyGroup[1]
+		local eliteEnemy = enemyGroup[2]
+		local id = normalEnemy ~= 0 and normalEnemy or eliteEnemy
+
+		V.loadEnemySprite(self._imgEnemies[i], id)
+		self:setClick(self._imgEnemies[i]:GetComponent("Button"), function ()
+			V.showEnemyBubble(id, self._imgEnemies[i].transform)
+		end)
+	end
+end
+
+return M

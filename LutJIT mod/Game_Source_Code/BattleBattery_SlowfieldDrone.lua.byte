@@ -1,0 +1,132 @@
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local requireLua = requireLua
+local opt = opt
+local Vector3 = Vector3
+local BattleMathLib = BattleMathLib
+local DronGroup = requireLua("BattleBattery_SlowfieldDroneGroup")
+local M = class("BattleBattery_SlowfieldDrone", requireLua("BattleBattery"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView_SlowfieldDrone").new(battleSession)
+	end
+
+	self._group1 = DronGroup.create(self, battleSession)
+end
+
+function M:stepSeekingEnemy()
+	if self._isChanneling then
+		return
+	end
+
+	self._targetEnemy = self._battleSession._nearestEnemy
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+	self._group1:step(dt)
+
+	if self._group2 then
+		self._group2:step(dt)
+	end
+
+	if self._skinGroups then
+		for i = 1, #self._skinGroups do
+			self._skinGroups[i]:step(dt)
+		end
+	end
+end
+
+function M:onPropDitry(k, v)
+	if k == BattlePropEnum.Salvo then
+		self._group2 = DronGroup.create(self, self._battleSession)
+	end
+end
+
+function M:onCastSkill(bullet, groupIndex)
+	bullet._groupIndex = groupIndex
+
+	if groupIndex == 1 then
+		self._bullet = bullet
+	end
+end
+
+function M:isInAtkingStage()
+	return self._group1._stage == 4
+end
+
+function M:castSkill()
+	self._isChanneling = true
+
+	self._group1:castSkill(1, self._group1, self._group2)
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		if self._skinGroups == nil then
+			self._skinGroups = table.new(4, 0)
+		end
+
+		local count = self._skinSkillParam1
+
+		for i = 1, count do
+			self._skinGroups[i] = DronGroup.create(self, self._battleSession)
+
+			self._skinGroups[i]:castSkill(3, self._group1, self._group2)
+		end
+	end
+
+	if self._group2 then
+		self._group2:castSkill(2, self._group1, self._group2)
+	end
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if self._bullet ~= bullet then
+		return
+	end
+
+	local param = self:getEffect(551)
+
+	if param then
+		local p = D.getBattleEffectParams(551)
+
+		if self._skillCastedCount % p[1] == 0 then
+			self._effect551 = 1
+
+			if self._group2 then
+				self._effect551 = self._effect551 + 1
+			end
+		end
+	end
+
+	self._isChanneling = false
+
+	self:onChannelingEnd()
+
+	if self._view then
+		self._group1._view:posEvent()
+		self._group1._view:channelingEndEvent()
+
+		if self._group2 and self._group2._view then
+			self._group2._view:posEvent()
+			self._group2._view:channelingEndEvent()
+		end
+
+		if self._skinGroups then
+			for i = 1, #self._skinGroups do
+				self._skinGroups[i]._view:posEvent()
+				self._skinGroups[i]._view:channelingEndEvent()
+			end
+		end
+	end
+end
+
+return M

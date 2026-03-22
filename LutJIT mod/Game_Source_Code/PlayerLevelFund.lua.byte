@@ -1,0 +1,14 @@
+local M = class("PlayerLevelFund", requireLua("PlayerBattlePassBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.LevelFund
+	self._bpLevelCfg = D._levelFundConfig
+	self._bpLogWay = D.LogWay.level_fund
+	self._key_redDot = "city.home.special.levelfund"
+end
+
+function M:getCurExp()
+	return P:getLevel()
+end
+
+return M

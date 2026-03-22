@@ -1,0 +1,110 @@
+local newtab = table.new
+local cleartab = table.clear
+local setmetatable = setmetatable
+local M = newtab(0, 8)
+_G.TablePool = M
+local max_pool_size = 130
+local pool_init_size = 128
+local pools = newtab(0, pool_init_size)
+
+function M.fetch32()
+	return M.fetch(32, 32, 0)
+end
+
+function M.release32(obj)
+	M.release(32, obj)
+end
+
+function M.fetch8()
+	return M.fetch(8, 8, 0)
+end
+
+function M.release8(obj)
+	M.release(8, obj)
+end
+
+function M.fetch4()
+	return M.fetch(4, 4, 0)
+end
+
+function M.release4(obj)
+	M.release(4, obj)
+end
+
+function M.fetchTable4()
+	return M.fetch(4, 0, 4)
+end
+
+function M.fetch2()
+	return M.fetch(2, 2, 0)
+end
+
+function M.release2(obj)
+	M.release(2, obj)
+end
+
+function M.fetch(tag, narr, nrec)
+	local pool = pools[tag]
+
+	if not pool then
+		pool = newtab(pool_init_size, 2)
+		pools[tag] = pool
+		pool.c = 0
+		pool[0] = 0
+	else
+		local len = pool[0]
+
+		if len > 0 then
+			local obj = pool[len]
+			pool[len] = nil
+			pool[0] = len - 1
+
+			return obj
+		end
+	end
+
+	return newtab(narr, nrec)
+end
+
+function M.release(tag, obj, noclear)
+	if not obj then
+		error("object empty", 2)
+	end
+
+	local pool = pools[tag]
+
+	if not pool then
+		pool = newtab(4, 2)
+		pools[tag] = pool
+		pool.c = 0
+		pool[0] = 0
+	end
+
+	local cnt = pool.c + 1
+
+	if cnt >= 20000 then
+		pool = newtab(pool_init_size, 2)
+		pools[tag] = pool
+		pool.c = 0
+		pool[0] = 0
+
+		return
+	end
+
+	pool.c = cnt
+	local len = pool[0] + 1
+
+	if max_pool_size < len then
+		return
+	end
+
+	if not noclear then
+		setmetatable(obj, nil)
+		cleartab(obj)
+	end
+
+	pool[len] = obj
+	pool[0] = len
+end
+
+return M

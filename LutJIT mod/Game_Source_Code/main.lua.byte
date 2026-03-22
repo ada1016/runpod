@@ -1,0 +1,311 @@
+local require = require
+
+local function requireProto()
+	require("net.proto.Msg_pb")
+	require("net.proto.Auth_pb")
+	require("net.proto.User_pb")
+	require("net.proto.Region_pb")
+
+	Msg_pb = Protol.Msg_pb
+	Auth_pb = Protol.Auth_pb
+	User_pb = Protol.User_pb
+	Region_pb = Protol.Region_pb
+end
+
+local function initRequire(checkLuaFlag)
+	if checkLuaFlag or AppConst.Platform == AppConst.osx or AppConst.Platform == AppConst.webgl then
+		function table.new()
+			return {}
+		end
+
+		function table.clear(tbl)
+			for k, v in pairs(tbl) do
+				tbl[k] = nil
+			end
+		end
+	else
+		require("table.new")
+		require("table.clear")
+	end
+
+	LuaOut = require("tolua.out")
+	json = require("cjson")
+
+	require("core.common_lua.functions")
+	require("core.common_lua.stringex")
+	require("app._automatical.LuaPath")
+
+	if not checkLuaFlag then
+		requireLua("hotfix")
+	end
+
+	local requireLua = requireLua
+
+	requireLua("PrefabDefine")
+	requireLua("StringEnums")
+	requireLua("core_init")
+	requireLua("Trace")
+
+	lc._encryptOffset = math.random(-9999, 9999)
+
+	requireLua("DropHelper")
+	requireLua("Data")
+	requireLua("ResultCode")
+	requireLua("Client")
+	requireLua("V")
+	requireLua("NotificationMgr")
+	requireLua("RedDotManager")
+	requireLua("TaskHelper")
+	requireLua("battle_init")
+end
+
+local function launchGame()
+	LuaUnity.createGameObject("Assets/FW/Prefabs/UI/MainGameRoot.prefab")
+	SceneHelper:EnterLoginScene(function ()
+		AudioService:Init()
+		AudioService:SetMusicMute(Client._musicFlag == 0)
+		AudioService:SetSoundMute(Client._soundFlag == 0)
+	end)
+end
+
+function mainDebug()
+	for i = 1, #_G_ALL_PACKAGES_ARRAY do
+		package.loaded[_G_ALL_PACKAGES_ARRAY[i]] = nil
+	end
+
+	main()
+end
+
+function outputConfigValues(name)
+	print("<<<<<<<<<<<", name)
+
+	local config = require(string.format("app._config.%s", name))
+	local sort_ids = {}
+
+	for k, v in pairs(config) do
+		if type(k) == "number" then
+			sort_ids[#sort_ids + 1] = k
+		end
+	end
+
+	table.sort(sort_ids, function (a, b)
+		return a < b
+	end)
+
+	local keys = config.mapKeyIndexArray
+	local str_vals = {}
+
+	for i = 1, #sort_ids do
+		local row = config[sort_ids[i]]
+
+		for j = 1, #keys do
+			local v = row[keys[j]]
+
+			if type(v) == "table" then
+				local c = v.c or #v
+
+				for i = 1, c do
+					local vv = v[i]
+
+					if type(vv) == "table" then
+						local cc = vv.c or #vv
+
+						for i = 1, cc do
+							local vvv = vv[i]
+							str_vals[#str_vals + 1] = tostring(vvv) .. "\n"
+						end
+					else
+						str_vals[#str_vals + 1] = tostring(vv) .. "\n"
+					end
+				end
+			else
+				str_vals[#str_vals + 1] = tostring(v) .. "\n"
+			end
+		end
+	end
+
+	Application = UnityEngine.Application
+	local file, err = io.open(Application.persistentDataPath .. "/output2/" .. name .. ".txt", "w")
+	local result, errMsg = file:write(table.concat(str_vals))
+
+	file:close()
+	print("文件保存成功")
+end
+
+function checkData()
+	math.randomseed(tostring(os.time()):reverse():sub(1, 6))
+	require("app._automatical.LuaPath")
+	requireLua("StringEnums")
+
+	local requireLua = requireLua
+	lc = {
+		_encryptOffset = math.random(-9999, 9999)
+	}
+
+	print("lc._encryptOffset", lc._encryptOffset)
+	outputConfigValues("activity_ark_rebuild")
+	outputConfigValues("activity_ark_rebuild_milestone")
+	outputConfigValues("activity_monopoly")
+	outputConfigValues("activity_monopoly_battlepass")
+	outputConfigValues("activity_monopoly_cell")
+	outputConfigValues("activity_monopoly_milestone")
+	outputConfigValues("activity_time")
+	outputConfigValues("activity_week_lottery")
+	outputConfigValues("activity_week_lottery_2")
+	outputConfigValues("ark_rebuild_atk_level")
+	outputConfigValues("ark_rebuild_battlepass")
+	outputConfigValues("ark_rebuild_module")
+	outputConfigValues("battlepass")
+	outputConfigValues("battlepass_dome")
+	outputConfigValues("battlepass_key")
+	outputConfigValues("battlepass_skin")
+	outputConfigValues("challenge")
+	outputConfigValues("chip")
+	outputConfigValues("damage_type_enum")
+	outputConfigValues("defender_upgrade")
+	outputConfigValues("dome_upgrade")
+	outputConfigValues("drop")
+	outputConfigValues("drop_path")
+	outputConfigValues("equip")
+	outputConfigValues("equip_refine")
+	outputConfigValues("equip_upgrade")
+	outputConfigValues("exchange")
+	outputConfigValues("gem_effect")
+	outputConfigValues("gift")
+	outputConfigValues("guide")
+	outputConfigValues("guide_text")
+	outputConfigValues("guide_trigger")
+	outputConfigValues("iap")
+	outputConfigValues("item")
+	outputConfigValues("item_avatar")
+	outputConfigValues("jump")
+	outputConfigValues("levelfund")
+	outputConfigValues("lottery")
+	outputConfigValues("lottery_extra")
+	outputConfigValues("mail")
+	outputConfigValues("mission")
+	outputConfigValues("mission_ark_rebuild")
+	outputConfigValues("mission_dome")
+	outputConfigValues("mission_elite")
+	outputConfigValues("mission_global_defense")
+	outputConfigValues("mission_offline")
+	outputConfigValues("player_level")
+	outputConfigValues("rank_ark_rebuild")
+	outputConfigValues("rank_dome")
+	outputConfigValues("rank_monopoly")
+	outputConfigValues("rewards")
+	outputConfigValues("seven_day")
+	outputConfigValues("skin_dome")
+	outputConfigValues("skin_effect")
+	outputConfigValues("skin_gatlin")
+	outputConfigValues("skin_role")
+	outputConfigValues("skin_weapon")
+	outputConfigValues("support")
+	outputConfigValues("system_unlock")
+	outputConfigValues("task")
+	outputConfigValues("tips")
+	outputConfigValues("weapon")
+	outputConfigValues("weapon_grow")
+	outputConfigValues("weapon_prop")
+	outputConfigValues("weapon_upgrade")
+	outputConfigValues("battle_buff")
+	outputConfigValues("battle_enemy")
+	outputConfigValues("battle_global_buff")
+	outputConfigValues("battle_rouge")
+	outputConfigValues("battle_rouge_card")
+	outputConfigValues("battle_skill")
+end
+
+function main(checkLuaFlag)
+	math.randomseed(tostring(os.time()):reverse():sub(1, 6))
+
+	P = nil
+
+	initRequire(checkLuaFlag)
+
+	if checkLuaFlag then
+		return
+	end
+
+	if lc._isMobile then
+		C._useFirebaseAccount = true
+	else
+		C._useFirebaseAccount = false
+	end
+
+	if AppConst.appId == "10003" then
+		-- Nothing
+	end
+
+	C._appConfig = json.decode(AppConst.csvStr)
+
+	AudioService:Init()
+	D.loadConfig()
+	C.init()
+
+	if C._config.useRemoteData then
+		C._useFirebaseAccount = true
+	end
+
+	if C._config.testAi then
+		requireLua("BattleAi").create()
+	end
+
+	Trace.AF_traceSession("begin", 0)
+	launchGame()
+end
+
+function OnApplicationPause(pause)
+	if not C then
+		return
+	end
+
+	print("OnApplicationPause", pause, C.getCurTime())
+
+	if pause then
+		if lc._isiOS then
+			Time.timeScale = 0
+		end
+
+		Client.OnApplicationPause()
+	else
+		if lc._isiOS then
+			Time.timeScale = 1
+		end
+
+		Client.OnApplicationFocus()
+	end
+end
+
+function OnApplicationQuit()
+	if not C then
+		return
+	end
+
+	print("OnApplicationQuit", C.getCurTime())
+	Client.OnApplicationPause()
+end
+
+function OnLoadResCallStart(isZip)
+	SimpleEvent.emit("load.res.call.start", isZip)
+end
+
+function OnLoadResCallMessage(msg)
+	SimpleEvent.emit("load.res.call.message", msg)
+end
+
+function OnLoadResCallProgress(progress)
+	SimpleEvent.emit("load.res.call.progress", progress)
+end
+
+function OnLoadResCallSuccess()
+	SimpleEvent.emit("load.res.call.success")
+end
+
+function OnLoadResError(msgType, extraMsg)
+	SimpleEvent.emit("load.res.on.error", msgType, extraMsg)
+end
+
+function OnLoadResFatalError(msgType)
+	SimpleEvent.emit("load.res.on.fatal.error", msgType)
+end

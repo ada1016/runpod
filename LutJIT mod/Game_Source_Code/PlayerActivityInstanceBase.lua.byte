@@ -1,0 +1,180 @@
+local M = class("PlayerActivityInstanceBase")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.unlock = self._meta.unlock or false
+	self._total = self._meta.total
+	self._subTotal = self._meta.subTotal
+	self._current = self._meta.current
+
+	self:initInstance()
+end
+
+function M:initInstance()
+	self:dealSubModuleInit()
+end
+
+function M:start()
+	P._playerActivity:registerOpenCheck(self._activityType, function ()
+		return self:openCheck()
+	end)
+	P._playerActivity:registerOpen(self._activityType, function (activityData)
+		self:dealOpen(activityData)
+	end)
+	P._playerActivity:registerExpired(self._activityType, function (activityData)
+		self:dealExpire(activityData)
+	end)
+	P._playerActivity:registerSettle(self._activityType, function (activityData)
+		return self:trySettle(activityData)
+	end)
+end
+
+function M:dailyReset()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._current then
+		return false
+	end
+
+	self:instanceDailyReset()
+
+	return true
+end
+
+function M:instanceDailyReset()
+end
+
+function M:openCheck()
+	return true
+end
+
+function M:tryUnlock()
+	if self:isUnlock() then
+		return false
+	end
+
+	self._meta.unlock = true
+	self._total = lc.assignTable(self._meta, "total")
+	self._subTotal = lc.assignTable(self._meta, "subTotal")
+	self._current = lc.assignTable(self._meta, "current")
+
+	self:unlockInstanceData()
+
+	return true
+end
+
+function M:unlockInstanceData()
+end
+
+function M:dealInstanceInit()
+end
+
+function M:isUnlock()
+	return self._meta.unlock
+end
+
+function M:haveDot(auid)
+	return false
+end
+
+function M:isExpired()
+	return self._data.expired == true
+end
+
+function M:createCycleData(activityData)
+	return {
+		subType = activityData.subType
+	}
+end
+
+function M:getData(uid)
+	return self._current[uid]
+end
+
+function M:dealOpen(activityData)
+	self:tryUnlock()
+
+	local uniqueId = activityData.uid
+
+	if self._current[uniqueId] and self._current[uniqueId].id == activityData.id then
+		return
+	end
+
+	table.delete(self._current, function (e)
+		return e.expired == true
+	end)
+
+	local subType = activityData.subType
+	local newInstanceData = self:createCycleData(activityData)
+	self._current[uniqueId] = newInstanceData
+	newInstanceData.expired = false
+
+	self:dealInstanceOpen(activityData)
+end
+
+function M:dealInstanceOpen(activityData)
+end
+
+function M:dealSubModuleInit(instanceData)
+end
+
+function M:dealExpire(activityData)
+	local instanceData = self._current[activityData.uid]
+
+	if not instanceData then
+		return
+	end
+
+	if instanceData.expired then
+		return
+	end
+
+	instanceData.expired = true
+
+	self:dealInstanceExpire()
+end
+
+function M:dealInstanceExpire()
+end
+
+function M:dealInstanceSettle()
+end
+
+function M:getTotalData()
+	return self._total
+end
+
+function M:getSubTotal(subType)
+	if not self._subTotal[subType] then
+		self._subTotal[subType] = {}
+	end
+
+	return self._subTotal[subType]
+end
+
+function M:getCurrentDataByUid(uid)
+	return self._current[uid]
+end
+
+function M:getCurrentData()
+	if not self._current then
+		return
+	end
+
+	return self:getCurrentDataByUid(self._persistentUid)
+end
+
+function M:getSubTypeByUid(uid)
+	return self._current[uid].subType
+end
+
+function M:getSubType()
+	return self:getSubTypeByUid(self._persistentUid)
+end
+
+return M

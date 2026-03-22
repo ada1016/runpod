@@ -1,0 +1,127 @@
+local M = class("ExchangeShopPage", requireLua("BasePanel"))
+M.args = {
+	textExpireTime = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goTemplate = Types.GameObject,
+	txtItemNum = Types.TMP_Text,
+	imgIcon = Types.Image
+}
+local CellWidget = requireLua("ExchangeGroupWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._exchangeIds = {}
+	self._module = P._playerExchange
+	local cellHeight = 150
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		cellHeight = cellHeight,
+		cellInitCount = showCount + 1
+	})
+	self._btnPages = {}
+
+	self:updateTimes()
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		self:updateTimes()
+		self:updateUI()
+	end)
+	self:on("prop.dirty", function (cid)
+		if cid == self._exchangeCid then
+			self._txtItemNum.text = P._playerAsset:getAssetNum(self._exchangeCid)
+		end
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._imgIcon.transform:GetComponent("Button"), function ()
+		V.showItemInfoPanel(self._exchangeCid)
+	end)
+end
+
+function M:init(panel, exchangeGroup)
+	self._goTemplate:SetActive(false)
+
+	self._parentPanel = panel
+	self._exchangeGroup = exchangeGroup
+
+	self:updateUI()
+end
+
+function M:showInternal(exchangeGroup)
+	M.super.showInternal(self)
+
+	self._exchangeGroup = exchangeGroup
+
+	self:updateUI()
+	self:addEvents()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:updateUI()
+	local ids = self._module:getUnlockedExchangeIdsByType(self._exchangeGroup)
+	self._exchangeIds = clone(ids)
+	local cid1, num1 = P._playerExchange:readExchangeCost(ids[1])
+	self._exchangeCid = cid1
+	self._txtItemNum.text = P._playerAsset:getAssetNum(cid1)
+
+	LuaUnity.setTPSprite(self._imgIcon, "item/item_" .. cid1, true)
+	self._scrollViewEx:reloadData(0)
+end
+
+function M:updateTimes()
+	self._refreshTime = 0
+end
+
+function M:onCellNum()
+	return #self._exchangeIds
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+		goCell:SetActive(true)
+
+		goCell = CellWidget.noCreate(goCell)
+
+		goCell:init()
+	end
+
+	local list = self._exchangeIds
+	local exchangeId = list[index]
+
+	goCell:updateUI(exchangeId, self._pageIdx)
+	goCell:setExchangeClick(self)
+
+	return goCell
+end
+
+return M

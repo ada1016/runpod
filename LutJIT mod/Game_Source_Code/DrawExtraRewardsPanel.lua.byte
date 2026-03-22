@@ -1,0 +1,107 @@
+local M = class("DrawExtraRewardsPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	textCurNum = Types.TMP_Text,
+	textEndNum = Types.TMP_Text,
+	goItem = Types.GameObject
+}
+local RewardWidget = requireLua("DrawExtraRewardWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._module = P._playerShop
+	local cellNum = 5
+	local cellHeight = 80
+	self._showCellCount = cellNum
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		cellMargin = 10,
+		cellHeight = cellHeight,
+		cellInitCount = cellNum + 2
+	})
+	self._scrollViewEx._direction = 2
+
+	ItemWidget.noCreate(self._goItem)
+	self:setClick(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init()
+	self:updateUI()
+
+	local jumpIdx = self._module:getExtraDrawClaimNum() % D.DRAW_EXTRA_SHOWCELL_PER_TURN
+
+	self._scrollViewEx:moveToItemByIndex(jumpIdx - 5, nil, true)
+	self._scrollViewEx:moveToItemByIndex(jumpIdx, math.min(jumpIdx, 5) / 5 * 0.618 / 2)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self._boxType = D.BoxType.Gold
+	local curDrawNum = self._module:getDrawBoxNum(self._boxType)
+	local claimNum = self._module:getExtraDrawClaimNum()
+	local maxIdx = math.ceil(claimNum / D.DRAW_EXTRA_SHOWCELL_PER_TURN) * D.DRAW_EXTRA_SHOWCELL_PER_TURN
+	self._textCurNum.text = curDrawNum
+	self._textEndNum.text = self._module:readExtraRewardsNeedNum(maxIdx)
+	local cid, num = self._module:readExtraRewards(maxIdx)
+
+	if cid then
+		self._goItem:init(cid, num)
+		self._goItem:SetVisible(true)
+	else
+		self._goItem:SetVisible(false)
+	end
+
+	self._scrollViewEx:reloadData(0)
+end
+
+function M:jumpToLevel(jumpLevel)
+	local delta = math.abs(self._scrollViewEx:getFirstCellIdx() - jumpLevel)
+	local moveTime = Mathf.Clamp((delta - 3) / self._showCellCount * 0.5, 0.1, 0.5)
+
+	self._scrollViewEx:moveToItemByIndex(jumpLevel, moveTime, nil, , function ()
+	end)
+end
+
+function M:onCellNum()
+	return D.DRAW_EXTRA_SHOWCELL_PER_TURN
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RewardWidget.create(self._tfContainer)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self)
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+return M

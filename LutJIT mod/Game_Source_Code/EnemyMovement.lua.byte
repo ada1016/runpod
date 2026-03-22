@@ -1,0 +1,440 @@
+local math = math
+local BattleDefine = BattleDefine
+local sin = math.sin
+local cos = math.cos
+local pi = math.pi
+local M = {
+	PATHES = {}
+}
+
+local function move(self, dt)
+	self._position.x = self._position.x + self._dir[1] * dt * self._speed * self._speedXFactor * self._speedFactor
+	self._position.y = math.max(0, self._position.y + self._dir[2] * dt * self._speed * self._speedFactor)
+end
+
+M[1] = function (self, dt)
+	move(self, dt)
+end
+
+M[3] = function (self, dt)
+	move(self, dt)
+
+	local ditry = false
+
+	if self._battleSession._screenEdgeX2 <= self._position.x + self._radius then
+		ditry = true
+		self._dir[1] = -math.abs(self._dir[1])
+	elseif self._position.x - self._radius <= self._battleSession._screenEdgeX1 then
+		ditry = true
+		self._dir[1] = math.abs(self._dir[1])
+	end
+
+	if ditry then
+		self:setDir(self._dir[1], self._dir[2])
+
+		if self._originId == 1302 then
+			self._speedFactor = self._speedFactor + 0.5
+		elseif self._originId == 1308 then
+			-- Nothing
+		elseif self._originId == 1306 and self._view then
+			if self._dir[1] < 0 then
+				self._view:playSpriteAnimation(3)
+			else
+				self._view:playSpriteAnimation(4)
+			end
+		end
+	end
+end
+
+M[9] = function (self, dt)
+	self._moveT = self._moveT + dt * self._speed
+	local p = Mathf.PingPong(self._moveT, 1)
+	local x1 = self._battleSession._screenEdgeX1 + 1
+	local x2 = self._battleSession._screenEdgeX2 - 1
+	local y2 = self._battleSession._screenEdgeY2 - 1
+	local y1 = BattleDefine.DOME_POSY + self._params[1]
+	local centerX = (x1 + x2) / 2
+	local centerY = y2
+	local radiusX = (x2 - x1) / 2
+	local radiusY = Mathf.Abs(y2 - y1)
+	local angle = Mathf.Lerp(0, 180, p) * Mathf.Deg2Rad
+	local x = centerX + Mathf.Cos(angle) * radiusX * (self._leftStart and -1 or 1)
+	local y = centerY - Mathf.Sin(angle) * radiusY
+	self._position.x = x
+	self._position.y = y
+end
+
+M[4] = function (self, dt)
+	move(self, dt)
+
+	if not self._readyAtk then
+		if self._battleSession._screenEdgeX2 <= self._position.x - (self._radius + 2) then
+			self._dir[1] = -math.abs(self._dir[1])
+			self._position.y = self._position.y - self._radius * 1.5
+			self._position.y = math.max(self._position.y, BattleDefine.DOME_POSY + self._atkRange - 0.5)
+		elseif self._position.x + self._radius + 2 <= self._battleSession._screenEdgeX1 then
+			self._dir[1] = math.abs(self._dir[1])
+			self._position.y = self._position.y - self._radius * 1.5
+			self._position.y = math.max(self._position.y, BattleDefine.DOME_POSY + self._atkRange - 0.5)
+		end
+	elseif self._battleSession._screenEdgeX2 <= self._position.x then
+		self._dir[1] = -math.abs(self._dir[1])
+		self._position.x = self._battleSession._screenEdgeX2
+	elseif self._position.x <= self._battleSession._screenEdgeX1 then
+		self._dir[1] = math.abs(self._dir[1])
+		self._position.x = self._battleSession._screenEdgeX1
+	end
+end
+
+M[5] = function (self, dt)
+	move(self, dt)
+
+	local ditry = false
+
+	if self._dir[1] > 0 and self._battleSession._screenEdgeX2 <= self._position.x - (self._radius + 5) then
+		ditry = true
+		self._dir[1] = -math.abs(self._dir[1])
+	elseif self._dir[1] < 0 and self._position.x + self._radius + 5 <= self._battleSession._screenEdgeX1 then
+		ditry = true
+		self._dir[1] = math.abs(self._dir[1])
+	end
+
+	if ditry then
+		self._position.y = self._position.y + 2 - (self._battleSession._zoomScale - 1) * 2
+
+		if self._position.y <= BattleDefine.DOME_POSY + 6 then
+			local randomTargetX = self._battleRandomLib:randomMN(-0.5, 0.5)
+			local angle = math.deg(math.atan2(3 - self._position.y, randomTargetX - self._position.x))
+
+			self:setDirByAngle(angle)
+		else
+			local angle = 180 - self._angle
+
+			self:setDirByAngle(angle)
+		end
+
+		if self._view then
+			self._view:rotationEvent()
+		end
+	end
+end
+
+M[6] = function (self, dt)
+	self._runPathTime = self._runPathTime + dt * self._speed * 0.5
+	local x, y = BattleMathLib.calculate_bezier_point_2(self._runPathTime, self._pBegan, self._pCtrl, self._pEnd)
+	self._position.x = x
+	self._position.y = y
+end
+
+local CENTER_POSY = 29.5
+local CENTER_RADIUS = 25
+
+M[7] = function (self, dt)
+	move(self, dt)
+
+	if not self._inAtkStatus then
+		local ditry = false
+
+		if self._dir[1] > 0 and self._battleSession._screenEdgeX2 <= self._position.x - (self._radius + 2.5) then
+			ditry = true
+			self._dir[1] = -math.abs(self._dir[1])
+		elseif self._dir[1] < 0 and self._position.x + self._radius + 2.5 <= self._battleSession._screenEdgeX1 then
+			ditry = true
+			self._dir[1] = math.abs(self._dir[1])
+		end
+
+		if ditry then
+			self._audioFlag = true
+
+			self:updateAngle()
+
+			if self._position.x < 0 then
+				self._position.x = self._position.x + 1.5
+			else
+				self._position.x = self._position.x - 1.5
+			end
+
+			self._position.y = self._position.y + 2
+
+			if self._position.y <= BattleDefine.DOME_POSY + 6 then
+				if self._position.x > 0 then
+					self._position.x = self._battleSession._enemyBornEdgeX2 + 4
+				elseif self._position.x < 0 then
+					self._position.x = self._battleSession._enemyBornEdgeX1 - 4
+				end
+
+				self._position.y = BattleMathLib.find_circle_y2(0, CENTER_POSY, CENTER_RADIUS, self._position.x)
+				local v1 = Vector2.static(self._position.y - CENTER_POSY, -self._position.x):SetNormalize()
+				self._dir[1] = v1.x
+				self._dir[2] = v1.y
+
+				self:updateAngle()
+
+				self._inAtkStatus = true
+				self._readyAttack = true
+
+				self._scriptBehavior.respawnChildren(self, 2)
+
+				if self._view then
+					self._view._ator:SetTrigger("ready_attack")
+				end
+			else
+				self._scriptBehavior.respawnChildren(self, 1)
+			end
+
+			if self._view then
+				self._view:posEvent()
+				self._view:rotationEvent()
+			end
+		end
+	else
+		if self._takeDmgDelayCD then
+			self._takeDmgDelayCD = self._takeDmgDelayCD - dt
+
+			if self._takeDmgDelayCD <= 0 then
+				self._takeDmgDelayCD = nil
+
+				self:takeDamageToPlayer()
+			end
+		end
+
+		if self._readyAttack then
+			if self._dir[1] < 0 and self._dir[2] < 0 and self._position.x < 2 then
+				self._readyAttack = false
+				self._takeDmgDelayCD = 1
+
+				if self._view then
+					self._view:attackEvent()
+				end
+			elseif self._dir[1] > 0 and self._dir[2] < 0 and self._position.x > -2 then
+				self._readyAttack = false
+				self._takeDmgDelayCD = 1
+
+				if self._view then
+					self._view:attackEvent()
+				end
+			end
+		end
+
+		if self._dir[1] < 0 then
+			local v1 = Vector2.static(self._position.y - CENTER_POSY, -self._position.x):SetNormalize()
+			self._dir[1] = v1.x
+			self._dir[2] = v1.y
+
+			self:updateAngle()
+
+			if self._view then
+				self._view._obj:SetLocalRotation(0, 0, self._angle + 180)
+			end
+		else
+			local v1 = Vector2.static(-(self._position.y - CENTER_POSY), self._position.x):SetNormalize()
+			self._dir[1] = v1.x
+			self._dir[2] = v1.y
+
+			self:updateAngle()
+
+			if self._view then
+				self._view._obj:SetLocalRotation(0, 0, self._angle)
+			end
+		end
+
+		if self._dir[1] < 0 and self._position.x + 4 < self._battleSession._screenEdgeX1 then
+			self._readyAttack = true
+			self._audioFlag = true
+
+			self._scriptBehavior.respawnChildren(self, 2)
+
+			self._dir[1] = math.abs(self._dir[1])
+
+			if self._view then
+				self._view._tf:GetChild(0):SetLocalScale(-1, 1, 1)
+				self._view._ator:SetTrigger("ready_attack")
+			end
+		elseif self._dir[1] > 0 and self._battleSession._screenEdgeX2 < self._position.x - 4 then
+			self._readyAttack = true
+			self._audioFlag = true
+
+			self._scriptBehavior.respawnChildren(self, 2)
+
+			self._dir[1] = -math.abs(self._dir[1])
+
+			if self._view then
+				self._view._tf:GetChild(0):SetLocalScale(1, 1, 1)
+				self._view._ator:SetTrigger("ready_attack")
+			end
+		end
+	end
+
+	if self._audioFlag == nil or self._audioFlag then
+		if self._dir[1] < 0 and self._position.x < 8.5 then
+			self._audioFlag = false
+
+			Client.playBattleSound("se_Enemy_3301_summon")
+		elseif self._dir[1] > 0 and self._position.x > -8.5 then
+			self._audioFlag = false
+
+			Client.playBattleSound("se_Enemy_3301_summon")
+		end
+	end
+end
+
+M[8] = function (self, dt)
+	self._runPathTime = self._runPathTime + dt * self._speedFactor
+	local x, y = BattleMathLib.calculate_bezier_point_2(self._runPathTime, self._pBegan, self._pCtrl, self._pEnd)
+	self._position.x = x
+	self._position.y = y
+	local x1, y1 = BattleMathLib.calculate_second_bezier_tangent(self._runPathTime, self._pBegan, self._pCtrl, self._pEnd)
+	local v1 = Vector2.static(x1, y1):SetNormalize()
+	self._dir[1] = v1.x
+	self._dir[2] = v1.y
+
+	self:updateAngle()
+
+	if self._view then
+		self._view._obj:SetLocalRotation(0, 0, self._angle + 90)
+	end
+end
+
+M[11] = function (self, dt)
+	if self._rotateTime then
+		self._angle = self._angle + dt * self._rotateSpeed
+
+		if self._rotateSpeed > 0 and self._angle >= -90 or self._rotateSpeed < 0 and self._angle <= -90 then
+			self._angle = -90
+			self._rotateTime = nil
+			self._moveMode = 1
+			self._dir[1] = 0
+			self._dir[2] = -1
+			self._speed = self._initialSpeed
+		end
+
+		if self._view then
+			self._view:rotationEvent()
+		end
+
+		return
+	end
+
+	self._runPathTime = self._runPathTime - dt
+
+	if self._runPathTime > 0 then
+		self._position.x = self._position.x + self._dir[1] * dt * self._speed * self._speedXFactor
+		self._position.y = math.max(0, self._position.y + self._dir[2] * dt * self._speed)
+	else
+		self._rotateTime = 0.1
+	end
+end
+
+local function towardsDirectly(pos0, pos1, t)
+	return (pos1[1] - pos0[1]) * t + pos0[1], (pos1[2] - pos0[2]) * t + pos0[2]
+end
+
+local function formationMove(self, dt)
+	if self._dir[1] ~= 0 or self._dir[2] ~= -1 then
+		self._dir[1] = 0
+		self._dir[2] = -1
+
+		if not self._noRotation then
+			self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+
+			if self._view then
+				self._view:rotationEvent()
+			end
+		end
+	end
+
+	if self._runPathTime - self._pathEndTime <= self._formationT then
+		if self._routing then
+			self._routing = false
+			self._formationPos0 = {
+				self._position.x,
+				self._position.y
+			}
+		end
+
+		self._formating = true
+		self._position.x, self._position.y = towardsDirectly(self._formationPos0, self._formationPos, (self._runPathTime - self._pathEndTime) / self._formationT)
+	elseif self._formationMoveTime <= self._battleSession._elapsedTime then
+		if self._formating then
+			self._formating = false
+			self._inMatrix = false
+		end
+
+		move(self, dt)
+	end
+end
+
+local function syncRotation(self, x0, y0)
+	self._dir[2] = self._position.y - y0
+	self._dir[1] = self._position.x - x0
+
+	if not self._noRotation then
+		self._angle = math.deg(math.atan2(self._dir[2], self._dir[1]))
+
+		if self._view then
+			self._view:rotationEvent()
+		end
+	end
+end
+
+local function moveByCurve(self, dt, id, symmetry)
+	self._runPathTime = self._runPathTime + dt
+	local data = M.PATHES[id]
+	local points = data[1]
+	local len = data[2]
+	local v = data[3]
+	self._pathEndTime = len / v
+
+	if self._formationPos and self._pathEndTime <= self._runPathTime then
+		formationMove(self, dt)
+
+		return
+	end
+
+	local s = self._runPathTime * (v or 4)
+	local x = points[#points][1]
+	local y = points[#points][2]
+	local dx, dy = nil
+
+	for i = 1, #points - 1 do
+		dy = points[i + 1][2] - points[i][2]
+		dx = points[i + 1][1] - points[i][1]
+		local len = math.sqrt(dx * dx + dy * dy)
+
+		if s < len then
+			x = points[i][1] + dx * s / len
+			y = points[i][2] + dy * s / len
+
+			break
+		end
+
+		s = s - len
+	end
+
+	if symmetry then
+		x = -x
+	end
+
+	local x0 = self._position.x
+	local y0 = self._position.y
+	local scale = self._battleSession._zoomScale
+	self._position.x = x * scale
+	self._position.y = y * scale
+
+	syncRotation(self, x0, y0)
+end
+
+for clazz, _ in pairs(LuaPath) do
+	local sp = string.split(clazz, "_")
+
+	if sp[1] == "curve" then
+		local id = tonumber(sp[2])
+		M.PATHES[id] = requireLua(clazz)
+
+		M[id] = function (self, dt)
+			moveByCurve(self, dt, id)
+		end
+	end
+end
+
+return M

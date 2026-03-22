@@ -1,0 +1,64 @@
+local M = class("ArkRebuildPopPanel", requireLua("BasePanel"))
+M.args = {
+	btnGo = Types.Button,
+	btnMask = Types.Button,
+	txtTime = Types.TMP_Text,
+	tfRewardsContainer = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnGo, function ()
+		if P._playerActivityArkRebuild:isEntered() then
+			UIManager.openPanel(PrefabDefine.ArkRebuildMainPanel, "mainBtn")
+			Trace.traceDesign_Activity("RebuildMainPanel_Enter:%s", nil, D.ActivityType.ArkRebuild, P._playerActivityArkRebuild:getSubType())
+
+			return
+		else
+			UIManager.openPanel(PrefabDefine.ArkRebuildPreviewPanel)
+		end
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	local activityData = P._playerActivity:getArkRebuildData()
+	local rawOffset = C.getTimezoneOffset()
+	local start = os.date("%Y/%m/%d %H:%M", activityData.startTime - rawOffset)
+	local ed = os.date("%Y/%m/%d %H:%M", activityData.endTime - rawOffset)
+	self._txtTime.text = string.format("%s-%s(UTC)", start, ed)
+	local showRewardsMap = {}
+	local subType = activityData.subType
+	local milestoneRewardCids = P._playerActivityArkRebuild:readPreviewMilestoneRewards(subType)
+	local star, allRewards = P._playerActivityArkRebuild:getMilestoneRewards(subType, true)
+
+	for i = 1, #milestoneRewardCids do
+		local cid = milestoneRewardCids[i]
+
+		for j = 1, #allRewards do
+			if allRewards[j][1] == cid then
+				showRewardsMap[cid] = (showRewardsMap[cid] or 0) + allRewards[j][2]
+			end
+		end
+	end
+
+	local showRewardsList = {}
+
+	for k, v in pairs(showRewardsMap) do
+		table.insert(showRewardsList, {
+			k,
+			v
+		})
+	end
+
+	D.sortRewards(showRewardsList, true)
+	V.loadRewardsWidget(self, self._tfRewardsContainer, showRewardsList, false, false)
+end
+
+return M

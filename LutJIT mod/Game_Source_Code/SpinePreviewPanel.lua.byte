@@ -1,0 +1,114 @@
+local M = class("SpinePreviewPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtId = Types.TMP_Text,
+	goSpineWidget = Types.GameObject,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	btnUp = Types.Button,
+	btnDown = Types.Button,
+	btnSex1 = Types.Button,
+	btnSex2 = Types.Button
+}
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	self:startUpdater()
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnLeft, function ()
+		self:changeBody(-1)
+	end)
+	self:setClick(self._btnRight, function ()
+		self:changeBody(1)
+	end)
+	self:setClick(self._btnUp, function ()
+		self:changeWeapon(-1)
+	end)
+	self:setClick(self._btnDown, function ()
+		self:changeWeapon(1)
+	end)
+	self:setClick(self._btnSex1, function ()
+		self:changeSex(1)
+	end)
+	self:setClick(self._btnSex2, function ()
+		self:changeSex(0)
+	end)
+end
+
+function M:init()
+	self._showBody = lc.getIntKeyValue("debug_skin_id_actor", 120000)
+	self._showWeapon = lc.getIntKeyValue("debug_skin_id_weapon", 110000)
+	self._roleSex = P._playerSkin:readRoleSkinSex(self._showBody)
+
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+	self:updateUI()
+	self:updateSexBtnStats()
+end
+
+function M:Update()
+	local isControl = Input.GetKey("left ctrl") or Input.GetKey("right ctrl")
+	local isAlt = Input.GetKey("left alt") or Input.GetKey("right alt")
+
+	if Input.GetKeyDown("left") then
+		self:changeBody(-1)
+	elseif Input.GetKeyDown("right") then
+		self:changeBody(1)
+	elseif Input.GetKeyDown("up") then
+		self:changeWeapon(-1)
+	elseif Input.GetKeyDown("down") then
+		self:changeWeapon(1)
+	elseif Input.GetKeyDown("1") then
+		self:changeSex(1)
+	elseif Input.GetKeyDown("0") then
+		self:changeSex(0)
+	end
+end
+
+function M:updateUI()
+	self._goSpineWidget:testForceUpdatePlayerUI(self._showBody, self._showWeapon, self._roleSex)
+	lc.setIntKeyValue("debug_skin_id_actor", self._showBody)
+	lc.setIntKeyValue("debug_skin_id_weapon", self._showWeapon)
+
+	self._txtId.text = string.format("%d %d", self._showBody, self._showWeapon)
+end
+
+function M:changeBody(delta)
+	self._showBody = math.max(120000, self._showBody + delta)
+
+	self:updateUI()
+end
+
+function M:changeWeapon(delta)
+	self._showWeapon = math.max(110000, self._showWeapon + delta)
+
+	self:updateUI()
+end
+
+function M:changeSex(sex)
+	if self._roleSex == sex then
+		self._roleSex = 1
+	else
+		self._roleSex = sex
+	end
+
+	self:updateSexBtnStats()
+	self:updateUI()
+end
+
+function M:updateSexBtnStats()
+	local img1 = self._btnSex1.transform:GetChild(0):GetComponent("Image")
+	local img2 = self._btnSex2.transform:GetChild(0):GetComponent("Image")
+	img1.color = Color.str2Static(self._roleSex == 1 and "00FF63" or "B7B7B7")
+	img2.color = Color.str2Static(self._roleSex == 0 and "FF005B" or "B7B7B7")
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

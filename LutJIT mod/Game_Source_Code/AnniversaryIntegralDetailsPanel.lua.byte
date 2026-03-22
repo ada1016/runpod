@@ -1,0 +1,75 @@
+local M = class("AnniversaryIntegralDetailsPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("AnniversaryIntegralDetailsWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goEmptyRank = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	txtTotalPoint = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 20,
+		cellHeight = 116,
+		cellInitCount = 10
+	})
+end
+
+function M:addClicks()
+end
+
+function M:init(rankList)
+	self._rankList = rankList
+
+	self._goEmptyRank:SetActive(#self._rankList == 0)
+	self._scrollViewEx1:reloadData(true)
+
+	local totalPoint = 0
+
+	for i = 1, #self._rankList do
+		local rankData = self._rankList[i]
+		totalPoint = totalPoint + rankData.rankValue
+	end
+
+	self._txtTotalPoint:SetLocalize(SID.STR_TOTAL_POINTS_X, totalPoint)
+end
+
+function M:updateUI()
+	self._scrollViewEx1:reloadData()
+end
+
+function M:onCellNum()
+	return #self._rankList
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	local rankData = self._rankList[index]
+
+	goCell:init(rankData)
+	self:setClick(goCell._btnViewInfo, function ()
+		V.viewOtherInfo(rankData)
+	end)
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = RankWidget.create(self._tfScrollContainer1)
+
+	return go
+end
+
+return M

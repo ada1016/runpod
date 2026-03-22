@@ -1,0 +1,75 @@
+local M = class("AnniversarySelectRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversarySelectRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem1)
+	ItemWidget.noCreate(go._goItem2)
+	ItemWidget.noCreate(go._goItem3)
+
+	go._goItems = {
+		go._goItem1,
+		go._goItem2,
+		go._goItem3
+	}
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem1)
+	ItemWidget.noCreate(go._goItem2)
+	ItemWidget.noCreate(go._goItem3)
+
+	go._goItems = {
+		go._goItem1,
+		go._goItem2,
+		go._goItem3
+	}
+
+	return go
+end
+
+function M:updateUI(packageId, selectId)
+	local module = P._playerActivityAnniversary._moduleLottery
+	self._packageId = packageId
+
+	self._goSelect:SetActive(self._packageId == selectId)
+
+	local cids = module:readSkinRewardIds(self._packageId)
+	local costCid, costNum = module:readDrawCost(self._packageId)
+
+	V.loadItemSprite(self._imgIcon, costCid)
+	self._txtNum:SetLocalize(SID.STR_COST_NUM_FIRST_TIME, costNum)
+
+	for i = 1, 3 do
+		self._goItems[i]:init(cids[i], 1)
+	end
+end
+
+function M:updateSelect(selectId)
+	self._goSelect:SetActive(self._packageId == selectId)
+end
+
+function M:setRewardsClick(panel)
+	for i = 1, 3 do
+		panel:setClickWithoutAction(self._goItems[i]._btnClick, function ()
+			self._goItems[i]:rewardclickCallback()
+		end)
+	end
+
+	panel:setClickWithoutAction(self._btnIcon, function ()
+		local module = P._playerActivityAnniversary._moduleLottery
+		local costCid, costNum = module:readDrawCost(self._packageId)
+
+		V.showItemInfoPanel(costCid)
+	end)
+end
+
+return M

@@ -1,0 +1,73 @@
+local M = class("BattleNewEnemyPanel", requireLua("BasePanel"))
+M.args = {
+	imgEnemyIcon = Types.Image,
+	showAtor = Types.Animator,
+	tmpTitle = Types.TMP_Text,
+	tmpDesc1 = Types.TMP_Text,
+	tmpDesc2 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:addEvents()
+end
+
+function M:OnShow()
+	M.super.OnShow(self)
+end
+
+function M:OnHide()
+	M.super.OnHide(self)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:init(enemyId)
+	enemyId = enemyId or 1
+
+	self._tmpTitle:SetLocalize(D._battleEnemyConfig[enemyId]._nameSid)
+
+	local tipsText = V.getEnemyDescAndWeakText(enemyId)
+	self._tmpDesc1.text = tipsText
+
+	self._tmpDesc2:SetLocalize(D._battleEnemyConfig[enemyId]._descSid)
+
+	local isBoss = D._battleEnemyConfig[enemyId]._type == 3
+	local isElite = D._battleEnemyConfig[enemyId]._type == 2
+	local scale = isBoss and 0.35 or 1
+
+	if isBoss then
+		if enemyId == 3201 then
+			scale = 0.7
+		else
+			scale = 0.7
+		end
+	elseif isElite then
+		scale = 0.8
+	else
+		scale = 1
+	end
+
+	lc.setLocalScale(self._imgEnemyIcon.transform, scale, scale, scale)
+	V.loadEnemySprite(self._imgEnemyIcon, enemyId)
+end
+
+function M:showNewEnemy(show)
+	self._showAtor:ResetTrigger("show")
+	self._showAtor:ResetTrigger("hide")
+
+	if show then
+		self._showAtor:SetTrigger("show")
+	else
+		self._showAtor:SetTrigger("hide")
+	end
+end
+
+return M

@@ -1,0 +1,95 @@
+local M = class("RankRewardWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RankRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem1)
+	ItemWidget.noCreate(go._goItem2)
+	ItemWidget.noCreate(go._goItem3)
+	ItemWidget.noCreate(go._goItem4)
+	ItemWidget.noCreate(go._goItem5)
+
+	return go
+end
+
+function M:init(cfg)
+	local min = cfg._min
+	local max = cfg._max
+
+	if min > 0 and max > 0 then
+		if max == 9999 then
+			self._txtRank.text = string.format("%d~", min)
+		elseif min == max then
+			self._txtRank.text = string.format("%d", min)
+		else
+			self._txtRank.text = string.format("%d-%d", min, max)
+		end
+	elseif min > 0 and max < 0 then
+		self._txtRank:SetLocalize(SID.STR_RANK_TOP, min, -max)
+	else
+		self._txtRank:SetLocalize(SID.STR_RANK_TOP_TOP, -min, -max)
+	end
+
+	self._goAvatar:SetActive(false)
+
+	for i = 1, 5 do
+		local goItem = self["_goItem" .. i]
+
+		if cfg._rewardCids[i] then
+			if D.isItem(cfg._rewardCids[i]) and D._itemConfig[cfg._rewardCids[i]]._type == D.ItemType.Avatar then
+				self._avatar = cfg._rewardCids[i]
+
+				LuaUnity.setTPSprite(self._imgAvatar, "avatar/" .. cfg._rewardCids[i], true)
+				LuaUnity.setTPSprite(self._imgAvatarFrame, D.toAvatarBgSprite(cfg._rewardCids[i]), true)
+				goItem:SetActive(false)
+				self._goAvatar:SetActive(true)
+			elseif D.isItem(cfg._rewardCids[i]) and D._itemConfig[cfg._rewardCids[i]]._type == D.ItemType.AvatarFrame then
+				self._avatar = cfg._rewardCids[i]
+
+				LuaUnity.setTPSprite(self._imgAvatar, "avatar/frame_" .. cfg._rewardCids[i], true)
+				LuaUnity.setTPSprite(self._imgAvatarFrame, "avatar/avatar_bg", true)
+				goItem:SetActive(false)
+				self._goAvatar:SetActive(true)
+			else
+				goItem:SetActive(true)
+				goItem:init(cfg._rewardCids[i], cfg._rewardNums[i])
+			end
+		else
+			goItem:SetActive(false)
+		end
+	end
+end
+
+function M:showHighlight()
+	self._goMyArea:SetActive(true)
+end
+
+function M:hideHighlight()
+	self._goMyArea:SetActive(false)
+end
+
+function M:initClicks(panel)
+	panel:setClick(self._goItem1._btnClick, function ()
+		self._goItem1:rewardclickCallback()
+	end)
+	panel:setClick(self._goItem2._btnClick, function ()
+		self._goItem2:rewardclickCallback()
+	end)
+	panel:setClick(self._goItem3._btnClick, function ()
+		self._goItem3:rewardclickCallback()
+	end)
+	panel:setClick(self._goItem4._btnClick, function ()
+		self._goItem4:rewardclickCallback()
+	end)
+	panel:setClick(self._goItem5._btnClick, function ()
+		self._goItem5:rewardclickCallback()
+	end)
+	panel:setClick(self._goAvatar:GetComponent("Button"), function ()
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, self._avatar, self._num)
+	end)
+end
+
+return M

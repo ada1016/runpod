@@ -1,0 +1,29 @@
+local M = table.new(64, 0)
+local BattlePropEnum = requireLua("BattlePropEnum")
+M[305] = {
+	_dmgDelay = 0.2
+}
+M[803] = {
+	_readDmgMode = 2
+}
+M[602] = {
+	_duration = 10,
+	_dmgDelay = 1
+}
+M[621] = {
+	_dmgDelay = 1
+}
+M[623] = {
+	_duration = 10,
+	_dmgDelay = 1
+}
+M[406] = {
+	_duration = 10,
+	_dmgDelay = 1
+}
+M[904] = {
+	_duration = 10,
+	_dmgDelay = 1
+}
+
+return M

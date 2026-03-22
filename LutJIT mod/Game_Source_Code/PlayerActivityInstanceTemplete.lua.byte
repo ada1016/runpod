@@ -1,0 +1,28 @@
+local M = class("PlayerActivityInstanceTemplete", requireLua("PlayerActivityInstanceBase"))
+
+function M:initInstance()
+end
+
+function M:unlockInstanceData()
+end
+
+function M:instanceDailyReset()
+end
+
+function M:haveDot(auid)
+	return false
+end
+
+function M:createCycleData(activityData)
+	return {
+		subType = activityData.subType
+	}
+end
+
+function M:dealInstanceOpen()
+end
+
+function M:dealInstanceExpire()
+end
+
+return M

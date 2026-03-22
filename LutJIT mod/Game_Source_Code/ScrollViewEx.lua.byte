@@ -1,0 +1,552 @@
+local M = class("ScrollViewEx")
+
+declare("ScrollViewEx", M)
+
+function M:doRemoves(removes)
+	if #removes == 0 then
+		return
+	end
+
+	table.sort(removes, function (a, b)
+		return a < b
+	end)
+
+	local delegate = self._delegate
+
+	for i = 1, #removes do
+		local index = removes[i]
+		local objCell = self._objCell[index]
+
+		if objCell then
+			if delegate.onRecycleCell then
+				delegate:onRecycleCell(objCell, index)
+			end
+
+			objCell.gameObject:SetVisible(false)
+
+			self._obj_cells[#self._obj_cells + 1] = objCell
+			self._objCell[index] = nil
+		end
+	end
+end
+
+function M:onChangeVisibleCells()
+	if self._onChangeVisibleCells then
+		self._onChangeVisibleCells(self._delegate)
+	end
+end
+
+function M:doAdds(adds)
+	if #adds == 0 then
+		return
+	end
+
+	table.sort(adds, function (a, b)
+		return a < b
+	end)
+
+	local middleY = -self._oriTopPadding / 2
+	local delegate = self._delegate
+
+	for i = 1, #adds do
+		local index = adds[i]
+		local objCell = self._obj_cells[#self._obj_cells]
+
+		if objCell then
+			self._obj_cells[#self._obj_cells] = nil
+		end
+
+		objCell = self._onAddCell(self._delegate, objCell, index)
+
+		objCell.gameObject:SetVisible(true)
+
+		if math.abs(self._direction) == 1 then
+			local x, y, z = lc.getLocalPosition(objCell.transform)
+			x = self._contentWidth / 2
+			y = -self._yRangIndex[index] * math.sign(self._direction)
+
+			objCell.transform:SetLocalPosition(x, y, z)
+		else
+			objCell.transform:SetLocalPosition(self._yRangIndex[index] - middleY, 0, 0)
+		end
+
+		self._objCell[index] = objCell
+	end
+end
+
+function M:ctor(scrollRect, delegate, args)
+	self._obj_cells = {}
+	self._objCell = {}
+	self._visibleCellObjs = {}
+	self._scrollRect = scrollRect
+	self._content = scrollRect.content
+	self._delegate = delegate
+	self._args = args
+	self._direction = args.direction or 1
+	self._showCellIndexMap = {}
+	self._showCellIndexArray = {}
+	self._extraEarlyCount = args.extraEarlyCount or 0
+	self._updateVisibleCells = args.updateVisibleCells or false
+	self._onAddCell = args.onAddCell or delegate.onAddCell
+	self._onChangeVisibleCells = args.onChangeVisibleCells or delegate.onChangeVisibleCells
+	self._lastY = 0
+	self._initFlag = false
+
+	scrollRect.onValueChanged:RemoveAllListeners()
+	scrollRect.onValueChanged:AddListener(function (pt)
+		if not self._initFlag then
+			return
+		end
+
+		self:onScroll()
+	end)
+end
+
+function M:onScroll(force)
+	self:onScroll_cellChanges(force)
+
+	if self._updateVisibleCells then
+		self:_updateVisibleCellObjs(force)
+	end
+end
+
+function M:onScroll_cellChanges(force)
+	local ptY = nil
+	local anchoredPosition = self._content.anchoredPosition
+
+	if math.abs(self._direction) == 1 then
+		ptY = anchoredPosition.y * math.sign(self._direction)
+	else
+		ptY = -anchoredPosition.x
+	end
+
+	if not force and self._lastY <= ptY then
+		return
+	end
+
+	if self._lastY <= ptY then
+		ptY = self._lastY
+	end
+
+	local firstCellIndex = 1
+
+	for i = 1, self._cellCount do
+		if self._yRangIndex[i + 1] == nil or self._yRangIndex[i] <= ptY and ptY < self._yRangIndex[i + 1] then
+			firstCellIndex = i
+
+			break
+		end
+	end
+
+	if ptY <= self._topPadding and firstCellIndex == self._cellCount then
+		firstCellIndex = 1
+	end
+
+	if self._cellCount > 0 and self._showCellIndexArray[1] and firstCellIndex == math.max(self._showCellIndexArray[1] - self._extraEarlyCount, 1) then
+		return
+	end
+
+	local nowCellIndexMap = {}
+	local maxCellIndex = math.min(firstCellIndex + self._cellShowCount - 1 + self._extraEarlyCount, self._cellCount)
+
+	for i = firstCellIndex, maxCellIndex do
+		nowCellIndexMap[i] = 1
+	end
+
+	if self._cellCount > 0 and firstCellIndex - self._extraEarlyCount > 0 then
+		for i = firstCellIndex - self._extraEarlyCount, firstCellIndex do
+			nowCellIndexMap[i] = 1
+		end
+	end
+
+	local removes = {}
+
+	for i, _ in pairs(self._showCellIndexMap) do
+		if nowCellIndexMap[i] == nil then
+			removes[#removes + 1] = i
+		end
+	end
+
+	local adds = {}
+
+	for i, _ in pairs(nowCellIndexMap) do
+		if self._showCellIndexMap[i] == nil then
+			adds[#adds + 1] = i
+		end
+	end
+
+	self:doRemoves(removes)
+	self:doAdds(adds)
+
+	self._showCellIndexMap = {}
+	self._showCellIndexArray = {}
+
+	for i, _ in pairs(nowCellIndexMap) do
+		self._showCellIndexMap[i] = 1
+		self._showCellIndexArray[#self._showCellIndexArray + 1] = i
+	end
+
+	table.sort(self._showCellIndexArray, function (a, b)
+		return a < b
+	end)
+end
+
+function M:getShowCellObjs()
+	local out = {}
+
+	for i = 1, #self._showCellIndexArray do
+		local index = self._showCellIndexArray[i]
+		out[#out + 1] = self._objCell[index]
+	end
+
+	return out
+end
+
+function M:getFirstCellIdx()
+	return self._showCellIndexArray[1]
+end
+
+function M:getLastCellIdx()
+	return self._showCellIndexArray[#self._showCellIndexArray]
+end
+
+function M:getLastVisibleCellIdx()
+	if not self._updateVisibleCells then
+		return 0
+	end
+
+	local visibleCellObjs = self._visibleCellObjs
+
+	if #visibleCellObjs == 0 then
+		return 0
+	end
+
+	local lastObj = visibleCellObjs[#visibleCellObjs]
+	local targetIndex = 0
+
+	for index, objCell in pairs(self._objCell) do
+		if objCell == lastObj then
+			targetIndex = index
+
+			break
+		end
+	end
+
+	return targetIndex
+end
+
+function M:isIdxShow(idx)
+	return self._showCellIndexMap[idx] ~= nil, self._objCell[idx]
+end
+
+function M:doSth2All(callback)
+	for k, obj in pairs(self._objCell) do
+		callback(obj)
+	end
+end
+
+function M:getShowCellObjByFunc(compareFunc, param)
+	for i = 1, #self._showCellIndexArray do
+		local index = self._showCellIndexArray[i]
+		local cell = self._objCell[index]
+
+		if compareFunc(cell, param) then
+			return cell
+		end
+	end
+end
+
+function M:reloadData(resetZero)
+	self._initFlag = true
+	local removes = {}
+
+	for i, _ in pairs(self._showCellIndexMap) do
+		if self._showCellIndexMap[i] then
+			removes[#removes + 1] = i
+		end
+	end
+
+	self:doRemoves(removes)
+
+	local args = self._args
+	local topPadding = args.topPadding or 0
+	self._topPadding = topPadding
+	self._oriTopPadding = topPadding
+	local bottomPadding = args.bottomPadding or 0
+	self._bottomPadding = bottomPadding
+	local cellMargin = args.cellMargin or 0
+	self._cellMargin = cellMargin
+	local cellHeight = args.cellHeight
+	self._cellHeight = cellHeight
+	local cellInitCount = args.cellInitCount
+	local cellCount = args.cellNum or self._delegate:onCellNum()
+	local autoTopPaddingFlag = false
+
+	if self._direction == 2 and (args.topPadding == nil or topPadding == -1) then
+		local transform = self._scrollRect.transform
+		local anchorMin = transform.anchorMin
+		local anchorMax = transform.anchorMax
+		local contentWidth = nil
+
+		if anchorMin.x == 0 and anchorMax.x == 1 then
+			contentWidth = transform.rect.width
+		else
+			contentWidth = transform.sizeDelta.x
+		end
+
+		local w = cellCount * cellHeight + cellMargin * (cellCount - 1) + bottomPadding
+
+		if contentWidth > w then
+			topPadding = (contentWidth - w) / 2
+			self._topPadding = topPadding
+			autoTopPaddingFlag = true
+		else
+			topPadding = cellMargin
+			self._topPadding = topPadding
+		end
+
+		self._oriTopPadding = 0
+	end
+
+	self._cellCount = cellCount
+	self._cellInitCount = math.min(cellInitCount, cellCount)
+	self._cellShowCount = math.min(cellInitCount, cellCount)
+	local beganY = topPadding
+	local yRangIndex = {}
+
+	for i = 1, cellCount do
+		yRangIndex[i] = beganY
+		beganY = beganY + cellMargin + (cellHeight or self._delegate:onCellHeight(i))
+	end
+
+	self._yRangIndex = yRangIndex
+	local contentHight = beganY
+	contentHight = contentHight + bottomPadding
+	local scrollRect = self._scrollRect
+
+	if math.abs(self._direction) == 1 then
+		local sizeDelta = scrollRect.content.sizeDelta
+		sizeDelta.y = contentHight
+		scrollRect.content.sizeDelta = sizeDelta
+		self._contentWidth = scrollRect.content.rect.width
+		self._contentHeight = contentHight
+	else
+		local sizeDelta = scrollRect.content.sizeDelta
+
+		if autoTopPaddingFlag then
+			local temp = self._scrollRect.transform.sizeDelta
+			local tempX = temp.x
+			sizeDelta.x = math.max(contentHight, tempX)
+		else
+			sizeDelta.x = contentHight
+		end
+
+		scrollRect.content.sizeDelta = sizeDelta
+		self._contentWidth = contentHight
+		self._contentHeight = sizeDelta.y
+	end
+
+	local adds = {}
+	self._showCellIndexMap = {}
+	self._showCellIndexArray = {}
+
+	for i = 1, self._cellInitCount do
+		self._showCellIndexMap[i] = 1
+		adds[#adds + 1] = i
+		self._showCellIndexArray[#self._showCellIndexArray + 1] = i
+	end
+
+	self:doAdds(adds)
+
+	self._viportHeight = nil
+
+	if self._direction == 1 then
+		self._viportHeight = scrollRect.viewport.rect.height
+	else
+		self._viportHeight = scrollRect.viewport.rect.width
+	end
+
+	self._lastY = contentHight - self._viportHeight
+
+	if resetZero then
+		if resetZero == true then
+			resetZero = 0
+		end
+
+		self:moveToItemByIndex(resetZero + 1)
+	else
+		self:onScroll(true)
+	end
+end
+
+function M:forceReload()
+	self:onScroll(true)
+end
+
+function M:reloadYRang()
+	local beganY = self._topPadding
+	local yRangIndex = {}
+
+	for i = 1, self._cellCount do
+		yRangIndex[i] = beganY
+		beganY = beganY + self._cellMargin + self._delegate:onCellHeight(i)
+	end
+
+	self._yRangIndex = yRangIndex
+	self._contentHeight = beganY
+	self._scrollRect.content.sizeDelta = Vector2.static(0, beganY)
+
+	for i = 1, self._cellCount do
+		local objCell = self._objCell[i]
+
+		if objCell then
+			lc.setLocalPosition(objCell, self._contentWidth / 2, -yRangIndex[i], 0)
+		end
+	end
+end
+
+function M:moveToItemByIndex(index, duration, force, middleOffset, callback)
+	local scrollRect = self._scrollRect
+
+	if middleOffset then
+		local h = self._viportHeight - self._topPadding - self._bottomPadding
+		local num = math.floor(h / (self._cellHeight + self._cellMargin) / 2)
+		index = math.min(math.max(1, index - num + middleOffset), self._cellCount)
+	end
+
+	scrollRect:StopMovement()
+
+	local beganY = self._yRangIndex[index]
+
+	if beganY == nil then
+		return
+	end
+
+	beganY = beganY - self._topPadding
+	local maxY = nil
+
+	if self._direction == 2 then
+		maxY = math.max(self._contentWidth - self._scrollRect.viewport.rect.width, 0)
+
+		if maxY < beganY then
+			beganY = maxY
+		end
+	elseif math.abs(self._direction) == 1 then
+		maxY = math.max(self._contentHeight - self._scrollRect.viewport.rect.height, 0)
+
+		if maxY < beganY then
+			beganY = maxY
+		end
+	end
+
+	local x, y, z = lc.getAnchoredPosition(self._content)
+
+	if self._direction == 2 then
+		x = -beganY
+	elseif math.abs(self._direction) == 1 then
+		y = beganY * math.sign(self._direction)
+	end
+
+	self._lastY = maxY + 100
+
+	if duration == nil then
+		lc.setAnchoredPosition(self._content, x, y)
+		self:onScroll(force)
+
+		if callback then
+			callback()
+		end
+	else
+		self._isMovingToItem = true
+
+		self:setRaycastTarget(false)
+		self._content.transform:DOKill(false)
+		self._content.transform:DOAnchorPos3D(Vector3.static(x, y, z), duration):OnComplete(function ()
+			self._isMovingToItem = false
+
+			self:setRaycastTarget(true)
+			self:onScroll()
+
+			if callback then
+				callback()
+			end
+		end):SetLink(self._content.gameObject)
+	end
+end
+
+function M:isMovingToItem()
+	return self._isMovingToItem
+end
+
+function M:setRaycastTarget(isCast)
+	local img = self._scrollRect.viewport:GetComponent("Image")
+
+	if img then
+		self._scrollRect.viewport:GetComponent("Image").raycastTarget = isCast
+	end
+end
+
+local function areVisibleListsDifferent(listA, listB)
+	if #listA ~= #listB then
+		return true
+	end
+
+	for i = 1, #listA do
+		if listA[i] ~= listB[i] then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:_updateVisibleCellObjs()
+	local scrollRect = self._scrollRect
+	local content = self._content
+	local viewport = scrollRect.viewport
+	local isVertical = math.abs(self._direction) == 1
+	local viewportSize, contentPos = nil
+
+	if isVertical then
+		viewportSize = viewport.rect.height
+		contentPos = content.anchoredPosition.y * math.sign(self._direction)
+	else
+		viewportSize = viewport.rect.width
+		contentPos = -content.anchoredPosition.x
+	end
+
+	local oldVisibleCellObjs = self._visibleCellObjs
+	local viewportStartPos = contentPos
+	local viewportEndPos = contentPos + viewportSize
+	local tempVisibleMap = {}
+
+	for index, objCell in pairs(self._objCell) do
+		local cellStartPos = self._yRangIndex[index]
+		local cellDimension = self._cellHeight or self._delegate:onCellHeight(index)
+		local margin = self._cellMargin
+		local cellEndPos = cellStartPos + cellDimension + margin
+
+		if cellStartPos < viewportEndPos and viewportStartPos < cellEndPos then
+			tempVisibleMap[index] = objCell
+		end
+	end
+
+	local newVisibleCellObjs = {}
+
+	for i = 1, #self._showCellIndexArray do
+		local index = self._showCellIndexArray[i]
+		local objCell = tempVisibleMap[index]
+
+		if objCell then
+			newVisibleCellObjs[#newVisibleCellObjs + 1] = objCell
+		end
+	end
+
+	if areVisibleListsDifferent(newVisibleCellObjs, oldVisibleCellObjs) then
+		self._visibleCellObjs = newVisibleCellObjs
+
+		self:onChangeVisibleCells()
+	end
+end
+
+return M

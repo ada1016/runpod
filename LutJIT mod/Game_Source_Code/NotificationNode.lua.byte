@@ -1,0 +1,32 @@
+local M = class("NotificationNode")
+
+function M:ctor(satisfiedFunc, notificationType, textSid)
+	self._satisfiedFunc = satisfiedFunc
+	self._notificationType = notificationType
+	self._textSid = textSid
+	self._textSatisified = nil
+	self._refGroups = {}
+end
+
+function M:isSatisfied()
+	local ret, text = self._satisfiedFunc()
+	self._textSatisified = text
+
+	return ret
+end
+
+function M:notificationTypeAndText()
+	return self._notificationType, self._textSid, self._textSatisified
+end
+
+function M:addRefGroup(notificationGroup)
+	self._refGroups[#self._refGroups + 1] = notificationGroup
+end
+
+function M:updateNotificationNode()
+	for i = 1, #self._refGroups do
+		self._refGroups[i]:updateNotificationGroup()
+	end
+end
+
+return M

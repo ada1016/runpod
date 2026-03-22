@@ -1,0 +1,278 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleBattery_Plasma", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._dontRotate = true
+	self._bullet = nil
+	self._secondBullets = table.new(4, 0)
+	self._bullets = table.new(8, 0)
+	self._enemysMap = table.new(0, 8)
+	self._killEnemyCount = 0
+	self._shootCtrlPos = Vector3.retain(0, 0, 0)
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:seekingEnemy()
+	self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery_Plasma(self)
+
+	self:towardTargetEnemy(self._targetEnemy)
+end
+
+function M:createBullet(targetEnemy)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	self._shootCtrlPos:Set(self._towardDir):Mul(self._muzzleDistance + 2.5):Add(self._rotatePos)
+	bullet:setLineBegan(self._shootPos.x, self._shootPos.y, self._shootCtrlPos.x, self._shootCtrlPos.y)
+	bullet:setTargetEnemy(targetEnemy)
+
+	bullet._isMain = true
+	bullet._plasmaType = 1
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	bullet:finishInitialization()
+	self:tryCastReflectBullets(bullet, targetEnemy)
+
+	return bullet
+end
+
+function M:castSkill()
+	self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery_Plasma(self)
+
+	if self._targetEnemy == nil then
+		if self._view then
+			Client.stopFadeOut(self._mainSkill._audio)
+		end
+
+		return
+	end
+
+	self._isChanneling = true
+	local targetEnemy = self._targetEnemy
+
+	table.clear(self._enemysMap)
+
+	local bullet = self:createBullet(targetEnemy)
+	self._enemysMap[targetEnemy._id] = targetEnemy
+
+	self:tryCastReflectMainBullets(bullet, targetEnemy)
+	bullet:updateLine()
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		local count = self._skinSkillParam1
+
+		for i = 1, count do
+			local newEnemy = self._battleSession:randomOneEnemy(self._enemysMap)
+
+			if newEnemy == nil then
+				newEnemy = targetEnemy
+			end
+
+			local bullet = self:createBullet(newEnemy)
+			bullet._plasmaType = 4
+			self._enemysMap[newEnemy._id] = targetEnemy
+
+			self:tryCastReflectMainBullets(bullet, newEnemy)
+			bullet:updateLine()
+		end
+	end
+
+	local triggerSkill = self:getSkill(703)
+
+	if triggerSkill then
+		self:castTriggerSkill(triggerSkill)
+	end
+
+	local effPar = self:getEffect(751)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) then
+		local triggerSkill = self:getSkill(708)
+
+		if triggerSkill then
+			self:castTriggerSkill(triggerSkill)
+		end
+	end
+end
+
+function M:tryCastReflectBullets(mainBullet, targetEnemy)
+	local castSkill = self:getSkill(701)
+
+	if castSkill == nil then
+		return
+	end
+
+	local followEnemy = targetEnemy
+	local num = castSkill:getProp(BattlePropEnum.Salvo, 0)
+
+	for i = 1, num do
+		local enemy = self._battleSession:randomOneEnemyInRange(targetEnemy._position, 3, self._enemysMap)
+
+		if enemy == nil then
+			enemy = self._battleSession:randomOneEnemy(self._enemysMap)
+		end
+
+		if enemy == nil then
+			break
+		end
+
+		self._enemysMap[enemy._id] = enemy
+		local bullet = castSkill:createBullet()
+
+		mainBullet:addReflectBullet(bullet)
+
+		bullet._isMain = false
+		bullet._mainBullet = mainBullet
+		bullet._plasmaType = 2
+
+		bullet:setPos(followEnemy._position.x, followEnemy._position.y)
+		bullet:setLineBeganTarget(targetEnemy)
+		bullet:setTargetEnemy(enemy)
+
+		followEnemy = enemy
+
+		if bullet._view then
+			bullet._view:posEvent()
+		end
+	end
+
+	followEnemy = nil
+end
+
+function M:tryCastReflectMainBullets(parentBullet, targetEnemy)
+	if not targetEnemy:isSlowDown() then
+		return
+	end
+
+	self._enemysMap[targetEnemy._id] = targetEnemy
+	local effPar = self:getEffect(752)
+
+	if effPar then
+		for i = 1, effPar do
+			local newEnemy = self._battleSession:randomOneEnemy(self._enemysMap)
+
+			if newEnemy then
+				local bullet = self:createBullet(newEnemy)
+				bullet._plasmaType = 5
+				self._enemysMap[newEnemy._id] = newEnemy
+
+				bullet:setPos(targetEnemy._position.x, targetEnemy._position.y)
+				bullet:setLineBeganTarget(targetEnemy)
+				bullet:setTargetEnemy(newEnemy)
+				bullet:updateLine(newEnemy._position.x, newEnemy._position.y)
+				parentBullet:addReflectMainBullet(bullet)
+
+				if bullet._view then
+					bullet._view:posEvent()
+				end
+			end
+		end
+	end
+end
+
+function M:castTriggerSkill(castSkill)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	self._shootCtrlPos:Set(self._towardDir):Mul(self._muzzleDistance + 1):Add(self._rotatePos)
+	bullet:setLineBegan(self._shootPos.x, self._shootPos.y, self._shootCtrlPos.x, self._shootCtrlPos.y)
+
+	bullet._isMain = false
+	bullet._plasmaType = 3
+	local targetEnemy = self._battleSession:randomOneEnemy(self._enemysMap)
+
+	if targetEnemy == nil then
+		targetEnemy = self._targetEnemy
+	end
+
+	bullet:setTargetEnemy(targetEnemy)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	self._secondBullets[#self._secondBullets + 1] = bullet
+end
+
+function M:removeSecondBullets()
+	for i = 1, #self._secondBullets do
+		self._secondBullets[i]:markToBeDestroyed()
+	end
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._battleSkill == self._mainSkill then
+		self:removeSecondBullets()
+
+		if bullet._plasmaType == 1 then
+			self._isChanneling = false
+
+			self:onChannelingEnd()
+			table.clear(self._enemysMap)
+
+			if self._view then
+				self._view:returnEvent()
+			end
+		end
+	end
+end
+
+function M:enemyKilledByBullet(bullet)
+	if bullet == nil then
+		return
+	end
+
+	if self:getEffect(702) then
+		self._killEnemyCount = self._killEnemyCount + 1
+		local params = D.getBattleEffectParams(702)
+
+		if self._killEnemyCount % params[1] == 0 then
+			bullet._damageAddNum = math.min(bullet._damageAddNum + params[2], params[3])
+		end
+	end
+end
+
+function M:onMainEnemyKilled(bullet, oldMainEnemy)
+	self:enemyKilledByBullet(bullet)
+
+	self._enemysMap[oldMainEnemy._id] = nil
+end
+
+function M:onSubEnemyKilled(bullet, oldSubEnemy)
+	self:enemyKilledByBullet(bullet._mainBullet)
+
+	self._enemysMap[oldSubEnemy._id] = nil
+end
+
+function M:castSkin62Effect(bullet, enemy)
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+	count = 2
+	local angle = self._angle
+	local dtAngle = 10
+
+	for i = 1, count do
+		local bullet = castSkill:createBullet()
+
+		bullet:setPos(self._shootPos.x, self._shootPos.y)
+		bullet:setDirByAngle(angle + dtAngle * (i - count) / 2)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+end
+
+return M

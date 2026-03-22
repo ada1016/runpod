@@ -1,0 +1,41 @@
+local M = class("BattleRanger_Nested", requireLua("BattleRanger"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+end
+
+function M:init(cid, index)
+	SUPER.init(self, cid, index)
+
+	local subClass = string.format("BattleRanger_%d_Sub", self._id)
+	self._subFly = requireLua(subClass).create(self)
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+	self._subFly:step(dt)
+end
+
+function M:castMainSkill()
+	self._isInChanneling = true
+
+	self._subFly:doStart(self._targetEnemy)
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if self._id == 208 or self._id == 206 or self._id == 210 or self._id == 213 or self._id == 212 then
+		return
+	end
+
+	if bullet == nil or bullet._battleSkill == self._mainSkill then
+		self:onEnd()
+	end
+end
+
+function M:onEnd()
+	self._subFly:doEnd()
+	self:onChannelEnd()
+end
+
+return M

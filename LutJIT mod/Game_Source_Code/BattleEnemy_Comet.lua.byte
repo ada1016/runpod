@@ -1,0 +1,18 @@
+local M = class("BattleEnemy_Comet", requireLua("BattleEnemy"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+end
+
+function M:init(id, cid)
+	SUPER.init(self, id, cid)
+end
+
+function M:move(dt)
+end
+
+return M

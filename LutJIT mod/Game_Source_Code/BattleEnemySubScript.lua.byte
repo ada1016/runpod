@@ -1,0 +1,3692 @@
+local M = {}
+local TablePool = TablePool
+local BattleDefine = BattleDefine
+local BattleMathLib = BattleMathLib
+local table = table
+local pairs = pairs
+local math = math
+M[2] = {
+	init = function (self)
+		self.__coutdown = 5
+	end,
+	step = function (self, dt)
+		if self._readyAtk then
+			return
+		end
+
+		self.__coutdown = self.__coutdown - dt
+
+		if self.__coutdown <= 0 then
+			self.__coutdown = 5
+			local b = self._battleRandomLib:randomMN(1, 2) == 1
+
+			if b then
+				self:addBuff(self._params[1], self._params[2])
+			end
+		end
+	end,
+	addBuff = function (self)
+		if self._view then
+			self._view:skillEvent(true)
+		end
+	end,
+	removeBuff = function (self)
+		if self._view then
+			self._view:skillEvent(false)
+		end
+	end,
+	destroy = function (self)
+		self.__coutdown = nil
+	end
+}
+M[3] = {
+	markToBeDestroyed = function (self)
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local cnt = self._params[1]
+		local enemyMetaId = self._params[2]
+		local posx = self._position.x
+		local posy = self._position.y
+
+		if self._view then
+			local obj = self._sessionView:createAndPlayVFX("Enemy_1202_split", 0.3)
+
+			if obj then
+				obj:SetPosition(posx, posy, 0)
+			end
+		end
+
+		for i = 1, cnt do
+			local x, y = BattleMathLib.random_inside_circle(1)
+			x = x + posx
+			y = y + posy
+			x, y = self._battleSession:limitEnemyPosition(x, y)
+			local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+			enemy:setPos(x, y)
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+		end
+	end
+}
+M[5] = {
+	init = function (self)
+		self.__stage = 1
+		self.__coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+		self._affectedEnemys = nil
+		self._haloVFXName = "Enemy_1502_speedup"
+		self._halpStepCDMax = self._battleRandomLib:randomMN(40, 60) / 100
+		self._haloStepCD = self._halpStepCDMax
+	end,
+	destroy = function (self)
+		self._haloStepCD = nil
+		self.__stage = 1
+		self.__coutdown = nil
+		self._affectedEnemys = nil
+		self._haloVFXName = nil
+	end,
+	step = function (self, dt)
+		if self._attacked then
+			return
+		end
+
+		self.__coutdown = self.__coutdown - dt
+
+		if self.__coutdown <= 0 then
+			if self.__stage == 1 then
+				self.__stage = 2
+				self.__coutdown = self._params[3]
+				self._haloEffecting = true
+				self._forceSpeedEx = 0
+				self._haloStepCD = self._halpStepCDMax
+
+				if self._view then
+					self._view:haloEvent(true)
+				end
+			elseif self.__stage == 2 then
+				self.__stage = 1
+
+				self:recalculateSpeed()
+
+				self.__coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+
+				self:cancelHalo()
+			end
+		end
+
+		if self._haloEffecting then
+			self._haloStepCD = self._haloStepCD - dt
+
+			if self._haloStepCD <= 0 then
+				self._haloStepCD = self._halpStepCDMax
+
+				self:stepHalo(dt)
+			end
+		end
+	end,
+	markToBeDestroyed = function (self)
+		self:cancelHalo()
+	end
+}
+M[7] = {
+	init_end = function (self)
+		self:addBuff(self._params[1], self._params[2])
+	end
+}
+M[9] = {
+	init = function (self)
+		self._receiveDamagePool = 0
+	end,
+	receiveDamage = function (self, damage)
+		if self._receiveDamagePool then
+			self._receiveDamagePool = self._receiveDamagePool + math.abs(damage)
+
+			if self._receiveDamagePool / self._maxHp >= self._params[1] / 100 then
+				self._receiveDamagePool = 0
+
+				self:addBuff(self._params[2], self._params[3])
+			end
+		end
+	end,
+	destroy = function (self)
+		self._receiveDamagePool = nil
+	end
+}
+M[10] = {
+	markToBeDestroyed = function (self)
+		local enemys = self._battleSession:getAllEnemys()
+		local cnt = #enemys
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and self._id ~= enemy._id and BattleMathLib.dis_square(self._position, enemy._position) <= self._params[1]^2 then
+				enemy:addBuff(self._params[2], 36000)
+			end
+		end
+
+		if self._view then
+			local obj = self._sessionView:createAndPlayVFX("Enemy_1504_wave", 0.7)
+
+			if obj then
+				obj:SetLocalScale(self._params[1])
+				obj:SetPosition(self._position.x, self._position.y, 0)
+			end
+		end
+	end
+}
+M[12] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._stage = nil
+	end,
+	receiveDamage = function (self)
+		if self._stage == 2 then
+			return
+		end
+
+		if self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+			local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+			self._speed = self._params[2]
+			self._initialSpeed = self._speed
+			self._delayStepCount = 0.5
+
+			if self._view then
+				self._view._umbrellaRoot:SetActive(false)
+				self._view._flame:SetActive(true)
+
+				local obj = self._sessionView:createAndPlayVFX("Enemy_1404_fire", 0.5)
+
+				if obj then
+					obj:SetPosition(self._position.x, self._position.y, 0)
+					obj:SetLocalScale(self._scale)
+				end
+			end
+		end
+	end
+}
+M[14] = {
+	init = function (self)
+		self._originScale = nil
+	end,
+	receiveDamage = function (self, damage)
+		if self._originScale == nil then
+			self._originScale = self._scale
+		end
+
+		local scale = (1 + 1 - self._hp / self._maxHp) * self._originScale
+
+		self:setScale(scale)
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	end,
+	destroy = function (self)
+		self._originScale = nil
+	end
+}
+M[15] = {
+	init = function (self)
+		self.__stage = 1
+		self.__coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+		self._affectedEnemys = nil
+		self._haloVFXName = "Enemy_1503_invisible"
+		self._halpStepCDMax = self._battleRandomLib:randomMN(40, 60) / 100
+		self._haloStepCD = self._halpStepCDMax
+	end,
+	step = function (self, dt)
+		if self._attacked then
+			return
+		end
+
+		self.__coutdown = self.__coutdown - dt
+
+		if self.__coutdown <= 0 then
+			if self.__stage == 1 then
+				self.__stage = 2
+				self.__coutdown = self._params[3]
+				self._haloEffecting = true
+				self._haloStepCD = self._halpStepCDMax
+				self._forceSpeedEx = 0
+
+				if self._view then
+					self._view:haloEvent(true)
+				end
+			elseif self.__stage == 2 then
+				self.__stage = 1
+				self.__coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+
+				self:recalculateSpeed()
+				self:cancelHalo()
+			end
+		end
+
+		if self._haloEffecting then
+			self._haloStepCD = self._haloStepCD - dt
+
+			if self._haloStepCD <= 0 then
+				self._haloStepCD = self._halpStepCDMax
+
+				self:stepHalo(dt)
+			end
+		end
+	end,
+	markToBeDestroyed = function (self)
+		self:cancelHalo()
+	end,
+	destroy = function (self)
+		self.__stage = 1
+		self.__coutdown = nil
+		self._affectedEnemys = nil
+		self._haloVFXName = nil
+	end
+}
+M[16] = {
+	markToBeDestroyed = function (self)
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local enemyMetaId1 = self._params[1]
+		local enemyMetaId2 = self._params[2]
+		local posx = self._position.x
+		local posy = self._position.y
+		local w = self._params[3]
+		local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId1)
+		local x = posx - 0.5 * w + 0 * w
+		local y = posy
+		x, y = self._battleSession:limitEnemyPosition(x, y)
+
+		enemy:setPos(x, y)
+
+		if enemy._view then
+			enemy._view:posEvent()
+		end
+
+		local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId2)
+		local x = posx - 0.5 * w + 1 * w
+		local y = posy
+		x, y = self._battleSession:limitEnemyPosition(x, y)
+
+		enemy:setPos(x, y)
+
+		if enemy._view then
+			enemy._view:posEvent()
+		end
+
+		if self._view then
+			local obj = self._sessionView:createAndPlayVFX("Enemy_2182_split", 0.3)
+
+			if obj then
+				obj:SetPosition(posx, posy, 0)
+			end
+		end
+	end
+}
+M[17] = {
+	init = function (self)
+		self._readyCastSkill = false
+		self._nextCastSkillCD = self._params[4]
+	end,
+	destroy = function (self)
+		self._readyCastSkill = nil
+	end,
+	readyAttack = function (self)
+		if self._readyAtk and self._readyCastSkill then
+			self._readyCastSkill = false
+			self._readyAtk = false
+			self._castSkillTime = 0.5
+			self._nextCastSkillCD = self._params[4]
+
+			if self._view then
+				self._view._ator:SetTrigger("skill")
+
+				self._battleSession._skillFinalDmgPerEffectCD = self._params[3]
+				self._battleSession._skillFinalDmgPer = self._params[5]
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self._nextCastSkillCD then
+			self._nextCastSkillCD = self._nextCastSkillCD - dt
+
+			if self._nextCastSkillCD <= 0 then
+				self._readyCastSkill = true
+			end
+		end
+
+		if self._castSkillTime then
+			self._castSkillTime = self._castSkillTime - dt
+
+			if self._castSkillTime <= 0 then
+				self._castSkillTime = nil
+				self._jumpDuration = 0.5
+				self._knockbackStatus = true
+				self._knockbackSpeed = self._params[2] / self._params[1]
+				self._knockbackDir[1] = 0
+				self._knockbackDir[2] = 1
+
+				if self._view then
+					local vfx = self._sessionView:createAndPlayVFX("Enemy_2381_ink", self._params[3] + 0.5)
+
+					if vfx then
+						vfx:SetPosition(0, 3.8, 0)
+						vfx:SetLocalScale(self._scale)
+					end
+
+					Client.playBattleSound("Enemy_2381_ink")
+				end
+			end
+		end
+
+		if self._jumpDuration then
+			self._jumpDuration = self._jumpDuration - dt
+
+			if self._jumpDuration <= 0 then
+				self._jumpDuration = nil
+
+				if self._view then
+					self._knockbackStatus = nil
+
+					self._view._ator:SetTrigger("move")
+				end
+			end
+		end
+	end
+}
+M[18] = {
+	init = function (self)
+		self._readySkillCD = self._params[2]
+		self._readySkill = true
+	end,
+	step = function (self, dt)
+		if self._readySkill == false then
+			self._readySkillCD = self._readySkillCD - dt
+
+			if self._readySkillCD <= 0 then
+				self._readySkill = true
+			end
+		end
+
+		if self._portalOutCD then
+			self._portalOutCD = self._portalOutCD - dt
+
+			if self._portalOutCD <= 0 then
+				self._portalOutCD = nil
+				local posx = self._position.x
+				local tx = 0
+
+				if posx > 0 then
+					local x1 = (self._battleSession._battleFieldEdgeX1 + self._radius) * 10
+					tx = self._battleRandomLib:randomMN(x1, 0) / 10
+				elseif posx < 0 then
+					local x2 = (self._battleSession._battleFieldEdgeX2 - self._radius) * 10
+					tx = self._battleRandomLib:randomMN(0, x2) / 10
+				else
+					local x1 = (self._battleSession._battleFieldEdgeX1 + self._radius) * 10
+					local x2 = (self._battleSession._battleFieldEdgeX2 - self._radius) * 10
+					tx = self._battleRandomLib:randomMN(x1, x2) / 10
+				end
+
+				self._portalInCD = 0.4
+				self._position.x = tx
+
+				if self._view then
+					self._view._obj:SetActive(false)
+
+					local obj = self._sessionView:createAndPlayVFX("Enemy_2481_move", 0.8)
+
+					if obj then
+						obj:SetPosition(tx, self._position.y, 0)
+					end
+				end
+			end
+		end
+
+		if self._portalInCD then
+			self._portalInCD = self._portalInCD - dt
+
+			if self._portalInCD <= 0 then
+				self._portalInCD = nil
+
+				if self._view then
+					self._view._obj:SetActive(true)
+
+					self._invincible = false
+
+					for i = 1, self._params[1] do
+						self:addBuff(self._params[3], 36000)
+					end
+				end
+			end
+		end
+	end,
+	onHit = function (self)
+		if not self._readySkill then
+			return
+		end
+
+		self._readySkill = false
+		self._readySkillCD = self._params[2]
+		self._portalOutCD = 0.4
+		self._invincible = true
+
+		if self._view then
+			local obj = self._sessionView:createAndPlayVFX("Enemy_2481_move", 0.8)
+
+			if obj then
+				obj:SetPosition(self._position.x, self._position.y, 0)
+			end
+		end
+	end,
+	destroy = function (self)
+		self._portalInCD = nil
+		self._portalOutCD = nil
+		self._readySkillCD = nil
+	end
+}
+M[19] = {
+	init = function (self)
+		self._vampiric = true
+	end,
+	destroy = function (self)
+		self._vampiric = nil
+	end
+}
+M[20] = {
+	init = function (self)
+		self._ignoreRegulateBuf = true
+	end,
+	destroy = function (self)
+		self._ignoreRegulateBuf = false
+	end,
+	onHit = function (self, battleBullet)
+		self:addBuff(self._params[1], self._params[2])
+	end
+}
+M[2281] = {
+	onHit = function (self, battleBullet)
+		if battleBullet._destroyType == 1 then
+			battleBullet:tryMarkToBeDestroyedWithEnemyBlock()
+		end
+	end
+}
+local shake_params = {
+	0.3,
+	2,
+	0,
+	0.5,
+	0,
+	0.1,
+	0,
+	0,
+	0,
+	0
+}
+M[21] = {
+	init = function (self)
+		self._scale = 5
+		self._stopSpawn = false
+		self._spawnChildId1 = self._params[1]
+		self._spawnChildId2 = self._params[2]
+		self._beginSpawnChildNum = self._params[3]
+		self._onHitSpawnPercent = self._params[4]
+		self._onHitSpawnNum = self._params[5]
+		self._hpPercent = 100 / self._onHitSpawnPercent
+	end,
+	step = function (self, dt)
+		local sessionView = self._sessionView
+
+		if not self._stopSpawn then
+			if sessionView then
+				if Client._shakeCameraOn == 1 then
+					sessionView._cameraShaker.enabled = true
+					local posInfluence = opt.vec3_1:SetXYZ(shake_params[5], shake_params[6], shake_params[7])
+					local rotInfluence = opt.vec3_2:SetXYZ(shake_params[8], shake_params[9], shake_params[10])
+
+					if lc._isMobile then
+						self._shakeIns = sessionView._cameraShaker:StartShake(shake_params[1] * 2, shake_params[2], shake_params[3], posInfluence, rotInfluence, true)
+					else
+						self._shakeIns = sessionView._cameraShaker:StartShake(shake_params[1], shake_params[2], shake_params[3], posInfluence, rotInfluence, true)
+					end
+				end
+
+				self._initialSize = self._battleSession._initialOrthographicSize
+				self._nearestScale = 0.9
+				self._y0 = self._position.y
+				self._y1 = 10
+			end
+
+			self._stopSpawn = true
+
+			for i = 1, self._beginSpawnChildNum do
+				local rand = self._battleRandomLib:random() * 2 * math.pi
+				local x, y = BattleMathLib.random_inside_circle(self._radius)
+				local x = self._position.x + x
+				local y = self._position.y + y
+				local randomTargetX = self._battleRandomLib:randomMN(-3 * self._battleSession._zoomScale, 3 * self._battleSession._zoomScale)
+				local targetPosY = self._battleSession._battleActor._position.y
+				local angle = math.deg(math.atan2(targetPosY - y, randomTargetX - x))
+				local enemyMetaId = self._battleRandomLib:randomTrue() and self._spawnChildId1 or self._spawnChildId2
+				local enemy = self._battleSession._battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+				enemy:setPos(x, y)
+				enemy:setDirByAngle(angle)
+
+				if enemy._view then
+					enemy._view:posEvent()
+					enemy._view:rotationEvent()
+				end
+			end
+		end
+
+		if self._sessionView then
+			local percent = (self._position.y - self._y0) / (self._y1 - self._y0)
+			percent = math.max(0, math.min(1 + (self._nearestScale - 1) * percent, 1))
+
+			self._sessionView:zoomFieldExtra(percent)
+		end
+	end,
+	onHit = function (self)
+		local hpPercent = math.ceil(self._hp * 100 / self._maxHp / self._onHitSpawnPercent)
+
+		for i = hpPercent + 1, self._hpPercent do
+			for j = 1, self._onHitSpawnNum do
+				local x, y = BattleMathLib.random_along_circle(self._radius)
+				local x = self._position.x + x
+				local y = self._position.y + y
+				local randomTargetX = self._battleRandomLib:randomMN(-3 * self._battleSession._zoomScale, 3 * self._battleSession._zoomScale)
+				local targetPosY = self._battleSession._battleActor._position.y
+				local angle = math.deg(math.atan2(targetPosY - y, randomTargetX - x))
+				local enemyMetaId = self._battleRandomLib:randomTrue() and self._spawnChildId1 or self._spawnChildId2
+				local enemy = self._battleSession._battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+				enemy:setPos(x, y)
+				enemy:setDirByAngle(angle)
+
+				if enemy._view then
+					enemy._view:posEvent()
+					enemy._view:rotationEvent()
+				end
+			end
+		end
+
+		if self._hpPercent ~= hpPercent then
+			if self._sessionView then
+				local posInfluence = Vector3.new(shake_params[5], shake_params[6], shake_params[7])
+				local rotInfluence = Vector3.new(shake_params[8], shake_params[9], shake_params[10])
+
+				self._sessionView._cameraShaker:ShakeOnce(shake_params[1] * 10, shake_params[2], shake_params[3], shake_params[4], posInfluence, rotInfluence)
+			end
+
+			self._hpPercent = hpPercent
+		end
+	end,
+	markToBeDestroyed = function (self)
+		if self._sessionView then
+			if self._shakeIns then
+				self._shakeIns:StartFadeOut(1)
+
+				self._shakeIns = nil
+			end
+
+			self._sessionView._extraZoom = 1
+
+			self._sessionView:zoomField(-1)
+		end
+	end
+}
+local spawnChilds22 = {
+	1501,
+	1502
+}
+M[22] = {
+	init = function (self)
+		self._spawn = false
+		self._spawnChildNum1 = self._params[1]
+		self._spawnChildNum2 = self._params[2]
+		self._spawnChildIds = spawnChilds22
+		self._children = table.new(32, 0)
+		self._childrenHp = table.new(32, 0)
+		self._childrenExp = table.new(32, 0)
+		self._swallowNum = 0
+	end,
+	step = function (self, dt)
+		if not self._spawn then
+			self._spawn = true
+			local curPos = self._position
+			local dir = {
+				self._dir[1],
+				self._dir[2]
+			}
+			local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+			local cnt = self._battleRandomLib:randomMN(self._spawnChildNum1, self._spawnChildNum2)
+			local x = self._position.x
+			local y = self._position.y
+
+			for i = 1, cnt do
+				x = x + dir[1] * 1
+				y = y + dir[2] * 1
+
+				if self._battleSession._screenEdgeX2 <= x + self._radius then
+					dir[1] = -math.abs(self._dir[1])
+					i = i - 1
+				elseif x - self._radius <= self._battleSession._screenEdgeX1 then
+					dir[1] = math.abs(self._dir[1])
+					i = i - 1
+				elseif self._battleSession._enemyBornEdgeX1 <= x and x <= self._battleSession._enemyBornEdgeX2 then
+					local id = self._spawnChildIds[self._battleRandomLib:randomN(#self._spawnChildIds)]
+					local enemy = battleEnemyGenerator:createSummonEnemy(id)
+
+					enemy:setPos(x + self._battleRandomLib:random(), y + self._battleRandomLib:random())
+
+					if enemy._view then
+						enemy._view:posEvent()
+					end
+				end
+			end
+
+			self._initScale = self._scale
+		end
+
+		if self._swallowNum < self._params[3] then
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+			local children = self._children
+			local childrenHp = self._childrenHp
+			local childrenExp = self._childrenExp
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed and self._id ~= enemy._id and enemy._type == BattleDefine.EnemyType.Normal and BattleMathLib.circle_circle_intersect(self._position, enemy._position, self._radius, enemy._radius) and self._swallowNum < self._params[3] then
+					self._swallowNum = self._swallowNum + 1
+
+					enemy:markToBeDestroyed()
+
+					children[#children + 1] = enemy._cid
+					local scale = (1 + self._swallowNum / 100) * self._initScale
+
+					self:setScale(scale)
+
+					if self._view then
+						self._view:scaleEvent()
+						Client.playBattleSound("se_Enemy_22_eat")
+					end
+				end
+			end
+		end
+	end,
+	markToBeDestroyed = function (self)
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local cnt = #self._children
+
+		for i = 1, cnt do
+			local x, y = BattleMathLib.random_inside_circle(self._radius)
+			x = x + self._position.x
+			y = y + self._position.y
+			x, y = self._battleSession:limitEnemyPosition(x, y)
+			local enemy = battleEnemyGenerator:createSummonEnemy(self._children[i])
+
+			enemy:setPos(x, y)
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+		end
+	end
+}
+M[23] = {
+	init = function (self)
+		self._dir[1] = 1
+		self._dir[2] = 0
+		self._spawnChildCD = self._params[1]
+		self._spawnChildId = self._params[2]
+	end,
+	step = function (self, dt)
+		self._spawnChildCD = self._spawnChildCD - dt
+
+		if self._spawnChildCD <= 0 and self._battleSession._enemyBornEdgeX1 <= self._position.x and self._position.x <= self._battleSession._enemyBornEdgeX2 then
+			self._spawnChildCD = self._params[1]
+			local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+			local enemy = battleEnemyGenerator:createSummonEnemy(self._spawnChildId)
+
+			enemy:setPos(self._position.x, self._position.y - self._radius + 1)
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+		end
+	end
+}
+M[1303] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._stage = nil
+	end,
+	receiveDamage = function (self, damage)
+		if self._stage == 1 and self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+
+			self:addBuff(10, 9999)
+		end
+	end
+}
+M[1304] = {
+	init = function (self)
+		self._form = 1
+		self._damageFinalCutPer = 0.5
+	end,
+	destroy = function (self)
+		self._damageFinalCutPer = nil
+		self._form = nil
+	end,
+	readyAttack = function (self)
+		if self._form == 2 then
+			return
+		end
+
+		self._form = 2
+		self._damageFinalCutPer = nil
+
+		if self._view then
+			self._view._obj:GetChild(0):SetActive(false)
+			self._view._obj:GetChild(1):SetActive(true)
+
+			self._view._spAnimation.nextBehavior = 1
+
+			self._view:skillEvent(true)
+		end
+	end,
+	onHit = function (self, battleBullet)
+		if self._form == 1 and battleBullet._destroyType == 1 then
+			battleBullet:tryMarkToBeDestroyedWithEnemyBlock()
+		end
+	end
+}
+M[1101] = {
+	markToBeDestroyed = function (self)
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local enemyMetaId = self._params[1]
+		local cnt = self._battleRandomLib:randomMN(self._params[2], self._params[3])
+		local posx = self._position.x
+		local posy = self._position.y
+
+		if self._cid == 2103 then
+			self._childrenCount = cnt
+		end
+
+		for i = 1, cnt do
+			local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+			enemy:setPos(posx, posy)
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+
+			enemy._scriptBehavior.initPath(enemy)
+		end
+	end
+}
+M[4101] = {
+	init = function (self)
+		self._pBegan = Vector2.retain(0, 0)
+		self._pCtrl = Vector2.retain(0, 0)
+		self._pEnd = Vector2.retain(0, 0)
+		self._runPathTime = 0
+	end,
+	destroy = function (self)
+		Vector2.release(self._pBegan)
+
+		self._pBegan = nil
+
+		Vector2.release(self._pCtrl)
+
+		self._pCtrl = nil
+
+		Vector2.release(self._pEnd)
+
+		self._pEnd = nil
+		self._runPathTime = nil
+	end,
+	initPath = function (self)
+		self._runPathTime = 0
+		self._pBegan.x = self._position.x
+		self._pBegan.y = self._position.y
+		local offsetX = self._battleRandomLib:randomMN(10, 20) / 10
+
+		if self._battleRandomLib:randomTrue() then
+			self._pCtrl.x = self._pBegan.x - offsetX
+
+			if self._view then
+				self._view._ator:SetTrigger("left")
+			end
+		else
+			self._pCtrl.x = self._pBegan.x + offsetX
+
+			if self._view then
+				self._view._ator:SetTrigger("right")
+			end
+		end
+
+		local offsetY = self._battleRandomLib:randomMN(10, 20) / 10
+
+		if self._battleRandomLib:randomTrue() then
+			self._pCtrl.y = self._pBegan.y - offsetX
+		else
+			self._pCtrl.y = self._pBegan.y + offsetX
+		end
+
+		self._pEnd.x = self._pCtrl.x
+		self._pEnd.y = 0
+	end
+}
+M[2201] = {
+	init = function (self)
+		self._receiveDamagePool = 0
+	end,
+	step = function (self, dt)
+		if self._skillDuration then
+			self._skillDuration = self._skillDuration - dt
+
+			if self._skillDuration <= 0 then
+				self._forceSpeedEx = nil
+			end
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._receiveDamagePool then
+			self._receiveDamagePool = self._receiveDamagePool + math.abs(damage)
+
+			if self._receiveDamagePool / self._maxHp >= self._params[1] / 100 then
+				self._receiveDamagePool = 0
+				local enemys = self._battleSession:getAllEnemys()
+				local cnt = #enemys
+
+				for j = 1, cnt do
+					local enemy = enemys[j]
+
+					if not enemy._isToBeDestroyed and self._id ~= enemy._id and BattleMathLib.dis_square(self._position, enemy._position) <= self._params[2]^2 then
+						enemy:addBuff(self._params[3], self._params[4])
+					end
+				end
+
+				self:addBuff(self._params[3], self._params[4])
+
+				self._forceSpeedEx = 0
+				self._skillDuration = 1
+
+				if self._view then
+					self._view._ator:SetTrigger("skill")
+
+					local obj = self._sessionView:createAndPlayVFX("Enemy_2201_powder", self._params[4])
+
+					if obj then
+						obj:SetLocalScale(self._params[2] * 2)
+						obj:SetPosition(self._position.x, self._position.y, 0)
+					end
+				end
+			end
+		end
+	end,
+	destroy = function (self)
+		self._skillDuration = nil
+		self._receiveDamagePool = nil
+	end
+}
+local PIVOT_LEFT = {
+	-2.7,
+	-0.175
+}
+local PIVOT_RIGHT = {
+	2.7,
+	-0.175
+}
+local ROTATION_LEFT = -115.5
+local ROTATION_RIGHT = -65.5
+local BIRTH_CD = 1
+local ONCE_COUNT = 5
+local SKILL_CD = 10
+local ATTACK_CD = 10
+
+local function create_enemy_3401(self, enemyMetaId, x, y, angle)
+	local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+	local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+	enemy._moveMode = 11
+	enemy._speed = enemy._initialSpeed * 2
+
+	enemy:setPos(x, y)
+	enemy:setDirByAngle(angle)
+	enemy:setScale(1)
+
+	if enemy._view then
+		enemy._view:rotationEvent()
+		enemy._view:posEvent()
+		enemy._view:scaleEvent()
+	end
+
+	return enemy
+end
+
+M[3401] = {
+	init = function (self)
+		self._stage = 1
+		self._stageDuration = 2.5
+	end,
+	destroy = function (self)
+		self._stageDuration = nil
+		self._stage = nil
+	end,
+	receiveDamage = function (self, damage)
+		if self._hp / self._maxHp <= self._params[2] / 100 then
+			if self._lastStage == 35 then
+				self._stage = 36
+				self._lastStage = -1
+			end
+		elseif self._hp / self._maxHp <= self._params[1] / 100 and self._lastStage == 25 then
+			self._stage = 26
+			self._lastStage = -1
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 1 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stage = 2
+			end
+		elseif self._stage == 2 then
+			self._stage = 21
+			self._stageDuration = 0.5
+
+			if self._view then
+				local obj = self._sessionView:createAndPlayVFX("Enemy_3401_move", 1)
+
+				if obj then
+					obj:SetPosition(0, BattleDefine.DOME_POSY + 9, 0)
+				end
+			end
+		elseif self._stage == 21 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = 0.3
+				self._stage = 22
+				self._position.x = 0
+				self._position.y = BattleDefine.DOME_POSY + 9
+
+				if self._view then
+					self._view:posEvent()
+					self._view._obj:SetLocalScale(0.1)
+					self._view._tf:DOScale(1, 0.3)
+				end
+			end
+		elseif self._stage == 22 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 23
+			end
+		elseif self._stage == 23 then
+			self._stage = 24
+			self._stageDuration = 0.6666666666666666
+
+			if self._view then
+				self._view._ator:SetTrigger("skill_began")
+			end
+		elseif self._stage == 24 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 25
+				self._skillCD = 0
+			end
+		elseif self._stage == 25 then
+			self._skillCD = self._skillCD - dt
+
+			if self._skillCD <= 0 then
+				self._lastStage = 25
+				self._stage = 101
+				self._skillCD = SKILL_CD
+				self._birthCD = BIRTH_CD
+				self._birthIndex = 1
+				self._enemyMetaId = 1402
+			end
+		elseif self._stage == 26 then
+			self._stage = 27
+			self._stageDuration = 0.6666666666666666
+
+			if self._view then
+				self._view._ator:SetTrigger("skill_end")
+			end
+		elseif self._stage == 27 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = 0.8
+				self._stage = 28
+
+				if self._view then
+					local obj = self._sessionView:createAndPlayVFX("Enemy_3401_move", 1)
+
+					if obj then
+						obj:SetPosition(self._position.x, self._position.y, 0)
+					end
+
+					local seq = DOTween.Sequence()
+
+					seq:AppendInterval(0.4)
+					seq:Append(self._view._tf:DOScale(0, 0.3))
+				end
+			end
+		elseif self._stage == 28 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				if self._view then
+					-- Nothing
+				end
+
+				self._stage = 31
+				self._stageDuration = 0.1
+			end
+		elseif self._stage == 31 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = 0.7
+				self._stage = 32
+				self._position.x = 0
+				self._position.y = BattleDefine.DOME_POSY + 6
+
+				if self._view then
+					self._view:posEvent()
+
+					local obj = self._sessionView:createAndPlayVFX("Enemy_3401_move", 1)
+
+					if obj then
+						obj:SetPosition(self._position.x, self._position.y, 0)
+					end
+
+					local seq = DOTween.Sequence()
+
+					seq:AppendInterval(0.4)
+					seq:Append(self._view._tf:DOScale(1, 0.3))
+				end
+			end
+		elseif self._stage == 32 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 33
+			end
+		elseif self._stage == 33 then
+			self._stage = 34
+			self._stageDuration = 0.6666666666666666
+
+			if self._view then
+				self._view._ator:SetTrigger("skill_began")
+			end
+		elseif self._stage == 34 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 35
+				self._skillCD = 0
+			end
+		elseif self._stage == 35 then
+			self._skillCD = self._skillCD - dt
+
+			if self._skillCD <= 0 then
+				self._lastStage = 35
+				self._stage = 101
+				self._skillCD = SKILL_CD
+				self._birthCD = BIRTH_CD
+				self._birthIndex = 1
+				self._enemyMetaId = 1403
+			end
+		elseif self._stage == 36 then
+			self._stage = 37
+			self._stageDuration = 0.6666666666666666
+
+			if self._view then
+				self._view._ator:SetTrigger("skill_end")
+			end
+		elseif self._stage == 37 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = 0.7
+				self._stage = 38
+
+				if self._view then
+					local obj = self._sessionView:createAndPlayVFX("Enemy_3401_move", 1)
+
+					if obj then
+						obj:SetPosition(self._position.x, self._position.y, 0)
+					end
+
+					local seq = DOTween.Sequence()
+
+					seq:AppendInterval(0.4)
+					seq:Append(self._view._tf:DOScale(0, 0.3))
+				end
+			end
+		elseif self._stage == 38 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stage = 41
+				self._stageDuration = 0.1
+			end
+		elseif self._stage == 41 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = 0.7
+				self._stage = 42
+				self._position.x = 0
+				self._position.y = BattleDefine.DOME_POSY + 4.5
+
+				if self._view then
+					self._view:posEvent()
+
+					local obj = self._sessionView:createAndPlayVFX("Enemy_3401_move", 1)
+
+					if obj then
+						obj:SetPosition(self._position.x, self._position.y, 0)
+					end
+
+					local seq = DOTween.Sequence()
+
+					seq:AppendInterval(0.4)
+					seq:Append(self._view._tf:DOScale(1, 0.3))
+				end
+
+				self:removeInvisibilityIf()
+			end
+		elseif self._stage == 42 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 43
+			end
+		elseif self._stage == 43 then
+			self._stage = 44
+			self._stageDuration = 0.8333333333333334
+
+			if self._view then
+				self._view._ator:SetTrigger("attack_began")
+			end
+		elseif self._stage == 44 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stageDuration = nil
+				self._stage = 45
+				self._stageDuration = ATTACK_CD
+			end
+		elseif self._stage == 45 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stage = 46
+				self._stageDuration = 0.1
+
+				self:attackPlayer()
+			end
+		elseif self._stage == 46 then
+			self._stageDuration = self._stageDuration - dt
+
+			if self._stageDuration <= 0 then
+				self._stage = 47
+				self._skillCD = ATTACK_CD
+
+				if self._view then
+					self._view._ator:SetTrigger("attack_end")
+				end
+			end
+		elseif self._stage == 47 then
+			self._skillCD = self._skillCD - dt
+
+			if self._skillCD <= 0 then
+				self._stage = 43
+				self._skillCD = nil
+			end
+		elseif self._stage == 101 then
+			self._birthCD = self._birthCD - dt
+
+			if self._birthCD <= 0 then
+				self._birthCD = BIRTH_CD
+				local enemy = create_enemy_3401(self, self._enemyMetaId, self._position.x + PIVOT_LEFT[1], self._position.y + PIVOT_LEFT[2], ROTATION_LEFT)
+				enemy._rotateSpeed = 100
+				enemy._runPathTime = (ONCE_COUNT + 1) * BIRTH_CD - self._birthIndex * BIRTH_CD
+				local enemy = create_enemy_3401(self, self._enemyMetaId, self._position.x + PIVOT_RIGHT[1], self._position.y + PIVOT_RIGHT[2], ROTATION_RIGHT)
+				enemy._rotateSpeed = -100
+				enemy._runPathTime = (ONCE_COUNT + 1) * BIRTH_CD - self._birthIndex * BIRTH_CD
+
+				if self._view then
+					self._view._obj:GetChild(0):GetChild(1):GetComponent("Animation"):Play()
+				end
+
+				self._birthIndex = self._birthIndex + 1
+
+				if ONCE_COUNT < self._birthIndex then
+					self._stage = self._lastStage
+				end
+			end
+		end
+	end
+}
+M[1205] = {
+	toDestroy = function (self)
+		local recoverHP = self._maxHp * self._params[2] / 100
+		local allEnemys = self._battleSession:getEnemysInRange(self._position, self._params[1])
+
+		for i = 1, #allEnemys do
+			local enemy = allEnemys[i]
+
+			if not enemy._isToBeDestroyed then
+				enemy:receiveRecoverHP(recoverHP)
+			end
+		end
+	end
+}
+M[1105] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	receiveDamage = function (self, damage)
+		if self._stage ~= 1 then
+			return
+		end
+
+		if self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+			self._conceal = true
+			self._invincible = true
+			self._coutdown = self._params[2] + 1
+			self._atkInterval = 999
+
+			if self._view then
+				self._view._spAnimation.nextBehavior = 1
+
+				self._view._spAnimation:SetBehavior(3)
+
+				local vfxFade = self._sessionView:addVFX("Enemy_1105_disappear_start", self._view._tf)
+
+				if self._cid == 2105 then
+					vfxFade:SetLocalScale(self._scale * 2)
+				else
+					vfxFade:SetLocalScale(self._scale)
+				end
+
+				self._battleView:delayRemoveVFX(vfxFade, 1)
+				self._view._flasher:DOFade(0, 0.8)
+			end
+
+			if self._enemyBullet then
+				self._enemyBullet:markToBeDestroyed()
+
+				self._enemyBullet = nil
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 2 and self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 3
+				self._conceal = nil
+				self._invincible = nil
+				self._atkInterval = self._atkRawInterval
+
+				if self._view then
+					self._view._flasher:DOFade(1, 0.8)
+
+					local vfxFade = self._sessionView:addVFX("Enemy_1105_disappear_end", self._view._tf)
+
+					if self._cid == 2105 then
+						vfxFade:SetLocalScale(self._scale * 2)
+					else
+						vfxFade:SetLocalScale(self._scale)
+					end
+
+					self._battleView:delayRemoveVFX(vfxFade, 1)
+				end
+			end
+		end
+	end,
+	destroy = function (self)
+		self._coutdown = nil
+		self._invincible = nil
+		self._conceal = nil
+		self._stage = nil
+	end,
+	attackPlayer = function (self)
+		self._conceal = nil
+		self._invincible = nil
+
+		if self._view then
+			self._view._flasher:KillFade()
+			self._view._flasher:DOFade(1, 0.15)
+		end
+	end
+}
+M[2482] = {
+	init = function (self)
+		self._stage = 1
+		self._stageDitry = false
+		self._enemy = nil
+		self._chargeing = false
+	end,
+	init_end = function (self)
+		if self._view then
+			self._view._obj:GetChild(1):SetActive(false)
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._stage == 1 and self._hp / self._maxHp <= 0.5 then
+			self._stage = 2
+			self._atkRawInterval = self._atkRawInterval / 2
+
+			if self._view then
+				self._stageDitry = true
+			end
+		end
+	end,
+	markToBeDestroyed = function (self)
+		if self._chargeing and self._enemy then
+			self._enemy:markToBeDestroyed()
+
+			self._enemy = nil
+		end
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._enemy = nil
+	end,
+	readyAttack = function (self)
+		if self._chargeing then
+			return
+		end
+
+		self._chargeing = true
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local enemy = battleEnemyGenerator:createSummonEnemy(tonumber(self._bulletPrefab))
+
+		enemy:setPos(self._position.x, self._position.y - 0.35)
+
+		enemy._stopAction = true
+		self._enemy = enemy
+		enemy._invincible = true
+		enemy._parentEnemy = self
+
+		if enemy._view then
+			enemy._view:posEvent()
+			enemy._view._obj:SetLocalScale(0)
+			enemy._view._tf:DOScale(1, self._atkInterval):SetLink(enemy._view._obj)
+
+			if enemy._view._hpWidget then
+				enemy._view._hpWidget:SetActive(false)
+			end
+		end
+
+		if self._view then
+			self._view._obj:GetChild(1):SetActive(true)
+		end
+	end,
+	attackPlayer = function (self)
+		if self._view then
+			self._view._obj:GetChild(1):SetActive(false)
+		end
+
+		self._chargeing = false
+		self._enemy._invincible = false
+		self._enemy._stopAction = false
+		self._enemy._parentEnemy = nil
+
+		if self._stageDitry then
+			self._stageDitry = false
+
+			if self._view then
+				self._view._ator.speed = 2
+			end
+		end
+	end
+}
+M[248201] = {
+	init = function (self)
+		self.__coutdown = 2
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self.__coutdown = nil
+		self._parentEnemy = nil
+	end,
+	step = function (self, dt)
+		if self._parentEnemy then
+			self:setPos(self._parentEnemy._position.x, self._parentEnemy._position.y - 0.35)
+
+			if self._view then
+				self._view:posEvent()
+			end
+		end
+
+		if self._stopAction then
+			return
+		end
+
+		if self.__coutdown then
+			self.__coutdown = self.__coutdown - dt
+
+			if self.__coutdown <= 0 then
+				self.__coutdown = nil
+
+				if self._view then
+					self._view._ator:SetTrigger("play")
+				end
+			end
+		end
+	end
+}
+local children_3301 = {
+	1301,
+	1302,
+	1303
+}
+
+local function create_enemy_3301(self)
+	local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+	local childId = children_3301[self._battleRandomLib:randomMN(1, 3)]
+	local enemy = battleEnemyGenerator:createSummonEnemy(childId)
+	enemy._moveMode = -1
+	enemy._ignoreRegulateBuf = true
+	local angle = self._battleRandomLib:randomMN(0, 360)
+	local r = self._battleRandomLib:randomMN(15, 40) / 10
+	local x, y = BattleMathLib.point_in_circle_by_angle(r, angle)
+	enemy._offsetXWithRoot = x
+	enemy._offsetYWithRoot = y
+	x = self._position.x + x
+	y = self._position.y + y
+
+	enemy:setDirByAngle(self._angle)
+	enemy:setPos(x, y)
+
+	if enemy._view then
+		enemy._view:posEvent()
+		enemy._view:rotationEvent()
+	end
+
+	return enemy
+end
+
+local function create_enemy_3301_stage2(self)
+	local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+	local childId = children_3301[self._battleRandomLib:randomMN(1, 3)]
+	local enemy = battleEnemyGenerator:createSummonEnemy(childId)
+	enemy._moveMode = 8
+	local x = self._battleRandomLib:randomMN(-20, 60) / 10
+	local y = self._battleRandomLib:randomMN(10, 40) / 10
+	x = self._position.x + x
+	y = self._position.y + y
+
+	enemy:setDirByAngle(self._angle)
+	enemy:setPos(x, y)
+
+	if enemy._view then
+		enemy._view:posEvent()
+		enemy._view:rotationEvent()
+	end
+
+	return enemy
+end
+
+M[3301] = {
+	init = function (self)
+		self._spawnCD = 0.1
+		self._children3301 = table.new(32, 0)
+	end,
+	destroy = function (self)
+		self._spawnCD = nil
+		self._children3301 = nil
+	end,
+	markToBeDestroyed = function (self)
+		for i = 1, #self._children3301 do
+			local enemy = self._children3301[i]
+			enemy._offsetXWithRoot = nil
+			enemy._offsetYWithRoot = nil
+
+			enemy:markToBeDestroyed()
+		end
+	end,
+	step = function (self, dt)
+		if self._spawnCD then
+			self._spawnCD = self._spawnCD - dt
+
+			if self._spawnCD <= 0 then
+				self._spawnCD = nil
+				local angle = 0
+				local childrenCount = self._params[1]
+
+				for i = 1, childrenCount do
+					local enemy = create_enemy_3301(self)
+					self._children3301[#self._children3301 + 1] = enemy
+				end
+			end
+		else
+			local removedCount = 0
+			local cnt = #self._children3301
+
+			for i = 1, cnt do
+				local enemy = self._children3301[i]
+
+				if enemy then
+					if not enemy._isToBeDestroyed then
+						enemy:setPos(self._position.x + enemy._offsetXWithRoot, self._position.y + enemy._offsetYWithRoot)
+						enemy:setDirByAngle(self._angle)
+
+						enemy._atkRange = -10
+
+						if enemy._view then
+							enemy._view:posEvent()
+							enemy._view:rotationEvent()
+						end
+					else
+						self._children3301[i] = nil
+						removedCount = removedCount + 1
+					end
+				end
+			end
+
+			if removedCount ~= cnt then
+				table.removeNilValuesOutOrder(self._children3301, cnt)
+			end
+		end
+	end,
+	respawnChildren = function (self, stage)
+		if stage == 1 then
+			for i = 1, #self._children3301 do
+				local enemy = self._children3301[i]
+
+				if enemy._isToBeDestroyed then
+					local enemy = create_enemy_3301(self)
+					self._children3301[i] = enemy
+				end
+			end
+		elseif stage == 2 then
+			for i = 1, #self._children3301 do
+				local enemy = self._children3301[i]
+				enemy._offsetXWithRoot = nil
+				enemy._offsetYWithRoot = nil
+
+				enemy:markToBeDestroyed()
+			end
+
+			table.clear(self._children3301)
+
+			local angle = 0
+			local childrenCount = self._params[2]
+
+			for i = 1, childrenCount do
+				local enemy = create_enemy_3301_stage2(self)
+				enemy._runPathTime = 0
+				enemy._speedFactor = self._params[3]
+				enemy._moveMode = 8
+				enemy._pBegan = Vector2.retain(enemy._position.x, enemy._position.y)
+				local pEndX = self._battleRandomLib:randomMN((self._battleSession._battleFieldEdgeX1 + 1) * 10, (self._battleSession._battleFieldEdgeX2 - 1) * 10) / 10
+				local pEndY = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER, BattleDefine.DOME_RADIUS + 1, pEndX)
+				enemy._pEnd = Vector2.retain(pEndX, pEndY)
+				enemy._pCtrl = Vector2.retain(pEndX, enemy._pBegan.y)
+			end
+		end
+	end
+}
+M[1106] = {
+	init = function (self)
+		self._stage = 1
+		self._oldMoveMode = self._moveMode
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._ignoreSlowDownBuf = nil
+		self.__coutdown = nil
+		self._oldMoveMode = nil
+	end,
+	receiveDamage = function (self, damage)
+		if self._inMatrix then
+			return
+		end
+
+		if self._stage == 1 and self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+
+			self:removeSlowDownBuffs()
+
+			self._ignoreSlowDownBuf = true
+			self._atkRawInterval = self._atkRawInterval * (1 + self._params[2] / 100)
+			self._initialSpeed = self._initialSpeed * (1 + self._params[3] / 100)
+			self._speed = self._speed * (1 + self._params[3] / 100)
+			self._atk = self._atk * (1 + self._params[4] / 100)
+			self.__coutdown = 0.5
+			self._moveMode = 0
+
+			if self._view then
+				self._view:formEvent()
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			self.__coutdown = self.__coutdown - dt
+
+			if self.__coutdown <= 0 then
+				self._stage = 3
+				self._moveMode = self._oldMoveMode
+			end
+		end
+	end
+}
+M[2582] = {
+	init = function (self)
+		self._receiveDamagePool = 0
+		self._oldMoveMode = self._moveMode
+	end,
+	destroy = function (self)
+		self._stopAtkPlayer = nil
+		self._receiveDamagePool = nil
+		self.__coutdown = nil
+		self.__countNum = nil
+		self._oldMoveMode = nil
+
+		if self._view._vfx then
+			self._battleView:removeVFX(self._view._vfx)
+
+			self._view._vfx = nil
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._receiveDamagePool then
+			self._receiveDamagePool = self._receiveDamagePool + math.abs(damage)
+
+			if self._receiveDamagePool / self._maxHp >= self._params[1] / 100 then
+				self._receiveDamagePool = self._receiveDamagePool - self._maxHp * self._params[1] / 100
+				self.__coutdown = self._params[2]
+				self.__countNum = self._params[5]
+				self._stopAtkPlayer = true
+				self._moveMode = 0
+
+				if self._view then
+					self._view:skillEvent(true)
+
+					if self._view._vfx == nil then
+						self._view._vfx = self._sessionView:addVFX("Enemy_2582_HP", self._view._tf)
+					end
+				end
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self.__countNum and self.__countNum > 0 then
+			self.__coutdown = self.__coutdown - dt
+
+			if self.__coutdown <= 0 then
+				local recoverHP = self._maxHp * self._params[4] / 100
+				local enemys = self._battleSession:getAllEnemys()
+				local dis_sqrt = self._params[3]^2
+				local cnt = #enemys
+
+				for j = 1, cnt do
+					local enemy = enemys[j]
+
+					if not enemy._isToBeDestroyed and BattleMathLib.dis_square(self._position, enemy._position) <= dis_sqrt then
+						self.__coutdown = self._params[2]
+
+						enemy:receiveRecoverHP(recoverHP)
+					end
+				end
+
+				self.__countNum = self.__countNum - 1
+
+				if self.__countNum == 0 then
+					self._stopAtkPlayer = nil
+					self._moveMode = self._oldMoveMode
+
+					if self._view then
+						self._view:skillEvent(false)
+
+						if self._view._vfx then
+							self._battleView:removeVFX(self._view._vfx)
+
+							self._view._vfx = nil
+						end
+					end
+				end
+			end
+		end
+	end
+}
+M[1305] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self.__coutdown = nil
+		self.__countNum = nil
+		self._stage = nil
+		self._stopAtkPlayer = nil
+
+		if self._view then
+			self._battleView:removeVFX(self._view._vfx)
+
+			self._view._vfx = nil
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._formationMoveTime and self._battleSession._elapsedTime < self._formationMoveTime then
+			return
+		end
+
+		if self._stage == 1 and self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+			self._moveMode = 0
+			self.__coutdown = self._params[2]
+			self.__countNum = self._params[4]
+			self._stopAtkPlayer = true
+
+			if self._view then
+				self._view:skillEvent(true)
+
+				self._view._vfx = self._sessionView:addVFX("Enemy_1305_HP", self._view._tf)
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self.__countNum and self.__countNum > 0 then
+			self.__coutdown = self.__coutdown - dt
+
+			if self.__coutdown <= 0 then
+				local recoverHP = self._maxHp * self._params[3] / 100
+
+				self:receiveRecoverHP(recoverHP)
+
+				self.__countNum = self.__countNum - 1
+				self.__coutdown = self._params[2]
+
+				if self.__countNum == 0 then
+					self._stopAtkPlayer = nil
+					self._moveMode = self._cfg._moveMode
+
+					if self._view then
+						self._view:skillEvent(false)
+
+						if self._view._vfx then
+							self._battleView:removeVFX(self._view._vfx)
+
+							self._view._vfx = nil
+						end
+					end
+				end
+			end
+		end
+	end
+}
+M[1505] = {
+	init = function (self)
+		self._stage = 1
+		self._swallowCountDown = 0.4
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._swallowEnemyMetaId = nil
+		self._waitSwallowEnemy = nil
+	end,
+	step = function (self, dt)
+		if self._stage == 1 then
+			if (self._position.y - BattleDefine.DOME_POSY) * self._battleSession._zoomScale <= self._params[1] then
+				self._stage = 2
+			end
+		elseif self._stage == 2 then
+			local swallowEnemy = nil
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if not enemy._isToBeDestroyed and self._id ~= enemy._id and enemy._type == BattleDefine.EnemyType.Normal and (enemy._atkType == 3 or enemy._atkType == 1 or enemy._atkType == 2 and not enemy._readyAtk) and (enemy._cid ~= self._cid or enemy._cid == self._cid and not enemy._swallowEnemyMetaId) and BattleMathLib.circle_circle_intersect(self._position, enemy._position, self._radius / 2, enemy._radius) then
+					swallowEnemy = enemy
+
+					break
+				end
+			end
+
+			if swallowEnemy then
+				self._stage = 3
+				swallowEnemy._ignorePVPProtal = true
+				self._waitSwallowEnemy = swallowEnemy
+				self._swallowCountDown = 0.3
+				self._speed = self._speed * self._params[2]
+				self._swallowEnemyMetaId = self._waitSwallowEnemy._cid
+
+				self._waitSwallowEnemy:markToBeDestroyed()
+
+				self._waitSwallowEnemy = nil
+
+				if self._view then
+					self._view:formEvent()
+				end
+			end
+		elseif self._stage == 3 then
+			self._swallowCountDown = self._swallowCountDown - dt
+
+			if self._swallowCountDown <= 0 then
+				self._speed = self._initialSpeed
+				self._stage = 4
+			end
+		end
+	end,
+	markToBeDestroyed = function (self)
+		if self._swallowEnemyMetaId then
+			local enemyMetaId = self._swallowEnemyMetaId
+			self._swallowEnemyMetaId = nil
+			local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+			local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+			local y = self._battleSession:limitEnemyPositionY(self._position.y + 0.5)
+
+			enemy:setPos(self._position.x, y)
+
+			if enemy._view then
+				enemy._view:posEvent()
+			end
+		end
+	end
+}
+M[1206] = {
+	takeDamageToPlayer = function (self, bullet)
+		if self._cid == 1206 then
+			if self._battleSession._120601Num == nil then
+				self._battleSession._120601Num = 0
+			end
+
+			if self._params[2] < self._battleSession._120601Num then
+				return
+			end
+		elseif self._cid == 2206 then
+			if self._battleSession._220601Num == nil then
+				self._battleSession._220601Num = 0
+			end
+
+			if self._params[2] < self._battleSession._220601Num then
+				return
+			end
+		end
+
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local enemy = battleEnemyGenerator:createSummonEnemy(self._params[1])
+		local x = bullet._position.x
+		local y = bullet._position.y + enemy._radius
+
+		enemy:setPos(x, self._battleSession:limitEnemyPositionY(y))
+
+		if enemy._view then
+			enemy._view:posEvent()
+		end
+
+		if enemy._cid == 120601 then
+			self._battleSession._120601Num = (self._battleSession._120601Num or 0) + 1
+		elseif enemy._cid == 220601 then
+			self._battleSession._220601Num = (self._battleSession._220601Num or 0) + 1
+		end
+	end
+}
+M[1306] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._stage = nil
+	end,
+	readyAttack = function (self)
+		if self._stage == 1 then
+			self._stage = 2
+
+			if self._view then
+				self._view:playSpriteAnimation(1)
+			end
+		end
+	end
+}
+M[1506] = {
+	init = function (self)
+		self._stage = 1
+		self._coutdown = 3
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._coutdown = nil
+		self._conceal = nil
+		self._invincible = nil
+		self._stopAction = nil
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 3
+				self._coutdown = 0.5
+
+				if self._view and self._view then
+					self._view:playSpriteAnimation(5)
+				end
+			end
+		elseif self._stage == 3 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 4
+				self._conceal = false
+				self._invincible = false
+				self._stopAction = false
+				self._atkInterval = self._atkRawInterval
+				self._hp = self._maxHp
+
+				if self._view then
+					self._view:hpEvent(self._maxHp)
+				end
+			end
+		end
+	end,
+	dieBefore = function (self)
+		if self._stage == 1 then
+			self._stage = 2
+			self._conceal = true
+			self._invincible = true
+			self._coutdown = self._params[1]
+			self._stopAction = true
+
+			if self._view and self._view then
+				self._view:playSpriteAnimation(3)
+			end
+		end
+	end
+}
+M[2382] = {
+	init = function (self)
+		self._receiveDamagePool = 0
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._coutdown = nil
+		self._receiveDamagePool = nil
+		self._stage = nil
+		self._dmgReducePerCommom = 0
+	end,
+	receiveDamage = function (self, damage)
+		if self._receiveDamagePool then
+			self._receiveDamagePool = self._receiveDamagePool + math.abs(damage)
+
+			if self._stage == 1 and self._receiveDamagePool / self._maxHp >= self._params[1] / 100 then
+				self._receiveDamagePool = self._receiveDamagePool - self._maxHp * self._params[1] / 100
+				self._coutdown = self._params[2]
+				self._stage = 2
+				self._dmgReducePerCommom = self._params[4]
+				self._stopAction = true
+
+				if self._view then
+					self._view:playSpriteAnimation(3)
+				end
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = 0.3
+				self._stage = 3
+				self._knockbackStatus = nil
+
+				if self._view then
+					self._view:playSpriteAnimation(4)
+				end
+			end
+		elseif self._stage == 3 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 1
+				self._dmgReducePerCommom = 0
+				self._stopAction = false
+			end
+		end
+	end,
+	addBuff = function (self, id, buff)
+		if self._stage == 2 and buff._type == BattleBuffEnum.Knockback then
+			buff._duration = buff._duration * self._params[3]
+		end
+	end
+}
+M[1406] = {
+	attackPlayer = function (self)
+		self._coutdown = 0.25
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = nil
+
+				self:createEnemyBullet(2)
+			end
+		end
+	end
+}
+M[1107] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._stage = nil
+	end,
+	markToBeDestroyed = function (self)
+		if self._view then
+			self._view._tf:GetChild(0):SetActive(false)
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._stage == 1 and self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+			self._atkType = 1
+			self._hpDmg = 0
+			self._atk = self._atk * self._params[3] / 100
+			self._initialSpeed = self._initialSpeed * (1 + self._params[2] / 100)
+			self._speed = self._speed * (1 + self._params[2] / 100)
+
+			if self._enemyBullet then
+				self._enemyBullet:markToBeDestroyed()
+
+				self._enemyBullet = nil
+			end
+
+			self._coutdown = 1
+
+			if self._view then
+				self._view._tf:GetChild(0):SetActive(true)
+				self._view:playSpriteAnimation(3)
+			end
+		end
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = nil
+				self._forceSpeed = nil
+			end
+		end
+	end
+}
+M[1407] = {
+	init = function (self)
+		self._speedTotalAdd = 0
+		self._cfgSpeed = self._cfg._speed
+	end,
+	destroy = function (self)
+		self._speedTotalAdd = nil
+		self._cfgSpeed = nil
+	end,
+	step = function (self, dt)
+		self._speedTotalAdd = self._speedTotalAdd + self._params[1] * dt
+
+		if self._speedTotalAdd < self._params[2] then
+			self._initialSpeed = self._cfgSpeed * (1 + self._speedTotalAdd / 100)
+
+			self:recalculateSpeed()
+		end
+	end
+}
+M[1507] = {
+	markToBeDestroyed = function (self)
+		local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+		local enemyMetaId = self._params[1]
+		local posx = self._position.x
+		local posy = self._position.y
+		local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+		enemy:setPos(posx, posy)
+
+		enemy._initialRaduis = self._initialRaduis
+
+		enemy:setScale(self._scale)
+
+		if enemy._view then
+			enemy._view:posEvent()
+			enemy._view:scaleEvent()
+		end
+	end
+}
+M[150701] = {
+	init = function (self)
+		self._invincible = true
+		self._stopAction = true
+		self._coutdown = self._params[1]
+	end,
+	destroy = function (self)
+		self._invincible = nil
+		self._stopAction = nil
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = nil
+
+				self:markToBeDestroyed()
+			end
+		end
+	end,
+	onHitBefore = function (self, battleBullet)
+		if battleBullet._destroyType == 1 then
+			battleBullet:tryMarkToBeDestroyedWithEnemyBlock()
+		end
+	end
+}
+M[1307] = {
+	init = function (self)
+		self._stage = 1
+		self._coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._coutdown = nil
+		self._ignoreHaloEnemy = nil
+	end,
+	step = function (self, dt)
+		if self._attacked then
+			return
+		end
+
+		if self._stage == 4 then
+			return
+		end
+
+		self._coutdown = self._coutdown - dt
+
+		if self._stage == 1 then
+			if self._coutdown <= 0 then
+				self._stage = 2
+				self._coutdown = 0.16666666666666666
+
+				if self._view then
+					self._view:playSpriteAnimation(3)
+				end
+			end
+		elseif self._stage == 2 then
+			if self._coutdown <= 0 then
+				self._stage = 3
+				self._coutdown = self._params[5]
+
+				self:addBuff(self._params[4], self._params[5])
+
+				local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+				local enemyMetaId = self._params[3]
+				local enemy = battleEnemyGenerator:createSummonEnemy(enemyMetaId)
+
+				enemy:setPos(self._position.x, self._position.y - 0.5)
+
+				self._ignoreHaloEnemy = enemy
+
+				if enemy._view then
+					enemy._view:posEvent()
+				end
+
+				if self._view then
+					self._view:playSpriteAnimation(4)
+				end
+			end
+		elseif self._stage == 3 then
+			if self._coutdown <= 0 then
+				self._stage = 4
+				self._coutdown = 0.375
+
+				if self._view then
+					self._view:playSpriteAnimation(5)
+				end
+			end
+		elseif self._stage == 4 then
+			-- Nothing
+		end
+	end
+}
+M[130701] = {
+	init = function (self)
+		self.__stage = 1
+		self.__coutdown = 0
+		self._affectedEnemys = nil
+		self._haloVFXName = "Enemy_1307_speedup"
+		self._conceal = true
+		self._invincible = true
+	end,
+	destroy = function (self)
+		self._haloStepCD = nil
+		self.__stage = nil
+		self.__coutdown = nil
+		self._affectedEnemys = nil
+		self._haloVFXName = nil
+		self._conceal = nil
+		self._invincible = nil
+	end,
+	step = function (self, dt)
+		if self.__stage ~= 1 and self.__stage ~= 2 then
+			return
+		end
+
+		self.__coutdown = self.__coutdown - dt
+
+		if self.__coutdown <= 0 then
+			if self.__stage == 1 then
+				self.__stage = 2
+				self.__coutdown = self._params[4]
+				self._haloEffecting = true
+				self._forceSpeedEx = 0
+
+				if self._view then
+					self._view:haloEvent(true)
+				end
+			elseif self.__stage == 2 then
+				self.__stage = 3
+
+				self:markToBeDestroyed()
+			end
+		end
+
+		if self._haloEffecting then
+			self:stepHalo_Rect(dt)
+		end
+	end,
+	markToBeDestroyed = function (self)
+		self:cancelHalo(self._params[3])
+	end
+}
+M[2183] = {
+	init = function (self)
+		self._stage = 1
+		self._affectedEnemys = table.new(32, 0)
+		self._coutdown = nil
+	end,
+	destroy = function (self)
+		self._coutdown = nil
+		self._stage = nil
+		self._shieldEnemy = nil
+		self._affectedEnemys = nil
+	end,
+	receiveDamage = function (self, damage)
+		local flag = false
+
+		if self._stage == 1 then
+			if self._hp / self._maxHp <= self._params[1] / 100 then
+				self._stage = 2
+				flag = true
+			end
+		elseif self._stage == 2 and self._hp / self._maxHp <= self._params[2] / 100 then
+			self._stage = 3
+			flag = true
+		end
+
+		if flag then
+			self._coutdown = self._params[5]
+
+			if self._view then
+				self._view._vfxShield2183 = self._sessionView:addVFX("Enemy_2183_shield", self._view._tf)
+
+				self._view._vfxShield2183:SetLocalScale(0)
+				self._view._vfxShield2183.transform:DOScale(self._params[3] * self._scale, 0.2)
+			end
+
+			self._hpShieldValue2183 = self._maxHp * self._params[4] / 100
+			self._invincibleFrom2183Parent = self
+		end
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = nil
+
+				self._scriptBehavior.shieldDestroyed(self)
+
+				return
+			end
+		end
+
+		if self._hpShieldValue2183 then
+			local dis_sq = self._params[3]^2
+			local enemys = self._battleSession:getAllEnemys()
+			local cnt = #enemys
+
+			for j = 1, cnt do
+				local enemy = enemys[j]
+
+				if enemy._id ~= self._id and not enemy._isToBeDestroyed then
+					if BattleMathLib.dis_square(self._position, enemy._position) <= dis_sq then
+						if enemy._invincibleFrom2183Parent == nil then
+							enemy._invincibleFrom2183Parent = self
+							self._affectedEnemys[#self._affectedEnemys + 1] = enemy
+						end
+					elseif enemy._invincibleFrom2183Parent == self then
+						enemy._invincibleFrom2183Parent = nil
+					end
+				end
+			end
+		end
+	end,
+	shieldDestroyed = function (self)
+		self._invincible = nil
+		self._hpShieldValue2183 = nil
+		self._invincibleFrom2183Parent = nil
+
+		if self._view then
+			self._battleView:removeVFX(self._view._vfxShield2183)
+
+			self._view._vfxShield2183 = nil
+		end
+
+		local cnt = #self._affectedEnemys
+
+		for j = 1, cnt do
+			local enemy = self._affectedEnemys[j]
+			enemy._invincibleFrom2183Parent = nil
+		end
+
+		table.clear(self._affectedEnemys)
+	end,
+	markToBeDestroyed = function (self)
+		self._scriptBehavior.shieldDestroyed(self)
+	end
+}
+M[1207] = {
+	init = function (self)
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._coutdown = nil
+		self._ignoreAllBuffOld = nil
+		self._ignoreRegulateBufOld = nil
+
+		if self._view and self._view._vfxShield1207 then
+			self._battleView:removeVFX(self._view._vfxShield1207)
+
+			self._view._vfxShield1207 = nil
+		end
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 3
+				self._coutdown = nil
+				self._invincible = nil
+				self._ignoreAllBuff = self._ignoreAllBuffOld
+				self._ignoreRegulateBuf = self._ignoreRegulateBufOld
+				self._initialSpeed = self._speedOld
+
+				self:recalculateSpeed()
+
+				if self._view then
+					self._view:playSpriteAnimation(1)
+					self._battleView:removeVFX(self._view._vfxShield1207)
+
+					self._view._vfxShield1207 = nil
+				end
+			end
+		end
+	end,
+	receiveDamage = function (self, damage)
+		local flag = false
+
+		if self._stage == 1 and self._hp / self._maxHp <= self._params[1] / 100 then
+			self._stage = 2
+			flag = true
+			self._invincible = true
+
+			self:removeBuffs()
+
+			self._ignoreAllBuffOld = self._ignoreAllBuff
+			self._ignoreRegulateBufOld = self._ignoreRegulateBuf
+			self._ignoreAllBuff = true
+			self._ignoreRegulateBuf = true
+			self._speedOld = self._initialSpeed
+			self._initialSpeed = self._initialSpeed * (1 + self._params[3] / 100)
+
+			self:recalculateSpeed()
+		end
+
+		if flag then
+			self._coutdown = self._params[2]
+
+			if self._view then
+				self._view._vfxShield1207 = self._sessionView:addVFX("Enemy_1207_shield", self._view._tf)
+
+				self._view._vfxShield1207:SetLocalScale(0)
+
+				if self._type == BattleDefine.EnemyType.Elite then
+					self._view._vfxShield1207.transform:DOScale(2, 0.2)
+				else
+					self._view._vfxShield1207.transform:DOScale(1, 0.2)
+				end
+
+				self._view:playSpriteAnimation(3)
+			end
+		end
+	end
+}
+M[1408] = {
+	init = function (self)
+		self._stage = 1
+		self._coutdown = self._params[1]
+		self._atkInterval = 0.1
+		self._lastAttackStatus = 1
+		self._ignoreRegulateBuf = true
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._coutdown = nil
+		self._lastAttackStatus = nil
+		self._ignoreRegulateBuf = nil
+	end,
+	step = function (self, dt)
+		if self._attacked and not self._readyAtk and self._lastAttackStatus == 2 then
+			self._lastAttackStatus = 1
+
+			self._view:playSpriteAnimation(7)
+
+			self._stage = 1
+			self._coutdown = self._params[2]
+
+			return
+		end
+
+		if self._lastAttackStatus == 1 and self._stage == 201 then
+			if self._readyAtk then
+				self._coutdown = 0.75
+				self._atkInterval = self._coutdown
+				self._lastAttackStatus = 2
+
+				self._view:playSpriteAnimation(5)
+
+				return
+			else
+				self._stage = 3
+				self._coutdown = 0.5
+
+				self._view:playSpriteAnimation(4)
+			end
+		end
+
+		if self._stage == 1 then
+			if self._battleSession._step % (self._params[2] * 60) == 0 then
+				self._stage = 101
+				self._coutdown = 0.5
+
+				if self._beDraging then
+					self._beDragingDuration = 0
+				end
+
+				self._knockbackStatus = nil
+				self._knockbackSpeed = nil
+
+				if self._view then
+					self._view:playSpriteAnimation(2)
+				end
+			end
+		elseif self._stage == 101 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 2
+				self._coutdown = 0.1
+				local obj = self._sessionView:createAndPlayVFX("Bullet_1408_portal_in", 0.3)
+
+				if obj then
+					obj:SetPosition(self._position.x, self._position.y, 0)
+				end
+			end
+		elseif self._stage == 2 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 201
+				self._lastAttackStatus = 1
+				local x = self._battleRandomLib:randomMN(self._battleSession._enemyBornEdgeX1 * 10, self._battleSession._enemyBornEdgeX2 * 10) / 10
+				local y = self._battleRandomLib:randomMN(self._params[3] * 10, self._params[4] * 10) / 10
+				local tox = x
+				local toy = self._position.y - y
+				local miny = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER + self._atkRange, BattleDefine.DOME_RADIUS, tox)
+				toy = math.max(toy, miny - 0.5)
+
+				self:setPos(tox, toy)
+
+				if self._view then
+					self._view:posEvent()
+
+					local obj = self._sessionView:createAndPlayVFX("Bullet_1408_portal_out", 0.3)
+
+					obj:SetPosition(self._position.x, self._position.y, 0)
+				end
+			end
+		elseif self._stage == 3 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 1
+				self._coutdown = self._params[2]
+			end
+		end
+	end
+}
+M[1108] = {
+	init = function (self)
+		self._coutdown = 1
+		self._hpSheild = 0
+		self._hpSheildNum = 0
+		self._hpSheildMaxNum = self._params[2]
+		self._castSkillNum = 0
+		self._view_1108HpSheilds = TablePool.fetch4()
+		self._view_rotateRoot = 0
+		self._view_rotation = 0
+	end,
+	init_end = function (self)
+		if self._view then
+			local rotate = self._view._tf:GetChild(0):GetChild(0)
+			self._view_rotateRoot = rotate
+
+			for i = 1, 5 do
+				self._view_1108HpSheilds[i] = rotate:GetChild(i - 1)
+
+				self._view_1108HpSheilds[i]:SetActive(false)
+			end
+		end
+	end,
+	enemyCreated = function (self)
+		self._singleHpSheild = self._hp * self._params[3] / 100
+	end,
+	destroy = function (self)
+		for i = 1, #self._view_1108HpSheilds do
+			self._view_1108HpSheilds[i]:SetActive(false)
+		end
+
+		TablePool.release4(self._view_1108HpSheilds)
+
+		self._coutdown = nil
+		self._hpSheild = nil
+		self._hpSheildNum = nil
+		self._view_rotateRoot = nil
+		self._view_rotation = nil
+		self._view_1108HpSheilds = nil
+		self._castSkillNum = nil
+	end,
+	step = function (self, dt)
+		if self._view then
+			self._view_rotation = self._view_rotation - dt * 10
+
+			self._view_rotateRoot:SetLocalRotation(0, 0, self._view_rotation)
+		end
+
+		if self._hpSheildNum < self._hpSheildMaxNum and self._castSkillNum < self._params[4] then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = self._params[1]
+				self._hpSheildNum = self._hpSheildNum + 1
+				self._hpSheild = self._hpSheild + self._singleHpSheild
+				self._castSkillNum = self._castSkillNum + 1
+
+				if self._view then
+					self._view_1108HpSheilds[self._hpSheildNum]:SetActive(true)
+
+					local grap = 360 / self._hpSheildNum
+
+					for i = 1, self._hpSheildNum do
+						self._view_1108HpSheilds[i]:SetLocalRotation(0, 0, (i - 1) * grap)
+					end
+				end
+			end
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._hpSheildNum and self._hpSheildNum > 0 then
+			self._hpSheildNum = math.ceil(self._hpSheild / self._singleHpSheild)
+
+			if self._view then
+				for i = 1, self._hpSheildNum do
+					self._view_1108HpSheilds[i]:SetActive(true)
+				end
+
+				for i = self._hpSheildNum + 1, self._hpSheildMaxNum do
+					self._view_1108HpSheilds[i]:SetActive(false)
+				end
+
+				local grap = 360 / self._hpSheildNum
+
+				for i = 1, self._hpSheildNum do
+					self._view_1108HpSheilds[i]:SetLocalRotation(0, 0, (i - 1) * grap)
+				end
+			end
+		end
+	end
+}
+M[1308] = {
+	init = function (self)
+		self._stage = 1
+		self._form = 1
+		self._casted = false
+		self._coutdown = self._params[2]
+	end,
+	init_end = function (self)
+		if self._view then
+			self._view_goForm1 = self._view._obj:GetChild(0)
+			self._view_spForm1 = self._view_goForm1:GetComponent("SpriteRenderer")
+			self._view_goForm2 = self._view._obj:GetChild(1)
+			self._view_spForm2 = self._view_goForm2:GetChild(0):GetComponent("SpriteRenderer")
+		end
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._casted = nil
+		self._coutdown = nil
+		self._conceal = nil
+		self._form = nil
+		self._invincible = nil
+
+		if self._view then
+			self._view_spForm1 = nil
+			self._view_goForm2 = nil
+			self._view_spForm2 = nil
+		end
+	end,
+	readyAttack = function (self)
+		if self._stage == 3 then
+			self._stage = 101
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			self._stage = 3
+			local left = self._battleRandomLib:randomTrue()
+
+			if left then
+				self:setDirByAngle(-150)
+			else
+				self:setDirByAngle(-30)
+			end
+
+			if self._view then
+				self._view:rotationEvent()
+			end
+		elseif self._stage == 3 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 101
+			end
+		elseif self._stage == 101 then
+			self._stage = 4
+			self._moveMode = 2
+			self._speedFactor = 1
+			self._conceal = false
+			self._invincible = false
+			self._dir[1] = 0
+			self._dir[2] = -1
+
+			self:setDir(0, self._dir[2])
+
+			if self._view then
+				self._view_goForm2:SetActive(false)
+				self._view_spForm1:DOFade(1, 1)
+				self._view_spForm2:DOFade(0, 1)
+				self._view_goForm2:SetLocalRotation(0, 0, 0)
+			end
+		end
+	end,
+	onHit = function (self)
+		if self._casted == false then
+			self._casted = true
+			self._moveMode = 3
+			self._stage = 2
+			self._speedFactor = self._params[1]
+			self._conceal = true
+			self._invincible = true
+
+			if self._view then
+				self._view_spForm1:DOFade(0, 1)
+				self._view_goForm2:SetActive(true)
+				self._view_spForm2:DOFade(1, 1)
+			end
+		end
+	end
+}
+M[2283] = {
+	init = function (self)
+		self._stage = 1
+		self._countdown = self._params[1]
+		self._linkedCount = 0
+		self._children2283 = table.new(8, 0)
+		self._childrenLineXs = {
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0)
+		}
+		self._childrenLineYs = {
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0),
+			table.new(32, 0)
+		}
+	end,
+	init_end = function (self)
+		if self._view then
+			self._childrenLines = {}
+
+			for i = 1, self._params[3] do
+				local main = self._sessionView:addVFX("Enemy_2283_skillline")
+
+				main:SetActive(false)
+
+				self._childrenLines[i] = {
+					obj = main,
+					body = main:GetChild(0):GetComponent("LineRenderer"),
+					began_p = main:GetChild(1),
+					end_p = main:GetChild(2),
+					p_began = Vector2.retain(0, 0),
+					p_end = Vector2.retain(0, 0),
+					p_ctrl = Vector2.retain(0, 0)
+				}
+			end
+
+			self._childrenLines[1].began_p:SetActive(true)
+
+			self._beganNode = self._view._flasher.Pivot
+		end
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._countdown = nil
+
+		for i = 1, #self._children2283 do
+			local enemy = self._children2283[i]
+
+			enemy:setScale(enemy._scale / 1.5)
+
+			if enemy._view then
+				enemy._view:scaleEvent()
+			end
+
+			enemy._atkFinalAddPer2283 = nil
+			enemy._damageSubPer2283 = nil
+			enemy._connectBy2283 = nil
+			enemy._destroyCallback2283 = nil
+		end
+
+		self._children2283 = nil
+		self._childrenLineXs = nil
+		self._childrenLineYs = nil
+		self._linkedCount = nil
+		self._beganNode = nil
+
+		if self._view then
+			for i = 1, #self._childrenLines do
+				GameObject.Destroy(self._childrenLines[i].obj)
+			end
+
+			self._childrenLines = nil
+		end
+	end,
+	removeDestroyEnemy = function (self, enemy)
+		local cnt = #self._children2283
+		local removedCount = 0
+
+		for i = 1, cnt do
+			if self._children2283[i]._id == enemy._id then
+				self._children2283[i] = nil
+			end
+		end
+
+		if removedCount ~= cnt then
+			table.removeNilValuesOutOrder(self._children2283, cnt)
+		end
+
+		enemy._destroyCallback2283 = nil
+		enemy._atkFinalAddPer2283 = nil
+		enemy._damageSubPer2283 = nil
+		enemy._connectBy2283 = nil
+		self._linkedCount = self._linkedCount - 1
+	end,
+	step = function (self, dt)
+		self._countdown = self._countdown - dt
+
+		if self._countdown <= 0 then
+			self._countdown = self._params[1]
+
+			if self._linkedCount < self._params[3] then
+				local enemys = self._battleSession:getAllEnemys()
+				local cnt = #enemys
+
+				for j = 1, cnt do
+					local enemy = enemys[j]
+
+					if not enemy._isToBeDestroyed and self._id ~= enemy._id and enemy._type == BattleDefine.EnemyType.Normal and enemy._connectBy2283 == nil and BattleMathLib.dis_square(self._position, enemy._position) <= self._params[2]^2 then
+						self._children2283[#self._children2283 + 1] = enemy
+						enemy._connectBy2283 = true
+						self._linkedCount = self._linkedCount + 1
+
+						function enemy._destroyCallback2283(selfEnemy)
+							self._scriptBehavior.removeDestroyEnemy(self, selfEnemy)
+						end
+
+						enemy:setScale(1.5 * enemy._scale)
+
+						if enemy._view then
+							enemy._view:scaleEvent()
+						end
+
+						break
+					end
+				end
+			end
+		end
+
+		for i = self._linkedCount + 1, self._params[3] do
+			if self._view then
+				self._childrenLines[i].obj:SetActive(false)
+				self._childrenLines[i].end_p:SetActive(false)
+			end
+		end
+
+		for i = 1, self._linkedCount do
+			local enemy = self._children2283[i]
+			enemy._atkFinalAddPer2283 = self._params[4]
+			enemy._damageSubPer2283 = self._params[5]
+
+			if enemy._view then
+				local childLine = self._childrenLines[i]
+
+				childLine.obj:SetActive(true)
+				childLine.end_p:SetActive(true)
+
+				local x, y = self._beganNode:GetPosition()
+
+				childLine.p_began:Set(x, y)
+				childLine.p_end:Set(enemy._position.x, enemy._position.y)
+
+				if self._position.x < enemy._position.x then
+					childLine.p_ctrl:Set(enemy._position.x + 2, self._position.y + 2)
+				else
+					childLine.p_ctrl:Set(enemy._position.x - 2, self._position.y + 2)
+				end
+
+				local p_b = childLine.p_began
+				local p_e = childLine.p_end
+				local p_c = childLine.p_ctrl
+
+				childLine.began_p:SetPosition(p_b.x, p_b.y, 0)
+				childLine.end_p:SetPosition(enemy._position.x, enemy._position.y, 0)
+
+				local lineXs = self._childrenLineXs[i]
+				local lineYs = self._childrenLineYs[i]
+
+				table.clear(lineXs)
+				table.clear(lineYs)
+
+				local c = 1
+				lineXs[c] = self._position.x
+				lineYs[c] = self._position.y
+				c = c + 1
+
+				for t = 0, 100, 10 do
+					local x, y = BattleMathLib.calculate_bezier_point_2(t / 100, p_b, p_c, p_e)
+					lineXs[c] = x
+					lineYs[c] = y
+					c = c + 1
+				end
+
+				c = c - 1
+
+				LuaHelper.SetLineRendererPositions(childLine.body, c, lineXs, lineYs)
+			end
+		end
+	end
+}
+M[1109] = {
+	init = function (self)
+	end,
+	destroy = function (self)
+		self._countdown = nil
+	end,
+	step = function (self, dt)
+		if self._countdown then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._countdown = nil
+			end
+		end
+	end,
+	addBuff = function (self, id, buff)
+		if buff._negative and self._countdown == nil then
+			self._countdown = self._params[2]
+
+			self:receiveRecoverHP(self._params[1] / 100 * self._maxHp)
+		end
+	end,
+	addBuffTwice = function (self, id, buff)
+		if buff._negative and self._countdown == nil then
+			self._countdown = self._params[2]
+
+			self:receiveRecoverHP(self._params[1] / 100 * self._maxHp)
+		end
+	end
+}
+M[1508] = {
+	init = function (self)
+		self._countdown = self._battleRandomLib:randomMN(self._params[1] * 10, self._params[2] * 10) / 10
+		self._inRangeSqrt = self._params[3]^2
+		self._stage = 1
+	end,
+	destroy = function (self)
+		self._countdown = nil
+		self._inRangeSqrt = nil
+		self._stage = nil
+	end,
+	step = function (self, dt)
+		if self._readyAtk then
+			return
+		end
+
+		if self._stage == 1 then
+			if self._countdown then
+				self._countdown = self._countdown - dt
+
+				if self._countdown <= 0 then
+					self._countdown = 0.8333333333333334
+					self._stage = 2
+					self._stopAction = true
+					local enemys = self._battleSession:getAllEnemys()
+					local cnt = #enemys
+
+					for j = 1, cnt do
+						local enemy = enemys[j]
+
+						if not enemy._isToBeDestroyed and self._id ~= enemy._id and BattleMathLib.dis_square(self._position, enemy._position) <= self._inRangeSqrt then
+							local bid = enemy:hasRemovedBuff()
+
+							if bid then
+								enemy:removeBuff(bid)
+							end
+
+							enemy:addBuff(self._params[4], self._params[5])
+						end
+					end
+
+					if self._view then
+						self._countdown = 0.8333333333333334
+
+						self._view:playSpriteAnimation(3)
+
+						local obj = self._sessionView:createAndPlayVFX("Enemy_1508_dispel", 1)
+
+						if obj then
+							obj:SetPosition(self._position.x, self._position.y, 0)
+							obj:SetLocalScale(self._scale)
+						end
+					end
+				end
+			end
+		elseif self._stage == 2 then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._countdown = self._battleRandomLib:randomMN(self._params[1] * 10, self._params[2] * 10) / 10
+				self._stage = 1
+				self._stopAction = false
+			end
+		end
+	end
+}
+M[1309] = {
+	init = function (self)
+		self._form = 1
+	end,
+	destroy = function (self)
+		self._form = nil
+		self._countdown = nil
+	end,
+	step = function (self, dt)
+		if self._countdown then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._countdown = nil
+				self._stopAction = false
+				self._atkInterval = self._atkRawInterval
+			end
+		end
+	end,
+	receiveDamage = function (self, damage)
+		if self._form == 1 and self._hp / self._maxHp < self._params[1] / 100 then
+			self._form = 2
+
+			if self._view then
+				self._view:playSpriteAnimation(5)
+			end
+		end
+	end
+}
+M[2483] = {
+	init = function (self)
+		self._addAtkPer = 0
+	end,
+	destroy = function (self)
+		self._addAtkPer = nil
+
+		if self._enemyBullet and self._enemyBullet._view then
+			self._enemyBullet._view:scaleXEvent(1)
+		end
+	end,
+	takeDamageToPlayer = function (self)
+		self._addAtkPer = math.min(self._addAtkPer + self._params[1], self._params[2])
+
+		if self._enemyBullet and self._enemyBullet._view then
+			self._enemyBullet._view:scaleXEvent(1 + self._addAtkPer / 100)
+		end
+	end
+}
+local ORIGIN_TOAWRD_OFFSET_Y = 5
+M[1409] = {
+	init = function (self)
+		self._stage = 1
+		self._countdown = self._params[1]
+		self._inRangeSqrt = self._params[2]^2
+		self._lockTarget = nil
+		self._flyDir = Vector2.retain(0, 0)
+		self._towardDir = Vector2.retain(0, 0)
+		self._flySpeed = self._params[3]
+		self._relativeAngle = 270
+	end,
+	markToBeDestroyed = function (self)
+		self._stage = nil
+		self._countdown = nil
+		self._inRangeSqrt = nil
+		self._lockEnemy = nil
+		self._targetRelativeAngle = nil
+		self._stopAction = false
+		self._flyEndOffsetPositionX = nil
+		self._flyEndOffsetPositionY = nil
+
+		Vector2.release(self._flyDir)
+
+		self._flyDir = nil
+
+		Vector2.release(self._towardDir)
+
+		self._towardDir = nil
+		self._isCasting1409 = nil
+
+		if self._lockEnemy then
+			self._lockEnemy._beLockedBy1409 = nil
+			self._lockEnemy = nil
+		end
+	end,
+	endCast = function (self)
+		self._stage = 1
+		self._countdown = self._params[1]
+		self._stopAction = false
+		self._angle = -90
+
+		if self._view then
+			self._view._obj:SetLocalRotation(0, 0, self._angle + 90)
+		end
+	end,
+	step = function (self, dt)
+		if self._isToBeDestroyed then
+			return
+		end
+
+		if self._lockEnemy and self._lockEnemy._isToBeDestroyed then
+			self._lockEnemy = nil
+
+			if self._stage == 2 or self._stage == 3 or self._stage == 4 then
+				self._scriptBehavior.endCast(self)
+			end
+		end
+
+		if self._beSwallowing then
+			return
+		end
+
+		if self:hasBuff(14) then
+			return
+		end
+
+		if self._stage == 1 then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				if self._beLockedBy1409 then
+					self._countdown = self._params[1]
+				else
+					self._scriptBehavior.seekEnemy(self)
+				end
+			end
+		elseif self._stage == 2 then
+			local enemyPos = self._lockEnemy._position
+			local targetPosX = enemyPos.x + self._flyEndOffsetPositionX
+			local targetPosY = enemyPos.y + self._flyEndOffsetPositionY
+			self._flyDir.x = targetPosX - self._position.x
+			self._flyDir.y = targetPosY - self._position.y
+
+			self._flyDir:SetNormalize()
+
+			self._position.x = self._position.x + self._flyDir.x * self._flySpeed * dt
+			self._position.y = self._position.y + self._flyDir.y * self._flySpeed * dt
+
+			if math.abs(self._position.x - targetPosX) < 0.05 and math.abs(self._position.y - targetPosY) < 0.05 then
+				self._flyEndOffsetPositionX = self._flyEndOffsetPositionX + self._position.x - targetPosX
+				self._flyEndOffsetPositionY = self._flyEndOffsetPositionY + self._position.y - targetPosY
+				self._stage = 3
+				self._countdown = 1
+			end
+
+			if self._view then
+				self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+			end
+
+			self._scriptBehavior.updateAngle(self)
+		elseif self._stage == 3 then
+			local dtAngle = math.abs(self._relativeAngle - self._targetRelativeAngle)
+			self._relativeAngle = Mathf.MoveTowardsAngle(self._relativeAngle, self._targetRelativeAngle, dtAngle / 0.8 * dt)
+			self._angle = self._relativeAngle + 180
+			local rad = math.rad(self._relativeAngle)
+			local dis = self._lockEnemy._radius + self._radius + self._params[5]
+			self._flyEndOffsetPositionX = dis * math.cos(rad)
+			self._flyEndOffsetPositionY = dis * math.sin(rad)
+			local enemyPos = self._lockEnemy._position
+			self._position.x = enemyPos.x + self._flyEndOffsetPositionX
+			self._position.y = enemyPos.y + self._flyEndOffsetPositionY
+
+			if self._view then
+				self._view._obj:SetLocalRotation(0, 0, self._angle + 90)
+				self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+			end
+
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._stage = 4
+				self._countdown = 1.6666666666666667
+			end
+		elseif self._stage == 4 then
+			local enemyPos = self._lockEnemy._position
+			self._position.x = enemyPos.x + self._flyEndOffsetPositionX
+			self._position.y = enemyPos.y + self._flyEndOffsetPositionY
+
+			if self._view then
+				self._view._obj:SetPosition(self._position.x, self._position.y, 0)
+			end
+
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._stage = 3
+				self._countdown = 0.6666666666666666
+
+				self._scriptBehavior.randomTargetAngle(self)
+
+				local recoverHP = self._maxHp * self._params[4] / 100
+
+				self._lockEnemy:receiveRecoverHP(recoverHP)
+
+				if self._view then
+					self._view:playSpriteAnimation(2)
+
+					local vfx = self._sessionView:addVFX("Enemy_1305_HP", self._lockEnemy._view._tf, 1)
+
+					vfx:SetLocalScale(1)
+				end
+			end
+		end
+	end,
+	seekEnemy = function (self)
+		self._lockEnemy = nil
+		local insertCount = 0
+
+		opt.array_arg32:clear()
+
+		local enemys = self._battleSession:getAllEnemys()
+		local cnt = #enemys
+
+		for j = 1, cnt do
+			local enemy = enemys[j]
+
+			if not enemy._isToBeDestroyed and self._id ~= enemy._id and not enemy._isCasting1409 then
+				local beLockedBy1409 = enemy._beLockedBy1409 or 0
+
+				if (enemy._type == BattleDefine.EnemyType.Normal and beLockedBy1409 < 1 or enemy._type == BattleDefine.EnemyType.Elite and beLockedBy1409 < 2 or enemy._type == BattleDefine.EnemyType.Boss and beLockedBy1409 < 3) and BattleMathLib.dis_square(self._position, enemy._position) <= self._inRangeSqrt then
+					opt.array_arg32[#opt.array_arg32 + 1] = enemy
+					insertCount = insertCount + 1
+
+					if insertCount == 32 then
+						break
+					end
+				end
+			end
+		end
+
+		if insertCount > 0 then
+			self._stage = 2
+			self._stopAction = true
+
+			self._scriptBehavior.lockEnemy(self, self._battleRandomLib:randomOne(opt.array_arg32))
+
+			self._isCasting1409 = true
+		else
+			self._countdown = self._params[1]
+			self._stopAction = false
+			self._angle = -90
+
+			if self._view then
+				self._view._obj:SetLocalRotation(0, 0, self._angle + 90)
+			end
+		end
+	end,
+	lockEnemy = function (self, enemy)
+		self._lockEnemy = enemy
+		enemy._beLockedBy1409 = (enemy._beLockedBy1409 or 0) + 1
+
+		self._scriptBehavior.randomTargetAngle(self)
+
+		self._roundRadius = math.sqrt(enemy._position.x - self._position.x)^2 + (enemy._position.y - self._position.y)^2
+		local endPosX = enemy._position.x + self._flyEndOffsetPositionX
+		local endPosY = enemy._position.y + self._flyEndOffsetPositionY
+		local distanceSqrt = math.sqrt((self._position.x - endPosX)^2 + (self._position.y - endPosY)^2)
+		self._originDistance = distanceSqrt
+	end,
+	randomTargetAngle = function (self)
+		local angle = self._battleRandomLib:randomMN(30, 150)
+		local rad = math.rad(angle)
+		local dis = self._lockEnemy._radius + self._radius + self._params[5]
+		local x = dis * math.cos(rad)
+		local y = dis * math.sin(rad)
+		self._targetRelativeAngle = angle
+		self._flyEndOffsetPositionX = x
+		self._flyEndOffsetPositionY = y
+	end,
+	updateAngle = function (self)
+		local enemy = self._lockEnemy
+		local endPosX = enemy._position.x + self._flyEndOffsetPositionX
+		local endPosY = enemy._position.y + self._flyEndOffsetPositionY
+		local distance = math.sqrt((self._position.x - endPosX)^2 + (self._position.y - endPosY)^2)
+		self._towardOffsetY = ORIGIN_TOAWRD_OFFSET_Y / self._originDistance * distance
+		local enemyPos = self._lockEnemy._position
+		local towardPosX = enemyPos.x
+		local towardPosY = enemyPos.y - self._towardOffsetY
+		local pos = self._position
+		self._towardDir.x = towardPosX - pos.x
+		self._towardDir.y = towardPosY - pos.y
+
+		self._towardDir:SetNormalize()
+
+		self._angle = math.deg(math.atan2(self._towardDir.y, self._towardDir.x))
+		self._relativeAngle = self._angle + 180
+
+		if self._view then
+			self._view._obj:SetLocalRotation(0, 0, self._angle + 90)
+		end
+	end
+}
+M[1509] = {
+	init = function (self)
+		self._stage = 1
+		self._coutdown = self._battleRandomLib:randomMN(self._params[1], self._params[2])
+	end,
+	readyAttack = function (self)
+		self._stage = nil
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._countdown = nil
+		self._skipDestroyEvent = nil
+	end,
+	step = function (self, dt)
+		if self._stage == 1 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._invincible = true
+				self._conceal = true
+				self._ignoreAllBuff = true
+				self._stopAction = true
+				self._stage = 2
+				self._countdown = 0.75
+
+				if self._view then
+					if self._view._hpWidget then
+						self._view._hpWidget:SetActive(false)
+					end
+
+					self._view:playSpriteAnimation(3)
+				end
+			end
+		elseif self._stage == 2 then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._skipDestroyEvent = true
+				self._selfDestroy = true
+
+				self:markToBeDestroyed()
+
+				local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+
+				for i = 1, 2 do
+					local enemy = battleEnemyGenerator:createSummonEnemy(self._params[3])
+					local x = self._position.x + (i - 1.5) * self._params[4] * self._scale
+					local y = self._position.y
+					x, y = self._battleSession:limitEnemyPosition(x, y)
+
+					enemy:setPos(x, y)
+					enemy:setScale(self._scale)
+
+					enemy._hp = self._hp
+
+					if enemy._view then
+						enemy._view:syncHp()
+						enemy._view:posEvent()
+						enemy._view:scaleEvent()
+					end
+				end
+
+				self._selfDestroy = nil
+				self._skipDestroyEvent = nil
+			end
+		end
+	end
+}
+M[1310] = {
+	init = function (self)
+		self._stage = 1
+		self._coutdown = self._battleRandomLib:randomMN(self._params[1] * 10, self._params[2] * 10) / 10
+	end,
+	markToBeDestroyed = function (self)
+		self._stage = nil
+		self._countdown = nil
+	end,
+	readyAttack = function (self)
+		self._stage = 2
+	end,
+	step = function (self, dt)
+		if self._stage == 1 then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._coutdown = self._battleRandomLib:randomMN(self._params[1] * 10, self._params[2] * 10) / 10
+				local battleEnemyGenerator = self._battleSession._battleEnemyGenerator
+				local enemy = battleEnemyGenerator:createSummonEnemy(self._params[3])
+				local x = self._position.x
+				local y = self._position.y
+				y = math.min(math.max(BattleDefine.DOME_POSY + 1, y), self._battleSession._enemyBornEdgeY1 - 1)
+
+				enemy:setPos(x, y)
+				enemy:setScale(self._scale)
+
+				if enemy._view then
+					enemy._view:posEvent()
+					enemy._view:scaleEvent()
+				end
+			end
+		end
+	end
+}
+M[131001] = {
+	init = function (self)
+		self._coutdown = self._params[1]
+		self._recvDmgCount = self._params[2]
+	end,
+	markToBeDestroyed = function (self)
+		self._coutdown = nil
+	end,
+	step = function (self, dt)
+		if self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self:markToBeDestroyed()
+			end
+		end
+	end
+}
+M[2583] = {
+	init = function (self)
+		self._stage = 1
+		self._resurrectionCount = 0
+
+		if self._cid == 2583 then
+			self._battleSession._enemy2583 = self
+		elseif self._cid == 2584 then
+			self._battleSession._enemy2584 = self
+		end
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._resurrectionCount = nil
+
+		if self._cid == 2583 then
+			self._battleSession._enemy2583 = nil
+		elseif self._cid == 2584 then
+			self._battleSession._enemy2584 = nil
+		end
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			if self._coutdown then
+				self._coutdown = self._coutdown - dt
+
+				if self._coutdown <= 0 then
+					self._coutdown = 0.6666666666666666
+					self._stage = 3
+
+					if self._cid == 2583 then
+						self._battleSession._2583Dormancy = nil
+					elseif self._cid == 2584 then
+						self._battleSession._2584Dormancy = nil
+					end
+
+					self._resurrectionCount = self._resurrectionCount + 1
+					self._hp = self._maxHp
+					self._hp = math.ceil(self._hp * self._params[2] / 100 / self._resurrectionCount)
+					self._atkInterval = self._atkRawInterval
+
+					if self._view then
+						if self._view._hpWidget then
+							self._view._hpWidget:SetActive(true)
+						end
+
+						self._view:playSpriteAnimation(4)
+						self._view:hpEvent(self._hp)
+					end
+				end
+			end
+		elseif self._stage == 3 and self._coutdown then
+			self._coutdown = self._coutdown - dt
+
+			if self._coutdown <= 0 then
+				self._stage = 1
+				self._conceal = false
+				self._invincible = false
+				self._stopAction = false
+			end
+		end
+	end,
+	dieBefore = function (self)
+		if self._stage == 1 then
+			self._stage = 2
+			self._conceal = true
+			self._invincible = true
+			self._stopAction = true
+
+			self:clearBuffs()
+
+			self._coutdown = self._params[1]
+
+			if self._view then
+				if self._view._hpWidget then
+					self._view._hpWidget:SetActive(false)
+				end
+
+				self._view:playSpriteAnimation(3)
+			end
+		end
+	end
+}
+M[1208] = {
+	init = function (self)
+		self._stage = 1
+		self._recvDmgCount = self._params[1]
+	end,
+	init_end = function (self)
+		if self._view then
+			self._view._tf:GetChild(1):SetActive(true)
+		end
+	end,
+	destroy = function (self)
+		self._stage = nil
+		self._recvDmgCount = nil
+	end,
+	step = function (self, dt)
+		if self._stage == 2 then
+			self._countdown = self._countdown - dt
+
+			if self._countdown <= 0 then
+				self._stage = 3
+				self._conceal = false
+				self._invincible = false
+				self._stopAction = false
+			end
+		end
+	end,
+	doTrans = function (self)
+		self._conceal = true
+		self._invincible = true
+		self._stopAction = true
+		self._recvDmgCount = 0
+		self._stage = 2
+		self._countdown = 0.8333333333333334
+
+		if self._view then
+			self._view._tf:GetChild(1):SetActive(false)
+			self._view:playSpriteAnimation(3)
+		end
+	end
+}
+M[1110] = {
+	attackPlayer = function (self)
+		self._battleSession:enemy1110CastEffect(self._position.x, self._params[2], self._params[3])
+
+		if self._sessionView then
+			if self._cid == 2110 then
+				local vfx = self._sessionView:createAndPlayVFX("Enemy_Bullet_2110", self._params[1])
+
+				if vfx then
+					vfx:SetPosition(self._position.x, 1, 0)
+				end
+			else
+				local vfx = self._sessionView:createAndPlayVFX("Enemy_Bullet_1110", self._params[1])
+
+				if vfx then
+					vfx:SetPosition(self._position.x, 1, 0)
+				end
+			end
+		end
+	end
+}
+M[2484] = {
+	init = function (self)
+		self._leftStart = nil
+		self._loopCount = 4
+		self._moveStage = 1
+
+		if self._battleRandomLib:randomTrue() then
+			self._leftStart = true
+		else
+			self._leftStart = false
+		end
+
+		self._moveT = 0
+
+		requireLua("EnemyMovement")[9](self, 0)
+		self:setPos(self._position.x, self._position.y + 2)
+		self:setDirByAngle(-90)
+
+		self._dir[1] = 0
+		self._dir[2] = -1
+		self._speedFactor = 24
+	end,
+	step = function (self)
+		if self._isToBeDestroyed then
+			return
+		end
+
+		if self._moveT == nil then
+			return
+		end
+
+		if self._moveStage == 1 then
+			if self._position.y <= BattleDefine.SCREEN_DEGE_Y2 - 1 then
+				self._moveStage = 2
+				self._moveMode = 9
+				self._speedFactor = 1
+			end
+		elseif self._moveStage == 2 then
+			if self._moveT > self._loopCount - 0.1 and self._position.y >= BattleDefine.SCREEN_DEGE_Y2 - 1.2 then
+				self._moveStage = 3
+			end
+		elseif self._moveStage == 3 then
+			self._moveMode = 1
+			self._speedFactor = 24
+			self._dir[1] = 0
+			self._dir[2] = 1
+
+			if self._position.y >= BattleDefine.SCREEN_DEGE_Y2 + 1 then
+				self:markToBeDestroyed()
+			end
+		end
+	end,
+	destroy = function (self)
+		self._moveT = nil
+		self._leftStart = nil
+	end
+}
+
+return M

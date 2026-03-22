@@ -1,0 +1,116 @@
+local M = class("ItemSelectConfirmPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	goWidget = Types.Transform,
+	goEmpty = Types.GameObject,
+	goDesc = Types.GameObject,
+	txtDesc = Types.TMP_Text,
+	btnConfirm = Types.Button,
+	btnReselect = Types.Button
+}
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	ItemWidget.noCreate(self._goWidget)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnConfirm, function ()
+		self:handleConfirm()
+	end)
+	self:setClick(self._btnReselect, function ()
+		self:handleReselect()
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init(cid, goClickWidget, claimCallback, updateCallback)
+	self._cid = cid
+	self._claimCallback = claimCallback
+	self._updateCallback = updateCallback
+	self._goClickWidget = goClickWidget
+
+	if C._config.debug then
+		self._txtTitle.text = self._txtTitle.text .. cid
+	end
+
+	V.setBtnStyle(self._btnReselect, V.BTN_STYLE.blue)
+	self:updateUI()
+end
+
+function M:needHandleSparkScoutChip(cid)
+	if not P._inSparkScout then
+		return false
+	end
+
+	if D.isSparkChipCustom(cid) then
+		return true
+	end
+
+	return false
+end
+
+function M:updateUI()
+	local selectIdx, selectItemId, selectNum = P._playerAsset:getItemCustomSelectIdx(self._cid)
+
+	if selectIdx and self:needHandleSparkScoutChip(self._cid) and P._playerActivitySparkScout:hasHigherQualityChip(selectItemId, true) then
+		P._playerAsset:tryClearItemCustomSelectIdx(self._cid)
+
+		selectIdx, selectItemId, selectNum = nil
+
+		if self._updateCallback then
+			self._updateCallback()
+		end
+	end
+
+	local isChip = selectIdx and D.isGem(selectItemId)
+
+	self._goDesc:SetActive(isChip)
+	self._goEmpty:SetActive(not isChip)
+
+	if selectIdx and D.isGem(selectItemId) then
+		V.loadChipNameAndDesc(nil, self._txtDesc, selectItemId)
+	end
+
+	self:updateSelectItem()
+	self:updateConfirmBtn()
+end
+
+function M:handleConfirm()
+	if self._claimCallback then
+		self._claimCallback()
+	end
+
+	self:closePanel()
+end
+
+function M:handleReselect()
+	UIManager.openPanel(PrefabDefine.ItemSelectPanel, self._cid, function ()
+		self:updateUI()
+	end, {
+		notAllowCancel = true
+	})
+end
+
+function M:updateSelectItem()
+	self._goWidget:init(self._cid)
+	self._goClickWidget:init(self._cid)
+end
+
+function M:updateConfirmBtn()
+	local selectIdx = P._playerAsset:getItemCustomSelectIdx(self._cid)
+
+	self._btnConfirm.gameObject:SetActive(selectIdx ~= nil)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

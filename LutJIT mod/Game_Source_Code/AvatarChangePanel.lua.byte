@@ -1,0 +1,789 @@
+local M = class("AvatarChangePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	btnTab3 = Types.Button,
+	imgTab1 = Types.Image,
+	imgTab2 = Types.Image,
+	imgTab3 = Types.Image,
+	txtTab1 = Types.TMP_Text,
+	txtTab2 = Types.TMP_Text,
+	txtTab3 = Types.TMP_Text,
+	imgDotTab1 = Types.Image,
+	imgDotTab2 = Types.Image,
+	imgDotTab3 = Types.Image,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	goContent3 = Types.GameObject,
+	tfAvatarContainer = Types.Transform,
+	tfAvatarFrameContainer = Types.Transform,
+	tfAvatarMedalContainer = Types.Transform,
+	txtUnlockAvatar = Types.TMP_Text,
+	btnReplaceAvatar = Types.Button,
+	btnUpgrade = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTab1,
+		self._btnTab2,
+		self._btnTab3
+	}
+	self._imgTabs = {
+		self._imgTab1,
+		self._imgTab2,
+		self._imgTab3
+	}
+	self._txtTabs = {
+		self._txtTab1,
+		self._txtTab2,
+		self._txtTab3
+	}
+	self._goTabContents = {
+		self._goContent1,
+		self._goContent2,
+		self._goContent3
+	}
+	self._avatar = P._playerProfile:getAvatar()
+	self._avatarFrame = P._playerProfile:getAvatarFrame()
+	self._goAvatars = {}
+	self._goAvatarFrames = {}
+	self._goAvatarMedals = {}
+	self._choosedAvatar = nil
+	self._choosedAvatarFrame = nil
+	self._choosedAvatarMedal = nil
+
+	self:initAvatars()
+	self:initAvatarFrames()
+	self:initAvatarMedals()
+
+	if lc._isCN then
+		self._btnTab3:SetActive(false)
+	end
+end
+
+function M:initAvatars()
+	for i = 1, D.MAX_WEAPON_ID do
+		local id = D.WEAPON_ORDER[i]
+
+		if not self._goAvatars[id] then
+			self._goAvatars[id] = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AvatarEditWidget.prefab", self._tfAvatarContainer)
+
+			lc.prefabVarPeer(self._goAvatars[id])
+		end
+
+		self._goAvatars[id]._id = id
+		self._goAvatars[id]._isUnlocked = P._playerArmory:isWeaponUnlocked(id)
+
+		self._goAvatars[id]._imgLock:SetActive(not self._goAvatars[id]._isUnlocked)
+		LuaUnity.setTPSprite(self._goAvatars[id]._imgAvatar, "avatar/" .. id, true)
+		LuaUnity.setTPSprite(self._goAvatars[id]._imgAvatarFrame, D.toAvatarBgSprite(id), true)
+	end
+
+	local orders = {}
+	self._displayDomeGradeAvatar = nil
+	self._displayDomeGradeHighestAvatar = nil
+
+	for i = D.AVATAR_BEGIN, D.AVATAR_END do
+		local cfg = D._itemAvatarConfig[i]
+
+		if cfg then
+			if cfg._hidden then
+				if P._playerAsset:isAssetEnough(i, 1) then
+					orders[#orders + 1] = i
+				end
+			elseif D.DOME_GRADE_AVATAR_BEGIN <= i and i <= D.DOME_GRADE_AVATAR_END - 1 then
+				if P._playerAsset:isAssetEnough(i, 1) then
+					if self._displayDomeGradeAvatar == nil then
+						orders[#orders + 1] = i
+						self._displayDomeGradeAvatar = i
+						self._displayDomeGradeHighestAvatar = i
+					else
+						self._displayDomeGradeHighestAvatar = i
+					end
+				end
+			elseif cfg._unlockSkin then
+				local skinCfg = P._playerSkin:getCfg(cfg._unlockSkin)
+
+				if P._playerSkin:getSkinLevel(cfg._unlockSkin) > 0 then
+					orders[#orders + 1] = i
+				elseif not skinCfg._requireSkin or P._playerSkin:getSkinLevel(skinCfg._requireSkin) > 0 then
+					orders[#orders + 1] = i
+				end
+			else
+				orders[#orders + 1] = i
+			end
+		end
+	end
+
+	if self._displayDomeGradeAvatar == nil then
+		orders[#orders + 1] = D.DOME_GRADE_AVATAR_BEGIN
+	end
+
+	table.sort(orders, function (a, b)
+		local cfg1 = D._itemAvatarConfig[a]
+		local cfg2 = D._itemAvatarConfig[b]
+		local q1 = cfg1._quality
+		local q2 = cfg2._quality
+
+		if q1 ~= q2 then
+			return q1 < q2
+		else
+			return cfg1._index < cfg2._index
+		end
+	end)
+
+	for o = 1, #orders do
+		local i = orders[o]
+
+		if not self._goAvatars[i] then
+			self._goAvatars[i] = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AvatarEditWidget.prefab", self._tfAvatarContainer)
+
+			lc.prefabVarPeer(self._goAvatars[i])
+		end
+
+		self._goAvatars[i]._id = i
+		self._goAvatars[i]._isUnlocked = P._playerAsset:isAssetEnough(i, 1)
+
+		self._goAvatars[i]._imgLock:SetActive(not self._goAvatars[i]._isUnlocked)
+		LuaUnity.setTPSprite(self._goAvatars[i]._imgAvatar, "avatar/" .. i, true)
+		LuaUnity.setTPSprite(self._goAvatars[i]._imgAvatarFrame, D.toAvatarBgSprite(i), true)
+	end
+end
+
+function M:initAvatarFrames()
+	local orders = {}
+
+	for i = D.AVATAR_FRAME_BEGIN, D.AVATAR_FRAME_END do
+		local cfg = D._itemAvatarConfig[i]
+
+		if cfg then
+			if cfg._hidden then
+				if P._playerAsset:isAssetEnough(i, 1) then
+					orders[#orders + 1] = i
+				end
+			else
+				orders[#orders + 1] = i
+			end
+		end
+	end
+
+	table.sort(orders, function (a, b)
+		local cfg1 = D._itemAvatarConfig[a]
+		local cfg2 = D._itemAvatarConfig[b]
+		local q1 = cfg1._quality
+		local q2 = cfg2._quality
+
+		if q1 ~= q2 then
+			return q1 < q2
+		else
+			return cfg1._index < cfg2._index
+		end
+	end)
+
+	if not self._goAvatarFrames[1] then
+		self._goAvatarFrames[1] = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AvatarFrameEditWidget.prefab", self._tfAvatarFrameContainer)
+
+		lc.prefabVarPeer(self._goAvatarFrames[1])
+	end
+
+	self._goAvatarFrames[1]._id = nil
+	self._goAvatarFrames[1]._isUnlocked = true
+
+	self._goAvatarFrames[1]._imgAvatar:SetActive(false)
+	self._goAvatarFrames[1]._imgEmpty:SetActive(true)
+
+	for o = 1, #orders do
+		local i = orders[o]
+
+		if not self._goAvatarFrames[i] then
+			self._goAvatarFrames[i] = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AvatarFrameEditWidget.prefab", self._tfAvatarFrameContainer)
+
+			lc.prefabVarPeer(self._goAvatarFrames[i])
+		end
+
+		self._goAvatarFrames[i]._id = i
+		self._goAvatarFrames[i]._isUnlocked = P._playerAsset:isAssetEnough(i, 1)
+
+		self._goAvatarFrames[i]._imgLock:SetActive(not self._goAvatarFrames[i]._isUnlocked)
+		LuaUnity.setTPSprite(self._goAvatarFrames[i]._imgAvatar, "avatar/frame_" .. i, true)
+		LuaUnity.setTPSprite(self._goAvatarFrames[i]._imgLock, "avatar/frame_" .. i, true)
+	end
+end
+
+function M:initAvatarMedals()
+	local orders = {}
+
+	for i = D.AVATAR_MEDAL_BEGIN, D.AVATAR_MEDAL_END do
+		local cfg = D._itemAvatarConfig[i]
+
+		if cfg then
+			if cfg._hidden then
+				if P._playerAsset:isAssetEnough(i, 1) then
+					orders[#orders + 1] = i
+				end
+			else
+				orders[#orders + 1] = i
+			end
+		end
+	end
+
+	table.sort(orders, function (a, b)
+		local cfg1 = D._itemAvatarConfig[a]
+		local cfg2 = D._itemAvatarConfig[b]
+		local q1 = cfg1._quality
+		local q2 = cfg2._quality
+
+		if q1 ~= q2 then
+			return q1 < q2
+		else
+			return cfg1._index < cfg2._index
+		end
+	end)
+
+	for o = 1, #orders do
+		local i = orders[o]
+
+		if not self._goAvatarMedals[i] then
+			self._goAvatarMedals[i] = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AvatarMedalEditWidget.prefab", self._tfAvatarMedalContainer)
+
+			lc.prefabVarPeer(self._goAvatarMedals[i])
+		end
+
+		self._goAvatarMedals[i]._id = i
+		self._goAvatarMedals[i]._isUnlocked = P._playerAsset:isAssetEnough(i, 1)
+
+		self._goAvatarMedals[i]._imgLock:SetActive(not self._goAvatarMedals[i]._isUnlocked)
+		LuaUnity.setTPSprite(self._goAvatarMedals[i]._imgAvatar, "avatar/medal_" .. i, true)
+		LuaUnity.setTPSprite(self._goAvatarMedals[i]._imgLock, "avatar/medal_" .. i, true)
+	end
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	for id, go in pairs(self._goAvatars) do
+		self:setClick(go._btnClick, function ()
+			self:chooseAvatar(id)
+			self:updateAvatarDot()
+		end)
+	end
+
+	for id, go in pairs(self._goAvatarFrames) do
+		self:setClick(go._btnClick, function ()
+			self:chooseAvatarFrame(id)
+			self:updateFrameDot()
+		end)
+	end
+
+	for id, go in pairs(self._goAvatarMedals) do
+		self:setClick(go._btnClick, function ()
+			self:chooseAvatarMedal(id)
+			self:updateMedalDot()
+		end)
+	end
+
+	self:setClick(self._btnReplaceAvatar, function ()
+		self:handleConfirmBtn()
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		local targetAvatar = self._displayDomeGradeHighestAvatar
+
+		for i = self._displayDomeGradeAvatar, self._displayDomeGradeHighestAvatar - 1 do
+			P._playerAsset:increaseAssetNum(i, -P._playerAsset:getAssetNum(i), D.LogWay.dome_trial_grade_up)
+			P._playerRecord:flagAvatar(i)
+		end
+
+		local widget = self._goAvatars[self._displayDomeGradeAvatar]
+		self._goAvatars[self._displayDomeGradeAvatar] = nil
+
+		widget._goVfx:SetActive(true)
+		LuaUnity.setTPSprite(widget._imgAvatar, "avatar/" .. targetAvatar, true)
+
+		if P._playerProfile:getAvatar() == self._displayDomeGradeAvatar then
+			P._playerProfile:setAvatar(targetAvatar)
+		end
+
+		self._displayDomeGradeAvatar = targetAvatar
+		self._choosedAvatar = targetAvatar
+		widget._id = targetAvatar
+		self._goAvatars[self._displayDomeGradeAvatar] = widget
+		self._avatar = targetAvatar
+
+		self:setClick(widget._btnClick, function ()
+			self:chooseAvatar(targetAvatar)
+		end)
+		self:chooseAvatar(targetAvatar)
+		self:updateAvatarDot()
+	end)
+
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+end
+
+function M:addEvents()
+	self:on("avatarFrame.expire", function ()
+		self._avatarFrame = P._playerProfile:getAvatarFrame()
+
+		self:initAvatarFrames()
+		self:updateUI()
+		self:updateFrameDot()
+	end)
+	self:on("avatar.expire", function ()
+		self._avatar = P._playerProfile:getAvatar()
+
+		self:initAvatars()
+		self:updateUI()
+		self:updateAvatarDot()
+	end)
+	self:on("avatarMedal.expire", function ()
+		self._avatarMedal = P._playerProfile:getAvatarMedal()
+
+		self:initAvatarMedals()
+		self:updateUI()
+		self:updateMedalDot()
+	end)
+end
+
+function M:init()
+	self._goTabContents[1]:SetActive(true)
+	self._goTabContents[2]:SetActive(false)
+	self._goTabContents[3]:SetActive(false)
+	self:updateUI()
+	self:updateAvatarDot()
+	self:updateFrameDot()
+	self:updateMedalDot()
+end
+
+function M:updateAvatarDot()
+	local hasDot = false
+
+	for i = 1, D.MAX_WEAPON_ID do
+		hasDot = hasDot or P._playerRecord:isNewAvatar(i)
+	end
+
+	for i = D.AVATAR_BEGIN, D.AVATAR_END do
+		if self._goAvatars[i] then
+			if D.DOME_GRADE_AVATAR_BEGIN <= i and i <= D.DOME_GRADE_AVATAR_END - 2 then
+				hasDot = hasDot or P._playerRecord:isNewAvatar(i) or self._displayDomeGradeAvatar ~= nil and self._displayDomeGradeAvatar < self._displayDomeGradeHighestAvatar
+			else
+				hasDot = hasDot or P._playerRecord:isNewAvatar(i)
+			end
+		end
+	end
+
+	self._imgDotTab1:SetActive(hasDot)
+end
+
+function M:updateFrameDot()
+	local hasDot = false
+
+	for i = D.AVATAR_FRAME_BEGIN, D.AVATAR_FRAME_END do
+		if self._goAvatarFrames[i] then
+			hasDot = hasDot or P._playerRecord:isNewAvatarFrame(i)
+		end
+	end
+
+	self._imgDotTab2:SetActive(hasDot)
+end
+
+function M:updateMedalDot()
+	local hasDot = false
+
+	for i = D.AVATAR_MEDAL_BEGIN, D.AVATAR_MEDAL_END do
+		if self._goAvatarMedals[i] then
+			hasDot = hasDot or P._playerRecord:isNewAvatarMedal(i)
+		end
+	end
+
+	self._imgDotTab3:SetActive(hasDot)
+end
+
+function M:changeTab(tab)
+	if self._tab == tab then
+		return
+	end
+
+	self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+	self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+	self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+	self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+
+	self._goTabContents[self._tab]:SetActive(false)
+	self._goTabContents[tab]:SetActive(true)
+
+	self._tab = tab
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if self._tab == 1 then
+		for i = 1, D.MAX_WEAPON_ID do
+			self._goAvatars[i]._imgDot:SetActive(P._playerRecord:isNewAvatar(i))
+			self._goAvatars[i]._imgUse:SetActive(i == self._avatar)
+
+			if D.MAX_WEAPON_ID < i and D._itemAvatarConfig[i]._quality == D.Quality.COLORFUL then
+				self._goAvatars[i]._imgUseColor:SetActive(true)
+			else
+				self._goAvatars[i]._imgUseColor:SetActive(false)
+			end
+
+			if i == self._avatar then
+				self:chooseAvatar(i)
+			end
+		end
+
+		for i = D.AVATAR_BEGIN, D.AVATAR_END do
+			if self._goAvatars[i] then
+				if D.DOME_GRADE_AVATAR_BEGIN <= i and i <= D.DOME_GRADE_AVATAR_END - 2 then
+					self._goAvatars[i]._imgDot:SetActive(self._displayDomeGradeAvatar ~= nil and (P._playerRecord:isNewAvatar(i) or self._displayDomeGradeAvatar < self._displayDomeGradeHighestAvatar))
+				else
+					self._goAvatars[i]._imgDot:SetActive(P._playerRecord:isNewAvatar(i))
+				end
+
+				self._goAvatars[i]._imgUse:SetActive(i == self._avatar)
+
+				if D.MAX_WEAPON_ID < i and D._itemAvatarConfig[i]._quality == D.Quality.COLORFUL then
+					self._goAvatars[i]._imgUseColor:SetActive(true)
+				else
+					self._goAvatars[i]._imgUseColor:SetActive(false)
+				end
+
+				if i == self._avatar then
+					self:chooseAvatar(i)
+				end
+			end
+		end
+	elseif self._tab == 2 then
+		self._goAvatarFrames[1]._imgUse:SetActive(self._avatarFrame == nil)
+		self._goAvatarFrames[1]._imgDot:SetActive(false)
+
+		for i = D.AVATAR_FRAME_BEGIN, D.AVATAR_FRAME_END do
+			if self._goAvatarFrames[i] then
+				self._goAvatarFrames[i]._imgDot:SetActive(P._playerRecord:isNewAvatarFrame(i))
+				self._goAvatarFrames[i]._imgUse:SetActive(i == self._avatarFrame)
+
+				if i == self._avatarFrame then
+					self:chooseAvatarFrame(i)
+				end
+			end
+		end
+
+		if self._avatarFrame == nil then
+			self:chooseAvatarFrame(1)
+		end
+	elseif self._tab == 3 then
+		for i = D.AVATAR_MEDAL_BEGIN, D.AVATAR_MEDAL_END do
+			if self._goAvatarMedals[i] then
+				self._goAvatarMedals[i]._imgDot:SetActive(P._playerRecord:isNewAvatarMedal(i))
+				self._goAvatarMedals[i]._imgUse:SetActive(i == self._avatarMedal)
+
+				if i == self._avatarMedal then
+					self:chooseAvatarMedal(i)
+				end
+			end
+		end
+
+		if self._avatarMedal == nil then
+			self:chooseAvatarMedal(D.AVATAR_MEDAL_BEGIN)
+		end
+	end
+end
+
+function M:chooseAvatar(i)
+	if self._choosedAvatar then
+		self._goAvatars[self._choosedAvatar]._imgChoose:SetActive(false)
+	end
+
+	self._goAvatars[i]._imgChoose:SetActive(true)
+
+	self._choosedAvatar = i
+	local avatar = i
+
+	if D.DOME_GRADE_AVATAR_BEGIN <= i and i <= D.DOME_GRADE_AVATAR_END - 2 and self._displayDomeGradeAvatar ~= nil and self._displayDomeGradeAvatar < self._displayDomeGradeHighestAvatar then
+		self._txtUnlockAvatar.text = ""
+
+		self._btnReplaceAvatar:SetActive(false)
+		self._btnUpgrade:SetActive(true)
+	elseif avatar == P._playerProfile:getAvatar() then
+		if avatar == D.DOME_GRADE_AVATAR_END then
+			local now = C.getCurTime()
+			local expireTime = P._playerRecord:getAvatarExpired(avatar) or now
+			local delta = expireTime - now
+			local day = math.floor(delta / 86400)
+			local hour = math.floor((delta - day * 86400) / 3600)
+			local minute = math.ceil((delta - day * 86400 - hour * 3600) / 60)
+
+			self._txtUnlockAvatar:SetLocalize(SID.STR_USING_UNTIL, day, hour, minute)
+		else
+			self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+		self._btnUpgrade:SetActive(false)
+	elseif self._goAvatars[i]._isUnlocked then
+		self._txtUnlockAvatar.text = ""
+
+		self._btnReplaceAvatar:SetActive(true)
+		self._btnUpgrade:SetActive(false)
+	else
+		if D._itemConfig[avatar] then
+			local conf = D._itemConfig[avatar]
+
+			if conf._unlockSkin then
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid, -D._skinRoleConfig[conf._unlockSkin]._nameSid)
+			elseif D.DOME_GRADE_AVATAR_BEGIN <= i and i <= D.DOME_GRADE_AVATAR_END then
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid, -D._domeGradeConfig[conf._val]._nameSid)
+			else
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid)
+			end
+		else
+			self._txtUnlockAvatar:SetLocalize(SID.TIP_UNLOCK_LEVEL, D._weaponConfig[avatar]._unlockLevel)
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+		self._btnUpgrade:SetActive(false)
+	end
+
+	if P._playerRecord:isNewAvatar(avatar) then
+		P._playerRecord:flagAvatar(avatar)
+	end
+
+	if D.DOME_GRADE_AVATAR_BEGIN <= avatar and i <= D.DOME_GRADE_AVATAR_END - 2 then
+		self._goAvatars[i]._imgDot:SetActive(self._displayDomeGradeAvatar ~= nil and (P._playerRecord:isNewAvatar(avatar) or self._displayDomeGradeAvatar < self._displayDomeGradeHighestAvatar))
+	else
+		self._goAvatars[i]._imgDot:SetActive(P._playerRecord:isNewAvatar(avatar))
+	end
+end
+
+function M:chooseAvatarFrame(i)
+	self._btnUpgrade:SetActive(false)
+
+	if self._choosedAvatarFrame then
+		self._goAvatarFrames[self._choosedAvatarFrame]._imgChoose:SetActive(false)
+	end
+
+	self._goAvatarFrames[i]._imgChoose:SetActive(true)
+
+	self._choosedAvatarFrame = i
+	local avatarFrame = i > 1 and i or nil
+
+	if avatarFrame == P._playerProfile:getAvatarFrame() then
+		if avatarFrame and P._playerRecord:getAvatarFrameExpired(avatarFrame) then
+			local now = C.getCurTime()
+			local expireTime = P._playerRecord:getAvatarFrameExpired(avatarFrame) or now
+			local delta = expireTime - now
+			local day = math.floor(delta / 86400)
+			local hour = math.floor((delta - day * 86400) / 3600)
+			local minute = math.ceil((delta - day * 86400 - hour * 3600) / 60)
+
+			self._txtUnlockAvatar:SetLocalize(SID.STR_USING_UNTIL, day, hour, minute)
+		else
+			self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+	elseif self._goAvatarFrames[i]._isUnlocked then
+		self._txtUnlockAvatar.text = ""
+
+		self._btnReplaceAvatar:SetActive(true)
+	else
+		if D._itemConfig[avatarFrame] then
+			local conf = D._itemConfig[avatarFrame]
+
+			if conf._unlockSkin then
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid, -D._skinRoleConfig[conf._unlockSkin]._nameSid)
+			else
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid)
+			end
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+	end
+
+	if P._playerRecord:isNewAvatarFrame(avatarFrame) then
+		P._playerRecord:flagAvatarFrame(avatarFrame)
+	end
+
+	self._goAvatarFrames[i]._imgDot:SetActive(P._playerRecord:isNewAvatarFrame(avatarFrame))
+end
+
+function M:chooseAvatarMedal(i)
+	self._btnUpgrade:SetActive(false)
+
+	if self._choosedAvatarMedal then
+		self._goAvatarMedals[self._choosedAvatarMedal]._imgChoose:SetActive(false)
+	end
+
+	self._goAvatarMedals[i]._imgChoose:SetActive(true)
+
+	self._choosedAvatarMedal = i
+	local avatarMedal = i > 1 and i or nil
+
+	if avatarMedal == P._playerProfile:getAvatarMedal() then
+		if avatarMedal and P._playerRecord:getAvatarMedalExpired(avatarMedal) then
+			local now = C.getCurTime()
+			local expireTime = P._playerRecord:getAvatarMedalExpired(avatarMedal) or now
+			local delta = expireTime - now
+			local day = math.floor(delta / 86400)
+			local hour = math.floor((delta - day * 86400) / 3600)
+			local minute = math.ceil((delta - day * 86400 - hour * 3600) / 60)
+
+			self._txtUnlockAvatar:SetLocalize(SID.STR_USING_UNTIL, day, hour, minute)
+		else
+			self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+	elseif self._goAvatarMedals[i]._isUnlocked then
+		self._txtUnlockAvatar.text = ""
+
+		self._btnReplaceAvatar:SetActive(true)
+	else
+		if D._itemConfig[avatarMedal] then
+			local conf = D._itemConfig[avatarMedal]
+
+			if conf._unlockSkin then
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid, -D._skinRoleConfig[conf._unlockSkin]._nameSid)
+			else
+				self._txtUnlockAvatar:SetLocalize(conf._unlockDescSid)
+			end
+		end
+
+		self._btnReplaceAvatar:SetActive(false)
+	end
+
+	if P._playerRecord:isNewAvatarMedal(avatarMedal) then
+		P._playerRecord:flagAvatarMedal(avatarMedal)
+	end
+
+	self._goAvatarMedals[i]._imgDot:SetActive(P._playerRecord:isNewAvatarMedal(avatarMedal))
+end
+
+function M:handleConfirmBtn()
+	if self._tab == 1 then
+		local avatar = self._choosedAvatar
+
+		if self._goAvatars[self._choosedAvatar]._isUnlocked then
+			P._playerProfile:setAvatar(avatar)
+			self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+
+			if self._goAvatars[self._avatar] then
+				self._goAvatars[self._avatar]._imgUse:SetActive(false)
+			end
+
+			self._avatar = avatar
+
+			self._goAvatars[self._choosedAvatar]._imgUse:SetActive(true)
+
+			if D.MAX_WEAPON_ID < self._choosedAvatar and D._itemAvatarConfig[self._choosedAvatar]._quality == D.Quality.COLORFUL then
+				self._goAvatars[self._choosedAvatar]._imgUseColor:SetActive(true)
+			else
+				self._goAvatars[self._choosedAvatar]._imgUseColor:SetActive(false)
+			end
+
+			self._avatar = avatar
+
+			self:chooseAvatar(self._choosedAvatar)
+		end
+
+		self:updateAvatarDot()
+	elseif self._tab == 2 then
+		local avatarFrame = self._choosedAvatarFrame
+
+		if self._goAvatarFrames[self._choosedAvatarFrame]._isUnlocked then
+			if avatarFrame ~= 1 then
+				P._playerProfile:setAvatarFrame(avatarFrame)
+
+				local now = C.getCurTime()
+				local expireTime = P._playerRecord:getAvatarFrameExpired(avatarFrame) or now
+				local delta = expireTime - now
+				local day = math.floor(delta / 86400)
+				local hour = math.floor((delta - day * 86400) / 3600)
+				local minute = math.ceil((delta - day * 86400 - hour * 3600) / 60)
+
+				self._txtUnlockAvatar:SetLocalize(SID.STR_USING_UNTIL, day, hour, minute)
+
+				if self._goAvatarFrames[self._avatarFrame or 1] then
+					self._goAvatarFrames[self._avatarFrame or 1]._imgUse:SetActive(false)
+				end
+
+				self._avatarFrame = avatarFrame
+
+				self._goAvatarFrames[self._choosedAvatarFrame or 1]._imgUse:SetActive(true)
+
+				if D.MAX_WEAPON_ID < self._choosedAvatarFrame and D._itemAvatarConfig[self._choosedAvatarFrame or 1]._quality == D.Quality.COLORFUL then
+					self._goAvatarFrames[self._choosedAvatarFrame or 1]._imgUseColor:SetActive(true)
+				else
+					self._goAvatarFrames[self._choosedAvatarFrame or 1]._imgUseColor:SetActive(false)
+				end
+			else
+				self._goAvatarFrames[self._avatarFrame or 1]._imgUse:SetActive(false)
+				self._goAvatarFrames[self._choosedAvatarFrame or 1]._imgUse:SetActive(true)
+				self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+				P._playerProfile:setAvatarFrame(nil)
+
+				self._avatarFrame = nil
+			end
+
+			self:chooseAvatarFrame(self._choosedAvatarFrame)
+		end
+
+		self:updateFrameDot()
+	elseif self._tab == 3 then
+		local avatarMedal = self._choosedAvatarMedal
+
+		if self._goAvatarMedals[self._choosedAvatarMedal]._isUnlocked then
+			if avatarMedal ~= 1 then
+				P._playerProfile:setAvatarMedal(avatarMedal)
+
+				local now = C.getCurTime()
+				local expireTime = P._playerRecord:getAvatarMedalExpired(avatarMedal) or now
+				local delta = expireTime - now
+				local day = math.floor(delta / 86400)
+				local hour = math.floor((delta - day * 86400) / 3600)
+				local minute = math.ceil((delta - day * 86400 - hour * 3600) / 60)
+
+				self._txtUnlockAvatar:SetLocalize(SID.STR_USING_UNTIL, day, hour, minute)
+
+				if self._goAvatarMedals[self._avatarMedal or 1] then
+					self._goAvatarMedals[self._avatarMedal or 1]._imgUse:SetActive(false)
+				end
+
+				self._avatarMedal = avatarMedal
+
+				self._goAvatarMedals[self._choosedAvatarMedal or 1]._imgUse:SetActive(true)
+
+				if D.MAX_WEAPON_ID < self._choosedAvatarMedal and D._itemAvatarConfig[self._choosedAvatarMedal or 1]._quality == D.Quality.COLORFUL then
+					self._goAvatarMedals[self._choosedAvatarMedal or 1]._imgUseColor:SetActive(true)
+				else
+					self._goAvatarMedals[self._choosedAvatarMedal or 1]._imgUseColor:SetActive(false)
+				end
+			else
+				self._goAvatarMedals[self._avatarMedal or 1]._imgUse:SetActive(false)
+				self._goAvatarMedals[self._choosedAvatarMedal or 1]._imgUse:SetActive(true)
+				self._txtUnlockAvatar:SetLocalize(SID.STR_IN_USE)
+				P._playerProfile:setAvatarMedal(nil)
+
+				self._avatarMedal = nil
+			end
+
+			self:chooseAvatarMedal(self._choosedAvatarMedal)
+		end
+
+		self:updateMedalDot()
+	end
+end
+
+return M

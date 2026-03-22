@@ -1,0 +1,103 @@
+local M = class("BattleRanger_202", requireLua("BattleRanger"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._bullets = table.new(16, 0)
+	self._sortIndexs = table.new(16, 0)
+	self._excludeEnemys = table.new(2, 0)
+end
+
+function M:init(cid, index)
+	SUPER.init(self, cid, index)
+
+	self._atkInterval = self._mainSkill:getProp(BattlePropEnum.AtkInterval, 1)
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	self._atkInterval = self._atkInterval - dt
+
+	if self._atkInterval <= 0 then
+		self._atkInterval = self._mainSkill:getProp(BattlePropEnum.AtkInterval, 1)
+		self._atkInterval = self._atkInterval + self._atkInterval * self._mainSkill:getProp(BattlePropEnum.AtkIntervalAddPer, 0) / 100
+
+		self:castSubSkill()
+	end
+end
+
+function M:castMainSkill()
+	if self._targetEnemy then
+		self._excludeEnemys[self._targetEnemy._id] = true
+	end
+
+	SUPER.castMainSkill(self)
+end
+
+function M:runningFireFinished()
+	SUPER.runningFireFinished(self)
+	table.clear(self._excludeEnemys)
+end
+
+function M:seekingEnemy()
+	if self._targetEnemy and self._targetEnemy._isToBeDestroyed then
+		self._targetEnemy = nil
+	end
+
+	if self._targetEnemy == nil then
+		self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery4(self, self._atkRange, self._excludeEnemys)
+	end
+end
+
+function M:addBullet(bullet)
+	self._bullets[#self._bullets + 1] = bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._battleSkill == self._mainSkill then
+		local cnt = #self._bullets
+		self._bullets[1] = nil
+
+		table.removeNilValues(self._bullets, cnt)
+	end
+end
+
+function M:castSubSkill()
+	local count = #self._bullets
+
+	if count < 2 then
+		return
+	end
+
+	if self._bullets[#self._bullets]._readyed == nil then
+		count = count - 1
+	end
+
+	table.clear(self._sortIndexs)
+
+	for i = 1, count do
+		self._sortIndexs[#self._sortIndexs + 1] = i
+	end
+
+	for i = count, 2, -1 do
+		local j = self._battleRandomLib:randomMN(1, i)
+		self._sortIndexs[j] = self._sortIndexs[i]
+		self._sortIndexs[i] = self._sortIndexs[j]
+	end
+
+	self._sortIndexs[#self._sortIndexs + 1] = self._sortIndexs[1]
+
+	for i = 1, count do
+		local j1 = self._sortIndexs[i]
+		local j2 = self._sortIndexs[i + 1]
+		local b1 = self._bullets[j1]
+		local b2 = self._bullets[j2]
+		local newBullet = self._secondSkill:createBullet()
+
+		newBullet:setTargetPosition(b1._position, b2._position)
+	end
+end
+
+return M

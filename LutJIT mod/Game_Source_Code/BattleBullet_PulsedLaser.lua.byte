@@ -1,0 +1,232 @@
+local M = class("BattleBattery_PulsedLaser", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._segIndex = nil
+	self._length = 30
+	self._frontLength = 0
+	self._canStrafe = nil
+	self._strafeAngle = nil
+	self._totalRefectNum = 0
+	self._bullets = nil
+	self._moreStrafe = false
+	self._endPos = Vector2.retain(0, 0)
+end
+
+function M:setStrafe(flag, dtAngle, liveTime)
+	self._canStrafe = flag
+	self._strafeAngle = self._angle + dtAngle
+	self._strafeTargetAngle = self._angle - dtAngle
+	self._strafeLeftAngle = self._angle + math.abs(dtAngle)
+	self._strafeRightAngle = self._angle - math.abs(dtAngle)
+	self._strafeSpeed = math.abs(dtAngle * 2) / liveTime
+
+	if self._strafeTargetAngle < self._strafeAngle then
+		self._strafeSpeed = -self._strafeSpeed
+	end
+
+	local num = self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+	if num > 0 then
+		self._strafeSpeed = self._strafeSpeed * (num + 1)
+		self._moreStrafe = true
+	else
+		self._moreStrafe = false
+	end
+end
+
+function M:addSubBullets(bullet)
+	if self._subBullets == nil then
+		self._subBullets = TablePool.fetch32()
+	end
+
+	self._subBullets[#self._subBullets + 1] = bullet
+end
+
+function M:setSegIndex(index)
+	self._segIndex = index
+end
+
+function M:initSegs()
+	self:calSegLength()
+	self:calReflect()
+end
+
+function M:calReflect()
+	local reflectNum = self._battleSkill:getProp(BattlePropEnum.ReflectAdd, 0)
+
+	if reflectNum == 0 then
+		return
+	end
+
+	if self._bullets == nil then
+		self._bullets = table.new(4, 0)
+	else
+		table.clear(self._bullets)
+	end
+
+	self._totalRefectNum = reflectNum
+	local effect204Params = D.getBattleEffectParams(204)
+
+	for i = 1, reflectNum do
+		local bullet = self._battleSkill:createBullet()
+
+		bullet:setSegIndex(1 + i)
+
+		if self._battleWeapon:getEffect(204) then
+			bullet._damageAddPer = effect204Params[1] * i
+		end
+
+		self._bullets[#self._bullets + 1] = bullet
+		bullet._totalRefectNum = reflectNum
+	end
+
+	self:doReflect()
+end
+
+function M:getSegCount()
+	return self._totalRefectNum + 1
+end
+
+function M:doReflect()
+	if self._intersectPoints == nil then
+		self._intersectPoints = table.new(4, 0)
+	else
+		for i = 1, #self._intersectPoints do
+			Vector2.release(self._intersectPoints[i])
+		end
+
+		table.clear(self._intersectPoints)
+	end
+
+	local reflectCount = 0
+	local dir = Vector2.new(self._towardDir.x, self._towardDir.y)
+
+	self._battleSession:raySegmentIntersect(self._position, dir, 0, reflectCount, self._intersectPoints, self._totalRefectNum)
+
+	local cnt = self._totalRefectNum
+	cnt = math.min(#self._intersectPoints, cnt)
+	local frontLength = self._length
+
+	for i = 1, cnt do
+		local p1 = self._intersectPoints[i]
+		local p2 = self._intersectPoints[i + 1]
+		local bullet = self._bullets[i]
+
+		if p2 == nil then
+			if bullet._view and bullet._view._obj then
+				bullet._view._obj:SetActive(false)
+			end
+
+			break
+		end
+
+		bullet:calSegLength2(p1, p2)
+
+		bullet._frontLength = frontLength
+		frontLength = frontLength + bullet._length
+
+		if bullet._view then
+			bullet:updateView()
+		end
+	end
+end
+
+function M:calSegLength()
+	local lenght = 30
+
+	if self._battleSession:raySegmentIntersectWithLeftTopRight(self._position, self._towardDir, self._endPos) then
+		lenght = Vector2.Distance(self._position, self._endPos)
+	end
+
+	self._length = lenght
+end
+
+function M:calSegLength2(p1, p2)
+	self._towardDir:SetXYZ(p2.x - p1.x, p2.y - p1.y, 0)
+
+	self._angle = math.deg(math.atan2(self._towardDir.y, self._towardDir.x))
+
+	self:setPos(p1.x, p1.y)
+
+	self._endPos.x = p2.x
+	self._endPos.y = p2.y
+	local lenght = Vector2.Distance(p2, p1)
+	self._length = lenght
+end
+
+function M:updateView()
+	if self._view == nil then
+		return
+	end
+
+	self._view:lengthEvent()
+	self._view:posEvent()
+	self._view:rotationEvent()
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._canStrafe then
+		self._strafeAngle = self._strafeAngle + self._strafeSpeed * dt
+
+		self:setDirByAngle(self._strafeAngle)
+
+		if self._moreStrafe then
+			if self._strafeSpeed > 0 then
+				if self._strafeLeftAngle <= self._strafeAngle then
+					self._strafeSpeed = -self._strafeSpeed
+				end
+			elseif self._strafeSpeed < 0 and self._strafeAngle <= self._strafeRightAngle then
+				self._strafeSpeed = -self._strafeSpeed
+			end
+		end
+
+		if self._view then
+			self._view:rotationEvent()
+		end
+	end
+end
+
+function M:dragEnemy(enemy)
+	if self._battleSkill._id == 2 and self._battleWeapon:getEffect(206) then
+		local center = BattleMathLib.closest_point_on_ray(enemy._position, self._position, self._towardDir)
+		local atkInterval = self._atkIntervalInitial
+		local speed = 0.01
+		local weapon11 = self._battleSession:getWeapon(11)
+
+		if weapon11 then
+			speed = weapon11._mainSkill:getProp(BattlePropEnum.DragIntensity, 0) / 100
+			local addPer = weapon11._mainSkill:getProp(BattlePropEnum.DragIntensityAddPer, 0)
+			speed = speed + speed * addPer / 100
+		end
+
+		enemy:beDraged(center, atkInterval, speed)
+	end
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+
+	if self._subBullets then
+		for i = 1, #self._subBullets do
+			self._subBullets[i]:markToBeDestroyed()
+		end
+
+		TablePool.release32(self._subBullets)
+
+		self._subBullets = nil
+	end
+end
+
+return M

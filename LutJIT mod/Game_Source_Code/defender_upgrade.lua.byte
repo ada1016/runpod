@@ -1,0 +1,2193 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		105
+	},
+	{
+		2,
+		2,
+		2,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		3,
+		3,
+		3,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		4,
+		4,
+		4,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		5,
+		5,
+		5,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		6,
+		6,
+		6,
+		533 - lc._encryptOffset,
+		463 - lc._encryptOffset,
+		5
+	},
+	{
+		7,
+		2,
+		2,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		8,
+		3,
+		3,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		9,
+		4,
+		4,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		10,
+		6,
+		6,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		5
+	},
+	{
+		11,
+		11,
+		1,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		106
+	},
+	{
+		12,
+		2,
+		2,
+		613 - lc._encryptOffset,
+		478 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		13,
+		3,
+		3,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		14,
+		4,
+		4,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		15,
+		5,
+		5,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		16,
+		6,
+		6,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		5
+	},
+	{
+		17,
+		2,
+		2,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		18,
+		3,
+		3,
+		703 - lc._encryptOffset,
+		488 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		19,
+		4,
+		4,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		20,
+		6,
+		6,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		5
+	},
+	{
+		21,
+		21,
+		1,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		103
+	},
+	{
+		22,
+		2,
+		2,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		23,
+		3,
+		3,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		24,
+		4,
+		4,
+		783 - lc._encryptOffset,
+		503 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		25,
+		5,
+		5,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		26,
+		6,
+		6,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		5
+	},
+	{
+		27,
+		2,
+		2,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		28,
+		3,
+		3,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		29,
+		4,
+		4,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		30,
+		6,
+		6,
+		863 - lc._encryptOffset,
+		513 - lc._encryptOffset,
+		5
+	},
+	{
+		31,
+		31,
+		1,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		122
+	},
+	{
+		32,
+		2,
+		2,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		33,
+		3,
+		3,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		34,
+		4,
+		4,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		35,
+		5,
+		5,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		36,
+		6,
+		6,
+		975 - lc._encryptOffset,
+		526 - lc._encryptOffset,
+		5
+	},
+	{
+		37,
+		2,
+		2,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		38,
+		3,
+		3,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		39,
+		4,
+		4,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		40,
+		6,
+		6,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		5
+	},
+	{
+		41,
+		41,
+		1,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		143
+	},
+	{
+		42,
+		2,
+		2,
+		1120 - lc._encryptOffset,
+		547 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		43,
+		3,
+		3,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		44,
+		4,
+		4,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		45,
+		5,
+		5,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		46,
+		6,
+		6,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		5
+	},
+	{
+		47,
+		2,
+		2,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		48,
+		3,
+		3,
+		1285 - lc._encryptOffset,
+		571 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		49,
+		4,
+		4,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		50,
+		6,
+		6,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		5
+	},
+	{
+		51,
+		51,
+		1,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		141
+	},
+	{
+		52,
+		2,
+		2,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		53,
+		3,
+		3,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		54,
+		4,
+		4,
+		1468 - lc._encryptOffset,
+		598 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		55,
+		5,
+		5,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		56,
+		6,
+		6,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		5
+	},
+	{
+		57,
+		2,
+		2,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		58,
+		3,
+		3,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		59,
+		4,
+		4,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		60,
+		6,
+		6,
+		1671 - lc._encryptOffset,
+		628 - lc._encryptOffset,
+		5
+	},
+	{
+		61,
+		61,
+		61,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		107,
+		101
+	},
+	{
+		62,
+		2,
+		2,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		63,
+		3,
+		3,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		64,
+		4,
+		4,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		65,
+		5,
+		5,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		66,
+		6,
+		6,
+		1892 - lc._encryptOffset,
+		661 - lc._encryptOffset,
+		5
+	},
+	{
+		67,
+		2,
+		2,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		68,
+		3,
+		3,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		69,
+		4,
+		4,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		70,
+		6,
+		6,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		5
+	},
+	{
+		71,
+		71,
+		1,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		108
+	},
+	{
+		72,
+		2,
+		2,
+		2133 - lc._encryptOffset,
+		697 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		73,
+		3,
+		3,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		74,
+		4,
+		4,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		75,
+		5,
+		5,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		76,
+		6,
+		6,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		5
+	},
+	{
+		77,
+		2,
+		2,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		78,
+		3,
+		3,
+		2392 - lc._encryptOffset,
+		736 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		79,
+		4,
+		4,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		80,
+		5,
+		5,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		81,
+		81,
+		81,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		171
+	},
+	{
+		82,
+		2,
+		2,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		83,
+		3,
+		3,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		84,
+		4,
+		4,
+		2671 - lc._encryptOffset,
+		778 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		85,
+		5,
+		5,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		86,
+		6,
+		6,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		5
+	},
+	{
+		87,
+		2,
+		2,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		88,
+		3,
+		3,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		89,
+		4,
+		4,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		90,
+		5,
+		5,
+		2968 - lc._encryptOffset,
+		823 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		91,
+		91,
+		91,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		92,
+		2,
+		2,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		93,
+		3,
+		3,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		94,
+		4,
+		4,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		95,
+		5,
+		5,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		96,
+		6,
+		6,
+		3285 - lc._encryptOffset,
+		871 - lc._encryptOffset,
+		5
+	},
+	{
+		97,
+		2,
+		2,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		98,
+		3,
+		3,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		99,
+		4,
+		4,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		100,
+		5,
+		5,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		101,
+		101,
+		1,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		146
+	},
+	{
+		102,
+		2,
+		2,
+		3620 - lc._encryptOffset,
+		922 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		103,
+		3,
+		3,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		104,
+		4,
+		4,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		105,
+		5,
+		5,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		106,
+		6,
+		6,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		5
+	},
+	{
+		107,
+		2,
+		2,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		108,
+		3,
+		3,
+		3975 - lc._encryptOffset,
+		976 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		109,
+		4,
+		4,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		110,
+		5,
+		5,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		111,
+		91,
+		91,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		112,
+		2,
+		2,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		113,
+		3,
+		3,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		114,
+		4,
+		4,
+		4348 - lc._encryptOffset,
+		1033 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		115,
+		5,
+		5,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		116,
+		6,
+		6,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		5
+	},
+	{
+		117,
+		2,
+		2,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		118,
+		3,
+		3,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		119,
+		4,
+		4,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		120,
+		5,
+		5,
+		4741 - lc._encryptOffset,
+		1093 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		121,
+		121,
+		1,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		145
+	},
+	{
+		122,
+		2,
+		2,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		123,
+		3,
+		3,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		124,
+		4,
+		4,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		125,
+		5,
+		5,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		126,
+		6,
+		6,
+		5152 - lc._encryptOffset,
+		1156 - lc._encryptOffset,
+		5
+	},
+	{
+		127,
+		2,
+		2,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		128,
+		3,
+		3,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		129,
+		4,
+		4,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		130,
+		5,
+		5,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		131,
+		91,
+		91,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		132,
+		2,
+		2,
+		5583 - lc._encryptOffset,
+		1222 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		133,
+		3,
+		3,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		134,
+		4,
+		4,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		135,
+		5,
+		5,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		136,
+		6,
+		6,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		5
+	},
+	{
+		137,
+		2,
+		2,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		138,
+		3,
+		3,
+		6032 - lc._encryptOffset,
+		1291 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		139,
+		4,
+		4,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		140,
+		5,
+		5,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		141,
+		91,
+		91,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		142,
+		2,
+		2,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		143,
+		3,
+		3,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		144,
+		4,
+		4,
+		6501 - lc._encryptOffset,
+		1363 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		145,
+		5,
+		5,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		146,
+		6,
+		6,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		5
+	},
+	{
+		147,
+		2,
+		2,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		148,
+		3,
+		3,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		149,
+		4,
+		4,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		150,
+		5,
+		5,
+		6988 - lc._encryptOffset,
+		1438 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		151,
+		91,
+		91,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		152,
+		2,
+		2,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		153,
+		3,
+		3,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		154,
+		4,
+		4,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		155,
+		5,
+		5,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		156,
+		6,
+		6,
+		7495 - lc._encryptOffset,
+		1516 - lc._encryptOffset,
+		5
+	},
+	{
+		157,
+		2,
+		2,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		158,
+		3,
+		3,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		159,
+		4,
+		4,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		160,
+		5,
+		5,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		161,
+		91,
+		91,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		162,
+		2,
+		2,
+		8020 - lc._encryptOffset,
+		1597 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		163,
+		3,
+		3,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		164,
+		4,
+		4,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		165,
+		5,
+		5,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		166,
+		6,
+		6,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		5
+	},
+	{
+		167,
+		2,
+		2,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		168,
+		3,
+		3,
+		8565 - lc._encryptOffset,
+		1681 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		169,
+		4,
+		4,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		170,
+		5,
+		5,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		171,
+		91,
+		91,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		172,
+		2,
+		2,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		173,
+		3,
+		3,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		174,
+		4,
+		4,
+		9128 - lc._encryptOffset,
+		1768 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		175,
+		5,
+		5,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		176,
+		6,
+		6,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		5
+	},
+	{
+		177,
+		2,
+		2,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		178,
+		3,
+		3,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		179,
+		4,
+		4,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		180,
+		5,
+		5,
+		9711 - lc._encryptOffset,
+		1858 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		181,
+		91,
+		91,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		182,
+		2,
+		2,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		183,
+		3,
+		3,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		184,
+		4,
+		4,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		185,
+		5,
+		5,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		186,
+		6,
+		6,
+		10312 - lc._encryptOffset,
+		1951 - lc._encryptOffset,
+		5
+	},
+	{
+		187,
+		2,
+		2,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		188,
+		3,
+		3,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		189,
+		4,
+		4,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		190,
+		5,
+		5,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		191,
+		91,
+		91,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		192,
+		2,
+		2,
+		10933 - lc._encryptOffset,
+		2047 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		193,
+		3,
+		3,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		194,
+		4,
+		4,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		195,
+		5,
+		5,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	},
+	{
+		196,
+		6,
+		6,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		5
+	},
+	{
+		197,
+		2,
+		2,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		nil,
+		0.5
+	},
+	{
+		198,
+		3,
+		3,
+		11572 - lc._encryptOffset,
+		2146 - lc._encryptOffset,
+		nil,
+		nil,
+		2
+	},
+	{
+		199,
+		4,
+		4,
+		12231 - lc._encryptOffset,
+		2248 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		200,
+		5,
+		5,
+		12231 - lc._encryptOffset,
+		2248 - lc._encryptOffset,
+		nil,
+		nil,
+		nil,
+		nil,
+		0.5
+	}
+}
+local mapKeyIndex = {
+	k12683825 = 6,
+	k3550409 = 7,
+	k14587939 = 4,
+	k12897536 = 9,
+	k3917261 = 12,
+	k15383712 = 14,
+	k14944842 = 5,
+	k12754944 = 15,
+	k7486299 = 10,
+	k15255765 = 2,
+	k350424 = 11,
+	k2921533 = 13,
+	k1644150 = 1,
+	k923999 = 8,
+	k8655535 = 3
+}
+local mapKeyDimension = {
+	k14944842 = 0,
+	k14587939 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -453
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_DEFENDER_UPGRADE_NAMESID_" .. table[2]]
+		elseif key == "_descSid" then
+			if table[3] == nil then
+				return nil
+			end
+
+			return SID["SID_DEFENDER_UPGRADE_DESCSID_" .. table[3]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -453
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

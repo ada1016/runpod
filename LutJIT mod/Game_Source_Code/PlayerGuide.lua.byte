@@ -1,0 +1,254 @@
+local M = class("PlayerGuide")
+local GUIDE_START_STEP = 1010
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._guideStep = meta.guideStep
+	self._guideTriggerId = meta.guideTriggerId
+	self._lockingGuideTriggers = lc.assignTable(meta, "lockingGuideTriggers")
+	self._finishedGroups = lc.assignTable(meta, "finishedGroups")
+	self._waitGuideTriggers = lc.assignTable(meta, "waitGuideTriggers")
+	self._guideGroup = 0
+end
+
+function M:start()
+	if Client._config.disableGuide then
+		self._guideStep = 0
+	end
+
+	if self._guideTriggerId then
+		local guideTriggerConfig = D._guideTriggerConfig[self._guideTriggerId]
+		guideTriggerConfig = D._guideTriggerMap[guideTriggerConfig._type .. guideTriggerConfig._val .. "MainPanel"]
+
+		if guideTriggerConfig then
+			self._guideTriggerId = guideTriggerConfig._id
+
+			self:save()
+		end
+	end
+
+	if self._guideStep and self._guideStep > 0 then
+		local returnStep = D._guideConfig[self._guideStep]._saveId
+
+		if returnStep == 0 then
+			self:stepAfter(self._guideStep)
+
+			local group = D._guideConfig[self._guideStep]._group
+			self._guideStep = 0
+
+			self:save()
+			self:addFinishedGroups(group)
+		elseif self._guideStep ~= returnStep then
+			self:stepIn(returnStep)
+		end
+	end
+
+	if self._guideStep == nil then
+		self:stepIn(GUIDE_START_STEP)
+
+		self._guideTriggerId = 1
+
+		self:save()
+	end
+end
+
+function M:isWaitingTrigger()
+	return self._guideStep > 0 or self:hasWaitingGuide()
+end
+
+function M:isInGuide()
+	return self._guideStep > 0
+end
+
+function M:addFinishedGroups(group)
+	self._finishedGroups[group] = true
+
+	SimpleEvent.emit("guide.trigger", D.GuideTriggerType.CompleteGuideGroup, group)
+	SimpleEvent.emit("guide.group.finish", group)
+end
+
+function M:finishGroup(group)
+	self:addFinishedGroups(group)
+
+	self._guideStep = 0
+	self._guideGroup = 0
+	self._guideTriggerId = nil
+
+	self:save()
+end
+
+function M:removeFinishedGroup(group)
+	self._finishedGroups[group] = nil
+end
+
+function M:getGuideStep()
+	return self._guideStep
+end
+
+function M:getGuideArgs()
+	return D._guideConfig[self._guideStep]
+end
+
+function M:stepNext()
+	self:stepAfter(self._guideStep)
+
+	local config = D._guideConfig[self._guideStep]
+
+	if config._nextId > 0 then
+		self:stepIn(config._nextId)
+	else
+		local group = self._guideGroup
+
+		self:finishGroup(group)
+
+		if #self._lockingGuideTriggers > 0 then
+			for i = 1, #self._lockingGuideTriggers do
+				if D._guideTriggerConfig[self._lockingGuideTriggers[i]]._requireGroup == group then
+					self:addToWaitGuideTriggers(self._lockingGuideTriggers[i])
+				end
+			end
+		end
+
+		SimpleEvent.emit("guide.complete")
+
+		return false
+	end
+
+	return true
+end
+
+function M:stepIn(stepId)
+	self._guideStep = stepId
+	self._guideGroup = D._guideConfig[stepId]._group
+
+	self:save()
+end
+
+function M:stepAfter(stepId)
+	SimpleEvent.emit("guide.step", stepId)
+	Trace.traceDesign("GuideStep:%s", stepId)
+	Trace.AF_traceGuide(stepId)
+end
+
+function M:getGuideText()
+	local a = D._guideTextConfig[self._guideStep]
+
+	if a then
+		return a._descSid, a._roleId
+	end
+end
+
+function M:isGroupFinished(group)
+	if Client._config.disableGuide then
+		return true
+	end
+
+	if group == D.GuideGroupId.Union and C._appConfig.unionClose then
+		return true
+	end
+
+	if self._finishedGroups[group] then
+		return true
+	end
+
+	return false
+end
+
+function M:getGuideTriggerId()
+	return self._guideTriggerId
+end
+
+function M:tryTriggerAction(triggerType, triggerParam, panel)
+	for _, guideTriggerConfig in pairs(D._guideTriggerConfig) do
+		if guideTriggerConfig._type == triggerType and guideTriggerConfig._val == triggerParam then
+			if Client._config.disableGuide then
+				self:addFinishedGroups(guideTriggerConfig._group)
+
+				return
+			end
+
+			self:triggerGuide(guideTriggerConfig)
+		end
+	end
+end
+
+function M:triggerGuide(guideTriggerConfig)
+	local group = guideTriggerConfig._group
+
+	if self:isGroupFinished(group) then
+		return
+	end
+
+	if guideTriggerConfig._requireGroup ~= 0 and not self:isGroupFinished(guideTriggerConfig._requireGroup) then
+		table.insert(self._lockingGuideTriggers, guideTriggerConfig._id)
+
+		return
+	end
+
+	if self._guideGroup ~= guideTriggerConfig._group then
+		self:addToWaitGuideTriggers(guideTriggerConfig._id)
+		SimpleEvent.emit("guide.pop")
+	end
+
+	return true
+end
+
+function M:hasWaitingGuide()
+	return #self._waitGuideTriggers > 0
+end
+
+function M:tryPopGuide(panel)
+	if self._guideGroup ~= 0 then
+		return
+	end
+
+	for i = 1, #self._waitGuideTriggers do
+		local conf = D._guideTriggerConfig[self._waitGuideTriggers[i]]
+
+		if string.startsWith(conf._panel, panel) then
+			table.remove(self._waitGuideTriggers, i)
+
+			self._guideTriggerId = conf._id
+
+			self:stepIn(conf._guideId)
+
+			return
+		end
+	end
+end
+
+function M:addToWaitGuideTriggers(triggerId)
+	if not table.contains(self._waitGuideTriggers, triggerId) then
+		table.insert(self._waitGuideTriggers, triggerId)
+
+		local guideTriggerConfig = D._guideTriggerConfig[triggerId]
+
+		if guideTriggerConfig._giftResource then
+			for i = 1, #guideTriggerConfig._giftResource, 2 do
+				P._playerAsset:increaseAssetNum(guideTriggerConfig._giftResource[i], guideTriggerConfig._giftResource[i + 1], D.LogWay.guide)
+			end
+		end
+
+		table.sort(self._waitGuideTriggers, function (a, b)
+			return a < b
+		end)
+	end
+end
+
+function M:currrentGroup()
+	return self._guideGroup
+end
+
+function M:isInGroup(group)
+	return self._guideGroup == group
+end
+
+function M:save()
+	self._meta.guideStep = self._guideStep
+	self._meta.guideTriggerId = self._guideTriggerId
+end
+
+return M

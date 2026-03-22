@@ -1,0 +1,461 @@
+local M = class("OpenBoxNewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnBg = Types.Button,
+	btnReturn = Types.Button,
+	btnJump = Types.Button,
+	tfBox = Types.Transform,
+	boxAtor = Types.Animator,
+	btnOpenOne = Types.Button,
+	btnOpenMul = Types.Button,
+	tfBtnOne = Types.Transform,
+	tfBtnMul = Types.Transform,
+	goRewardsContainer = Types.GameObject,
+	tfRewardsParent = Types.Transform,
+	lgRewards = Types.LayoutGroup,
+	tfClickVfx = Types.Transform,
+	tfClickColorfulVfx = Types.Transform,
+	cgDrawBtns = Types.CanvasGroup,
+	cgReturn = Types.CanvasGroup,
+	cgTop = Types.CanvasGroup,
+	cgShowDiscord = Types.CanvasGroup,
+	goShowDiscordShare = Types.GameObject,
+	btnPreviewDiscordShare = Types.Button,
+	dotAtor1 = Types.Animator,
+	dotAtor2 = Types.Animator,
+	dotAtor3 = Types.Animator,
+	dotAtor4 = Types.Animator,
+	goOneChipTips = Types.GameObject,
+	txtOneChipDesc = Types.TMP_Text,
+	goDiscordShare = Types.GameObject
+}
+local ItemWidget = requireLua("ItemWidget")
+local DiscordShareWidget = requireLua("DiscordShareWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._rewards = {}
+	self._dotAtors = {
+		self._dotAtor1,
+		self._dotAtor2,
+		self._dotAtor3,
+		self._dotAtor4
+	}
+end
+
+function M:initPrefabVar()
+	DiscordShareWidget.noCreate(self._goDiscordShare)
+	self._goDiscordShare:setBtnsClick(self)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:dealClickBg()
+	end)
+	self:setClick(self._btnOpenOne, function ()
+		self:drawOne()
+	end)
+	self:setClick(self._btnOpenMul, function ()
+		self:drawTen()
+	end)
+	self:setClick(self._btnReturn, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnPreviewDiscordShare, function ()
+		self:previewShareDiscord()
+	end)
+	self:setClick(self._btnJump, function ()
+		self:jumpOpen()
+	end)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._interval)
+
+	local main = UIManager.getMainPanel()
+
+	if main and main._pages[1] then
+		main._pages[1]._pages[1]:updateDrawText()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:init(boxType, rewards)
+	self._tfRewardsParent:GetChild(0):SetActive(false)
+
+	self._boxType = boxType or D.BoxType.Purple
+	self._rewardsData = rewards or {}
+
+	self:updateUI()
+	self:openBox()
+
+	if lc._isCN then
+		LuaUnity.setTPSprite(self._btnPreviewDiscordShare.transform:GetChild(0):GetComponent("Image"), "general/g_btn_share", true)
+	end
+end
+
+function M:updateCostBtns()
+	local costCid, costNum = nil
+
+	if self._boxType == D.BoxType.Purple then
+		costCid = D.ResType.key_purple
+	elseif self._boxType == D.BoxType.Gold then
+		costCid = D.ResType.key_gold
+	end
+
+	local resultCode = P._playerShop:checkDrawBox(self._boxType, 1)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfBtnOne, costCid, 1)
+	else
+		costCid = D.ResType.diamond
+		costNum = 1 * D._globalConfig._draw_box_cost_diamonds[self._boxType]
+
+		V.loadItemNum(self._tfBtnOne, costCid, costNum)
+	end
+
+	local resultCode = P._playerShop:checkDrawBox(self._boxType, 10)
+
+	if resultCode == ResultCode.OK then
+		V.loadItemNum(self._tfBtnMul, costCid, 10)
+	else
+		costCid = D.ResType.diamond
+		costNum = 10 * D._globalConfig._draw_box_cost_diamonds[self._boxType]
+
+		V.loadItemNum(self._tfBtnMul, costCid, costNum)
+	end
+end
+
+function M:updateUI()
+	local boxImgPath, costCid, costNum = nil
+
+	if self._boxType == D.BoxType.Purple then
+		boxImgPath = "gift/img_box_pur%02d"
+		costCid = D.ResType.key_purple
+	elseif self._boxType == D.BoxType.Gold then
+		boxImgPath = "gift/img_box_yellow%02d"
+		costCid = D.ResType.key_gold
+	end
+
+	local idx = 1
+
+	for i = self._tfBox.childCount - 13, self._tfBox.childCount - 1 do
+		local img = self._tfBox:GetChild(i):GetComponent("Image")
+
+		LuaUnity.setTPSprite(img, string.format(boxImgPath, idx))
+
+		idx = idx + 1
+	end
+end
+
+function M:openBox()
+	Client.playSound("ui_Draw_come")
+
+	self._qualitys = {}
+
+	for i, item in ipairs(self._rewardsData) do
+		local quality = D.toQuality(item[1])
+		self._qualitys[quality] = (self._qualitys[quality] or 0) + 1
+	end
+
+	self._qualityData = {}
+
+	table.toArray(self._qualitys, self._qualityData)
+	table.sort(self._qualityData)
+
+	local specialNum = 0
+
+	for q = D.Quality.Purple, D.Quality.COLORFUL do
+		specialNum = specialNum + (self._qualitys[q] or 0)
+	end
+
+	self._showDiscord = specialNum > 1 or specialNum == 1 and self._qualitys[D.Quality.Purple] == nil
+	self._qualityIdx = 0
+	local startQuality = D.Quality.Green
+	local endQuality = self._qualityData[#self._qualityData]
+	self._qualityChangeNum = endQuality - startQuality + 1
+
+	table.clear(self._qualityData)
+
+	for q = startQuality + 1, endQuality do
+		table.insert(self._qualityData, q)
+	end
+
+	table.insert(self._qualityData, endQuality)
+
+	if #self._rewardsData == 1 then
+		local chipCid = self._rewardsData[#self._rewardsData][1]
+		local conf = D._gemConfig[chipCid]
+		local effectConf = D._gemEffectConfig[conf._effect]
+
+		V.loadChipDescription(self._txtOneChipDesc, effectConf, conf._param, conf._params, true)
+	end
+
+	self:updateCostBtns()
+	self:resetPanel2Start()
+
+	self._rewardIdx = 0
+
+	self._boxAtor:SetInteger("Quality", self._boxType == D.BoxType.Gold and D.Quality.Green or D.Quality.White)
+	self._boxAtor:SetInteger("Status", 1)
+	self._boxAtor:ResetTrigger("TryUpgrade")
+	self._boxAtor:ResetTrigger("Open")
+	self._boxAtor:SetTrigger("Open")
+	self._boxAtor:SetBool("LastClick", false)
+
+	self._lgRewards.childAlignment = #self._rewardsData == 1 and 4 or 0
+end
+
+function M:showRewards()
+	self._goRewardsContainer:SetActive(true)
+
+	self._interval = lc.setInterval(function ()
+		self:showNextReward()
+	end, 0.2)
+end
+
+function M:showNextReward()
+	local idx = self._rewardIdx + 1
+
+	if idx > #self._rewardsData then
+		return
+	end
+
+	self._rewardIdx = idx
+
+	if idx == #self._rewardsData then
+		self._isDone = true
+
+		lc.stopTimer(self._interval)
+		self._cgDrawBtns:DOFade(1, 0.3):SetLink(self.gameObject)
+		self._cgReturn:DOFade(1, 0.3):SetLink(self.gameObject)
+		self._cgTop:DOFade(1, 0.3):SetLink(self.gameObject)
+
+		self._cgDrawBtns.blocksRaycasts = true
+		self._cgReturn.blocksRaycasts = true
+		self._cgTop.blocksRaycasts = true
+
+		self._goShowDiscordShare:SetActive(self._showDiscord)
+		self._btnJump.gameObject:SetActive(false)
+	end
+
+	local rewardData = self._rewardsData[self._rewardIdx]
+	local goItem = self._rewards[self._rewardIdx]
+
+	if goItem == nil then
+		if self._rewardIdx == 1 then
+			goItem = self._tfRewardsParent:GetChild(0).gameObject
+
+			goItem:SetActive(true)
+		else
+			goItem = GameObject.Instantiate(self._tfRewardsParent:GetChild(0).gameObject, self._tfRewardsParent)
+		end
+
+		self._rewards[self._rewardIdx] = goItem
+
+		ItemWidget.noCreate(goItem)
+		self:setClick(goItem._btnClick, function ()
+			goItem:rewardclickCallback()
+		end)
+	end
+
+	self._rewards[self._rewardIdx]:SetActive(true)
+	self._rewards[self._rewardIdx]:setGetAnim(true)
+	self._rewards[self._rewardIdx]:init(rewardData[1], rewardData[2])
+end
+
+function M:resetPanel2Start()
+	self._goDiscordShare:reset()
+
+	self._isDone = false
+	self._isOpened = false
+
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._interval)
+	self._goRewardsContainer:SetActive(false)
+	self._goShowDiscordShare:SetActive(false)
+	self:showShareStatus(false)
+	self._btnJump.gameObject:SetActive(true)
+	self._cgDrawBtns:DOKill()
+
+	self._cgDrawBtns.alpha = 0
+	self._cgDrawBtns.blocksRaycasts = false
+
+	self._cgReturn:DOKill()
+
+	self._cgReturn.alpha = 0
+	self._cgReturn.blocksRaycasts = false
+
+	self._cgTop:DOKill()
+
+	self._cgTop.alpha = 0
+	self._cgTop.blocksRaycasts = false
+
+	for i, v in ipairs(self._rewards) do
+		v:SetActive(false)
+	end
+end
+
+function M:drawOne()
+	Client.checkNetworkAsync(function ()
+		self:draw(1)
+	end)
+end
+
+function M:drawTen()
+	Client.checkNetworkAsync(function ()
+		self:draw(10)
+	end)
+end
+
+function M:draw(num)
+	local useDiamond = false
+	local diamondCost = D._globalConfig._draw_box_cost_diamonds[self._boxType] * num
+	local ret = P._playerShop:checkDrawBox(self._boxType, num)
+
+	if ret ~= ResultCode.OK then
+		useDiamond = true
+		local ret = P._playerShop:checkDrawBox(self._boxType, num, true)
+
+		if ret ~= ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+				self:updateCostBtns()
+			end)
+
+			return
+		end
+	end
+
+	if useDiamond then
+		local costNum = diamondCost
+		local ret = V.tryShowDiamondConfirm(D.ResType.diamond, costNum, function ()
+			self:dealDrawLogic(num)
+		end)
+
+		if ret then
+			return
+		end
+	end
+
+	self:dealDrawLogic(num)
+end
+
+function M:dealDrawLogic(num)
+	local useDiamond = false
+	local diamondCost = D._globalConfig._draw_box_cost_diamonds[self._boxType] * num
+	local ret = P._playerShop:checkDrawBox(self._boxType, num)
+
+	if ret ~= ResultCode.OK then
+		useDiamond = true
+		local ret = P._playerShop:checkDrawBox(self._boxType, num, true)
+
+		if ret ~= ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+				self:updateCostBtns()
+			end)
+
+			return
+		end
+	end
+
+	self._rewardsData = P._playerShop:drawBox(self._boxType, num)
+
+	self:openBox()
+end
+
+function M:dealClickBg()
+	if self._qualityIdx < #self._qualityData then
+		self._qualityIdx = self._qualityIdx + 1
+		local quality = self._qualityData[self._qualityIdx]
+
+		self._boxAtor:SetInteger("Status", 2)
+		self._boxAtor:SetInteger("Quality", quality)
+		self._boxAtor:SetBool("LastClick", self._qualityIdx == self._qualityChangeNum)
+		self._boxAtor:ResetTrigger("TryUpgrade")
+		self._boxAtor:SetTrigger("TryUpgrade")
+
+		if self._qualityIdx ~= self._qualityChangeNum then
+			Client.playSound("ui_Draw_2")
+
+			if quality == D.Quality.COLORFUL then
+				V.playChildEffectsFast(self._tfClickColorfulVfx)
+			else
+				V.playChildEffectsFast(self._tfClickVfx)
+			end
+		else
+			if self._qualityData[self._qualityIdx] == D.Quality.COLORFUL then
+				Client.playSound("ui_Draw_open_color")
+			else
+				Client.playSound("ui_Draw_open")
+			end
+
+			self._waitOpenBoxAnim = lc.setTimer(function ()
+				self:showRewards()
+			end, 1.2)
+			self._isOpened = true
+		end
+	end
+end
+
+function M:jumpOpen()
+	if self._isDone then
+		return
+	end
+
+	if self._qualityIdx ~= self._qualityChangeNum then
+		if self._qualityData[self._qualityIdx] == D.Quality.COLORFUL then
+			Client.playSound("ui_Draw_open_skip")
+		else
+			Client.playSound("ui_Draw_open_skip")
+		end
+	end
+
+	self._qualityIdx = self._qualityChangeNum
+
+	self._boxAtor:SetInteger("Status", 3)
+	MainGameRoot:hideGlobalMask()
+	self._goRewardsContainer:SetActive(true)
+	self._boxAtor:SetInteger("Quality", self._qualityData[#self._qualityData])
+
+	if self._rewardIdx < #self._rewardsData then
+		lc.stopTimer(self._waitOpenBoxAnim)
+		lc.stopTimer(self._interval)
+
+		for i = self._rewardIdx + 1, #self._rewardsData do
+			self:showNextReward()
+		end
+	end
+
+	V.playChildEffectsFast(self._tfClickVfx)
+
+	self._isDone = true
+end
+
+function M:previewShareDiscord()
+	self:showShareStatus(true)
+	self._goDiscordShare:previewShareDiscord(function ()
+		self:showShareStatus(false)
+	end)
+end
+
+function M:showShareStatus(show)
+	self._sharing = show
+	self._cgTop.alpha = show and 0 or 1
+	self._cgTop.blocksRaycasts = not show
+	self._cgDrawBtns.alpha = show and 0 or 1
+	self._cgDrawBtns.blocksRaycasts = not show
+	self._cgReturn.alpha = show and 0 or 1
+	self._cgReturn.blocksRaycasts = not show
+	self._cgShowDiscord.alpha = show and 0 or 1
+	self._cgShowDiscord.blocksRaycasts = not show
+
+	self._goOneChipTips:SetActive(#self._rewardsData == 1 and show)
+end
+
+return M

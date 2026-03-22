@@ -1,0 +1,560 @@
+local M = class("NewbieGiftPanel", requireLua("BasePanel"))
+local ItemWidget = requireLua("ItemWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	tfTabParent = Types.Transform,
+	goTabLine = Types.GameObject,
+	goTab = Types.GameObject,
+	goSpineWidget = Types.GameObject,
+	goWeapons = Types.GameObject,
+	goBigReward = Types.GameObject,
+	goDomeShield = Types.GameObject,
+	goRangerPack1 = Types.GameObject,
+	goDesc1 = Types.GameObject,
+	goDesc2 = Types.GameObject,
+	rimgIcon = Types.RawImage,
+	rimgIconMask = Types.RawImage,
+	rimgIconShadow = Types.RawImage,
+	imgIcon1 = Types.Image,
+	imgIconBg1 = Types.Image,
+	imgIconBgLight11 = Types.Image,
+	imgIconBgLight12 = Types.Image,
+	imgIcon2 = Types.Image,
+	imgIconBg2 = Types.Image,
+	imgIconBgLight21 = Types.Image,
+	imgIconBgLight22 = Types.Image,
+	imgShowReward1 = Types.RawImage,
+	imgShowReward2 = Types.Image,
+	imgShowReward3 = Types.Image,
+	tfRewardsDay1 = Types.Transform,
+	tfRewardsDay2 = Types.Transform,
+	tfRewardsDay3 = Types.Transform,
+	btnClaim = Types.Button,
+	imgClaim = Types.Image,
+	imgClaimLight = Types.Image,
+	textClaim = Types.TMP_Text,
+	dotClaim = Types.GameObject,
+	txtExtraDesc = Types.TMP_Text
+}
+local tabColors = {
+	{
+		text = "C34F63",
+		bglight = "FF8AA2_80",
+		textTimeBg = "1D0909_157",
+		textTime = "C34F63"
+	},
+	{
+		text = "682732",
+		bglight = "FF8AA2_15",
+		textTimeBg = "1D0909_157",
+		textTime = "702C36"
+	}
+}
+local giftShowCfgs = {
+	[D.GiftId.Newbie1_origin] = {
+		small1 = 10006,
+		weight = 100,
+		small2 = 110001,
+		big = {
+			"gift_icon_03",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC2
+	},
+	[D.GiftId.Newbie1_forever] = {
+		small1 = 10006,
+		weight = 90,
+		small2 = 110001,
+		big = {
+			"gift_icon_03",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC2
+	},
+	[D.GiftId.Newbie1_CN_1] = {
+		small1 = 110002,
+		weight = 85,
+		small2 = 110005,
+		big = {
+			"gift_icon_04",
+			"gift_icon_02_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC1_1
+	},
+	[D.GiftId.Newbie2a] = {
+		small1 = 11000,
+		weight = 80,
+		small2 = 10006,
+		big = {
+			"gift_icon_03",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC3
+	},
+	[D.GiftId.Newbie2b] = {
+		small1 = 11000,
+		weight = 70,
+		showWeapon = true,
+		small2 = 10006,
+		big = {
+			"gift_icon_03",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC3_AB1
+	},
+	[D.GiftId.Newbie1_CN_2] = {
+		small1 = 10006,
+		weight = 65,
+		small2 = 110007,
+		big = {
+			"gift_icon_04_2",
+			"gift_icon_04_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC1_2
+	},
+	[D.GiftId.Newbie2c] = {
+		small1 = 11000,
+		weight = 60,
+		showWeapon = true,
+		small2 = 10006,
+		big = {
+			"gift_icon_03",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC3_AB1
+	},
+	[D.GiftId.Newbie3] = {
+		small1 = 10008,
+		showSpine = true,
+		weight = 50,
+		small2 = 13006,
+		big = {
+			"gift_icon_04",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC5
+	},
+	[D.GiftId.Newbie4] = {
+		small1 = 10008,
+		weight = 40,
+		showDomeShield = true,
+		small2 = 13006,
+		big = {
+			"gift_icon_04",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC6
+	},
+	[D.GiftId.Newbie5] = {
+		showRanger = true,
+		weight = 1,
+		big = {
+			"gift_icon_04",
+			"gift_icon_03_mask"
+		},
+		extraDesc = SID.GIFT_NEWBIE_DESC7
+	}
+}
+
+setmetatable(giftShowCfgs, {
+	__index = function (tb, idx)
+		return giftShowCfgs[D.GiftId.Newbie1]
+	end
+})
+
+local QualityBg = {
+	[3] = {
+		"gift/gift_bg_05",
+		"28EEFF_107"
+	},
+	[4] = {
+		"gift/gift_bg_06",
+		"F528FF_194"
+	},
+	[5] = {
+		"gift/gift_bg_11",
+		"FFE028_194"
+	},
+	[6] = {
+		"gift/gift_bg_42",
+		"ffa0ab_194"
+	}
+}
+
+setmetatable(QualityBg, {
+	__index = function (tb, idx)
+		return QualityBg[3]
+	end
+})
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+
+	for i = 1, 3 do
+		local tf = self["_tfRewardsDay" .. i]
+		self._goRewards[i] = {}
+
+		for j = 1, tf.childCount do
+			self._goRewards[i][j] = tf:GetChild(j - 1).gameObject
+
+			ItemWidget.noCreate(self._goRewards[i][j])
+		end
+	end
+
+	self._textCountdowns = {}
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+	self:on("purchase.inited", function ()
+		self:updateClaimBtn()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaim, function ()
+		self:dealClaimBtn()
+	end)
+end
+
+function M:init(showGiftId, isLogin)
+	self._showGiftIds = {}
+
+	for k, giftId in pairs(P._playerGift:getGiftsByType(D.GiftType.Newbie)) do
+		if P._playerGift:canShowGift(giftId) then
+			table.insert(self._showGiftIds, giftId)
+		end
+	end
+
+	table.sort(self._showGiftIds, function (a, b)
+		if giftShowCfgs[a].weight ~= giftShowCfgs[b].weight then
+			return giftShowCfgs[b].weight < giftShowCfgs[a].weight
+		end
+
+		return a < b
+	end)
+
+	local firstReddots = {}
+	local reddots = {}
+
+	for i, giftId in ipairs(self._showGiftIds) do
+		local haveRed = P._playerGift:haveReddot(giftId)
+		local haveFirstRed = P._playerGift:haveFirstReddot(giftId)
+
+		if haveRed then
+			reddots[#reddots + 1] = i
+		end
+
+		if haveFirstRed then
+			firstReddots[#firstReddots + 1] = i
+		end
+	end
+
+	local defaultTabIdx = firstReddots[1] or reddots[1] or 1
+	self._tabIdx = defaultTabIdx
+	self._showGiftId = self._showGiftIds[self._tabIdx]
+
+	if P._playerGift:canPopFace(D.GiftType.Newbie) then
+		P._playerGift:recordPopFace(D.GiftType.Newbie)
+	end
+
+	self:dealUpdateReddot()
+	self:initTabs()
+
+	for i = 1, #self._showGiftIds do
+		self:refreshTab(i, true)
+	end
+
+	self:updateTabRewards()
+	self:updateBigRewards()
+	self:updateClaimBtn()
+	Client.playSound("ui_Open_Gift_1")
+	self:clearTimer()
+
+	self._interval = lc.setInterval(function ()
+		self:updateCountDownText()
+	end, 1)
+
+	self._interval.func()
+end
+
+function M:closePanel()
+	self:clearTimer()
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	self:clearTimer()
+	M.super.OnDestroy(self)
+end
+
+function M:updateUI()
+	self:refreshTabs()
+	self:updateClaimBtn()
+	self:updateTabRewards()
+end
+
+function M:clearTimer()
+	lc.stopTimer(self._interval)
+end
+
+function M:initTabs()
+	local nums = #self._showGiftIds
+	local tabChildCounts = self._tfTabParent.childCount
+	local expectChildCounts = nums
+
+	if tabChildCounts < expectChildCounts then
+		local need = expectChildCounts - tabChildCounts
+
+		for i = 1, need do
+			local goTab = GameObject.Instantiate(self._goTab, self._tfTabParent)
+
+			goTab:SetActive(true)
+		end
+	elseif expectChildCounts < tabChildCounts then
+		for i = 1, tabChildCounts do
+			self._tfTabParent:GetChild(i - 1):SetActive(i <= expectChildCounts)
+		end
+	end
+end
+
+function M:refreshTabs()
+	local nums = #self._showGiftIds
+
+	for i = 1, nums do
+		self:refreshTab(i)
+	end
+
+	self:updateTabCountdown()
+end
+
+function M:refreshTab(idx, init)
+	local selected = self._tabIdx == idx
+	local cfg = selected and tabColors[1] or tabColors[2]
+	local giftId = self._showGiftIds[idx]
+	local tfTab = self._tfTabParent:GetChild(idx - 1)
+	local tfBgs = tfTab:GetChild(0)
+	local tfTexts = tfTab:GetChild(1)
+	local goSelect = tfBgs:GetChild(1)
+	local goNotSelect = tfBgs:GetChild(2)
+
+	goSelect:SetActive(selected)
+	goNotSelect:SetActive(not selected)
+
+	local textTab = tfTexts:GetChild(0):GetComponent("TextMeshProUGUI")
+	local imgCountDown = tfTexts:GetChild(1):GetComponent("Image")
+	local textCountdownParent = tfTexts:GetChild(1)
+	local textCountDown = textCountdownParent:GetChild(0):GetComponent("TextMeshProUGUI")
+	self._textCountdowns[idx] = textCountDown
+
+	textCountdownParent:SetActive(P._playerGift:isCountdownGift(giftId) and not P._playerGift:isBought(giftId) and not P._playerGift:isExpired(giftId))
+
+	local dot = tfTab:GetChild(2)
+
+	dot:SetActive(P._playerGift:haveReddot(giftId))
+	textTab:SetLocalize(D._giftConfig[giftId]._nameSid)
+
+	if init then
+		self:setClickWithoutAction(tfTab:GetComponent("Button"), function ()
+			self:changTab(idx)
+		end)
+	end
+
+	textTab.color = Color.str2Static(cfg.text)
+	textCountDown.color = Color.str2Static(cfg.textTime)
+	imgCountDown.color = Color.str2Static(cfg.textTimeBg)
+end
+
+function M:changTab(tabIdx)
+	if tabIdx == self._tabIdx then
+		return
+	end
+
+	local oldTabIdx = self._tabIdx
+	self._tabIdx = tabIdx
+	self._showGiftId = self._showGiftIds[self._tabIdx]
+
+	if oldTabIdx then
+		self:refreshTab(oldTabIdx)
+	end
+
+	self:dealUpdateReddot()
+	self:refreshTab(tabIdx)
+	self:updateTabRewards()
+	self:updateClaimBtn()
+	self:updateBigRewards()
+end
+
+function M:dealUpdateReddot()
+	local needUpdateReddot = false
+
+	if P._playerGift:haveDailyReddot(self._showGiftId) then
+		P._playerGift:recordDailyReddot(self._showGiftId)
+
+		needUpdateReddot = true
+	end
+
+	if P._playerGift:haveFirstReddot(self._showGiftId) then
+		P._playerGift:removeFirstReddot(self._showGiftId)
+
+		needUpdateReddot = true
+	end
+
+	if needUpdateReddot then
+		RedDotManager.update("city.home.newbie")
+	end
+end
+
+function M:updateTabRewards()
+	local idx = self._tabIdx
+	local showGiftId = self._showGiftId
+	local isBought = P._playerGift:isBought(showGiftId)
+
+	for i = 1, 3 do
+		local cids, nums = P._playerGift:readRewards(showGiftId, i)
+		local claimed = P._playerGift:isNewbieClaimed(showGiftId, i)
+		local canClaim = P._playerGift:isNewbieCanClaim(showGiftId, i)
+
+		for j = 1, #cids do
+			local obj = self._goRewards[i][j]
+
+			obj:init(cids[j], nums[j])
+			obj:setClaimed(claimed)
+			obj:setCanClaim(isBought and canClaim and not claimed)
+			self:setClickWithoutAction(obj._btnClick, function ()
+				obj:rewardclickCallback()
+			end)
+		end
+	end
+end
+
+function M:updateBigRewards()
+	local showGiftId = self._showGiftId
+	local showCfgs = giftShowCfgs[showGiftId]
+	local showBigRewards = not showCfgs.showSpine and not showCfgs.showWeapon and not showCfgs.showRanger
+
+	self._goSpineWidget:SetActive(showCfgs.showSpine or false)
+	self._goWeapons:SetActive(showCfgs.showWeapon or false)
+	self._goBigReward:SetActive(showBigRewards)
+	self._goDomeShield:SetActive(showCfgs.showDomeShield or false)
+	self._goRangerPack1:SetActive(showCfgs.showRanger or false)
+	self._goDesc1:SetActive(showCfgs.showSpine == nil)
+
+	if showBigRewards then
+		LuaUnity.setTexture(self._rimgIcon, showCfgs.big[1], true)
+		LuaUnity.setTexture(self._rimgIconMask, showCfgs.big[2], true)
+		LuaUnity.setTexture(self._rimgIconShadow, showCfgs.big[1])
+
+		local cid = showCfgs.small1
+		local quality = D.toQuality(cid)
+
+		LuaUnity.setTPSprite(self._imgIcon1, string.format("item/item_" .. cid), true)
+		LuaUnity.setTPSprite(self._imgIconBg1, QualityBg[quality][1], true)
+
+		self._imgIconBgLight11.color = Color.str2Static(QualityBg[quality][2])
+		self._imgIconBgLight12.color = Color.str2Static(QualityBg[quality][2])
+		local cid = showCfgs.small2
+		local quality = D.toQuality(cid)
+
+		LuaUnity.setTPSprite(self._imgIcon2, string.format("item/item_" .. cid), true)
+		LuaUnity.setTPSprite(self._imgIconBg2, QualityBg[quality][1], true)
+
+		self._imgIconBgLight21.color = Color.str2Static(QualityBg[quality][2])
+		self._imgIconBgLight22.color = Color.str2Static(QualityBg[quality][2])
+	end
+
+	if showCfgs.extraDesc then
+		self._txtExtraDesc:SetLocalize(showCfgs.extraDesc)
+	end
+end
+
+function M:updateClaimBtn()
+	local idx = self._tabIdx
+	local showGiftId = self._showGiftId
+
+	if P._playerGift:isBought(showGiftId) then
+		if P._playerGift:isNewbieTodayClaimed(showGiftId) then
+			self:updateBtnCountdown()
+
+			self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+			self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+		else
+			self._textClaim:SetLocalize(SID.STR_CLAIM)
+
+			self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+			self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+		end
+	else
+		self._textClaim.text = P._playerStore:getDisplayPrice(P._playerGift:readIapId(showGiftId))
+		self._imgClaim.color = Color.str2Static(V.COMMON_COLOR.btn_green)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_green_light)
+	end
+
+	self._dotClaim:SetActive(P._playerGift:isBought(showGiftId) and not P._playerGift:isNewbieTodayClaimed(showGiftId))
+end
+
+function M:updateCountDownText()
+	self:updateBtnCountdown()
+	self:updateTabCountdown()
+end
+
+function M:updateBtnCountdown()
+	local showGiftId = self._showGiftId
+
+	if P._playerGift:isBought(showGiftId) and P._playerGift:isNewbieTodayClaimed(showGiftId) and not P._playerGift:isClaimed(showGiftId) then
+		self._textClaim.text = V.formatTimeS2HMS(Client.getTodayZeroTimestamp(1) - Client.getCurTime())
+	end
+end
+
+function M:updateTabCountdown()
+	for i, v in ipairs(self._showGiftIds) do
+		local giftId = self._showGiftIds[i]
+
+		if P._playerGift:isCountdownGift(giftId) and self._textCountdowns[i] then
+			local seconds = P._playerGift:getExpireTime(giftId) - Client.getCurTime()
+
+			V.formatLeftTime(self._textCountdowns[i], seconds)
+		end
+	end
+end
+
+function M:dealClaimBtn()
+	local idx = self._tabIdx
+	local showGiftId = self._showGiftId
+
+	if not P._playerGift:isBought(showGiftId) then
+		C.tryPurchase(P._playerGift:readIapId(showGiftId), function ()
+			self:updateClaimBtn()
+			self:updateTabRewards()
+			self:refreshTab(idx)
+			RedDotManager.update("city.home.newbie")
+		end, D.PurchaseChannel.Main)
+
+		return
+	end
+
+	local isAllClaimed = P._playerGift:isClaimed(showGiftId)
+
+	if isAllClaimed then
+		return
+	end
+
+	local claimed, rewards = P._playerGift:tryClaimRewards(showGiftId)
+
+	if claimed == ResultCode.OK then
+		V.showRewardClaimPanel(rewards)
+		self:updateClaimBtn()
+		self:refreshTab(idx)
+		self:updateTabRewards()
+	end
+end
+
+return M

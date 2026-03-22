@@ -1,0 +1,88 @@
+local M = class("SparkScoutTemporaryCardsPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	scroll1 = Types.ScrollRect,
+	tfCardsArea1 = Types.Transform,
+	goNone1 = Types.GameObject,
+	btnChipOverview1 = Types.Button,
+	scroll2 = Types.ScrollRect,
+	tfCardsArea2 = Types.Transform,
+	goNone2 = Types.GameObject,
+	btnChipOverview2 = Types.Button
+}
+local ArkRebuildCardWidget = requireLua("ArkRebuildCardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	self._btnChipOverview1.gameObject:SetActive(false)
+	self._btnChipOverview2.gameObject:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClick(self._btnClose, function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(ignoreRevert)
+	self._ignoreRevert = ignoreRevert
+
+	self:updateUI()
+end
+
+function M:closePanel()
+	if not self._ignoreRevert then
+		BattleManager:revertStopTime()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:updateUI()
+	self:updateCards(BattleManager:getSession(2), self._tfCardsArea1, self._goNone1, self._btnChipOverview1)
+	self:updateCards(BattleManager:getSession(1), self._tfCardsArea2, self._goNone2, self._btnChipOverview2)
+end
+
+function M:updateCards(battleSession, tfContainer, goNone, btnChipOverview)
+	local cards = battleSession._battleRouge:getRougeSelectList() or {}
+	local weaponCardCount = {}
+	local defaultCardNum = #D._sparkScoutWeaponCardConfig[101]._cardIds
+	local isEmpty = true
+	local pvpWeapons = battleSession:getMatchData().pvpWeapons
+
+	for _, card in ipairs(cards) do
+		local conf = D._battleRougeCardConfig[card]
+		local weaponId = conf._belongWeapon
+
+		if weaponId ~= card then
+			weaponCardCount[weaponId] = (weaponCardCount[weaponId] or 0) + 1
+
+			if defaultCardNum < weaponCardCount[weaponId] then
+				local widget = ArkRebuildCardWidget.create(tfContainer)
+
+				widget:updateUI(card)
+				widget:setFront()
+
+				isEmpty = false
+
+				for i = 1, 9 do
+					if weaponId == pvpWeapons[math.floor((i - 1) / 3) + 1][(i - 1) % 3 + 1] then
+						widget:showGroup(math.floor((i - 1) / 3) + 1)
+					end
+				end
+
+				widget._goLv:SetActive(false)
+				self:setClick(widget._btnClick, function ()
+					UIManager.openPanel(PrefabDefine.WeaponTreePanel, card, true)
+				end)
+			end
+		end
+	end
+
+	goNone:SetActive(isEmpty)
+	self:setClick(btnChipOverview, function ()
+		UIManager.openPanel(PrefabDefine.ChipAttributePanel, battleSession:getMatchData().gemEffects)
+	end)
+end
+
+return M

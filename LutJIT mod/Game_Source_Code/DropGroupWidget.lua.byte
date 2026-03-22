@@ -1,0 +1,62 @@
+local M = class("DropGroupWidget")
+local BG_COLORS = {
+	"162E30_103",
+	"122527"
+}
+local DropInfoWidget = requireLua("DropInfoWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DropGroupWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(title, dropProbilities)
+	self._expand = true
+
+	self._txtTitle:SetLocalize(title)
+
+	local totalProblility = 0
+	local childCount = self._tfContainer.childCount
+
+	for i = 1, #dropProbilities do
+		local dropProbility = dropProbilities[i]
+		local dropInfoWidget = nil
+
+		if i <= childCount then
+			dropInfoWidget = self._tfContainer:GetChild(i - 1).gameObject
+		else
+			dropInfoWidget = DropInfoWidget.create(self._tfContainer)
+		end
+
+		dropInfoWidget:init(dropProbility[1], dropProbility[2])
+
+		totalProblility = totalProblility + dropProbility[2]
+
+		dropInfoWidget:setBgColor(BG_COLORS[i % #BG_COLORS + 1])
+	end
+
+	self._txtProbility.text = string.format("%.2f%%", totalProblility * 100)
+
+	self._tfContainer:SetActive(true)
+	lc.setLocalEulerAngles(self._goArrow, 0, 0, 180)
+end
+
+function M:setExpandClick(panel)
+	panel:setClick(self._btnClick, function ()
+		self._expand = not self._expand
+
+		if self._expand then
+			self._tfContainer:SetActive(true)
+			lc.setLocalEulerAngles(self._goArrow, 0, 0, 180)
+		else
+			self._tfContainer:SetActive(false)
+			lc.setLocalEulerAngles(self._goArrow, 0, 0, 270)
+		end
+	end)
+end
+
+return M

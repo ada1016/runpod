@@ -1,0 +1,218 @@
+local M = class("ExchangeResourcePanel", requireLua("BasePanel"))
+M.args = {
+	goRes = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtItemTitle = Types.TMP_Text,
+	goItemWidget = Types.Button,
+	btnPlus = Types.Button,
+	btnSub = Types.Button,
+	btnExchange = Types.Button,
+	txtLeftNum = Types.TMP_Text,
+	goLeftArea = Types.GameObject,
+	txtExchangeNum = Types.TMP_Text,
+	txtExchangeCostNum = Types.TMP_Text,
+	goTipArea = Types.GameObject,
+	txtTip = Types.TMP_Text,
+	textCloseTip = Types.TMP_Text,
+	btnMin = Types.Button,
+	btnMax = Types.Button
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	ItemWidget.noCreate(self._goItemWidget)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnPlus, function ()
+		self:updateValue(self._value + 1)
+	end)
+	self:setClick(self._btnSub, function ()
+		self:updateValue(self._value - 1)
+	end)
+	self:setClick(self._btnMin, function ()
+		self:updateValue(self._minValue)
+	end)
+	self:setClick(self._btnMax, function ()
+		self:updateValue(self._maxValue())
+	end)
+	self:setClick(self._btnExchange, function ()
+		self:dealExchange()
+	end)
+	self:setClickWithoutAction(self._btnMask, function ()
+		if self._canWhiteClose then
+			self:closePanel()
+		end
+	end)
+end
+
+function M:addEvents()
+	self:on("iap.exchange.success", function ()
+		self:closePanel()
+	end)
+	self:on("exchange.reset", function ()
+		self:updateUI()
+	end)
+end
+
+function M:init(exchangeId, params)
+	self._lbShowRes = LuaHelper.GetLuaBehaviour(self._goRes)
+	self._canWhiteClose = false
+
+	if params then
+		if params.titleSid then
+			self._txtTitle:SetLocalize(params.titleSid)
+		end
+
+		self._exchangeLimitFunc = params.exchangeLimitFunc
+		self._exchangeDealFunc = params.exchangeDealFunc
+		self._exchangeCheckFunc = params.exchangeCheckFunc
+		self._exchangeNumCheckFunc = params.exchangeNumCheckFunc
+		self._expectExchangeNum = params.expectExchangeNum
+	end
+
+	self._expectExchangeNum = self._expectExchangeNum or 1
+
+	self._textCloseTip.gameObject:SetActive(self._canWhiteClose == true)
+
+	self._exchangeId = exchangeId
+	self._costCid, self._costNum = P._playerExchange:readExchangeCost(exchangeId)
+	self._getCid, self._getNum = P._playerExchange:readExchangeGain(exchangeId)
+
+	self._lbShowRes:update(self._costCid)
+	self:setClick(self._goItemWidget._btnClick, function ()
+		self._goItemWidget:rewardclickCallback()
+	end)
+	self:initUI()
+end
+
+function M:initUI()
+	self._txtItemTitle:SetLocalize(D._itemConfig[self._getCid]._nameSid)
+	self._goItemWidget:init(self._getCid, self._getNum)
+	self:updateLimit()
+	V.loadItemNumWithLight(self._btnExchange.transform, self._costCid, self._costNum)
+
+	if self._exchangeId == D.ExchangeId.Energy3 then
+		self._goTipArea:SetActive(true)
+		self._txtTip:SetLocalize(SID.TIP_STORE_ENERGY, D._exchangeConfig[self._exchangeId]._buyLimit)
+	else
+		self._goTipArea:SetActive(false)
+	end
+
+	self:updateValue(self._expectExchangeNum)
+end
+
+function M:updateLimit()
+	local maxNum = 0
+
+	if self._exchangeLimitFunc then
+		maxNum = self._exchangeLimitFunc()
+	else
+		local limitNum = P._playerExchange:readExchangeBuyLimit(self._exchangeId)
+		self._isUnlimitedExchange = limitNum == -1
+		maxNum = P._playerExchange:getLeftExchangeCount(self._exchangeId)
+	end
+
+	self._exchangeLimitNum = ConfusedNumber.create(maxNum, "exchangeResourceLimit")
+
+	self._goLeftArea:SetActive(not self._isUnlimitedExchange)
+
+	if not self._isUnlimitedExchange then
+		self._txtLeftNum:SetLocalize(SID.EXCHANGE_LEFT, self._exchangeLimitNum())
+	end
+
+	self._minValue = 1
+	maxNum = math.max(maxNum, self._minValue, 1)
+	self._maxValue = ConfusedNumber.create(maxNum, "exchangeResourceMax")
+end
+
+function M:updateUI()
+	self:updateLimit()
+	self:updateValue(self._value)
+end
+
+function M:updateValue(num)
+	if self._maxValue() < num then
+		num = self._maxValue()
+	end
+
+	if num < self._minValue then
+		num = self._minValue
+	end
+
+	self._value = Mathf.Clamp(num, self._minValue, self._maxValue())
+	self._btnPlus.enabled = self._value < self._maxValue()
+	self._btnSub.enabled = self._minValue < self._value
+	self._txtExchangeNum.text = self._value
+
+	V.loadItemNumWithLight(self._btnExchange.transform, self._costCid, self._costNum * self._value)
+end
+
+function M:dealExchange()
+	if self._value <= 0 then
+		V.showResultCode(ResultCode.EXCHANGE_NUM_MAX)
+
+		return
+	end
+
+	if self._maxValue() < self._value then
+		return
+	end
+
+	if self._exchangeCheckFunc then
+		local resultCode = self._exchangeCheckFunc()
+
+		if resultCode ~= ResultCode.OK then
+			self:closePanel()
+
+			return
+		end
+	end
+
+	local resultCode, param = P._playerExchange:checkExchange(self._exchangeId, self._value)
+
+	if resultCode ~= ResultCode.OK then
+		V.showResultCode(resultCode, param)
+
+		return
+	end
+
+	if self._exchangeNumCheckFunc then
+		local result = self._exchangeNumCheckFunc(self._value)
+
+		if not result then
+			V.showResultCode(ResultCode.EXCHANGE_NUM_MAX)
+
+			return
+		end
+	end
+
+	local costNum = self._costNum * self._value
+	local ret = V.tryShowDiamondConfirm(self._costCid, costNum, function ()
+		P._playerExchange:tryExchange(self._exchangeId, self._value, function (rewards)
+			if self._exchangeDealFunc then
+				self._exchangeDealFunc(self._value)
+			end
+
+			V.showRewardClaimPanel(rewards)
+			self:closePanel()
+		end)
+	end)
+
+	if not ret then
+		P._playerExchange:tryExchange(self._exchangeId, self._value, function (rewards)
+			if self._exchangeDealFunc then
+				self._exchangeDealFunc(self._value)
+			end
+
+			V.showRewardClaimPanel(rewards)
+			self:closePanel()
+		end)
+	end
+end
+
+return M

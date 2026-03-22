@@ -1,0 +1,72 @@
+local string = string
+local M = declare("Network", {})
+local this = M
+local LCLuaSocket = requireLua("LCLuaSocket")
+M.SocketId = {
+	game = 1,
+	union = 2
+}
+local bytes = nil
+local length = 0
+local ret, msg = nil
+bytes, length = LuaHelper.FileReadProtobuf("Data.proto.bin", 0)
+ret, msg = pb.loadbytes(bytes, length)
+bytes, length = LuaHelper.FileReadProtobuf("Msg.proto.bin", 0)
+ret, msg = pb.loadbytes(bytes, length)
+bytes, length = LuaHelper.FileReadProtobuf("Game.proto.bin", 0)
+ret, msg = pb.loadbytes(bytes, length)
+
+function M:init(host, timeoutSeconds)
+	self._luaSockets = {}
+	self._cbFuncs = {}
+	self._cbRespNames = {}
+	self._luaSockets[M.SocketId.game] = LCLuaSocket.new(M.SocketId.game, host, timeoutSeconds)
+	self._gameSocket = self._luaSockets[M.SocketId.game]
+
+	self._gameSocket:connect()
+end
+
+function M:destroy()
+	if self._luaSockets == nil then
+		return
+	end
+
+	for i = 1, #self._luaSockets do
+		local luaSocket = self._luaSockets[i]
+
+		luaSocket:destroy()
+	end
+end
+
+function M:retryGameConnect()
+	self._gameSocket:tryRecoverAfterError()
+end
+
+function M.onOpened(id)
+	local self = this
+
+	self._luaSockets[id]:onOpened()
+end
+
+function M.onError(id, state)
+	local self = this
+
+	self._luaSockets[id]:onError(state)
+end
+
+function M.onClosed(id)
+	local self = this
+
+	self._luaSockets[id]:onClosed()
+end
+
+function M.OnMessage(id, buffer)
+	local self = this
+
+	self._luaSockets[id]:OnMessage(buffer)
+end
+
+function M.onStateException(id, msg)
+end
+
+return M

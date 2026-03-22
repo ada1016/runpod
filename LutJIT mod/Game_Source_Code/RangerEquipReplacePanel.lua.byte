@@ -1,0 +1,153 @@
+local M = class("RangerEquipReplacePanel", requireLua("BasePanel"))
+local Types = Types
+local Equip = requireLua("Equip")
+M.args = {
+	btnBg = Types.Button,
+	btnReplace = Types.Button,
+	txtReplace = Types.TMP_Text,
+	btnRefine = Types.Button,
+	btnLock = Types.Button,
+	imgLock = Types.Image,
+	btnDown = Types.Button,
+	goAttributeLeft = Types.GameObject,
+	goAttributeRight = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnRefine, function ()
+		if P._playerRanger:isRangerEquipLocked(self._id) then
+			V.showToast(SID.TIP_RANGER_EQUIP_LOCKED)
+
+			return
+		end
+
+		if P._playerRanger:getUsingRangerId(self._id) then
+			V.showToast(SID.TIP_RANGER_EQUIP_IN_USING)
+
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.RangerEquipWashPanel, self._id, function ()
+			self._thisEquip = P._playerRanger:getRangerEquipById(self._id)
+
+			V.loadRangerEquipAttribute(self._goAttributeRight, self._thisEquip)
+		end)
+	end)
+	self:setClick(self._btnReplace, function ()
+		if self._thisEquip.ranger then
+			V.showMessageBox({
+				_type = 2,
+				_content = SID.TIP_RANGER_EQUIP_USING_BY_OTHER,
+				_confirmCallback = function ()
+					P._playerRanger:unequipRangerEquip(self._id, self._thisEquip.ranger)
+
+					if self._replaceCallback then
+						self._replaceCallback(self._targetIndex)
+					end
+
+					self:closePanel()
+				end,
+				_cancelCallback = function ()
+				end
+			})
+		else
+			if self._replaceCallback then
+				self._replaceCallback(self._targetIndex)
+			end
+
+			self:closePanel()
+		end
+	end)
+	self:setClick(self._btnLock, function ()
+		if P._playerRanger:isRangerEquipLocked(self._id) then
+			P._playerRanger:unlockRangerEquip(self._id)
+			LuaUnity.setTPSprite(self._imgLock, "general/g_icon_lock02_big")
+		else
+			P._playerRanger:lockRangerEquip(self._id)
+			LuaUnity.setTPSprite(self._imgLock, "general/g_icon_lock_big")
+		end
+	end)
+	self:setClick(self._btnDown, function ()
+		if self._replaceCallback then
+			self._replaceCallback()
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(id, rangerId, targetIndex, replaceCallback)
+	if type(id) == "number" then
+		self._id = id
+		self._thisEquip = P._playerRanger:getRangerEquipById(id)
+	else
+		self._thisEquip = id
+
+		self:hideAction()
+		self._btnLock:SetActive(false)
+		self._goAttributeLeft:SetActive(false)
+		V.loadRangerEquipAttribute(self._goAttributeRight, self._thisEquip)
+
+		return
+	end
+
+	self._targetIndex = targetIndex
+
+	if self._thisEquip.ranger == rangerId then
+		self._btnDown:SetActive(true)
+		self._btnReplace:SetActive(false)
+	end
+
+	self._replaceCallback = replaceCallback
+
+	if targetIndex then
+		local targetEid = P._playerRanger:getRangerEquips(rangerId)[targetIndex]
+		self._targetEquip = P._playerRanger:getRangerEquipById(targetEid)
+
+		if self._targetEquip then
+			V.loadRangerEquipAttribute(self._goAttributeLeft, self._targetEquip)
+		else
+			self._goAttributeLeft:SetActive(false)
+			lc.setLocalScale(self._goAttributeRight, 1.2, 1.2, 1)
+		end
+	else
+		self._targetEquip, self._targetIndex = P._playerRanger:getTargetReplaceEquip(rangerId, id)
+
+		if self._targetEquip then
+			V.loadRangerEquipAttribute(self._goAttributeLeft, self._targetEquip)
+		else
+			self._goAttributeLeft:SetActive(false)
+			lc.setLocalScale(self._goAttributeRight, 1.2, 1.2, 1)
+		end
+	end
+
+	if not self._targetEquip then
+		self._txtReplace:SetLocalize(SID.STR_EMBED)
+	end
+
+	LuaUnity.setTPSprite(self._imgLock, P._playerRanger:isRangerEquipLocked(self._id) and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+	self:updateUI()
+end
+
+function M:updateUI()
+	V.loadRangerEquipAttribute(self._goAttributeRight, self._thisEquip)
+
+	if self._thisEquip.ranger then
+		self._btnRefine:SetActive(false)
+	end
+end
+
+function M:hideAction()
+	self._btnReplace:SetActive(false)
+	self._btnRefine:SetActive(false)
+	self._btnDown:SetActive(false)
+end
+
+return M

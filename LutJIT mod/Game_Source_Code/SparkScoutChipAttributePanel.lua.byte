@@ -1,0 +1,154 @@
+local M = class("SparkScoutChipAttributePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	txtTab1 = Types.TMP_Text,
+	txtTab2 = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	tfContainer1 = Types.Transform,
+	goEmpty1 = Types.GameObject,
+	tfContainer2 = Types.Transform,
+	goEmpty2 = Types.GameObject,
+	goTemplate = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._btnTabs = {
+		self._btnTab1,
+		self._btnTab2
+	}
+	self._imgTabs = {
+		self._btnTab1.gameObject:GetComponent("Image"),
+		self._btnTab2.gameObject:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTab1,
+		self._txtTab2
+	}
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnTab1, function ()
+		self:changeTab(1)
+	end)
+	self:setClickWithoutAction(self._btnTab2, function ()
+		self:changeTab(2)
+	end)
+end
+
+local function unpackEffectValue(effect, value)
+	if effect == 401 then
+		value = value / 5
+	elseif effect == 502 then
+		value = value / 2
+	elseif effect == 701 then
+		value = value / 20 * 100
+	elseif effect == 806 then
+		value = value / 5
+	end
+
+	return value
+end
+
+function M:init(effects, tab)
+	self._tabIdx = 1
+	self._effects = effects
+
+	self:updateUI()
+
+	if tab then
+		self:changeTab(tab)
+	end
+end
+
+function M:changeTab(tabIdx)
+	if self._tabIdx == tabIdx then
+		return
+	end
+
+	if not self._tabIdx then
+		self._tabIdx = 1
+	end
+
+	self._imgTabs[self._tabIdx].color = Color.str2Static(V.tabUnSelectedColor)
+	self._txtTabs[self._tabIdx].color = Color.str2Static(V.tabUnSelectTextColor)
+
+	LuaUnity.setTPSprite(self._imgTabs[1], tabIdx == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+	LuaUnity.setTPSprite(self._imgTabs[2], tabIdx == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+	self._imgTabs[tabIdx].color = Color.str2Static(V.tabSelectedColor)
+	self._txtTabs[tabIdx].color = Color.str2Static(V.tabSelectTextColor)
+
+	self._goContent1:SetActive(tabIdx == 1)
+	self._goContent2:SetActive(tabIdx == 2)
+
+	self._tabIdx = tabIdx
+end
+
+function M:updateUI()
+	local effects = {}
+
+	for k, v in pairs(self._effects) do
+		if k > 100 then
+			table.insert(effects, {
+				k,
+				v
+			})
+		end
+	end
+
+	table.sort(effects, function (a, b)
+		return D._gemEffectConfig[a[1]]._weaponId < D._gemEffectConfig[b[1]]._weaponId
+	end)
+	self:updateContent(effects, self._goEmpty1, self._tfContainer1)
+	table.clear(effects)
+
+	for k, v in pairs(self._effects) do
+		if k <= 100 then
+			table.insert(effects, {
+				k,
+				v
+			})
+		end
+	end
+
+	self:updateContent(effects, self._goEmpty2, self._tfContainer2)
+end
+
+function M:updateContent(effects, goEmpty, tfContainer)
+	if #effects == 0 then
+		goEmpty:SetActive(true)
+	else
+		goEmpty:SetActive(false)
+
+		for i = 1, #effects do
+			local goCell = GameObject.Instantiate(self._goTemplate, tfContainer)
+
+			goCell:SetActive(true)
+
+			if type(effects[i][2]) == "number" then
+				V.loadChipDescription(goCell.transform:Find("Text"):GetComponent("TMP_Text"), D._gemEffectConfig[effects[i][1]], unpackEffectValue(effects[i][1], effects[i][2]), nil)
+			else
+				local values = clone(effects[i][2])
+
+				if effects[i][1] == 36 then
+					values[2] = values[2] / math.min(D._globalConfig._chip_level_atk_limit / 2, P:getLevel())
+				elseif effects[i][1] == 503 then
+					values[2] = values[2] * 100 / 10
+				end
+
+				V.loadChipDescription(goCell.transform:Find("Text"):GetComponent("TMP_Text"), D._gemEffectConfig[effects[i][1]], nil, values)
+			end
+		end
+	end
+end
+
+return M

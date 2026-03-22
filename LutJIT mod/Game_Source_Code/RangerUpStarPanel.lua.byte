@@ -1,0 +1,150 @@
+local M = class("RangerUpStarPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	atorColor = Types.Animator,
+	imgSkin = Types.Image,
+	imgSkinBg = Types.Image,
+	imgSkinFrame = Types.Image,
+	goStarArea = Types.GameObject,
+	goStarContainer = Types.GameObject,
+	goStarContainerNext = Types.GameObject,
+	goUnlockSlotArea = Types.GameObject,
+	txtUnlockSlot = Types.TMP_Text,
+	goProp1Area = Types.GameObject,
+	txtProp1Value = Types.TMP_Text,
+	txtProp1ValueNext = Types.TMP_Text,
+	goDamageArea = Types.GameObject,
+	txtDamageValue = Types.TMP_Text,
+	txtDamageValueNext = Types.TMP_Text,
+	goCostItem1 = Types.GameObject,
+	txtCost1 = Types.TMP_Text,
+	btnUpgrade = Types.Button,
+	goMaxArea = Types.GameObject,
+	goNoneArea = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goCostItem1)
+end
+
+function M:addClicks()
+	self:setClick(self._goCostItem1._btnClick, function ()
+		V.showItemInfoPanel(self._rangerId)
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		local atk = math.floor(P._playerRanger:getRangerAtk(self._rangerId))
+		local ret, param = P._playerRanger:tryUpgradeRanger(self._rangerId)
+
+		if ret == ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.RangerUpgradePanel, self._rangerId, function ()
+				local newAtk = math.floor(P._playerRanger:getRangerAtk(self._rangerId))
+
+				V.showScoreToast(atk, newAtk - atk, true)
+			end)
+			self:updateUI()
+
+			if self._callback then
+				self._callback()
+			end
+		else
+			V.showResultCode(ret, param)
+
+			return
+		end
+	end)
+end
+
+function M:init(rangerId, callback)
+	self._rangerId = rangerId
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local rangerId = self._rangerId
+	local cfg = P._playerRanger:getCfg(rangerId)
+	local quality = cfg._quality
+	local level = P._playerRanger:getRangerLevel(rangerId)
+
+	if quality == D.Quality.Purple then
+		self._atorColor:Play("anim_GatlinColorPurple")
+	elseif quality == D.Quality.Orange then
+		self._atorColor:Play("anim_GatlinColorOrange")
+	else
+		self._atorColor:Play("anim_GatlinColorRed")
+	end
+
+	LuaUnity.setTPSprite(self._imgSkin, "item/item_" .. rangerId, true)
+	LuaUnity.setTPSprite(self._imgSkinBg, string.format("item/frame-frame_%02d", quality))
+	LuaUnity.setTPSprite(self._imgSkinFrame, string.format("item/frame-frame_%02d_out", quality))
+
+	local isMaxLevel = level == D.MAX_RANGER_STAR
+
+	if isMaxLevel then
+		self._goUnlockSlotArea:SetActive(false)
+	elseif (level + 1) % 5 == 0 then
+		self._txtUnlockSlot:SetLocalize(SID.TIP_RANGER_EQUIP_SLOT_UNLOCK)
+	else
+		self._txtUnlockSlot:SetLocalizeS(SID.TIP_RANGER_EQUIP_SLOT_REQUIRE2, string.format("%d<sprite name=\"%s\">", 5, V.TMP_COLOR_STAR[math.ceil((level + 1) / 5)]))
+	end
+
+	local tfStarArea = self._goStarArea.transform
+
+	tfStarArea:GetChild(2):SetActive(not isMaxLevel)
+	tfStarArea:GetChild(3):SetActive(not isMaxLevel)
+	self._goMaxArea:SetActive(isMaxLevel)
+	self._goNoneArea:SetActive(isMaxLevel)
+	self._btnUpgrade:SetActive(not isMaxLevel)
+	self._txtDamageValue:SetLocalize(SID.SID_GEM_EFFECT_DESCSID_18, cfg._eliteDamageAdd[level])
+
+	if not isMaxLevel then
+		self._txtDamageValueNext:SetLocalize(SID.SID_GEM_EFFECT_DESCSID_18, cfg._eliteDamageAdd[level + 1])
+	end
+
+	local tfDMGArea = self._goDamageArea.transform
+
+	tfDMGArea:GetChild(1):SetActive(not isMaxLevel)
+	tfDMGArea:GetChild(2):SetActive(not isMaxLevel)
+	self._txtProp1Value:SetLocalize(SID.TIP_RANGER_EXTEND_ATK_PERCENT, cfg._atkPercents[level])
+
+	if not isMaxLevel then
+		self._txtProp1ValueNext:SetLocalize(SID.TIP_RANGER_EXTEND_ATK_PERCENT, cfg._atkPercents[level + 1])
+	end
+
+	local tfProp1Area = self._goProp1Area.transform
+
+	tfProp1Area:GetChild(1):SetActive(not isMaxLevel)
+	tfProp1Area:GetChild(2):SetActive(not isMaxLevel)
+	V.setRangerQualityStar(self._goStarContainer, quality, level)
+
+	if isMaxLevel then
+		self._goCostItem1:SetActive(false)
+	else
+		V.setRangerQualityStar(self._goStarContainerNext, quality, level + 1)
+
+		local fragId = D.toFragment(rangerId)
+
+		self._goCostItem1:init(fragId)
+		self._goCostItem1:setNum(false)
+		self:setClick(self._goCostItem1._btnClick, function ()
+			V.showResultCode(fragId, cfg._costPieceNum[level + 1])
+		end)
+		V.formatNeedStr1(self._txtCost1, P._playerAsset:getAssetNum(fragId), cfg._costPieceNum[level + 1])
+
+		local cost1Enough = P._playerAsset:isAssetEnough(fragId, cfg._costPieceNum[level + 1])
+
+		if not cost1Enough then
+			V.setBtnStyle(self._btnUpgrade, V.BTN_STYLE.gray)
+		end
+	end
+end
+
+return M

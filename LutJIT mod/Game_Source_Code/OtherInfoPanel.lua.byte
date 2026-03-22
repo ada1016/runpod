@@ -1,0 +1,358 @@
+local M = class("OtherInfoPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	rawImgBg = Types.RawImage,
+	tfAvatar = Types.Transform,
+	txtLevel = Types.TMP_Text,
+	imgLevelProgress = Types.Image,
+	btnCopyId = Types.Button,
+	txtName = Types.TMP_Text,
+	txtId = Types.TMP_Text,
+	txtPower = Types.TMP_Text,
+	txtMission = Types.TMP_Text,
+	tfEquipContainer = Types.Transform,
+	tfRoleSkinContainer = Types.Transform,
+	tfWeaponSkinContainer = Types.Transform,
+	tfGatlinSkinContainer = Types.Transform,
+	tfDomeSkinContainer = Types.Transform,
+	tfRangerContainer = Types.Transform,
+	goRoleEmpty = Types.GameObject,
+	goWeaponEmpty = Types.GameObject,
+	goGatlinEmpty = Types.GameObject,
+	goDomeEmpty = Types.GameObject,
+	goRangerEmpty = Types.GameObject,
+	goSpineWidget = Types.GameObject,
+	scrollRole = Types.ScrollRect,
+	scrollWeapon = Types.ScrollRect,
+	scrollGatlin = Types.ScrollRect,
+	scrollDome = Types.ScrollRect,
+	scrollRanger = Types.ScrollRect
+}
+local Equip = requireLua("Equip")
+local GatlinSkinWidget = requireLua("GatlinSkinWidget")
+local RoleSkinWidget = requireLua("RoleSkinWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+local RangerItemWidget = requireLua("RangerItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._playerEquips = {
+		self._tfEquipContainer:GetChild(0):GetChild(0).gameObject,
+		self._tfEquipContainer:GetChild(1):GetChild(0).gameObject,
+		self._tfEquipContainer:GetChild(0):GetChild(1).gameObject,
+		self._tfEquipContainer:GetChild(1):GetChild(1).gameObject,
+		self._tfEquipContainer:GetChild(0):GetChild(2).gameObject,
+		self._tfEquipContainer:GetChild(1):GetChild(2).gameObject
+	}
+
+	for i = 1, D.PART_NUM do
+		lc.prefabVarPeer(self._playerEquips[i])
+		self:setClick(self._btnCopyId, function ()
+			UniClipboard.SetText(self._info.firebaseId)
+			V.showToast(SID.CONT_COPY_SUCCEED)
+		end)
+		self:setClick(self._playerEquips[i]._btnClick, function ()
+			local equip = self._info.equipSlots[i].equip
+			local locked = (not self._info.gemSlotUnlocks or not table.contains(self._info.gemSlotUnlocks, i)) and not self._info.gemSlots[i][6]
+
+			UIManager.openPanel(PrefabDefine.ChipViewPanel, Equip.create(equip), self._info.gemSlots[i], self._info.equipSlots[i].level or 0, locked)
+		end)
+	end
+
+	SpineGraphicWidget.noCreate(self._goSpineWidget)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init(info)
+	self._info = info
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	V.setPlayerNameByRankData(self._txtName, self._info)
+
+	self._txtId.text = string.format("id:%s", self._info.firebaseId)
+
+	if self._info.avatar == nil then
+		local e_debug_values = {
+			{
+				_key = "target",
+				_value = string.format("avatar nil %s", self._info.firebaseId)
+			}
+		}
+
+		Trace.AF_traceEvent("e_debug", e_debug_values)
+	end
+
+	V.loadAvatar(self._tfAvatar, self._info.avatar, self._info.avatarFrame)
+
+	self._txtLevel.text = self._info.level
+	self._imgLevelProgress.fillAmount = self._info.expProgress or 0
+
+	if P._playerMission:getCfgByType(D.MissionType.Common)[self._info.missionId] then
+		self._txtMission:SetLocalize(SID.STR_MISSION_X, -P._playerMission:readMissionName(self._info.missionId, D.MissionType.Common))
+
+		self._txtMission.text = string.gsub(self._txtMission.text, "{0}", self._info.missionId % 10000)
+	else
+		self._info.missionId = self._info.missionId - 1
+
+		self._txtMission:SetLocalize(SID.STR_MISSION_X, -P._playerMission:readMissionName(self._info.missionId, D.MissionType.Common))
+
+		self._txtMission.text = string.gsub(self._txtMission.text, "{0}", self._info.missionId % 10000)
+	end
+
+	self._txtPower.text = self._info.atk
+
+	self:updateEquip()
+	self:updateSkin()
+	self:updateRanger()
+
+	if lc._isCN then
+		self._scrollRanger.transform.parent:SetActive(false)
+	end
+end
+
+function M:updateEquip()
+	local playerEquips = self._playerEquips
+
+	for i = 1, #self._info.equipSlots do
+		local level = self._info.equipSlots[i].level or 0
+		local equip = self._info.equipSlots[i].equip
+
+		if D._equipConfig[equip.cid] == nil then
+			equip.cid = 31000 + i * 100 + 1
+		end
+
+		for j = 1, 6 do
+			local gemSlots = self._info.gemSlots[i] or {}
+
+			if gemSlots[j] and not D._gemConfig[gemSlots[j]] then
+				gemSlots[j] = nil
+			end
+		end
+
+		local part = D._equipConfig[equip.cid]._part
+		local grade = D._equipConfig[equip.cid]._grade
+		local quality = D._equipConfig[equip.cid]._quality
+
+		LuaUnity.setTPSprite(playerEquips[i]._imgIcon, "general/equip1_" .. part, true)
+		LuaUnity.setTPSprite(playerEquips[i]._imgQuality, "general/g_frame_small_0" .. quality, true)
+		playerEquips[i]._txtQuality:SetLocalize(SID.STR_GRADE_X, grade)
+
+		local gemSlots = self._info.gemSlots[i] or {}
+
+		for j = 1, 6 do
+			if gemSlots[j] then
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[gemSlots[j]]._quality)
+			else
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_empty")
+			end
+		end
+
+		if (not self._info.gemSlotUnlocks or not table.contains(self._info.gemSlotUnlocks, part)) and not gemSlots[6] then
+			playerEquips[i]._goExtraSlot:SetActive(false)
+		else
+			playerEquips[i]._goExtraSlot:SetActive(true)
+			playerEquips[i]._tfGemView:GetChild(5):Find("ImgLock"):SetActive(false)
+
+			playerEquips[i]._goExtraSlot:Find("ImgChip"):GetComponent("Image").color = Color.White
+		end
+
+		playerEquips[i]._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+	end
+end
+
+function M:updateSkinBgArea()
+	local bodySkin = self._info.roleSkin or D.DEFAULT_ROLE_SKIN
+	local skinStage = P._playerSkin:readSkinStageBg(bodySkin)
+
+	LuaUnity.setTexture(self._rawImgBg, string.format("img_bg_skin_role_%d_small", skinStage))
+end
+
+function M:updateSkin()
+	local bodySkin = self._info.roleSkin or D.DEFAULT_ROLE_SKIN
+	local weaponSkin = self._info.weaponSkin or D.DEFAULT_GATLIN_SKIN
+
+	self._goSpineWidget:updateUI(bodySkin, weaponSkin, true)
+	self:updateSkinBgArea()
+
+	local displaySkins = {
+		[D.SkinType.Gatlin] = {},
+		[D.SkinType.Role] = {},
+		[D.SkinType.Weapon] = {},
+		[D.SkinType.Dome] = {}
+	}
+
+	if self._info.skins then
+		local playerSkin = P._playerSkin
+
+		for id, star in pairs(self._info.skins) do
+			if playerSkin:getCfg(id) and not playerSkin:getCfg(id)._hidden then
+				local type = D.toSkinType(id)
+				displaySkins[type][#displaySkins[type] + 1] = {
+					id,
+					star
+				}
+			end
+		end
+
+		local function func(a, b)
+			local cfg1 = playerSkin:getCfg(a[1])
+			local cfg2 = playerSkin:getCfg(b[1])
+
+			if cfg1._quality == cfg2._quality then
+				if a[2] == b[2] then
+					return cfg1._index < cfg2._index
+				else
+					return b[2] < a[2]
+				end
+			else
+				return cfg2._quality < cfg1._quality
+			end
+		end
+
+		table.sort(displaySkins[D.SkinType.Role], func)
+		table.sort(displaySkins[D.SkinType.Weapon], func)
+		table.sort(displaySkins[D.SkinType.Gatlin], func)
+		table.sort(displaySkins[D.SkinType.Dome], func)
+		self:updateSkinRow(displaySkins[D.SkinType.Role], D.SkinType.Role, self._tfRoleSkinContainer)
+		self:updateSkinRow(displaySkins[D.SkinType.Weapon], D.SkinType.Weapon, self._tfWeaponSkinContainer)
+		self:updateSkinRow(displaySkins[D.SkinType.Gatlin], D.SkinType.Gatlin, self._tfGatlinSkinContainer)
+		self:updateSkinRow(displaySkins[D.SkinType.Dome], D.SkinType.Dome, self._tfDomeSkinContainer)
+	end
+
+	self._goRoleEmpty:SetActive(#displaySkins[D.SkinType.Role] == 0)
+	self._goWeaponEmpty:SetActive(#displaySkins[D.SkinType.Weapon] == 0)
+	self._goGatlinEmpty:SetActive(#displaySkins[D.SkinType.Gatlin] == 0)
+	self._goDomeEmpty:SetActive(#displaySkins[D.SkinType.Dome] == 0)
+
+	local hasRanger = false
+	local playerRanger = P._playerRanger
+
+	for id, _ in pairs(self._info.rangers or {}) do
+		if playerRanger:getCfg(id) and not playerRanger:getCfg(id)._hidden then
+			hasRanger = true
+		end
+	end
+
+	if #displaySkins[D.SkinType.Role] == 0 then
+		self._goRoleEmpty.transform.parent:SetAsLastSibling()
+	end
+
+	if not hasRanger then
+		self._goRangerEmpty.transform.parent:SetAsLastSibling()
+	end
+
+	if #displaySkins[D.SkinType.Weapon] == 0 then
+		self._goWeaponEmpty.transform.parent:SetAsLastSibling()
+	end
+
+	if #displaySkins[D.SkinType.Gatlin] == 0 then
+		self._goGatlinEmpty.transform.parent:SetAsLastSibling()
+	end
+
+	if #displaySkins[D.SkinType.Dome] == 0 then
+		self._goDomeEmpty.transform.parent:SetAsLastSibling()
+	end
+
+	self._scrollRole.enabled = #displaySkins[D.SkinType.Role] > 5
+	self._scrollWeapon.enabled = #displaySkins[D.SkinType.Weapon] > 5
+	self._scrollGatlin.enabled = #displaySkins[D.SkinType.Gatlin] > 4
+	self._scrollDome.enabled = #displaySkins[D.SkinType.Dome] > 5
+end
+
+function M:updateRanger()
+	if self._info.rangers then
+		local displayRangers = {}
+		local playerRanger = P._playerRanger
+
+		for id, data in pairs(self._info.rangers) do
+			if playerRanger:getCfg(id) and not playerRanger:getCfg(id)._hidden then
+				data.cid = id
+				displayRangers[#displayRangers + 1] = {
+					data,
+					data.level
+				}
+			end
+		end
+
+		local function func(a, b)
+			local cfg1 = D._rangerConfig[a[1].cid]
+			local cfg2 = D._rangerConfig[b[1].cid]
+
+			if cfg1._quality == cfg2._quality then
+				if a[2] == b[2] then
+					return cfg1._index < cfg2._index
+				else
+					return b[2] < a[2]
+				end
+			else
+				return cfg2._quality < cfg1._quality
+			end
+		end
+
+		table.sort(displayRangers, func)
+		self._goRangerEmpty:SetActive(#displayRangers == 0)
+
+		for i = 1, #displayRangers do
+			local id = displayRangers[i][1].cid
+			local star = displayRangers[i][2]
+			local widget = RangerItemWidget.create(self._tfRangerContainer)
+
+			widget:init(id, star)
+			widget:setUse(false)
+			widget:setChoose(false)
+			self:setClick(widget._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.RangerInfoPanel, displayRangers[i][1])
+			end)
+		end
+
+		self._scrollRanger.enabled = #displayRangers > 5
+
+		return
+	end
+
+	self._goRangerEmpty:SetActive(true)
+
+	self._scrollRanger.enabled = false
+end
+
+function M:updateSkinRow(displaySkins, skinType, container)
+	for i = 1, #displaySkins do
+		local id = displaySkins[i][1]
+		local star = displaySkins[i][2]
+
+		if skinType == D.SkinType.Gatlin then
+			local widget = GatlinSkinWidget.create(container)
+
+			widget:init(id, star)
+			widget:hideDot()
+			widget:setUse(false)
+			widget:setChoose(false)
+			self:setClick(widget._btnClick, function ()
+				V.showSkinInfoPanel(id, star)
+			end)
+		else
+			local widget = RoleSkinWidget.create(container)
+
+			widget:SetLocalScale(0.65, 0.65, 0.65)
+			widget:init(id, star)
+			widget:hideDot()
+			widget:setUse(false)
+			widget:setChoose(false)
+			self:setClick(widget._btnClick, function ()
+				V.showSkinInfoPanel(id, star)
+			end)
+		end
+	end
+end
+
+return M

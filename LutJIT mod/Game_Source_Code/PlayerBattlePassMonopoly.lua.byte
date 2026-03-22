@@ -1,0 +1,15 @@
+local M = class("PlayerBattlePassMonopoly", requireLua("PlayerBattlePassActivityBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.Monopoly
+	self._bpLevelCfg = D._battlePassMonopolyConfig
+	self._bpLogWay = D.LogWay.battle_pass_monopoly
+end
+
+function M:tryUnlockSystem()
+end
+
+function M:updateExpire()
+end
+
+return M

@@ -1,0 +1,78 @@
+local opt = {}
+_G.opt = opt
+local table = table
+opt.vec2_1 = Vector2.retain(0, 0)
+opt.vec2_2 = Vector2.retain(0, 0)
+opt.vec2_3 = Vector2.retain(0, 0)
+opt.vec3_1 = Vector3.retain(0, 0, 0)
+opt.vec3_2 = Vector3.retain(0, 0, 0)
+
+function opt.empty_func()
+end
+
+opt.empty_string = ""
+local table_mt = {
+	__index = {
+		clear = function (t)
+			table.clear(t)
+		end
+	}
+}
+opt.array_arg8 = table.new(8, 0)
+
+setmetatable(opt.array_arg8, table_mt)
+
+opt.array_arg32 = table.new(32, 0)
+
+setmetatable(opt.array_arg32, table_mt)
+
+opt.array_arg64 = table.new(64, 0)
+
+setmetatable(opt.array_arg64, table_mt)
+
+opt.dict_arg8 = table.new(0, 8)
+
+setmetatable(opt.dict_arg8, table_mt)
+
+opt.dict_arg32 = table.new(0, 32)
+
+setmetatable(opt.dict_arg32, table_mt)
+
+opt.rgba = {
+	g = 1,
+	a = 1,
+	b = 1,
+	r = 1
+}
+
+setmetatable(opt.rgba, {
+	__call = function (t, r, g, b, a)
+		t.r = (r or 255) / 255
+		t.g = (g or 255) / 255
+		t.b = (b or 255) / 255
+		t.a = (a or 255) / 255
+
+		return t
+	end
+})
+
+opt.OBBArea = {
+	angle = 0,
+	center = {
+		0,
+		0
+	},
+	extents = {
+		0,
+		0
+	}
+}
+opt.CircleArea = {
+	radius = 0,
+	center = {
+		0,
+		0
+	}
+}
+
+return opt

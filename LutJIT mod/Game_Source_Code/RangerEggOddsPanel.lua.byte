@@ -1,0 +1,69 @@
+local M = class("RangerEggOddsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContent = Types.Transform,
+	tmpTitle = Types.TMP_Text,
+	tmpBase = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:init(dropId, hideZeroQuality)
+	self._tmpTitle:SetLocalize(SID.SHOP_BOX_ODDS_TITLE, -SID.TITLE_RANGER_DRAW_PROP)
+
+	self._module = P._playerRanger
+
+	self._tmpBase:SetLocalize(SID.STR_CHANCE_DESC7, -SID["STR_QUALITY_" .. 4])
+
+	dropId = dropId or 1
+	local drops = DropHelper.readDropsById(dropId)
+	local showQualitys = {}
+	local totalWeight = 0
+
+	for i = 1, #drops do
+		local itemId = drops[i]._itemId
+		local quality = itemId
+		totalWeight = totalWeight + drops[i]._weight
+		showQualitys[quality] = {
+			drops[i]._itemId,
+			drops[i]._weight,
+			drops[i]._subDrop
+		}
+	end
+
+	for quality = 1, 7 do
+		local tf = self._tfContent:GetChild(quality - 1)
+		local show = showQualitys[quality] and (showQualitys[quality][2] > 0 or not hideZeroQuality)
+
+		tf:SetActive(show ~= nil)
+
+		if show then
+			self:setClickWithoutAction(tf:GetComponent("Button"), function ()
+				UIManager.openPanel(PrefabDefine.RangerEggDropInfoPanel, quality)
+			end)
+
+			local cfg = self._module:getRangerEggCfg(quality)
+
+			tf:GetChild(1):GetComponent("TextMeshProUGUI"):SetLocalize(cfg._nameSid)
+
+			if showQualitys[quality] then
+				local itemId = showQualitys[quality][1]
+				local weight = showQualitys[quality][2]
+				local subDrop = showQualitys[quality][3]
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", math.floor(weight / totalWeight * 10000) / 100)
+			else
+				local tf = self._tfContent:GetChild(quality - 1)
+				tf:GetChild(2):GetComponent("TextMeshProUGUI").text = string.format("%.2f%%", 0)
+			end
+		end
+	end
+end
+
+return M

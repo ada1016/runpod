@@ -1,0 +1,58 @@
+local M = class("BattleBullet_Mine", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+local circle_circle_intersect = BattleMathLib.circle_circle_intersect
+local Warn_Range = 0.5
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._status = 1
+end
+
+function M:checkEnemyCollision(dt)
+	SUPER.checkEnemyCollision(self, dt)
+
+	if self._dmgDelay and self._dmgDelay > 0 then
+		return
+	end
+
+	if not self._view then
+		return
+	end
+
+	local enemys = self._battleSession:getEnemys(self)
+
+	if enemys == nil then
+		return
+	end
+
+	local cnt = #enemys
+	local count = 0
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if circle_circle_intersect(self._position, enemy._position, self._radius + Warn_Range, enemy._radius) then
+			count = count + 1
+
+			break
+		end
+	end
+
+	if count == 0 then
+		if self._status == 2 then
+			self._status = 1
+
+			self._view._ator:SetTrigger("out")
+		end
+	elseif self._status == 1 then
+		self._status = 2
+
+		self._view._ator:SetTrigger("in")
+	end
+end
+
+return M

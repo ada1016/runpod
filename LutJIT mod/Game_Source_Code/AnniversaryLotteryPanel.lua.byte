@@ -1,0 +1,597 @@
+local M = class("AnniversaryLotteryPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	btnExit = Types.Button,
+	btnShop = Types.Button,
+	tfRewards = Types.Transform,
+	btnChoose = Types.Button,
+	imgRole = Types.Image,
+	btnReset = Types.Button,
+	btnCenterDesc = Types.Button,
+	txtDesc1 = Types.TMP_Text,
+	atorRobot = Types.Animator,
+	atorBox = Types.Animator,
+	btnCenter = Types.Button,
+	btnCheckProp = Types.Button,
+	tfVfxParent = Types.Transform,
+	goAnnounce = Types.GameObject
+}
+local vfxPool = requireLua("SingleVfxPool")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._delayTimers = {}
+	self._vfxPool_q1 = vfxPool.create(self._tfVfxParent:GetChild(0).gameObject, self._tfVfxParent)
+	self._vfxPool_q2 = vfxPool.create(self._tfVfxParent:GetChild(1).gameObject, self._tfVfxParent)
+	self._vfxPool_q3 = vfxPool.create(self._tfVfxParent:GetChild(2).gameObject, self._tfVfxParent)
+	self._vfxPool_q4 = vfxPool.create(self._tfVfxParent:GetChild(3).gameObject, self._tfVfxParent)
+	self._vfxPool_q5 = vfxPool.create(self._tfVfxParent:GetChild(4).gameObject, self._tfVfxParent)
+	self._vfxPool_q6 = vfxPool.create(self._tfVfxParent:GetChild(5).gameObject, self._tfVfxParent)
+	self._vfxPool_q7 = vfxPool.create(self._tfVfxParent:GetChild(6).gameObject, self._tfVfxParent)
+	self._vfxPool_sq5 = vfxPool.create(self._tfVfxParent:GetChild(7).gameObject, self._tfVfxParent)
+	self._vfxPool_sq6 = vfxPool.create(self._tfVfxParent:GetChild(8).gameObject, self._tfVfxParent)
+	self._vfxPool_sq7 = vfxPool.create(self._tfVfxParent:GetChild(9).gameObject, self._tfVfxParent)
+end
+
+function M:OnDestroy()
+	self._vfxPool_q1:onDestroy()
+	self._vfxPool_q2:onDestroy()
+	self._vfxPool_q3:onDestroy()
+	self._vfxPool_q4:onDestroy()
+	self._vfxPool_q5:onDestroy()
+	self._vfxPool_q6:onDestroy()
+	self._vfxPool_q7:onDestroy()
+	self._vfxPool_sq5:onDestroy()
+	self._vfxPool_sq6:onDestroy()
+	self._vfxPool_sq7:onDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	for i, v in pairs(self._delayTimers) do
+		lc.stopTimer(v)
+
+		self._delayTimers[i] = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnIssue, function ()
+		UIManager.openPanel(PrefabDefine.AnniversaryLotteryRulePanel)
+	end)
+	self:setClickWithoutAction(self._btnCenterDesc, function ()
+		self:handleDescBtn()
+	end)
+	self:setClickWithoutAction(self._btnChoose, function ()
+		self:handleChooseRoleBtn()
+	end)
+	self:setClick(self._btnReset, function ()
+		self:handleResetBtn()
+	end)
+	self:setClick(self._btnCheckProp, function ()
+		self:handlePropBtn()
+	end)
+	self:setClick(self._btnShop, function ()
+		self:handleShopBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+	end)
+	self:on("day.cross", function ()
+		self:updateReddots()
+	end)
+end
+
+function M:closePanel(enterBattle)
+	lc.stopTimer(self._secondTimer)
+	M.super.closePanel(self)
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:initPrefabVar()
+	self._tfCards = {}
+	self._goCards = {}
+
+	for i = 1, 10 do
+		local tf = self._tfRewards:GetChild(i - 1)
+		self._tfCards[i] = tf
+		self._goCards[i] = tf.gameObject
+	end
+
+	for i = 1, 10 do
+		lc.prefabVarPeer(self._goCards[i])
+		self:setClick(self._goCards[i]._btnClick, function ()
+			Client.checkNetworkAsync(function ()
+				self:handleDrawBtn(i)
+			end)
+		end)
+	end
+end
+
+function M:init()
+	self._module = P._playerActivityAnniversary._moduleLottery
+	self._secondFuncs = {}
+	self._secondTimer = lc.setInterval(function ()
+		for i, v in pairs(self._secondFuncs) do
+			v()
+		end
+	end, 0.5)
+
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_TITLE_DRAW)
+
+	local lb = LuaHelper.GetLuaBehaviour(self._goAnnounce)
+
+	lb:init(self._module:getUploadActivityId())
+	self._module:tryResetDrawData()
+
+	local pId = self._module:getCurChosePackageId()
+
+	if pId then
+		self._atorBox:SetTrigger("open")
+		self:updateCards()
+	else
+		self:showCardsBack(true)
+	end
+
+	self:updateUI()
+end
+
+function M:updateChoose()
+	local pId = self._module:getCurChosePackageId()
+	self._pid = pId
+	local isPackageSelect = self._pid ~= nil
+
+	self._btnChoose.transform:Find("dot"):SetActive(not isPackageSelect)
+	self._btnChoose.transform:Find("goExchange"):SetActive(isPackageSelect and self._module:getCurDrawNum() == 0)
+end
+
+function M:updateUI()
+	self:updateReddots()
+	self:updateChoose()
+
+	local isPackageSelect = self._pid ~= nil
+
+	if self._pid then
+		self._btnReset:SetActive(self._module:getCurDrawNum() > 0)
+		self._btnReset.title:SetLocalizeS(SID.EXCHANGE_LEFT, string.format("%d/%d", self._module:getLeftResetNum(), self._module:readResetNum()))
+
+		self._imgRole.enabled = true
+		local packageRewards = self._module:readSkinRewardIds(self._pid)
+
+		V.loadItemSprite(self._imgRole, packageRewards[1])
+		self:updateCostArea()
+	else
+		self._btnReset:SetActive(false)
+
+		self._imgRole.enabled = false
+
+		self._txtDesc1:SetLocalize(SID.STR_PLEASE_CHOOSE_FINAL_REWARD)
+	end
+
+	self._btnCheckProp:SetActive(isPackageSelect)
+	self:updateCostArea()
+	self:updateExpireTime()
+end
+
+function M:updateResetBtn()
+	local pId = self._module:getCurChosePackageId()
+	local isPackageSelect = self._pid ~= nil
+
+	self._btnReset:SetActive(isPackageSelect and self._module:getCurDrawNum() > 0)
+end
+
+function M:updateCostArea()
+	if self._pid then
+		local costCid, costNum = self._module:readDrawCost(self._pid, self._module:getCurDrawNum() + 1)
+
+		self._txtDesc1:SetLocalizeS(SID.STR_COST_NUM_THIS_TIME, string.format("%sx<color=#D88EFF>%d</color>", D.getTMPSpriteRichText("item_small_" .. costCid), costNum))
+	end
+end
+
+function M:updateCards(default)
+	for cardIdx = 1, #self._goCards do
+		local goCard = self._goCards[cardIdx]
+		local cid, num = self._module:getCardShowRes(cardIdx)
+
+		goCard._goFront:SetActive(cid ~= nil)
+		goCard._goBack:SetActive(cid == nil)
+
+		goCard._goBack:GetComponent("CanvasGroup").alpha = 1
+		goCard._goFront:GetComponent("CanvasGroup").alpha = 1
+
+		lc.setLocalScale(goCard._goBack, 1, 1, 1)
+		lc.setLocalScale(goCard._goFront, 1, 1, 1)
+		self:loadCard(cardIdx, default)
+	end
+end
+
+function M:loadCard(cardIdx, default)
+	local goCard = self._goCards[cardIdx]
+	local cid, num = nil
+
+	if default then
+		cid, num = self._module:getRewardByIdx(cardIdx)
+	else
+		cid, num = self._module:getCardShowRes(cardIdx)
+	end
+
+	if cid then
+		local q = D.toQuality(cid)
+
+		LuaUnity.setTPSprite(goCard._goFront:GetComponent("Image"), "anniversary/anniversary_frame_" .. q)
+		LuaUnity.setTPSprite(goCard._imgDeco, "anniversary/anniversary_frame_dec_" .. q)
+		V.loadItemSprite(goCard._imgIcon, cid)
+
+		goCard._txtNum.text = num
+		goCard._txtNum.enableVertexGradient = q == D.Quality.COLORFUL
+		goCard._txtNum.color = Color.str2Static(V.QUALITY_TRIANGLE[q])
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local endTime = P._playerActivityAnniversary:readActivityEndTime()
+
+	if not endTime or endTime <= 0 then
+		return
+	end
+
+	local targetTime = endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:updateReddots()
+	self._btnShop.dot:SetActive(self._module:haveShopDot())
+end
+
+function M:playResetAnim()
+	self._atorBox:SetTrigger("close")
+	self:updateUI()
+end
+
+function M:showCardsBack(isBack)
+	for i = 1, #self._goCards do
+		self._goCards[i]._goBack:SetActive(isBack)
+		self._goCards[i]._goFront:SetActive(not isBack)
+	end
+end
+
+function M:playAfterChooseAnim(choseBefore)
+	self:updateUI()
+
+	local animTime = 0
+
+	if choseBefore then
+		self._atorBox:SetTrigger("close")
+		Client.playSound("ui_Annvy_draw_close_1")
+
+		animTime = animTime + 1
+	end
+
+	local pId = self._module:getCurChosePackageId()
+
+	if not pId then
+		return
+	end
+
+	MainGameRoot:showGlobalMask()
+
+	self._delayTimers.choose_open = lc.setTimer(function ()
+		self._atorBox:SetTrigger("open")
+		self:updateCards(true)
+		self:showCardsBack(false)
+
+		self._delayTimers.choose_open = nil
+
+		Client.playSound("ui_Annvy_draw_ready_1")
+	end, animTime)
+	animTime = animTime + 1.5
+	self._delayTimers.choose_turn_back = lc.setTimer(function ()
+		for i = 1, 10 do
+			self._goCards[i]._anim:Play("anim_anniversary_item_turnBack")
+		end
+
+		self._delayTimers.choose_turn_back = nil
+	end, animTime)
+	animTime = animTime + 1
+	self._delayTimers.choose_wash = lc.setTimer(function ()
+		MainGameRoot:hideGlobalMask()
+		self:updateResetBtn()
+		self:playWashAnim()
+
+		self._delayTimers.choose_wash = nil
+	end, animTime)
+end
+
+function M:playWashAnim()
+	self:showCardsBack(true)
+	MainGameRoot:showGlobalMask()
+	self:PlayShuffle(self._tfCards, Vector3.constZero(), function ()
+		MainGameRoot:hideGlobalMask()
+	end)
+end
+
+function M:PlayShuffle(cards, centerPos, onComplete)
+	local opts = {}
+	local gatherDuration = opts.gatherDuration or 0.28
+	local shuffleDuration = opts.shuffleDuration or 0.6
+	local spreadDuration = opts.spreadDuration or 0.35
+	local shuffleRange = opts.shuffleRange or 40
+	local upOffset = opts.upOffset or 30
+	local rotRange = opts.rotRange or 15
+	local Ease = DG.Tweening.Ease
+	local LoopType = DG.Tweening.LoopType
+	local DOTween = DG.Tweening.DOTween
+	local originalPos = {}
+
+	for i, t in ipairs(cards) do
+		originalPos[i] = Vector3.new(t.localPosition.x, t.localPosition.y, t.localPosition.z)
+	end
+
+	local mainSeq = DOTween.Sequence()
+	local gatherSeq = DOTween.Sequence()
+
+	for _, t in ipairs(cards) do
+		gatherSeq:Join(t:DOLocalMove(centerPos, gatherDuration):SetEase(Ease.OutQuad))
+	end
+
+	mainSeq:Append(gatherSeq)
+
+	local shuffleSeq = DOTween.Sequence()
+
+	for _, t in ipairs(cards) do
+		local rnd = Vector3.new(math.random(-shuffleRange, shuffleRange), math.random(-shuffleRange, shuffleRange) + upOffset, 0)
+		local rotZ = math.random(-rotRange, rotRange)
+
+		shuffleSeq:Join(t:DOLocalMove(centerPos + rnd, shuffleDuration):SetLoops(2, LoopType.Yoyo):SetEase(Ease.InOutSine))
+		shuffleSeq:Join(t:DOLocalRotate(Vector3.new(0, 0, rotZ), shuffleDuration):SetLoops(2, LoopType.Yoyo):SetEase(Ease.InOutSine))
+	end
+
+	mainSeq:Append(shuffleSeq)
+
+	local spreadSeq = DOTween.Sequence()
+
+	for i, t in ipairs(cards) do
+		spreadSeq:Join(t:DOLocalMove(originalPos[i], spreadDuration):SetEase(Ease.OutBack))
+		spreadSeq:Join(t:DOLocalRotate(Vector3.constZero(), spreadDuration):SetEase(Ease.OutBack))
+	end
+
+	mainSeq:Append(spreadSeq)
+
+	if onComplete then
+		mainSeq:OnComplete(onComplete)
+	end
+
+	return mainSeq
+end
+
+function M:handleDrawBtn(cardIdx)
+	if not P._playerActivity:isAnniversaryOpening() then
+		V.showToast(SID.TIP_EVENT_END)
+		self:closePanel()
+
+		return
+	end
+
+	local result1, param1 = self._module:checkLottery(cardIdx)
+
+	if result1 ~= ResultCode.OK then
+		if result1 == ResultCode.LOCKED then
+			-- Nothing
+		elseif result1 == ResultCode.REWARD_CLAIMED then
+			local cid2, num2, rsIdx2 = self._module:getCardShowRes(cardIdx)
+
+			V.showItemInfoPanel(cid2, num2)
+
+			return
+		elseif result1 == ResultCode.RESOURCE_NOT_ENOUGH then
+			local exchangeId = self._module:readExchangeId()
+
+			if exchangeId then
+				UIManager.openPanel(PrefabDefine.ExchangeResourcePanel, exchangeId, {
+					expectExchangeNum = param1,
+					exchangeCheckFunc = function ()
+						if not P._playerActivity:isAnniversaryOpening() then
+							V.showToast(SID.TIP_EVENT_END)
+							self:closePanel()
+
+							return ResultCode.NOT_MEET_CONDITION
+						end
+
+						return ResultCode.OK
+					end
+				})
+
+				return
+			end
+		end
+
+		V.showResultCode(result1)
+
+		return
+	end
+
+	local unClickCards = {}
+	local unClaimedCount = 0
+
+	for i = 1, 10 do
+		if not self._module:isCardIdxClaimed(i) then
+			unClaimedCount = unClaimedCount + 1
+		end
+
+		unClickCards[i] = not self._module:isCardIdxClaimed(i)
+	end
+
+	unClickCards[cardIdx] = false
+	local result2, rewards = self._module:tryLottery(cardIdx)
+
+	if result2 ~= ResultCode.OK then
+		V.showResultCode(result1)
+
+		return
+	end
+
+	self:updateResetBtn()
+	self:updateChoose()
+	MainGameRoot:showGlobalMask()
+	self._atorRobot:SetTrigger("lottery")
+	Client.playSound("ui_Annvy_draw_flip_1")
+	self:loadCard(cardIdx)
+
+	local cid, num, rsIdx = self._module:getCardShowRes(cardIdx)
+	local isSuper = rsIdx == 1
+	local isFinalReward = rsIdx == 1
+	local animTime = 0
+
+	if isSuper then
+		self["_vfxPool_sq" .. D.toQuality(cid)]:playAt(3, self._goCards[cardIdx].transform.position)
+		self._goCards[cardIdx]._anim:Play("anim_anniversary_item_turn_super")
+	else
+		self["_vfxPool_q" .. D.toQuality(cid)]:playAt(3, self._goCards[cardIdx].transform.position)
+		self._goCards[cardIdx]._anim:Play("anim_anniversary_item_turn")
+	end
+
+	if isSuper then
+		animTime = animTime + 1.6666666666666667 + 0.2
+	else
+		animTime = animTime + 1 + 0.2
+	end
+
+	if isFinalReward and unClaimedCount > 1 then
+		self._delayTimers.draw_free_rewards = lc.setTimer(function ()
+			for i = 1, 10 do
+				if unClickCards[i] then
+					self:loadCard(i)
+
+					local cid2, num2, rsIdx2 = self._module:getCardShowRes(i)
+
+					Client.playSound("ui_Annvy_draw_flip_1")
+					self._goCards[i]._anim:Play("anim_anniversary_item_turn")
+					self["_vfxPool_q" .. D.toQuality(cid2)]:playAt(3, self._goCards[i].transform.position)
+				end
+			end
+
+			self._delayTimers.draw_free_rewards = nil
+		end, animTime)
+		animTime = animTime + 1.618
+	end
+
+	self._delayTimers.draw_show_rewards = lc.setTimer(function ()
+		local cleared = self._module:isRewardsCleared()
+
+		V.showRewardClaimPanel(rewards, nil, function ()
+			if cleared then
+				self._atorBox:SetTrigger("close")
+				Client.playSound("ui_Annvy_draw_close_1")
+			end
+		end)
+
+		self._delayTimers.draw_show_rewards = nil
+
+		MainGameRoot:hideGlobalMask()
+
+		if cleared then
+			self._module:tryResetDrawData()
+			self:updateUI()
+		else
+			self:updateCostArea()
+		end
+	end, animTime)
+end
+
+function M:handleChooseRoleBtn()
+	local chose = self._module:getCurChosePackageId()
+
+	if chose then
+		local drawNum = self._module:getCurDrawNum()
+
+		if drawNum > 0 then
+			local packageRewards = self._module:readSkinRewardIds(chose)
+
+			V.showItemInfoPanel(packageRewards[1])
+
+			return
+		end
+	end
+
+	UIManager.openPanel(PrefabDefine.AnniversaryLotteryChoosePanel, function ()
+		self:playAfterChooseAnim(chose)
+	end)
+end
+
+function M:handleResetBtn()
+	if self._module:getLeftResetNum() <= 0 then
+		V.showToast(SID.STR_RESET_NUM_MAX)
+
+		return
+	end
+
+	local ret = V.tryShowConfirm(nil, function ()
+		self._module:tryResetPackageId()
+		self:playResetAnim()
+	end, SID.STR_CONFIRM_RESET_REWARD)
+end
+
+function M:handlePropBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryLotteryPropPanel)
+end
+
+function M:handleShopBtn()
+	local iapIds1 = P._playerActivityAnniversary._moduleTreasureHunting:readPackIapIds()
+	local iapIds2 = P._playerActivityAnniversary._moduleLottery:readPackIapIds()
+	local showIapIds = clone(self._module:readPackIapIds())
+	local calIapIds = {
+		D.IapType.TreasureHunting_BP
+	}
+
+	table.append(calIapIds, iapIds1)
+	table.append(calIapIds, iapIds2)
+
+	local digIapSum = P._playerStore:getSumPriceByList(calIapIds)
+
+	if digIapSum >= 600 then
+		showIapIds[#showIapIds + 1] = D.IapType.AnniversaryLottery_BIG
+	end
+
+	UIManager.openPanel(PrefabDefine.ActivityPackGroupPanel, D.toNameSid(D.ResType.anniversary_lottery_core), self._module:readPackExchangeGroup(), showIapIds)
+end
+
+function M:handleDescBtn()
+	local pId = self._module:getCurChosePackageId()
+
+	if not pId then
+		return
+	end
+
+	V.showItemInfoPanel(D.ResType.anniversary_lottery_core)
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+return M

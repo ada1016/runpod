@@ -1,0 +1,15 @@
+local M = class("EarthManager", BLB)
+M.args = {
+	goEarth = Types.GameObject,
+	tfEarthRotator = Types.Transform,
+	goPointVfx = Types.GameObject,
+	tfContinents = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.EarthManager = self
+end
+
+return M

@@ -1,0 +1,315 @@
+local M = class("RogueCardInfoWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RogueCardInfoWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	self._cg = self:GetComponent("CanvasGroup")
+	self._ator = self:GetComponent("Animator")
+	self._cgGetAll = self._goGetAll:GetComponent("CanvasGroup")
+	self._cgDrawAgain = self._goDrawAgain:GetComponent("CanvasGroup")
+
+	self:showNew(false)
+	self:setCardScale(1)
+end
+
+local CardColors = {
+	{
+		"7bffe3",
+		"99efdb"
+	},
+	{
+		"ffebff",
+		"f1c5ff"
+	},
+	{
+		"d5fffc",
+		"9ff7e4"
+	},
+	{
+		"ffebff",
+		"f1c5ff"
+	}
+}
+
+function M:setCardScale(scale)
+	self._scale = scale or 1
+end
+
+function M:updateUI(cardId)
+	self._cardId = cardId or 1
+	local cardCfg = D._battleRougeCardConfig[self._cardId]
+	local cardType = cardCfg._type
+	local isGroupCard = cardType == 3
+	local isSuperCard = cardType == 4
+	local isNewStageCard = cardType == 2 or isSuperCard
+	local isChainCard = D._rougePrevUnlockCards[self._cardId] ~= nil or D._battleRougeCardConfig[self._cardId]._prevRougeCards ~= nil
+	local cardColorType = cardType
+
+	if isChainCard and not isNewStageCard then
+		cardColorType = 3
+	end
+
+	self._textId.text = cardId
+	local colors = CardColors[cardColorType] or CardColors[1]
+	self._textTitle.color = Color.str2Static(colors[1])
+	self._textDesc.color = Color.str2Static(colors[2])
+
+	if cardCfg._nameSid then
+		self._textTitle:SetLocalize(cardCfg._nameSid)
+	end
+
+	if cardCfg._descSid then
+		self._textDesc:SetLocalize(cardCfg._descSid)
+		V.setBuffLinkClick(self._textDesc)
+	end
+
+	local weaponId = cardCfg._belongWeapon or 1
+	self._damageType = D._weaponConfig[weaponId]._dmgType
+
+	self:updateIcon(weaponId)
+	self._goSuperCard:SetActive(isSuperCard)
+	self._goBgSweep:SetActive(isSuperCard)
+
+	if isSuperCard then
+		if not self._goSuperVfx then
+			self._goSuperVfx = LuaUnity.createGameObject("Assets/FW/Prefabs/UI_vfx/vfx_rogueCardSuper.prefab", self._tfSuperVfx)
+			self._atorSuper = self._goSuperVfx:GetComponent("Animator")
+		end
+
+		self._atorSuper:SetInteger("type", self._damageType)
+	elseif self._goSuperVfx then
+		self._goSuperVfx:SetActive(false)
+	end
+
+	self._tmpLv.text = cardCfg._stage
+
+	if isNewStageCard then
+		self._tmpLv.color = Color.str2Static("de9eff")
+
+		LuaUnity.setTPSprite(self._imgLvBg, "weapon/g_star_04")
+	else
+		self._tmpLv.color = Color.str2Static("7BFFE3")
+
+		LuaUnity.setTPSprite(self._imgLvBg, "weapon/g_star_03")
+	end
+
+	self._goComboCardBg:SetActive(isGroupCard)
+	self._goNewStageBg:SetActive(isNewStageCard)
+
+	if isNewStageCard then
+		LuaUnity.setTPSprite(self._imgBg, "weapon/cardFront_3")
+	elseif isGroupCard then
+		LuaUnity.setTPSprite(self._imgBg, "weapon/cardFront_2")
+	elseif isChainCard then
+		LuaUnity.setTPSprite(self._imgBg, "weapon/cardFront_4")
+	else
+		LuaUnity.setTPSprite(self._imgBg, "weapon/cardFront_1")
+	end
+
+	self:showChain(self._showExtraBtn and isChainCard)
+	self:showGroup(self._showExtraBtn and isGroupCard)
+end
+
+function M:clickCallback()
+end
+
+function M:updateIcon(weaponId)
+	V.loadWeaponIcon(self._imgIcon, weaponId)
+end
+
+function M:setFront()
+	self._ator:SetInteger("status", 1)
+end
+
+function M:setBack()
+	self._ator:SetInteger("status", 2)
+end
+
+function M:playTurnAnim()
+	self._ator:SetInteger("status", 0)
+	self._ator:SetTrigger("turn")
+end
+
+function M:playWaveAnim(wave)
+	self._ator:SetInteger("status", 0)
+	self._ator:SetBool("wave", wave or false)
+end
+
+function M:showNew(show)
+	if show == self._newTag then
+		return
+	end
+
+	self._newTag = show or false
+
+	self._goNew:SetActive(self._newTag)
+end
+
+function M:setAlpha(alpha)
+	self._cg.alpha = alpha or 1
+end
+
+function M:copy2Card(widget)
+	widget:setFront()
+	widget:showNew(self._newTag)
+	widget:updateUI(self._cardId)
+end
+
+function M:resetDraw()
+	self:showChain(false)
+	self:showDrawAgain(false)
+	self:showGetAll(false)
+	self:showADBtn(false)
+end
+
+function M:setBackColorDark(dark)
+	if dark then
+		self._imgBack.color = Color.str2Static("959595")
+	else
+		self._imgBack.color = Color.str2Static("FFFFFF")
+	end
+end
+
+function M:showDrawAgain(show)
+	self._goDrawAgain:SetActive(show)
+end
+
+function M:showGetAll(show)
+	self._goGetAll:SetActive(show)
+end
+
+function M:showADBtn(show)
+	local isAdRemoved = P._playerRight:isSVIP()
+
+	self._goAd:SetActive(show and not isAdRemoved)
+	self._goAdRemoved:SetActive(show and isAdRemoved)
+end
+
+function M:showStage(stage)
+	if stage then
+		self._goStageArea:SetActive(true)
+
+		self._txtStageLevel.text = stage
+	else
+		self._goStageArea:SetActive(false)
+	end
+end
+
+function M:showLock(unlockLevel)
+	if unlockLevel then
+		self._goLock:SetActive(true)
+		self._txtLockDesc:SetLocalize(SID.TIP_UNLOCK_LEVEL, unlockLevel)
+	else
+		self._goLock:SetActive(false)
+	end
+end
+
+function M:showNotOwn()
+	self._goLock:SetActive(true)
+	self._txtLockDesc:SetLocalize(SID.STR_NOT_OWN)
+end
+
+function M:showChain(show)
+	if show then
+		LuaUnity.setTPSprite(self._imgBtnBg, "weapon/g_icon_62")
+	end
+
+	self._btnChain:SetActive(show)
+end
+
+function M:showGroup(show)
+	if show then
+		local cfg = D._battleRougeCardConfig[self._cardId]
+		local comboCfg = cfg._unlockWeaponCards
+		local w1 = comboCfg[1]
+		local w1stage = comboCfg[2]
+		local w1star = comboCfg[3]
+		local w2 = comboCfg[4]
+		local w2stage = comboCfg[5]
+		local w2star = comboCfg[6]
+		local img1 = self._goWeapon1:GetChild(0):GetChild(1):GetComponent("Image")
+
+		LuaUnity.setTPSprite(img1, "weapon/weapon_" .. w1, true)
+
+		local img2 = self._goWeapon2:GetChild(0):GetChild(1):GetComponent("Image")
+
+		LuaUnity.setTPSprite(img2, "weapon/weapon_" .. w2, true)
+
+		local txt1 = self._goWeapon1:GetChild(0):GetChild(2):GetChild(1):GetComponent("TMP_Text")
+		txt1.text = w1stage
+		local txt2 = self._goWeapon2:GetChild(0):GetChild(2):GetChild(1):GetComponent("TMP_Text")
+		txt2.text = w2stage
+	end
+
+	self._btnGroup:SetActive(show)
+end
+
+function M:showSelect(show)
+	self._goSelect:SetActive(show)
+end
+
+function M:showFocus(show)
+	self._goSelect:SetActive(show)
+
+	local tf = self._goSelect.transform
+
+	lc.setLocalScale(tf, 1, 1, 1)
+
+	if show then
+		self._goSelect.transform:DOScale(Vector3.static(1.1, 1.1, 1.1), 0.75):SetUpdate(0, true):SetLoops(-1, 1):SetLink(self.gameObject):SetEase(V.EASE_IN_OUT_SINE)
+	end
+end
+
+function M:playFlyAnimation(fromPosition, targetPosition, cb)
+	local seq = DOTween.Sequence():SetUpdate(0, true):SetLink(self.gameObject)
+	local tfCard = self.transform
+
+	lc.setPosition(tfCard, fromPosition:Get())
+
+	local totalTime = 0
+	local moveTime = 0.3
+
+	seq:Append(tfCard:DOScale(Vector3.constOne() * self._scale * 1.1, moveTime):SetEase(V.EASE_OUT_BACK))
+
+	totalTime = totalTime + moveTime
+
+	seq:Append(tfCard:DOScale(Vector3.constZero(), moveTime):SetEase(V.EASE_OUT_SINE))
+	seq:Insert(totalTime, tfCard:DOMove(targetPosition, moveTime):SetEase(V.EASE_OUT_SINE))
+
+	totalTime = totalTime + moveTime
+
+	seq:InsertCallback(totalTime, function ()
+		if cb then
+			cb()
+		end
+	end)
+end
+
+function M:showCrisisLuckyTag(lucky)
+	self._goCrisisZone:SetActive(true)
+
+	if lucky then
+		LuaUnity.setTPSprite(self._imgLuckyIcon, "ranger/ranger_icon_11", true)
+	else
+		LuaUnity.setTPSprite(self._imgLuckyIcon, "ranger/ranger_icon_10", true)
+	end
+end
+
+return M

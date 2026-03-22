@@ -1,0 +1,51 @@
+local M = class("AccountInitializationConfirmPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnConfirm = Types.Button,
+	goConfirmMask = Types.GameObject,
+	tmpInputLabel = Types.TMP_Text,
+	tmpInput = Types.TMP_InputField
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self._tmpInput.onEndEdit:RemoveAllListeners()
+	self._tmpInput.onValueChanged:AddListener(function (pt)
+		if string.lower(self._tmpInput.text) == self._confirmLabel then
+			self._btnConfirm.enabled = true
+
+			self._goConfirmMask:SetActive(false)
+		else
+			self._btnConfirm.enabled = false
+
+			self._goConfirmMask:SetActive(true)
+		end
+	end)
+	self:setClick(self._btnConfirm, function ()
+		if string.lower(self._tmpInput.text) == self._confirmLabel then
+			V.showMessageBox({
+				_type = 2,
+				_content = SID.ACCOUNT_RESET_TIPS3,
+				_confirmCallback = function ()
+					C.resetAccountProgress()
+				end
+			})
+		end
+	end)
+end
+
+function M:addEvents()
+end
+
+function M:init()
+	self._confirmLabel = string.lower(self._tmpInputLabel.text)
+	self._btnConfirm.enabled = false
+end
+
+function M:updateUI()
+end
+
+return M

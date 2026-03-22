@@ -1,0 +1,826 @@
+local M = class("PlayerArmory")
+local BattlePropEnum = BattlePropEnum
+local band = bit.band
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._weaponLevels = lc.assignTable(meta, "weaponLevels")
+
+	lc.confuseTable(self._weaponLevels, "weaponLevel")
+
+	self._dailyIgnoreUpgrade = lc.assignTable(meta, "dailyIgnoreUpgrade")
+	self._domeTechLevels = lc.assignTable(meta, "domeTechLevels")
+	self._newDomeTechs = lc.assignTable(meta, "newDomeTechs")
+	self._domeProps = {}
+	self._domeDirty = true
+	self._unlockedWeapons = {}
+	self._unlockedWeaponsDirty = true
+	self._expectedWeaponLevels = {}
+	self._shardDirty = true
+end
+
+function M:start()
+	local domeLevel = self:getWeaponLevel(D.WEAPON_DOME, 0)
+
+	for i = 1, domeLevel do
+		local conf = D._domeUpgradeConfig[i]
+
+		if conf._tech and not self._domeTechLevels[conf._tech] then
+			self._domeTechLevels[conf._tech] = 1
+		end
+	end
+end
+
+function M:getWeaponLevel(id, defaultVal)
+	if self._weaponLevels[id] == nil then
+		self._weaponLevels[id] = ConfusedNumber.create(defaultVal or 1, "weaponLevel")
+	end
+
+	return self._weaponLevels[id]()
+end
+
+function M:getDomeLevel()
+	return self:getWeaponLevel(D.WEAPON_DOME, 0)
+end
+
+function M:getUpgradeShardCost(id, level)
+	return D._weaponUpgradeConfig[level]._shardNum
+end
+
+function M:getUpgradeCoinCost(id, level)
+	return D._weaponUpgradeConfig[level]._coinNum
+end
+
+function M:isWeaponUnlocked(id)
+	return D._weaponConfig[id]._unlockLevel <= P:getLevel()
+end
+
+function M:canUpgradeWeapon(id)
+	if not D.isSystemUnlocked(D.SystemType.Weapon) then
+		return false
+	end
+
+	if id then
+		if not self:isWeaponUnlocked(id) or self._dailyIgnoreUpgrade[id] or self:isMaxLevel(id) then
+			return false
+		end
+
+		local level = self:getWeaponLevel(id)
+		local shardCostNum = self:getUpgradeShardCost(id, level)
+		local shardId = D._weaponConfig[id]._shardId
+
+		if P._playerAsset:getAssetNum(shardId) < shardCostNum then
+			return false
+		end
+
+		local coinCostNum = self:getUpgradeCoinCost(id, level)
+
+		if P._playerAsset:getAssetNum(D.ResType.coin) < coinCostNum then
+			return false
+		end
+
+		return true
+	else
+		for id = 2, D.MAX_WEAPON_ID do
+			local conf = D._weaponConfig[id]
+
+			if conf and self:isWeaponUnlocked(id) and not self._dailyIgnoreUpgrade[id] and not self:isMaxLevel(id) then
+				local level = self:getWeaponLevel(id)
+				local shardCostNum = self:getUpgradeShardCost(id, level)
+				local shardId = D._weaponConfig[id]._shardId
+				local coinCostNum = self:getUpgradeCoinCost(id, level)
+
+				if shardCostNum <= P._playerAsset:getAssetNum(shardId) and coinCostNum <= P._playerAsset:getAssetNum(D.ResType.coin) then
+					return true
+				end
+			end
+		end
+	end
+end
+
+function M:tryUpgradeWeapon(id)
+	local level = self:getWeaponLevel(id)
+	local shardCostNum = self:getUpgradeShardCost(id, level)
+	local shardId = D._weaponConfig[id]._shardId
+
+	if P._playerAsset:getAssetNum(shardId) < shardCostNum then
+		return shardId, shardCostNum
+	end
+
+	local coinCostNum = self:getUpgradeCoinCost(id, level)
+
+	if P._playerAsset:getAssetNum(D.ResType.coin) < coinCostNum then
+		return D.ResType.coin, coinCostNum
+	end
+
+	self._weaponLevels[id]:reset(level + 1)
+	P._playerAsset:increaseAssetNum(shardId, -shardCostNum, D.LogWay.upgrade_weapon)
+	P._playerAsset:increaseAssetNum(D.ResType.coin, -coinCostNum, D.LogWay.upgrade_weapon)
+	TaskHelper:increaseTaskValue(D.TaskType.WEAPON_UPGRADE)
+
+	self._dailyIgnoreUpgrade[id] = false
+
+	Trace.traceDesign("TurretUpgrade:%d_%d", id, level + 1)
+	Trace.AF_traceUpgrade("Weapon", id, level + 1)
+	SimpleEvent.emit("weapon.upgrade.dirty", id)
+
+	if lc._isCN then
+		P:saveGameData()
+	end
+
+	return ResultCode.OK
+end
+
+function M:canUpgradeGatlin()
+	local id = D.WEAPON_GATLIN
+	local level = self:getWeaponLevel(id)
+
+	if not D._gatlinUpgradeConfig[level] then
+		return false
+	end
+
+	local shardCostNum = D._gatlinUpgradeConfig[level]._shardNum
+	local shardId = D._weaponConfig[id]._shardId
+	local coinCostNum = D._gatlinUpgradeConfig[level]._coinNum
+
+	return P._playerAsset:isAssetEnough(shardId, shardCostNum) and P._playerAsset:isAssetEnough(D.ResType.coin, coinCostNum)
+end
+
+function M:tryUpgradeGatlin()
+	local id = 1
+	local level = self:getWeaponLevel(id)
+	local shardCostNum = D._gatlinUpgradeConfig[level]._shardNum
+	local shardId = D._weaponConfig[id]._shardId
+
+	if P._playerAsset:getAssetNum(shardId) < shardCostNum then
+		return shardId, shardCostNum
+	end
+
+	local coinCostNum = D._gatlinUpgradeConfig[level]._coinNum
+
+	if P._playerAsset:getAssetNum(D.ResType.coin) < coinCostNum then
+		return D.ResType.coin, coinCostNum
+	end
+
+	self._weaponLevels[id]:reset(level + 1)
+	P._playerAsset:increaseAssetNum(shardId, -shardCostNum, D.LogWay.upgrade_research)
+	P._playerAsset:increaseAssetNum(D.ResType.coin, -coinCostNum, D.LogWay.upgrade_research)
+	TaskHelper:increaseTaskValue(D.TaskType.GATLIN_UPGRADE)
+	SimpleEvent.emit("gatlin.upgrade")
+	Trace.traceDesign("RoleSkillProgress:%d", level)
+	Trace.AF_traceUpgrade("Weapon", id, level)
+	RedDotManager.update("city.role.system.research")
+
+	return ResultCode.OK
+end
+
+function M:canUpgradeDome()
+	local level = self:getDomeLevel()
+
+	if not D._domeUpgradeConfig[level + 1] then
+		return false
+	end
+
+	local conf = D._domeUpgradeConfig[level + 1]
+	local shardCostId = conf._breakCost ~= 0 and D.ResType.dome_break_mat or D.ResType.dome_upgrade_mat
+	local shardCostNum = conf._breakCost ~= 0 and conf._breakCost or conf._shardNum
+
+	return P._playerAsset:isAssetEnough(shardCostId, shardCostNum)
+end
+
+function M:tryUpgradeDome()
+	local id = D.WEAPON_DOME
+	local level = self:getDomeLevel()
+
+	if not D._domeUpgradeConfig[level + 1] then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local conf = D._domeUpgradeConfig[level + 1]
+	local shardCostId = conf._breakCost ~= 0 and D.ResType.dome_break_mat or D.ResType.dome_upgrade_mat
+	local shardCostNum = conf._breakCost ~= 0 and conf._breakCost or conf._shardNum
+
+	if not P._playerAsset:isAssetEnough(shardCostId, shardCostNum) then
+		return shardCostId, shardCostNum
+	end
+
+	P._playerAsset:increaseAssetNum(shardCostId, -shardCostNum, D.LogWay.upgrade_dome)
+	self._weaponLevels[id]:reset(level + 1)
+
+	if conf._tech then
+		self._domeTechLevels[conf._tech] = 1
+
+		table.insert(self._newDomeTechs, conf._tech)
+		Trace.traceDesign("DomeTech:%d:%d", conf._tech, 1)
+	end
+
+	Trace.AF_traceUpgrade("DomeUpgrade", id, level + 1)
+	Trace.traceDesign("DomeLevel:%d", level + 1)
+	TaskHelper:increaseTaskValue(D.TaskType.UPGRADE_DOME, 1)
+	RedDotManager.update("city.role.dome.upgrade")
+
+	self._domeDirty = true
+
+	return ResultCode.OK
+end
+
+function M:getDomeTechLevel(id)
+	return self._domeTechLevels[id] or 0
+end
+
+function M:isDomeTechMaxLevel(id)
+	local level = self._domeTechLevels[id] or 0
+
+	return lc.lenTable(D._globalConfig._dome_tech_upgrade_cost) < level
+end
+
+function M:canUpgradeDomeTech(id)
+	if id then
+		local level = self._domeTechLevels[id] or 0
+
+		if not D._globalConfig._dome_tech_upgrade_cost[level] then
+			return false
+		end
+
+		local shardCostNum = D._globalConfig._dome_tech_upgrade_cost[level]
+
+		return P._playerAsset:isAssetEnough(D.ResType.dome_tech_upgrade_mat, shardCostNum)
+	else
+		if self:isWeaponUpgradeNotIgnored(D.WEAPON_DOME) then
+			for _, level in pairs(self._domeTechLevels) do
+				if D._globalConfig._dome_tech_upgrade_cost[level] then
+					local shardCostNum = D._globalConfig._dome_tech_upgrade_cost[level]
+
+					if P._playerAsset:isAssetEnough(D.ResType.dome_tech_upgrade_mat, shardCostNum) then
+						return true
+					end
+				end
+			end
+		end
+
+		return false
+	end
+end
+
+function M:tryUpgradeDomeTech(id)
+	local level = self._domeTechLevels[id] or 0
+
+	if not D._globalConfig._dome_tech_upgrade_cost[level] then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local shardCostNum = D._globalConfig._dome_tech_upgrade_cost[level]
+	local shareId = D.ResType.dome_tech_upgrade_mat
+
+	if not P._playerAsset:isAssetEnough(shareId, shardCostNum) then
+		return shareId, shardCostNum
+	end
+
+	P._playerAsset:increaseAssetNum(shareId, -shardCostNum, D.LogWay.upgrade_dome)
+
+	self._domeTechLevels[id] = level + 1
+
+	TaskHelper:increaseTaskValue(D.TaskType.UPGRADE_DOME_TECH, 1)
+	Trace.AF_traceUpgrade("DomeTech", id, self._domeTechLevels[id])
+	Trace.traceDesign("DomeTech:%d:%d", id, self._domeTechLevels[id])
+	RedDotManager.update("city.role.dome.upgrade")
+
+	return ResultCode.OK
+end
+
+function M:getTotalDomeTechHpPercentAdd()
+	local val = 0
+
+	for _, level in pairs(self._domeTechLevels) do
+		for i = 1, level do
+			val = val + D._globalConfig._dome_tech_upgrade_hp_percent[i]
+		end
+	end
+
+	return val
+end
+
+function M:hasNewDomeTech()
+	return #self._newDomeTechs > 0
+end
+
+function M:isNewDomeTech(tech)
+	return table.contains(self._newDomeTechs, tech)
+end
+
+function M:removeNewDomeTechs(tech)
+	table.erase(self._newDomeTechs, tech)
+end
+
+function M:isWeaponUpgradeNotIgnored(id)
+	return not self._dailyIgnoreUpgrade[id]
+end
+
+function M:ignoreWeaponUpgrade(id)
+	self._dailyIgnoreUpgrade[id] = true
+end
+
+function M:clearWeaponUpgrade()
+	table.clear(self._dailyIgnoreUpgrade)
+end
+
+function M:dailyReset()
+	self:clearWeaponUpgrade()
+end
+
+function M:getWeaponDisplayPropertyies(id)
+	return D._weaponConfig[id]._displayProps
+end
+
+function M:isMaxLevel(id)
+	local level = self:getWeaponLevel(id)
+
+	return D._weaponUpgradeConfig[level + 1] == nil
+end
+
+local function getPropValue(weapon, props, prop)
+	local value = 0
+
+	if props then
+		if weapon > 0 and props[0] then
+			value = props[0][prop] or 0
+		end
+
+		if props[weapon] then
+			value = value + (props[weapon][prop] or 0)
+		end
+	end
+
+	return value
+end
+
+function M:getWeaponPropValue(id, propId, level)
+	level = level or self:getWeaponLevel(id)
+	local baseValue, upgradeValue, gemValue, skinValue = M.WeaponPropFuncs[propId](self, id, level)
+	skinValue = skinValue or 0
+
+	return baseValue + upgradeValue + gemValue + skinValue, baseValue, upgradeValue, gemValue, skinValue
+end
+
+function M:calcWeaponDamage(id, level)
+	local baseValue = math.round(D._battleSkillConfig[D._weaponConfig[id]._damageSkillId]._dmgRate * P._playerRole:getWeaponAtk(id) / 10000)
+	local upgradeValue = math.round(D._weaponUpgradeConfig[level]._damage * baseValue / 100)
+	local nature = D._weaponConfig[id]._dmgType
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, gemProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+
+		if id == D.WEAPON_FIRE_BOMB then
+			dmgAddPer = dmgAddPer + getPropValue(D.SKILL_FIRE_BOMB, gemProps, BattlePropEnum.DmgOutAddPer)
+		else
+			dmgAddPer = dmgAddPer + getPropValue(-id, gemProps, BattlePropEnum.DmgOutAddPer)
+		end
+
+		gemValue = math.round(dmgAddPer * baseValue / 100)
+	end
+
+	local skinValue = 0
+	local skinProps = P._playerSkin:genBattleSkinInput({}).skins.props
+	local finalAddPer = 1
+
+	if skinProps then
+		local dmgAddPer = getPropValue(id, skinProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		dmgAddPer = dmgAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgOutAddPerOnlyBattery)
+		skinValue = dmgAddPer * baseValue / 100
+		finalAddPer = finalAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgFinalAddPer) / 100
+		finalAddPer = finalAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgFinalAllAddPerOnlyBattery) / 100
+	end
+
+	return math.round(baseValue * finalAddPer), math.round(upgradeValue * finalAddPer), math.round(gemValue * finalAddPer), math.round(skinValue) * finalAddPer
+end
+
+function M:calcWeaponRangeDamage(id, level)
+	local baseValue = math.round(D._battleSkillConfig[D._weaponConfig[id]._rangeDamageSkillId]._dmgRate * P._playerRole:getWeaponAtk(id) / 10000)
+	local upgradeValue = math.round(D._weaponUpgradeConfig[level]._rangeDamage * baseValue / 100)
+	local nature = D._weaponConfig[id]._dmgType
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DamageNature6Per) + getPropValue(id, gemProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, gemProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+
+		if id == D.WEAPON_FIRE_BOMB then
+			dmgAddPer = dmgAddPer + getPropValue(D.SKILL_FIRE_BOMB_RANGE, gemProps, BattlePropEnum.DmgOutAddPer)
+		else
+			dmgAddPer = dmgAddPer + getPropValue(-id, gemProps, BattlePropEnum.DmgOutAddPer)
+		end
+
+		gemValue = math.round(dmgAddPer * baseValue / 100)
+	end
+
+	local skinValue = 0
+	local skinProps = P._playerSkin:genBattleSkinInput({}).skins.props
+	local finalAddPer = 1
+
+	if skinProps then
+		local dmgAddPer = getPropValue(id, skinProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		dmgAddPer = dmgAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgOutAddPerOnlyBattery)
+		skinValue = dmgAddPer * baseValue / 100
+		finalAddPer = finalAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgFinalAddPer) / 100
+		finalAddPer = finalAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgFinalAllAddPerOnlyBattery) / 100
+	end
+
+	return math.round(baseValue * finalAddPer), math.round(upgradeValue * finalAddPer), math.round(gemValue * finalAddPer), math.round(skinValue) * finalAddPer
+end
+
+function M:calcWeaponDamageRange(id, level)
+	local baseValue = D._weaponConfig[id]._range
+	local upgradeValue = D._weaponConfig[id]._upgradeProp == D.WeaponProperty.DamageRange and D._weaponUpgradeConfig[level]._range * baseValue / 100 or 0
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DmgRangeAddPer)
+
+		if id == D.WEAPON_FIRE_BOMB then
+			dmgAddPer = dmgAddPer + getPropValue(D.SKILL_FIRE_BOMB_RANGE, gemProps, BattlePropEnum.DmgRangeAddPer)
+		elseif id == 6 then
+			dmgAddPer = dmgAddPer + getPropValue(D.SKILL_6_RANGE, gemProps, BattlePropEnum.DmgRangeAddPer)
+		elseif id == 10 then
+			dmgAddPer = dmgAddPer + getPropValue(D.SKILL_10_RANGE, gemProps, BattlePropEnum.DmgRangeAddPer)
+		else
+			dmgAddPer = dmgAddPer + getPropValue(-id, gemProps, BattlePropEnum.DmgRangeAddPer)
+		end
+
+		gemValue = math.round(dmgAddPer * baseValue / 100)
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponCoolDown(id, level)
+	local baseValue = D._weaponConfig[id]._cd
+	local upgradeValue = D._weaponUpgradeConfig[level]._cd
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+	gemValue = math.round(getPropValue(id, gemProps, BattlePropEnum.SkillCdSpeedAddPer) + getPropValue(-id, gemProps, BattlePropEnum.SkillCdSpeedAddPer))
+	local finalValue = 100 + upgradeValue + gemValue
+	upgradeValue = -upgradeValue / finalValue * baseValue
+	gemValue = -gemValue / finalValue * baseValue
+	upgradeValue = math.floor(upgradeValue * 100) / 100
+	gemValue = math.floor(gemValue * 100) / 100
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponThrough(id, level)
+	local baseValue = D._weaponConfig[id]._through
+	local upgradeValue = D._weaponConfig[id]._upgradeProp == D.WeaponProperty.Through and D._weaponUpgradeConfig[level]._through or 0
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local penetrateNum = getPropValue(id, gemProps, BattlePropEnum.PenetrateNum)
+		penetrateNum = penetrateNum + getPropValue(-id, gemProps, BattlePropEnum.PenetrateNum)
+		gemValue = penetrateNum
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponDamageInterval(id, level)
+	local baseValue = D._weaponConfig[id]._damageInterval
+	local upgradeValue = -D._weaponUpgradeConfig[level]._damageInterval
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local addPer = getPropValue(id, gemProps, BattlePropEnum.AtkIntervalAddPer)
+		addPer = addPer + getPropValue(-id, gemProps, BattlePropEnum.AtkIntervalAddPer)
+		gemValue = addPer * baseValue / 100
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponLastTime(id, level)
+	local baseValue = D._weaponConfig[id]._lastTime
+	local upgradeValue = D._weaponConfig[id]._upgradeProp == D.WeaponProperty.LastTime and D._weaponUpgradeConfig[level]._lastTime * baseValue / 100 or 0
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local addPer = getPropValue(id, gemProps, BattlePropEnum.DamageNum)
+		addPer = addPer + getPropValue(-id, gemProps, BattlePropEnum.DamageNum)
+		gemValue = math.floor(addPer)
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponOuterDamage(id, level)
+	local baseValue = math.round(D._weaponConfig[id]._outerDamage * P._playerRole:getWeaponAtk(id) / 10000)
+	local upgradeValue = math.round(D._weaponUpgradeConfig[level]._outerDamage * baseValue / 100)
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()[id]
+	local nature = D._weaponConfig[id]._dmgType
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, gemProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		gemValue = math.round(dmgAddPer * baseValue / 100)
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponCenterDamage(id, level)
+	local baseValue = math.round(D._weaponConfig[id]._centerDamage * P._playerRole:getWeaponAtk(id) / 10000)
+	local upgradeValue = math.round(D._weaponUpgradeConfig[level]._centerDamage * baseValue / 100)
+	local nature = D._weaponConfig[id]._dmgType
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()[id]
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, gemProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		gemValue = math.round(dmgAddPer * baseValue / 100)
+	end
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponReflectTimes(id, level)
+	local baseValue = D._weaponConfig[id]._reflectTimes
+	local upgradeValue = D._weaponConfig[id]._upgradeProp == D.WeaponProperty.ReflectTimes and D._weaponUpgradeConfig[level]._reflectTimes or 0
+	local gemValue = 0
+
+	return baseValue, upgradeValue, gemValue
+end
+
+function M:calcWeaponRange(id, level)
+	local baseValue = D._weaponConfig[id]._atkRange
+	local upgradeValue = 0
+	local gemValue = 0
+
+	return baseValue, upgradeValue, gemValue
+end
+
+M.WeaponPropFuncs = {
+	M.calcWeaponDamage,
+	M.calcWeaponRangeDamage,
+	M.calcWeaponDamageRange,
+	M.calcWeaponCoolDown,
+	M.calcWeaponThrough,
+	M.calcWeaponDamageInterval,
+	M.calcWeaponLastTime,
+	M.calcWeaponOuterDamage,
+	M.calcWeaponCenterDamage,
+	M.calcWeaponReflectTimes,
+	M.calcWeaponRange
+}
+
+function M:getGatlinUpgradeProps()
+	local dmg = 0
+	local crit = 0
+	local critDmg = 0
+	local chargeBulletDmgAdd = 0
+	local chargeBulletCritAdd = 0
+	local smallBulletDmgAdd = 0
+
+	for i = 1, self:getWeaponLevel(D.WEAPON_GATLIN) - 1 do
+		local conf = D._gatlinUpgradeConfig[i]
+
+		if conf._bulletDmgAdd then
+			dmg = dmg + conf._bulletDmgAdd
+		end
+
+		if conf._critAdd then
+			crit = crit + conf._critAdd
+		elseif conf._critDmgAdd then
+			critDmg = critDmg + conf._critDmgAdd
+		elseif conf._chargeBulletDmgAdd then
+			chargeBulletDmgAdd = chargeBulletDmgAdd + conf._chargeBulletDmgAdd
+		elseif conf._chargeBulletCritAdd then
+			chargeBulletCritAdd = chargeBulletCritAdd + conf._chargeBulletCritAdd
+		elseif conf._smallBulletDmgAdd then
+			smallBulletDmgAdd = smallBulletDmgAdd + conf._smallBulletDmgAdd
+		end
+	end
+
+	return dmg, crit, critDmg, chargeBulletDmgAdd, chargeBulletCritAdd, smallBulletDmgAdd
+end
+
+function M:getWeaponCritValue()
+	local value = 0
+
+	for id = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		local level = self:getWeaponLevel(id)
+
+		if id ~= D.WEAPON_GATLIN then
+			for i = 2, level do
+				value = value + math.ceil(i / 5)
+			end
+		end
+	end
+
+	return value
+end
+
+function M:calcGatlinDmg()
+	local id = D.WEAPON_GATLIN
+	local baseValue = D._battleSkillConfig[D._weaponConfig[id]._damageSkillId]._dmgRate * P._playerRole:getWeaponAtk(id) / 10000
+	local upgradePercent = P._playerArmory:getGatlinUpgradeProps()
+	local upgradeValue = baseValue * upgradePercent / 100
+	local nature = D._weaponConfig[id]._dmgType
+	local gemValue = 0
+	local gemProps = P._playerRole:getGemProps()
+
+	if gemProps then
+		local dmgAddPer = getPropValue(id, gemProps, BattlePropEnum.DmgOutAddPer)
+		dmgAddPer = dmgAddPer + getPropValue(id, gemProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		dmgAddPer = dmgAddPer + getPropValue(-id, gemProps, BattlePropEnum.DmgOutAddPer)
+		gemValue = dmgAddPer * baseValue / 100
+	end
+
+	local skinValue = 0
+	local skinProps = P._playerSkin:genBattleSkinInput({}).skins.props
+	local finalAddPer = 1
+
+	if skinProps then
+		local dmgAddPer = getPropValue(id, skinProps, BattlePropEnum.DamageNature1Per - 1 + nature)
+		dmgAddPer = dmgAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgOutAddPer)
+		skinValue = dmgAddPer * baseValue / 100
+		finalAddPer = finalAddPer + getPropValue(id, skinProps, BattlePropEnum.DmgFinalAddPer) / 100
+	end
+
+	return math.round((baseValue + upgradeValue + gemValue + skinValue) * finalAddPer)
+end
+
+function M:getDomeProps()
+	if self._domeDirty then
+		self._domeDirty = false
+
+		table.clear(self._domeProps)
+
+		self._domeProps[BattlePropEnum.MaxHp] = 0
+		self._domeProps[BattlePropEnum.MaxHpAddPer] = 0
+		self._domeProps[BattlePropEnum.HpDmgReduce] = 0
+		local conf = D._domeUpgradeConfig[self:getDomeLevel()]
+
+		if conf then
+			if conf._hpAdd then
+				self._domeProps[BattlePropEnum.MaxHp] = self._domeProps[BattlePropEnum.MaxHp] + conf._hpAdd
+			end
+
+			if conf._dmgReduce then
+				self._domeProps[BattlePropEnum.HpDmgReduce] = self._domeProps[BattlePropEnum.HpDmgReduce] + conf._dmgReduce
+			end
+		end
+	end
+
+	return self._domeProps
+end
+
+function M:dirtyUnlockedWeapons()
+	self._unlockedWeaponsDirty = true
+end
+
+function M:getUnlockedWeapons()
+	if not self._unlockedWeaponsDirty then
+		return self._unlockedWeapons
+	end
+
+	self._unlockedWeaponsDirty = false
+
+	table.clear(self._unlockedWeapons)
+
+	for id = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if self:isWeaponUnlocked(id) then
+			self._unlockedWeapons[#self._unlockedWeapons + 1] = id
+		end
+	end
+
+	return self._unlockedWeapons
+end
+
+function M:getExpectedWeaponLevels()
+	if self._shardDirty then
+		self._shardDirty = false
+
+		for id = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+			local level = self:getWeaponLevel(id)
+			local levelShardNum = D._weaponUpgradeConfig[level]._totalShardNum
+			local realShardNum = levelShardNum + P._playerAsset:getAssetNum(D._weaponConfig[id]._shardId)
+			self._expectedWeaponLevels[id] = self._expectedWeaponLevels[id] or 1
+
+			for lv = self._expectedWeaponLevels[id], D.MAX_WEAPON_LEVEL do
+				if D._weaponUpgradeConfig[lv]._totalShardNum < realShardNum then
+					self._expectedWeaponLevels[id] = lv
+				else
+					break
+				end
+			end
+		end
+	end
+
+	return self._expectedWeaponLevels
+end
+
+function M:dirtyWeaponShard()
+	self._shardDirty = true
+end
+
+function M:genBattleWeaponInput(input)
+	local weapons = {}
+	local props = {}
+	local effects = {}
+	weapons.props = props
+	weapons.effects = effects
+	local critValue = self:getWeaponCritValue()
+	props[0] = {
+		[BattlePropEnum.CritDmg] = critValue
+	}
+
+	for id = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		local conf = D._weaponConfig[id]
+		local level = self:getWeaponLevel(id)
+
+		if id == D.WEAPON_GATLIN then
+			local dmg, crit, critDmgGatlin, chargeBulletDmgAdd, chargeBulletCritAdd, smallBulletDmgAdd = self:getGatlinUpgradeProps()
+			props[id] = {
+				[BattlePropEnum.NormalBulletDmgAdd] = dmg,
+				[BattlePropEnum.CritRate] = crit,
+				[BattlePropEnum.CritDmgGatlin] = critDmgGatlin,
+				[BattlePropEnum.ChargeBulletDmgAdd] = chargeBulletDmgAdd + dmg,
+				[BattlePropEnum.ChargeBulletCritAdd] = chargeBulletCritAdd,
+				[BattlePropEnum.SmallBulletDmgAdd] = smallBulletDmgAdd
+			}
+		else
+			props[id] = {
+				[BattlePropEnum.SkillLevel] = level
+			}
+
+			if D._weaponUpgradeConfig[level]._cd ~= 0 then
+				props[id][BattlePropEnum.SkillCdSpeedAddPer] = D._weaponUpgradeConfig[level]._cd
+			end
+
+			if conf._upgradeProp == D.WeaponProperty.DamageRange and D._weaponUpgradeConfig[level]._range ~= 0 then
+				props[id][BattlePropEnum.DmgRangeAddPer] = D._weaponUpgradeConfig[level]._range
+			end
+
+			if conf._upgradeProp == D.WeaponProperty.LastTime and D._weaponUpgradeConfig[level]._lastTime ~= 0 then
+				props[id][BattlePropEnum.DamageNum] = D._weaponUpgradeConfig[level]._lastTime * conf._lastTime / 100
+			end
+
+			if conf._upgradeProp == D.WeaponProperty.Through and D._weaponUpgradeConfig[level]._through ~= 0 then
+				props[id][BattlePropEnum.PenetrateNum] = D._weaponUpgradeConfig[level]._through
+			end
+		end
+	end
+
+	props[D.WEAPON_DOME] = clone(self:getDomeProps())
+	props[D.WEAPON_DOME][BattlePropEnum.MaxHp] = props[D.WEAPON_DOME][BattlePropEnum.MaxHp] * (100 + self:getTotalDomeTechHpPercentAdd()) / 100
+
+	for id, level in pairs(self._domeTechLevels) do
+		if level > 0 then
+			local conf = D._domeTechConfig[id]
+			local value = conf._param[level]
+
+			if id == 10000 then
+				props[D.WEAPON_DOME][BattlePropEnum.HpDmgReduce] = props[D.WEAPON_DOME][BattlePropEnum.HpDmgReduce] * (value + 100) / 100
+			else
+				effects[#effects + 1] = {
+					id,
+					value
+				}
+			end
+		end
+	end
+
+	table.sort(effects, function (a, b)
+		return a[1] < b[1]
+	end)
+
+	input.weapons = weapons
+
+	return input
+end
+
+function M:loadBattleEnv(env)
+	for k, v in pairs(env.weaponLevels) do
+		self._weaponLevels[k] = env.weaponLevels[k]
+	end
+
+	if env.domeTechLevels then
+		for i = 1, 5 do
+			self._domeTechLevels[D._domeUpgradeConfig[i * 10]._tech] = env.domeTechLevels[i] or 0
+		end
+	end
+end
+
+return M

@@ -1,0 +1,751 @@
+local M = class("GuideManager", BLB)
+M.args = {
+	txtDebugGuide = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.GuideManager = self
+
+	self:on("guide.pop", function (conf)
+		self._forbidenClick = true
+
+		lc.setTimer(function ()
+			self._forbidenClick = false
+
+			self:tryShowAction()
+		end, 0.3, true)
+	end)
+	self:on("guide.trigger", function (type, val)
+		if UIManager.getTopPanel() then
+			P._playerGuide:tryTriggerAction(type, val, UIManager.getTopPanel().__prefabArg.id)
+		end
+	end)
+end
+
+function M:createGuidePanel()
+	self._UItoScreenScale = lc.getUI2ScreenScale()
+	self._guidePanel = LuaUnity.createGameObject(PrefabDefine.GuidePanel, MainGameRoot._currentCanvasTop)
+
+	lc.prefabVarPeer(self._guidePanel)
+
+	self._triggerPanel = nil
+	self._guideDialogPos = {
+		lc.getLocalPosition(self._guidePanel._dialog)
+	}
+
+	self._guidePanel._dialog:SetActive(false)
+	self._guidePanel._point:SetActive(false)
+	self._guidePanel._focus:SetActive(false)
+	self:setClickWithoutAction(self._guidePanel._btnTopBg, function ()
+		if self._forbidClose and not self._isInGuide then
+			return
+		end
+
+		if C.getCurTime() < self._dialogBlockTime then
+			return
+		end
+
+		if self._seq and self._guidePanel._dialogText.text ~= self._guidePanel._dialogText2.text then
+			self._seq:Kill()
+
+			self._seq = nil
+			self._guidePanel._dialogText.text = self._guidePanel._dialogText2.text
+			self._guidePanel._dialogNext.alpha = 1
+
+			return
+		end
+
+		if self._fcGuideBg then
+			self._fcGuideBg()
+		end
+	end)
+
+	self._dialogBlockTime = 0
+	self._guideStashedWidgetParents = {}
+end
+
+function M:isInGuide()
+	return self._isInGuide
+end
+
+function M:hideGuide()
+	if self._guidePanel then
+		self._guidePanel:SetVisible(false)
+	end
+end
+
+function M:matchPanel(panel)
+	if UIManager.getTopPanel().__prefabArg.id == panel then
+		return true
+	elseif string.startsWith(panel, UIManager.getTopPanel().__prefabArg.id) then
+		if UIManager.getTopPanel()._lastPage then
+			return string.endsWith(panel, UIManager.getTopPanel()._lastPage.__cname)
+		end
+
+		return false
+	end
+
+	return false
+end
+
+function M:doExec(exec)
+	local cmds = string.split(exec, ",")
+
+	for i = 1, #cmds do
+		local args = string.split(cmds[i], "|")
+
+		if args[1] then
+			if #args > 1 then
+				local fArgs = {}
+
+				for i = 2, #args do
+					if tonumber(args[i]) then
+						fArgs[#fArgs + 1] = tonumber(args[i])
+					else
+						fArgs[#fArgs + 1] = args[i]
+					end
+				end
+
+				M[args[1]](unpack(fArgs))
+			else
+				M[args[1]]()
+			end
+		end
+	end
+end
+
+function M:tryShowAction()
+	if V._crossingScene then
+		self:hideGuide()
+
+		return
+	end
+
+	local triggerPanel = UIManager.getTopPanel()
+
+	if triggerPanel then
+		if triggerPanel._animating then
+			function triggerPanel.onAnimCompleted()
+				self:tryShowAction()
+			end
+
+			return
+		end
+
+		if Client._config.disableGuide then
+			return
+		end
+
+		P._playerGuide:tryPopGuide(triggerPanel.__prefabArg.id)
+	end
+
+	if self._guidePanel == nil then
+		self:createGuidePanel()
+	end
+
+	local conf = P._playerGuide:getGuideArgs()
+
+	if conf == nil then
+		local guideTriggerId = P._playerGuide:getGuideTriggerId()
+
+		if guideTriggerId and guideTriggerId ~= 0 then
+			local triggerConf = D._guideTriggerConfig[guideTriggerId]
+
+			P._playerGuide:tryTriggerAction(triggerConf._type, triggerConf._val, triggerPanel.__prefabArg.id)
+
+			conf = P._playerGuide:getGuideArgs()
+
+			if conf == nil then
+				self:hideGuide()
+
+				return
+			end
+		else
+			self:hideGuide()
+
+			return
+		end
+	end
+
+	if self._isInGuide then
+		return
+	end
+
+	if not self._isNextStep then
+		local triggerConf = D._guideTriggerConfig[P._playerGuide:getGuideTriggerId()]
+
+		if UIManager.getTopPanel() == nil or not self:matchPanel(triggerConf._panel) then
+			self:hideGuide()
+
+			return
+		end
+	elseif self._targetPanel then
+		if UIManager.getTopPanel() == nil or not self:matchPanel(self._targetPanel) then
+			self:hideGuide()
+
+			return
+		end
+
+		self._targetPanel = nil
+	end
+
+	self._triggerPanel = triggerPanel
+	self._isInGuide = true
+
+	if conf._execResume and conf._execResume ~= "" then
+		self:doExec(conf._execResume)
+	end
+
+	if conf._execBefore and conf._execBefore ~= "" then
+		self:doExec(conf._execBefore)
+	end
+
+	local actionType = conf._actionType
+	self._actionType = actionType
+
+	self._guidePanel:SetVisible(true)
+	self._guidePanel._bg:SetActive(true)
+	self._guidePanel._blackBg:SetActive(false)
+	self._guidePanel._btnTopBg:SetActive(false)
+
+	self._fcGuideBg = nil
+
+	if conf._showObj and conf._showObj ~= "" and conf._showObj == "widgetLbs[1].btnDraw3_35" then
+		triggerPanel._widgetLbs[1]:scrollToBottom()
+	end
+
+	self._guidePanel._dialog:SetVisible(false)
+	self._guidePanel._dialogHand:SetActive(false)
+
+	if self._changingTab then
+		lc.setTimer(function ()
+			self._changingTab = false
+
+			self:showAction(conf)
+		end, 0.2, true)
+	else
+		lc.setTimer(function ()
+			self:showAction(conf)
+			self:showDialogContent(conf)
+		end, conf._waitTime + 0.1, true)
+	end
+end
+
+local function getWidget(panel, objPath)
+	local pathes = string.split(objPath, ".")
+	local ret = panel
+
+	for i = 1, #pathes do
+		if ret then
+			if i > 1 and ret.luaTable then
+				ret = ret.luaTable
+			end
+
+			if string.find(pathes[i], "%[") then
+				local num = tonumber(string.sub(pathes[i], string.find(pathes[i], "%[") + 1, string.find(pathes[i], "%]") - 1))
+				ret = ret["_" .. string.sub(pathes[i], 1, string.find(pathes[i], "%[") - 1)]
+
+				if ret then
+					ret = ret[num]
+				else
+					return nil
+				end
+			else
+				ret = ret["_" .. pathes[i]]
+			end
+		end
+	end
+
+	return ret
+end
+
+local function getWidgetCenterPos(focusWidget, scale)
+	local posX1, posY1, posZ1 = lc.getPosition(focusWidget.gameObject)
+	local pivot = focusWidget.transform.pivot
+
+	if pivot.x ~= 0.5 or pivot.y ~= 0.5 then
+		local rect = focusWidget.transform.rect
+		local rectWidth = rect.width * scale
+		local rectHeight = rect.height * scale
+		rectHeight = math.min(rectHeight, math.abs(posY1))
+		posX1 = posX1 + rectWidth * (0.5 - pivot.x)
+		posY1 = posY1 + rectHeight * (0.5 - pivot.y)
+	end
+
+	return posX1, posY1, posZ1
+end
+
+function M:showAction(conf)
+	local triggerPanel = UIManager.getTopPanel()
+
+	if conf._showType == 1 or conf._showType == 2 then
+		self._guidePanel._bg:SetActive(true)
+		self._guidePanel._blackBg:SetActive(false)
+	else
+		self._guidePanel._bg:SetActive(false)
+		self._guidePanel._blackBg:SetActive(true)
+	end
+
+	if conf._showObj and conf._showObj ~= "" then
+		local focusWidget = getWidget(triggerPanel, conf._showObj)
+		local posX1, posY1, posZ1 = nil
+
+		if focusWidget == nil then
+			self:nextStep()
+
+			local e_debug_values = {
+				{
+					_key = "target",
+					_value = "配置错误" .. conf._actionObj
+				}
+			}
+
+			Trace.AF_traceEvent("e_debug", e_debug_values)
+
+			return
+		end
+
+		if not self._guideStashedWidgetParents[focusWidget] then
+			local oldParent = focusWidget.transform.parent
+			local oldSigborIndex = focusWidget.transform:GetSiblingIndex()
+
+			if oldParent:GetComponent("GridLayoutGroup") then
+				LuaUnity.forceRebuildLayoutImmediate(oldParent)
+
+				oldParent:GetComponent("GridLayoutGroup").enabled = false
+			end
+
+			if oldParent:GetComponent("HorizontalLayoutGroup") then
+				LuaUnity.forceRebuildLayoutImmediate(oldParent)
+
+				oldParent:GetComponent("HorizontalLayoutGroup").enabled = false
+			end
+
+			if oldParent:GetComponent("VerticalLayoutGroup") then
+				LuaUnity.forceRebuildLayoutImmediate(oldParent)
+
+				oldParent:GetComponent("VerticalLayoutGroup").enabled = false
+			end
+
+			focusWidget.transform:SetParent(self._guidePanel._content, true)
+
+			self._guideStashedWidgetParents[focusWidget] = {
+				oldParent,
+				oldSigborIndex
+			}
+		end
+
+		posX1, posY1, posZ1 = getWidgetCenterPos(focusWidget, self._UItoScreenScale)
+
+		if conf._showType == 2 or conf._showType == 4 then
+			self._guidePanel._focus:SetActive(true)
+		end
+
+		local focusSizeW = conf._showWidth
+		local focusSizeH = conf._showHight
+
+		if focusSizeW and focusSizeH then
+			self._guidePanel._focus.transform.sizeDelta = Vector2.static(focusSizeW, focusSizeH)
+		end
+
+		local focusX = conf._showX or 0
+		local focusY = conf._showY or 0
+
+		self._guidePanel._focus:SetPosition(posX1 + focusX, posY1 + focusY, posZ1)
+	end
+
+	self:doAction(conf)
+end
+
+function M:doAction(conf)
+	local triggerPanel = UIManager.getTopPanel()
+	local actionType = conf._actionType
+
+	if actionType == 1 then
+		self._guidePanel._btnTopBg:SetActive(true)
+		self._guidePanel._point:SetActive(false)
+
+		self._guideWidget = self._guidePanel._btnTopBg
+
+		function self._fcGuideBg()
+			self:resetWidgetsParent()
+			self:nextStep()
+		end
+	else
+		if actionType == 2 then
+			self._guidePanel._point:SetActive(true)
+			self._guidePanel._pointAni:Play()
+
+			self._guideWidget = self._guidePanel._btnTopBg
+			local focusWidget = getWidget(triggerPanel, conf._actionObj)
+
+			if focusWidget == nil then
+				self:nextStep()
+
+				local e_debug_values = {
+					{
+						_key = "target",
+						_value = "配置错误" .. conf._actionObj
+					}
+				}
+
+				Trace.AF_traceEvent("e_debug", e_debug_values)
+
+				return
+			end
+
+			if not focusWidget.gameObject.activeSelf then
+				self:nextStep()
+
+				return
+			end
+
+			if focusWidget.gameObject.transform.localScale.x == 0 then
+				self:nextStep()
+
+				return
+			end
+
+			local posX1, posY1, posZ1 = getWidgetCenterPos(focusWidget, self._UItoScreenScale)
+
+			lc.setLocalRotation(self._guidePanel._point, 0, 0, 0)
+
+			if conf._handOffset and conf._handOffset ~= "" then
+				local splits = string.split(conf._handOffset, "|")
+				posX1 = posX1 + tonumber(splits[1]) * self._UItoScreenScale
+				posY1 = posY1 + tonumber(splits[2]) * self._UItoScreenScale
+
+				if #splits >= 3 then
+					lc.setLocalRotation(self._guidePanel._point, 0, 0, tonumber(splits[3]))
+				end
+
+				self._guidePanel._point:SetPosition(posX1, posY1, posZ1)
+			else
+				self._guidePanel._point:SetPosition(posX1, posY1, posZ1)
+			end
+
+			if conf._handScale then
+				self._guidePanel._point:SetLocalScale(conf._handScale, conf._handScale, 1)
+			else
+				self._guidePanel._point:SetLocalScale(1, 1, 1)
+			end
+
+			local btnClick = getWidget(triggerPanel, conf._actionObj)
+
+			if conf._actionObj == "btnMask" then
+				self._guidePanel._btnTopBg:SetActive(true)
+			elseif conf._actionObj ~= "btnMask" and not self._guideStashedWidgetParents[btnClick] then
+				local oldParent = btnClick.transform.parent
+				local oldSigborIndex = btnClick.transform:GetSiblingIndex()
+
+				btnClick.transform:SetParent(self._guidePanel._content, true)
+
+				self._guideStashedWidgetParents[btnClick] = {
+					oldParent,
+					oldSigborIndex
+				}
+
+				btnClick.transform.transform:SetSiblingIndex(0)
+			end
+
+			local savedClick = btnClick.onClick
+
+			if btnClick.onClick ~= self._guidePanel._btnTopBg.onClick then
+				btnClick.onClick = self._guidePanel._btnTopBg.onClick
+
+				function self._fcGuideBg()
+					self:resetWidgetsParent()
+
+					self._guideWidget = nil
+					btnClick.onClick = savedClick
+
+					savedClick:Invoke()
+					self:nextStep()
+				end
+			end
+
+			return
+		end
+
+		if actionType == 3 then
+			-- Nothing
+		elseif actionType == 9 then
+			lc.setTimer(function ()
+				self:nextStep()
+			end, 0.1)
+		elseif actionType == 10 then
+			self._guidePanel._btnTopBg:SetActive(true)
+			self._guidePanel._point:SetActive(false)
+
+			self._guideWidget = self._guidePanel._btnTopBg
+			self._actionTimer = lc.setTimer(function ()
+				self:nextStep()
+			end, tonumber(conf._actionObj))
+		end
+	end
+end
+
+function M:tryCallback()
+	if self._actionCallback then
+		self._actionCallback()
+	end
+end
+
+function M:resetWidgetsParent()
+	for widget, parentWrap in pairs(self._guideStashedWidgetParents) do
+		widget.transform:SetParent(parentWrap[1], true)
+		widget.transform:SetSiblingIndex(parentWrap[2])
+
+		if parentWrap[1].name == "Content" then
+			if parentWrap[1]:GetComponent("VerticalLayoutGroup") then
+				parentWrap[1]:GetComponent("VerticalLayoutGroup").enabled = true
+
+				LuaUnity.forceRebuildLayoutImmediate(parentWrap[1])
+			end
+
+			if parentWrap[1]:GetComponent("HorizontalLayoutGroup") then
+				parentWrap[1]:GetComponent("HorizontalLayoutGroup").enabled = true
+
+				LuaUnity.forceRebuildLayoutImmediate(parentWrap[1])
+			end
+
+			if parentWrap[1]:GetComponent("GridLayoutGroup") then
+				parentWrap[1]:GetComponent("GridLayoutGroup").enabled = true
+
+				LuaUnity.forceRebuildLayoutImmediate(parentWrap[1])
+			end
+		end
+	end
+
+	table.clear(self._guideStashedWidgetParents)
+end
+
+function M:nextStep()
+	local conf = P._playerGuide:getGuideArgs()
+
+	if conf._execAfter and conf._execAfter ~= "" then
+		self:doExec(conf._execAfter)
+	end
+
+	self._guidePanel._point:SetActive(false)
+	self._guidePanel._focus:SetActive(false)
+	self._guidePanel._btnTopBg:SetActive(false)
+
+	self._isInGuide = false
+	self._guideWidget = nil
+	self._triggerPanel = nil
+
+	self:resetWidgetsParent()
+
+	self._isNextStep = P._playerGuide:stepNext()
+
+	if self._actionTimer then
+		lc.stopTimer(self._actionTimer)
+
+		self._actionTimer = nil
+	end
+
+	self:tryShowAction()
+end
+
+function M:showDialogContent(conf)
+	local guideTextSid, roleId = P._playerGuide:getGuideText()
+
+	if conf._isHand ~= 1 and guideTextSid then
+		if self._seq then
+			self._seq:Kill()
+
+			self._seq = nil
+		end
+
+		self._guidePanel._dialog:SetVisible(true)
+
+		self._guidePanel._dialogText.text = ""
+
+		if P._playerGuide:getGuideStep() == 10010 then
+			self._guidePanel._dialogText2:SetLocalize(guideTextSid, -SID["STR_QUALITY_" .. P._playerRole:getAvaliableGems()[1].quality])
+		else
+			self._guidePanel._dialogText2:SetLocalize(guideTextSid)
+		end
+
+		self._guidePanel._dialogNext.alpha = 0
+		self._seq = DOTween.Sequence()
+
+		self._seq:SetUpdate(0, true)
+
+		if not self._guidePanel._dialog.activeSelf then
+			self._guidePanel._dialog:SetActive(true)
+			self._seq:AppendInterval(0.8)
+		end
+
+		self._seq:Append(self._guidePanel._dialogText:DOText(self._guidePanel._dialogText2.text, 1.5))
+		self._seq:Append(self._guidePanel._dialogNext:DOFade(1, 0.3))
+
+		if conf._dialogOffset and conf._dialogOffset ~= "" then
+			local splits = string.split(conf._dialogOffset, "|")
+			local posX = self._guideDialogPos[1] + tonumber(splits[1])
+			local posY = self._guideDialogPos[2] + tonumber(splits[2])
+
+			self._guidePanel._dialog:SetLocalPosition(posX, posY, self._guideDialogPos[3])
+		else
+			self._guidePanel._dialog:SetLocalPosition(self._guideDialogPos[1], self._guideDialogPos[2], self._guideDialogPos[3])
+		end
+
+		if roleId then
+			self._guidePanel._dialogRoleName:SetLocalize(SID.STR_NAME_GUIDE_ROLE)
+		end
+
+		self._dialogBlockTime = C.getCurTime() + 0.5
+	else
+		if guideTextSid and conf._isHand then
+			self._guidePanel._dialogHand:SetActive(true)
+
+			if P._playerGuide:getGuideStep() == 10010 then
+				self._guidePanel._dialogHandText:SetLocalize(guideTextSid, -SID["STR_QUALITY_" .. P._playerRole:getAvaliableGems()[1].quality])
+			else
+				self._guidePanel._dialogHandText:SetLocalize(guideTextSid)
+			end
+
+			local x = lc.getLocalPosition(self._guidePanel._point)
+
+			if x <= 0 then
+				lc.setLocalScale(self._guidePanel._dialogHand, 1, 1, 1)
+				lc.setLocalScale(self._guidePanel._dialogHandText.gameObject, 1, 1, 1)
+			else
+				lc.setLocalScale(self._guidePanel._dialogHand, -1, 1, 1)
+				lc.setLocalScale(self._guidePanel._dialogHandText.gameObject, -1, 1, 1)
+			end
+		end
+
+		self._guidePanel._dialog:SetActive(false)
+	end
+end
+
+function M:couldClickUIWidget(button)
+	if Client._config.disableGuide then
+		return true
+	end
+
+	if self._forbidenClick then
+		return false
+	end
+
+	if self._guideWidget == nil then
+		return true
+	end
+
+	if self._guideWidget == button then
+		return true
+	end
+
+	return false
+end
+
+function M:closeGuide()
+	self:resetWidgetsParent()
+
+	self._guideWidget = nil
+	self._isInGuide = nil
+
+	self:hideGuide()
+
+	if WildManager then
+		WildManager:setGuideObj(nil)
+	end
+end
+
+function M:forceCloseGuide()
+	if self._isInGuide then
+		self:closeGuide()
+		lc.stopTimer(self._actionTimer)
+
+		self._actionTimer = nil
+		self._guidePanel = nil
+		self._forbidenClick = nil
+	end
+end
+
+function M:isWaitingPanel(panel)
+	return self._targetPanel == panel
+end
+
+function M.battle()
+	local msId = 10001
+	local msType = 1
+	InputBattleData = {
+		msType = msType,
+		msId = msId
+	}
+
+	V.switchBetweenMainAndBattleScene("city", "battle")
+	Trace.traceDesign("NormalStageTimes:10001")
+end
+
+function M.pause()
+	BattleManager:getSession():pauseBattle(true)
+end
+
+function M.resume()
+	BattleManager:getSession():pauseBattle(false)
+end
+
+function M.widget()
+end
+
+function M.open(panelName, ...)
+	UIManager.openPanel(PrefabDefine[panelName], ...)
+end
+
+function M.close(panelName)
+	UIManager.closePanel(PrefabDefine[panelName])
+end
+
+function M.wait(panelName)
+	GuideManager._targetPanel = panelName
+end
+
+function M.changeTab(tabIndex)
+	if UIManager.getTopPanel()._lastPage and UIManager.getTopPanel()._lastPage.changeTab then
+		UIManager.getTopPanel()._lastPage:changeTab(tabIndex)
+
+		if UIManager.getTopPanel()._lastPage.reloadData then
+			UIManager.getTopPanel()._lastPage:reloadData(true)
+		end
+
+		return
+	end
+
+	if UIManager.getTopPanel()._lastPage and UIManager.getTopPanel()._lastPage.updateTab then
+		UIManager.getTopPanel()._lastPage:updateTab(tabIndex)
+
+		return
+	end
+
+	if UIManager.getTopPanel().changeTab then
+		UIManager.getTopPanel():changeTab(tabIndex)
+
+		return
+	end
+
+	if UIManager.getTopPanel().updateTab then
+		UIManager.getTopPanel():updateTab(tabIndex)
+
+		return
+	end
+end
+
+function M.setBgAlpha(alpha)
+	GuideManager._guidePanel._blackBg:GetComponent("CanvasGroup").alpha = alpha
+end
+
+function M.scrollTo(scroll, y)
+	lc.setLocalPosition(GuideManager._triggerPanel[scroll].content, 0, y, 0)
+end
+
+function M.changePage(index)
+	UIManager.getMainPanel():changePage(index)
+end
+
+return M

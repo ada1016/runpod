@@ -1,0 +1,329 @@
+local M = class("AnniversaryMainPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	btnExit = Types.Button,
+	btnInviteNewbie = Types.Button,
+	btnTask = Types.Button,
+	btnDraw = Types.Button,
+	btnDig = Types.Button,
+	btnCheckin = Types.Button,
+	btnCharge = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	Client.playMusic("music_anniversary_1")
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnInviteNewbie, function ()
+		self:handleInviteNewbieBtn()
+	end)
+	self:setClick(self._btnTask, function ()
+		self:handleTaskBtn(true)
+	end)
+	self:setClick(self._btnCheckin, function ()
+		self:handleCheckinBtn()
+	end)
+	self:setClick(self._btnDig, function ()
+		self:handleDigBtn()
+	end)
+	self:setClick(self._btnDraw, function ()
+		self:handleDrawBtn()
+	end)
+	self:setClick(self._btnCharge, function ()
+		self:handleChargeBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.spark_scout_wafer or cid == D.ResType.spark_scout_sp_wafer then
+			self:updateAtkDot()
+		end
+	end)
+	self:on("day.cross", function ()
+		self:updateReddots()
+		self:tryExpire()
+	end)
+end
+
+function M:closePanel(enterBattle)
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._timer)
+	Client.playMusic("music_city")
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+	self:updateReddots()
+	self:updatePlayBtn()
+	self:tryExpire()
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return
+	end
+
+	self._tickExpireTimer = lc.setInterval(function ()
+		if self._expireDealed then
+			return
+		end
+
+		if not self._module:isExpired() then
+			return
+		end
+
+		if UIManager:isPlayingAnim() then
+			return
+		end
+
+		if UIManager.isTopPanel(self.__prefabArg.id) then
+			self._expireDealed = true
+
+			lc.stopTimer(self._tickExpireTimer)
+			UIManager.closeToPanelOrMain(self.__prefabArg.id)
+			V.showMessageBox({
+				_type = 1,
+				_content = SID.TIP_EVENT_END,
+				_confirmCallback = function ()
+					self._module:trySettle()
+
+					if self._module:isSettleClaimed() then
+						self:closePanel()
+					else
+						local rewards = P._playerActivityAnniversary:tryClaimSettleRewards()
+
+						if rewards then
+							V.showAnniMissRewardClaimPanel(rewards, nil, function ()
+								self:closePanel()
+							end)
+						else
+							self:closePanel()
+						end
+					end
+				end
+			})
+		end
+	end, 0.3)
+end
+
+local pushPanels = {}
+
+function M:dealBackMainPop()
+	table.clear(pushPanels)
+
+	if self._expireDealed then
+		return
+	end
+
+	for i = 1, #pushPanels do
+		local data = pushPanels[i]
+
+		if not UIManager.isBackTargetPanelPushed(PrefabDefine.Celebration1MainPanel, data[1]) then
+			UIManager.pushPanelAfterBackTarget(PrefabDefine.Celebration1MainPanel, unpack(data))
+		end
+	end
+
+	UIManager.popBackTargetPanel()
+end
+
+function M:canPopPanel()
+	return true
+end
+
+function M:initPrefabVar()
+end
+
+function M:init(from)
+	self._from = from
+
+	self._tmpTitle:SetLocalize(SID.ANNIVERSARY_TITLE)
+	self._btnCheckin.title:SetLocalize(SID.ANNIVERSARY_TITLE_CHECKIN)
+	self._btnTask.title:SetLocalize(SID.ANNIVERSARY_TITLE_TASK)
+	self._btnDig.title:SetLocalize(SID.ANNIVERSARY_TITLE_DIG)
+	self._btnInviteNewbie.title:SetLocalize(SID.ANNIVERSARY_TITLE_INVITE_NEWBIE)
+	self._btnDraw.title:SetLocalize(SID.ANNIVERSARY_TITLE_DRAW)
+	self._btnCharge.title:SetLocalize(SID.STR_CHARGE_GIFT)
+
+	if from == "preview" then
+		-- Nothing
+	end
+
+	Trace.traceDesign("Annvy_Enter")
+
+	self._module = P._playerActivityAnniversary
+	local data = P._playerActivity:getAnniversaryData()
+	self._aType = data.type
+	self._subType = data.subType
+	self._auid = data.uid
+	self._id = data.id
+	self._aData = data
+	self._secondFuncs = {}
+	self._secondTimer = lc.setInterval(function ()
+		for i, v in pairs(self._secondFuncs) do
+			v()
+		end
+	end, 0.5)
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateExpireTime()
+	self:updatePlayBtn()
+	self:updateReddots()
+end
+
+function M:updatePlayBtn()
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local data = self._aData
+
+	if not data then
+		return
+	end
+
+	local targetTime = data.endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:updateReddots()
+	self._btnInviteNewbie.dot:SetVisible(self._module:haveInviteDot())
+	self._btnCheckin.dot:SetVisible(self._module:haveCheckinDot())
+	self._btnTask.dot:SetVisible(self._module:haveTaskDot())
+	self._btnDig.dot:SetVisible(self._module:haveDigDot())
+	self._btnDraw.dot:SetVisible(self._module:haveDrawDot())
+	self._btnCharge.dot:SetVisible(self._module:haveChargeDot())
+end
+
+function M:handleDrawBtn()
+	local isOpen, dt = self._module:isLotteryOpen()
+
+	if not isOpen then
+		local d, h, m, s = C.getTimeEndArgs(dt)
+
+		if d > 0 then
+			V.showToast({
+				SID.STR_BEGIN_IN_D_H_M,
+				d,
+				h,
+				m
+			})
+		else
+			V.showToast({
+				SID.STR_BEGIN_IN_H_M_S,
+				h,
+				m,
+				s
+			})
+		end
+
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.AnniversaryLotteryPanel)
+end
+
+function M:handleDigBtn()
+	local unlockLevel = P._playerActivityAnniversary:readDigOpenLevel()
+
+	if P:getLevel() < unlockLevel then
+		V.showToast({
+			SID.TIP_UNLOCK_LEVEL,
+			unlockLevel
+		})
+
+		return
+	end
+
+	local isOpen, dt = self._module:isDigOpen()
+
+	if not isOpen then
+		local d, h, m, s = C.getTimeEndArgs(dt)
+
+		if d > 0 then
+			V.showToast({
+				SID.STR_BEGIN_IN_D_H_M,
+				d,
+				h,
+				m
+			})
+		else
+			V.showToast({
+				SID.STR_BEGIN_IN_H_M_S,
+				h,
+				m,
+				s
+			})
+		end
+
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.AnniversaryTreasureHuntingPanel)
+end
+
+function M:handleChargeBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryRechargePanel)
+end
+
+function M:handleCheckinBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryGlobalCheckinPanel)
+end
+
+function M:handleTaskBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryTaskPanel, D.TaskClass.Anniversary)
+end
+
+function M:handleInviteNewbieBtn()
+	UIManager.openPanel(PrefabDefine.AnniversaryInvitePanel)
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:handleStartBtn()
+end
+
+return M

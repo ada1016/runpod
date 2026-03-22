@@ -1,0 +1,77 @@
+local M = class("ConfirmPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	txtTitle = Types.TMP_Text,
+	txtContent = Types.TMP_Text,
+	tfItemContent = Types.Transform,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	btnClose = Types.Button,
+	btnBg = Types.Button,
+	lgRewards = Types.LayoutGroup
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goItems = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._fcConfirm then
+			self._fcConfirm()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnClose, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+	self:setClick(self._btnBg, function ()
+		if self._fcCancel then
+			self._fcCancel()
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(param)
+	self._fcConfirm = param._fcConfirm
+	self._fcCancel = param._fcCancel
+
+	if param._title then
+		self._txtTitle:SetLocalize(param._title)
+	end
+
+	if param._content then
+		self._txtContent:SetLocalize(param._content)
+	end
+
+	if param._items then
+		self._lgRewards.childAlignment = #param._items <= 5 and 4 or 0
+
+		for i = 1, #param._items do
+			local item = param._items[i]
+			local widget = ItemWidget.create(self._tfItemContent)
+			self._goItems[i] = widget
+			local cid = item.cid or item[1]
+			local num = item.num or item[2]
+
+			widget:init(cid, num)
+			self:setClick(widget._btnClick, function ()
+				widget:rewardclickCallback()
+			end)
+		end
+	end
+end
+
+return M

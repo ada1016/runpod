@@ -1,0 +1,22 @@
+Object = UnityEngine.Object
+GameObject = UnityEngine.GameObject
+Resources = UnityEngine.Resources
+Time = UnityEngine.Time
+Screen = UnityEngine.Screen
+Application = UnityEngine.Application
+Sprite = UnityEngine.Sprite
+Debug = UnityEngine.Debug
+Input = UnityEngine.Input
+Camera = UnityEngine.Camera
+Physics = UnityEngine.Physics
+Shader = UnityEngine.Shader
+RES = LuaHelper.GetResManager()
+AUDIO = LuaHelper.GetAudioManager()
+
+function CNull(obj)
+	if obj == nil or tolua.isnull(obj) then
+		return true
+	else
+		return false
+	end
+end

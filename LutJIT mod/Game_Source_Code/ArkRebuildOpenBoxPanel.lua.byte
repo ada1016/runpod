@@ -1,0 +1,326 @@
+local M = class("ArkRebuildOpenBoxPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	imgBgColor = Types.Image,
+	btnBg = Types.Button,
+	btnReturn = Types.Button,
+	tfBox = Types.Transform,
+	goAnim1 = Types.GameObject,
+	goAnim2 = Types.GameObject,
+	goSkip = Types.GameObject,
+	btnOpenOne = Types.Button,
+	btnOpenCoin = Types.Button,
+	cgDrawBtns = Types.CanvasGroup,
+	cgReturn = Types.CanvasGroup,
+	cgTop = Types.CanvasGroup,
+	goForbidClick = Types.GameObject,
+	goChipRemainNum = Types.GameObject,
+	txtChipRemainNum = Types.TMP_Text,
+	txtPool1 = Types.TMP_Text,
+	txtPool2 = Types.TMP_Text,
+	txtPool3 = Types.TMP_Text,
+	txtPool4 = Types.TMP_Text,
+	txtPool5 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:Start()
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:jumpOpen()
+	end)
+	self:setClick(self._btnOpenOne, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawTicket()
+			P:saveGameData()
+		end)
+	end)
+	self:setClick(self._btnOpenCoin, function ()
+		Client.checkNetworkAsync(function ()
+			self:drawGold()
+			P:saveGameData()
+		end)
+	end)
+	self:setClick(self._btnReturn, function ()
+		self:closePanel()
+	end)
+
+	for i = 1, 5 do
+		self:setClick(self["_txtPool" .. i].transform.parent:GetComponent("Button"), function ()
+			V.showBubbleTips({
+				desc = i <= 4 and SID["CARD_TYPE_TITLE_" .. i] or SID.ARK_REBUILD_MODULE_TITLE
+			}, {
+				alignment = 1,
+				offset = {
+					0,
+					10,
+					0
+				}
+			})
+		end)
+	end
+end
+
+function M:closePanel()
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._delayReShow)
+
+	if self._callback then
+		self._callback()
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:init(boxType, callback)
+	self._alwaysSkipOpenAnim = lc.getIntKeyValue("ark_rebuild_openbox_skip", 0) == C.getTodayZeroTimestamp()
+	self._boxType = boxType or D.ArkRebuildDropType.Pack1Drop
+	self._callback = callback
+	self._rewardsData = {}
+
+	Client.playSound("ui_Ark_cardpack_come_1")
+
+	self._delayOpenTimer = lc.setTimer(function ()
+		Client.playSound("ui_Ark_cardpack_open_1")
+
+		self._delayOpenTimer = nil
+	end, 1)
+
+	if self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop then
+		self._imgBgColor.color = Color.str2Static("000A24")
+
+		self._goAnim1:SetActive(true)
+		self._goAnim2:SetActive(false)
+
+		self._anim = self._goAnim1:GetComponent("Animator")
+	else
+		self._imgBgColor.color = Color.str2Static("1E1404")
+
+		self._goAnim1:SetActive(false)
+		self._goAnim2:SetActive(true)
+
+		self._anim = self._goAnim2:GetComponent("Animator")
+	end
+
+	self:openBox()
+	self._goForbidClick:SetActive(true)
+	lc.delayFunc(function ()
+		self:trySkipBoxAnim()
+		self._goForbidClick:SetActive(false)
+	end, 0.1)
+end
+
+function M:trySkipBoxAnim()
+	if not self._alwaysSkipOpenAnim then
+		return
+	end
+
+	self:jumpOpen()
+end
+
+function M:updateCostBtns()
+	local costCid1, costNum1, costCid2, costNum2, goldType = nil
+
+	if self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop then
+		costCid1 = D.ResType.ark_rebuild_ticket_common
+		costCid2 = D.ResType.ark_rebuild_gold
+		goldType = D.ArkRebuildDropType.GoldDrop
+	elseif self._boxType == D.ArkRebuildDropType.Pack2Drop or self._boxType == D.ArkRebuildDropType.SPGoldDrop then
+		costCid1 = D.ResType.ark_rebuild_ticket_advance
+		costCid2 = D.ResType.ark_rebuild_sp_gold
+		goldType = D.ArkRebuildDropType.SPGoldDrop
+	end
+
+	local allowCoinOpen = self:allCoinOpen()
+
+	self._btnOpenCoin:SetActive(allowCoinOpen)
+
+	if allowCoinOpen then
+		local cid, cost = P._playerActivityArkRebuild:getDropCost(goldType)
+		self._btnOpenCoin.transform:GetChild(1):GetComponent("TMP_Text").text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. cid), cost)
+	end
+
+	self._btnOpenOne.transform:GetChild(1):GetComponent("TMP_Text").text = string.format("%s%d", D.getTMPSpriteRichText("item_small_" .. costCid1), 1)
+end
+
+function M:allCoinOpen()
+	return P._playerActivityArkRebuild:readCurrentCfg()._pack3UnlockStage < P._playerActivityArkRebuild:getCurMission() % 10000
+end
+
+function M:openBox()
+	self:updateCostBtns()
+	self:resetPanel2Start()
+
+	self._delayOpenTimer = lc.setTimer(function ()
+		Client.playSound("ui_Ark_cardpack_open_1")
+
+		self._delayOpenTimer = nil
+	end, 1)
+
+	self._goSkip:SetActive(true)
+
+	self._rewardIdx = 0
+
+	self._anim:SetInteger("Status", 1)
+
+	self._waitOpenBoxAnim = lc.setTimer(function ()
+		self:showRewards()
+	end, 1.26)
+end
+
+function M:showRewards()
+	self._goSkip:SetActive(false)
+
+	self._isDone = true
+
+	self:showArkPool()
+	UIManager.openPanel(PrefabDefine.ArkRebuildSelectPanel, function ()
+		Client.playSound("ui_Ark_cardpack_come_1")
+		self._anim:SetInteger("Status", 0)
+
+		if P._playerActivityArkRebuild:getSelectingCardData() and #P._playerActivityArkRebuild:getSelectingCardData() > 0 then
+			self._goForbidClick:SetActive(true)
+
+			self._delayReShow = lc.setTimer(function ()
+				self._goForbidClick:SetActive(false)
+				self:showRewards()
+			end, 0.1)
+		else
+			self:showAfterOpen()
+		end
+	end)
+end
+
+function M:showAfterOpen()
+	self._cgDrawBtns:DOFade(1, 0.3):SetLink(self.gameObject)
+	self._cgReturn:DOFade(1, 0.3):SetLink(self.gameObject)
+	self._cgTop:DOFade(1, 0.3):SetLink(self.gameObject)
+
+	self._cgDrawBtns.blocksRaycasts = true
+	self._cgReturn.blocksRaycasts = true
+	self._cgTop.blocksRaycasts = true
+
+	self:showArkPool()
+end
+
+function M:resetPanel2Start()
+	self._isDone = false
+
+	lc.stopTimer(self._waitOpenBoxAnim)
+	lc.stopTimer(self._delayReShow)
+	self._goForbidClick:SetActive(false)
+	self._cgDrawBtns:DOKill()
+
+	self._cgDrawBtns.alpha = 0
+	self._cgDrawBtns.blocksRaycasts = false
+
+	self._cgReturn:DOKill()
+
+	self._cgReturn.alpha = 0
+	self._cgReturn.blocksRaycasts = false
+
+	self._cgTop:DOKill()
+
+	self._cgTop.alpha = 0
+	self._cgTop.blocksRaycasts = false
+end
+
+function M:drawOne(boxType)
+	local cid, cost = P._playerActivityArkRebuild:getDropCost(boxType)
+
+	if not P._playerAsset:isAssetEnough(cid, cost) then
+		V.showResultCode(ResultCode.RESOURCE_NOT_ENOUGH)
+
+		return
+	end
+
+	P._playerAsset:decreaseAssetNum(cid, cost, D.LogWay.ark_rebuild_shop)
+	P._playerActivityArkRebuild:dropSelectCards(boxType)
+	self:openBox()
+	self:trySkipBoxAnim()
+end
+
+function M:isResEnough()
+	if self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop then
+		local cid1, cost1 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.Pack1Drop)
+		local cid2, cost2 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.GoldDrop)
+
+		if P._playerAsset:isAssetEnough(cid1, cost1) or P._playerAsset:isAssetEnough(cid2, cost2) and self:allCoinOpen() then
+			return true
+		end
+	elseif self._boxType == D.ArkRebuildDropType.Pack2Drop or self._boxType == D.ArkRebuildDropType.SPGoldDrop then
+		local cid1, cost1 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.Pack2Drop)
+		local cid2, cost2 = P._playerActivityArkRebuild:getDropCost(D.ArkRebuildDropType.SPGoldDrop)
+
+		if P._playerAsset:isAssetEnough(cid1, cost1) or P._playerAsset:isAssetEnough(cid2, cost2) and self:allCoinOpen() then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:drawTicket()
+	local boxType = nil
+
+	if self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop then
+		boxType = D.ArkRebuildDropType.Pack1Drop
+	elseif self._boxType == D.ArkRebuildDropType.Pack2Drop or self._boxType == D.ArkRebuildDropType.SPGoldDrop then
+		boxType = D.ArkRebuildDropType.Pack2Drop
+	end
+
+	self:drawOne(boxType)
+end
+
+function M:drawGold()
+	local boxType = nil
+
+	if self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop then
+		boxType = D.ArkRebuildDropType.GoldDrop
+	elseif self._boxType == D.ArkRebuildDropType.Pack2Drop or self._boxType == D.ArkRebuildDropType.SPGoldDrop then
+		boxType = D.ArkRebuildDropType.SPGoldDrop
+	end
+
+	self:drawOne(boxType)
+end
+
+function M:jumpOpen()
+	if self._isDone then
+		return
+	end
+
+	if not self._alwaysSkipOpenAnim then
+		self._alwaysSkipOpenAnim = true
+
+		lc.setIntKeyValue("ark_rebuild_openbox_skip", C.getTodayZeroTimestamp())
+	end
+
+	self._anim:SetTrigger("Jump")
+	self._anim:SetInteger("Status", 1)
+
+	if self._delayOpenTimer then
+		self._delayOpenTimer:Done()
+	end
+
+	self._waitOpenBoxAnim:Done()
+
+	self._isDone = true
+end
+
+function M:showArkPool()
+	local isNormalDrop = self._boxType == D.ArkRebuildDropType.Pack1Drop or self._boxType == D.ArkRebuildDropType.GoldDrop
+	self._txtChipRemainNum.color = Color.str2Static(isNormalDrop and "6EAEFF" or "FFBD49")
+	local chipPools, multiCardMinus = P._playerActivityArkRebuild:calcCardPools()
+	self._txtPool1.text = #chipPools[2] * 3 - multiCardMinus
+	self._txtPool2.text = #chipPools[3]
+	self._txtPool3.text = #chipPools[4]
+	self._txtPool4.text = #chipPools[5]
+	self._txtPool5.text = #chipPools[6]
+end
+
+return M

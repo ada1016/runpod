@@ -1,0 +1,166 @@
+local M = class("RangerEquipWashPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goEquip1 = Types.GameObject,
+	goEquip2 = Types.GameObject,
+	btnWash = Types.Button,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	goVfx = Types.GameObject,
+	animWash = Types.Animation,
+	btnAccept = Types.Button,
+	btnAbondon = Types.Button,
+	btnRare = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:setClick(self._btnWash, function ()
+		if not self._assetEnough then
+			V.showResultCode(self._costCid, self._costNum)
+		else
+			if lc.isNetworkNotReachable() then
+				V.showToast(SID.NETWORK_NOTREACHABLE)
+
+				return
+			end
+
+			Client.checkNetworkAsync(function ()
+				self:doWash()
+			end)
+		end
+	end)
+	self:setClick(self._btnAccept, function ()
+		P._playerRanger:acceptRefinedRangerEquip(self._id)
+
+		self._equip = P._playerRanger:getRangerEquipById(self._id)
+
+		V.loadRangerEquipAttribute(self._goEquip1, self._equip)
+		self._animWash:Play("ani_rangerWashReplace")
+		self._btnWash:SetActive(true)
+		self._btnAccept:SetActive(false)
+		self._btnAbondon:SetActive(false)
+
+		self._washing = false
+
+		if self._callback then
+			self._callback()
+		end
+	end)
+	self:setClick(self._btnAbondon, function ()
+		if self._isRare then
+			UIManager.openPanel(PrefabDefine.PromptsPanel, {
+				_type = 2,
+				_showClose = true,
+				_delayCloseTime = 2,
+				_title = SID.TITLE_TIP,
+				_content = SID.TIP_RANGER_EQUIP_REFINE_CONFIRM,
+				_txtConfirm = SID.STR_CONFIRM,
+				_fcCancel = SID.STR_CANCEL,
+				_confirmCallback = function ()
+					P._playerRanger:abandonRefinedRangerEquip()
+					self._animWash:Play("ani_rangerWashCancel")
+					self._btnWash:SetActive(true)
+					self._btnAccept:SetActive(false)
+					self._btnAbondon:SetActive(false)
+
+					self._washing = false
+				end
+			})
+		else
+			P._playerRanger:abandonRefinedRangerEquip()
+			self._animWash:Play("ani_rangerWashCancel")
+			self._btnWash:SetActive(true)
+			self._btnAccept:SetActive(false)
+			self._btnAbondon:SetActive(false)
+
+			self._washing = false
+		end
+	end)
+	self:setClick(self._btnRare, function ()
+		UIManager.openPanel(PrefabDefine.RangerDropWeightOverviewPanel, self._quality)
+	end)
+end
+
+function M:doWash()
+	self:dealWash()
+end
+
+function M:init(id, callback)
+	self._id = id
+	self._callback = callback
+	self._equip = P._playerRanger:getRangerEquipById(id)
+	self._quality = D._rangerEquipConfig[self._equip.cid]._quality
+
+	V.loadRangerEquipAttribute(self._goEquip1, self._equip)
+	self._goVfx:SetActive(false)
+	self:updateCost()
+end
+
+function M:updateCost()
+	local cost = D._rangerEquipConfig[self._equip.cid]._refineCost
+	self._costCid = D.ResType.ranger_equip_refine_mat
+	local num = P._playerAsset:getAssetNum(self._costCid)
+	self._assetEnough = cost <= num
+	self._costNum = cost
+
+	V.loadItemCost(self._imgCost, self._txtCost, self._costCid, cost, self)
+end
+
+function M:dealWash()
+	self._washing = true
+	local result, equip = P._playerRanger:tryRefineRangerEquip(self._id)
+
+	if result == ResultCode.OK then
+		self._isRare = false
+
+		V.loadRangerEquipAttribute(self._goEquip2, equip)
+
+		local skill2 = equip.skill2
+
+		if skill2 then
+			local cfg = D._rangerEquipSkillConfig[skill2]
+
+			if cfg._ranger then
+				self._isRare = true
+			end
+		end
+
+		self._goVfx:SetActive(false)
+		self._goVfx:SetActive(true)
+		self._animWash:Play("ani_rangerWash")
+		self._btnWash:SetActive(false)
+		self._btnAccept:SetActive(true)
+		self._btnAbondon:SetActive(true)
+		self:updateCost()
+		Client.playSound("ui_Refine_1")
+	else
+		V.showResultCode(result)
+	end
+end
+
+function M:closePanel()
+	if self._washing then
+		UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+			_type = 2,
+			_content = SID.TIP_RANGER_EQUIP_CONFIRM_ABANDON_REFINE,
+			_confirmCallback = function ()
+				self._washing = false
+
+				M.super.closePanel(self)
+			end
+		})
+	else
+		M.super.closePanel(self)
+	end
+end
+
+return M

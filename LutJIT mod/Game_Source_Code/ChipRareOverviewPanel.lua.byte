@@ -1,0 +1,164 @@
+local M = class("ChipRareOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goChipOdds = Types.GameObject,
+	btnChipOdds = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+
+	self._partLoaded = {}
+	self._partArrows = {}
+	self._partBtns = {}
+	self._partBgs = {}
+	self._partTitles = {}
+	self._partContents = {}
+	self._parts = {}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClickWithoutAction(self._btnChipOdds, function ()
+		UIManager.openPanel(PrefabDefine.ChipDropWeightOverviewPanel, self._showQuality, self._showPart)
+	end)
+end
+
+function M:init(onlyShowPart, showQuality)
+	local showPart = onlyShowPart or 1
+	self._showPart = showPart
+	self._showQuality = showQuality
+
+	self._goChipOdds:SetActive(onlyShowPart ~= nil)
+
+	self._loadEffectCount = 0
+
+	for i = 1, 6 do
+		local tfPart = self._tfContainer:GetChild(i - 1 + 1)
+		self._parts[i] = tfPart
+		self._partBgs[i] = tfPart:GetChild(0):GetChild(0)
+		self._partTitles[i] = tfPart:GetChild(0):GetChild(1)
+		local imgPart = self._partTitles[i]:GetChild(0):GetChild(1):GetComponent("Image")
+		local tmpPart = self._partTitles[i]:GetChild(1):GetComponent("TMP_Text")
+
+		tmpPart:SetLocalize(SID["STR_PART_" .. i])
+		LuaUnity.setTPSprite(imgPart, "general/g_icon_center_" .. i, true, true)
+
+		self._partContents[i] = tfPart:GetChild(0):GetChild(2)
+		self._partBtns[i] = self._partTitles[i]:GetChild(2):GetComponent("Button")
+		self._partArrows[i] = self._partTitles[i]:GetChild(2):GetChild(0):GetComponent("Image")
+
+		self:setClick(self._partBtns[i], function ()
+			self:expandPart(i)
+			self:updatePartUI(i)
+
+			if self._partLoaded[i] then
+				self:focusTab(i)
+			end
+		end)
+	end
+
+	for i = 1, 6 do
+		if onlyShowPart and onlyShowPart == i or not onlyShowPart then
+			self:expandPart(i)
+		end
+
+		self._parts[i]:SetActive(not onlyShowPart or i == onlyShowPart)
+		self._partTitles[i]:SetActive(not onlyShowPart or false)
+		self._partBgs[i]:SetActive(onlyShowPart and onlyShowPart == i or not onlyShowPart)
+		self:updatePartUI(i)
+	end
+
+	self._goEmpty:SetActive(self._showQuality and self._loadEffectCount == 0)
+end
+
+function M:focusTab(idx)
+	LuaUnity.forceRebuildLayoutImmediate(self._tfContainer)
+
+	local moveSpeed = 400
+	local tfPart = self._parts[idx]
+	local tfViewport = self._tfContainer.parent
+	local x1, y1, z1 = lc.getAnchoredPosition(tfPart)
+	local totalHeight = tfViewport.rect.height
+	local partLen = self._partContents[idx].rect.height
+	local x2, y2, z2 = lc.getAnchoredPosition(self._tfContainer)
+
+	self._tfContainer:DOAnchorPosY(-y1, 0.35):SetLink(self.gameObject)
+end
+
+function M:expandPart(part)
+	if self._partLoaded[part] == nil then
+		self:loadPart(part, self._showQuality)
+	else
+		self._partLoaded[part] = not self._partLoaded[part]
+	end
+end
+
+function M:updatePartUI(part)
+	self._partContents[part]:SetActive(self._partLoaded[part] == true)
+	lc.setLocalEulerAngles(self._partArrows[part], 0, 0, self._partLoaded[part] and 180 or 270)
+end
+
+function M:loadPart(dealPart, showQuality)
+	local tfContainer = self._partContents[dealPart]
+	self._partLoaded[dealPart] = true
+	local effects = D.RareEffectByPartConfig[dealPart]
+	local effectGemIds = D.RareGemEffectByPartConfig[dealPart]
+
+	for i = 1, #effects do
+		local effectId = effects[i]
+
+		if effectId == 27 then
+			local aa = 1
+		end
+
+		local effectConf = D._gemEffectConfig[effectId]
+		local ids = effectGemIds[effectId]
+		local BatchParam = {}
+		local BatchParams = {}
+		local BatchQuality = {}
+
+		for j = 1, #ids do
+			local gemId = ids[j]
+			local gemConf = D._gemConfig[gemId]
+
+			if showQuality and showQuality == gemConf._quality or not showQuality then
+				local param = gemConf._param
+				param = param and math.floor(gemConf._param * 10000) / 10000
+				BatchParam[#BatchParam + 1] = param
+				BatchParams[#BatchParams + 1] = gemConf._params
+				BatchQuality[#BatchQuality + 1] = gemConf._quality
+
+				if showQuality then
+					break
+				end
+			end
+		end
+
+		if #BatchQuality > 0 then
+			self._loadEffectCount = self._loadEffectCount + 1
+			local goCell = GameObject.Instantiate(self._goTemplate, tfContainer)
+
+			goCell:SetActive(true)
+
+			local tmp = goCell.transform:Find("Text"):GetComponent("TMP_Text")
+
+			V.loadChipRareBatchDescription(tmp, effectConf, BatchQuality, BatchParam, BatchParams)
+		end
+	end
+
+	if tfContainer.childCount > 0 then
+		local lastCell = tfContainer:GetChild(tfContainer.childCount - 1)
+
+		lastCell:GetChild(1):SetActive(false)
+	end
+end
+
+return M

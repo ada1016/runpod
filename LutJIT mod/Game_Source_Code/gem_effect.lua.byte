@@ -1,0 +1,1615 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		0,
+		0,
+		nil,
+		dup._182,
+		nil,
+		nil,
+		nil,
+		1
+	},
+	{
+		2,
+		0,
+		0,
+		nil,
+		dup._399,
+		nil,
+		nil,
+		nil,
+		2
+	},
+	{
+		3,
+		0,
+		0,
+		nil,
+		dup._400,
+		nil,
+		nil,
+		nil,
+		3
+	},
+	{
+		4,
+		0,
+		0,
+		nil,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		4
+	},
+	{
+		5,
+		0,
+		0,
+		nil,
+		dup._422,
+		nil,
+		nil,
+		nil,
+		5
+	},
+	{
+		6,
+		0,
+		0,
+		nil,
+		{
+			244
+		},
+		nil,
+		nil,
+		nil,
+		6
+	},
+	{
+		7,
+		0,
+		0,
+		nil,
+		dup._423,
+		nil,
+		nil,
+		nil,
+		7
+	},
+	{
+		8,
+		0,
+		0,
+		nil,
+		dup._424,
+		nil,
+		nil,
+		nil,
+		8
+	},
+	{
+		9,
+		0,
+		0,
+		nil,
+		dup._421,
+		nil,
+		nil,
+		nil,
+		9
+	},
+	{
+		10,
+		0,
+		0,
+		nil,
+		dup._425,
+		nil,
+		nil,
+		nil,
+		10
+	},
+	{
+		11,
+		0,
+		0,
+		nil,
+		nil,
+		11,
+		nil,
+		nil,
+		11
+	},
+	{
+		12,
+		0,
+		100,
+		nil,
+		{
+			401
+		},
+		12,
+		nil,
+		nil,
+		12
+	},
+	{
+		13,
+		0,
+		100,
+		nil,
+		{
+			1,
+			108
+		},
+		nil,
+		nil,
+		nil,
+		13
+	},
+	{
+		14,
+		0,
+		0,
+		nil,
+		dup._32,
+		nil,
+		nil,
+		nil,
+		14
+	},
+	{
+		15,
+		0,
+		0,
+		nil,
+		dup._1544,
+		nil,
+		nil,
+		nil,
+		15
+	},
+	{
+		16,
+		0,
+		0,
+		nil,
+		nil,
+		13,
+		nil,
+		nil,
+		16
+	},
+	{
+		17,
+		0,
+		100,
+		nil,
+		nil,
+		14,
+		nil,
+		nil,
+		17
+	},
+	{
+		18,
+		0,
+		0,
+		nil,
+		nil,
+		15,
+		nil,
+		nil,
+		18
+	},
+	{
+		19,
+		0,
+		100,
+		nil,
+		nil,
+		16,
+		nil,
+		nil,
+		19
+	},
+	{
+		20,
+		0,
+		0,
+		nil,
+		nil,
+		17,
+		nil,
+		nil,
+		20
+	},
+	{
+		21,
+		0,
+		0,
+		nil,
+		nil,
+		18,
+		nil,
+		nil,
+		21
+	},
+	{
+		22,
+		0,
+		100,
+		nil,
+		nil,
+		19,
+		nil,
+		nil,
+		22
+	},
+	{
+		23,
+		0,
+		100,
+		nil,
+		nil,
+		20,
+		nil,
+		nil,
+		23
+	},
+	{
+		24,
+		0,
+		100,
+		nil,
+		nil,
+		21,
+		nil,
+		nil,
+		24
+	},
+	{
+		25,
+		0,
+		100,
+		nil,
+		nil,
+		22,
+		nil,
+		nil,
+		25
+	},
+	{
+		26,
+		0,
+		0,
+		nil,
+		nil,
+		23,
+		nil,
+		nil,
+		26
+	},
+	{
+		27,
+		0,
+		0,
+		nil,
+		nil,
+		24,
+		nil,
+		nil,
+		27
+	},
+	{
+		28,
+		0,
+		0,
+		nil,
+		nil,
+		25,
+		nil,
+		nil,
+		28
+	},
+	{
+		29,
+		0,
+		0,
+		nil,
+		nil,
+		26,
+		nil,
+		nil,
+		29
+	},
+	{
+		30,
+		0,
+		0,
+		nil,
+		nil,
+		27,
+		nil,
+		nil,
+		30
+	},
+	{
+		31,
+		0,
+		0,
+		nil,
+		nil,
+		28,
+		nil,
+		nil,
+		31
+	},
+	{
+		32,
+		0,
+		0,
+		nil,
+		{
+			99
+		},
+		nil,
+		nil,
+		nil,
+		32
+	},
+	{
+		33,
+		0,
+		0,
+		nil,
+		nil,
+		29,
+		nil,
+		nil,
+		33
+	},
+	{
+		34,
+		0,
+		0,
+		nil,
+		nil,
+		30,
+		nil,
+		nil,
+		34
+	},
+	{
+		35,
+		0,
+		0,
+		nil,
+		nil,
+		31,
+		nil,
+		nil,
+		35
+	},
+	{
+		36,
+		0,
+		0,
+		nil,
+		dup._332,
+		nil,
+		nil,
+		nil,
+		36
+	},
+	{
+		37,
+		0,
+		0,
+		nil,
+		dup._350,
+		32,
+		nil,
+		nil,
+		37
+	},
+	{
+		38,
+		0,
+		0,
+		nil,
+		nil,
+		33,
+		nil,
+		nil,
+		38
+	},
+	{
+		39,
+		0,
+		100,
+		nil,
+		nil,
+		34,
+		nil,
+		nil,
+		39
+	},
+	{
+		40,
+		0,
+		0,
+		nil,
+		nil,
+		35,
+		nil,
+		nil,
+		40
+	},
+	{
+		41,
+		0,
+		100,
+		nil,
+		nil,
+		36,
+		nil,
+		nil,
+		41
+	},
+	{
+		42,
+		0,
+		0,
+		nil,
+		dup._409,
+		nil,
+		nil,
+		nil,
+		42
+	},
+	{
+		43,
+		0,
+		0,
+		nil,
+		nil,
+		37,
+		nil,
+		nil,
+		43
+	},
+	[51] = {
+		51,
+		0,
+		0,
+		nil,
+		dup._19,
+		nil,
+		nil,
+		nil,
+		51
+	},
+	[52] = {
+		52,
+		0,
+		0,
+		nil,
+		dup._410,
+		nil,
+		nil,
+		nil,
+		52
+	},
+	[53] = {
+		53,
+		0,
+		0,
+		nil,
+		dup._116,
+		nil,
+		nil,
+		nil,
+		53
+	},
+	[54] = {
+		54,
+		0,
+		100,
+		nil,
+		nil,
+		55,
+		nil,
+		nil,
+		54
+	},
+	[55] = {
+		55,
+		0,
+		100,
+		nil,
+		nil,
+		54,
+		nil,
+		nil,
+		55
+	},
+	[101] = {
+		101,
+		1,
+		1,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		101
+	},
+	[102] = {
+		102,
+		1,
+		1,
+		1,
+		{
+			80,
+			227
+		},
+		nil,
+		nil,
+		nil,
+		102
+	},
+	[103] = {
+		103,
+		1,
+		1,
+		1,
+		dup._1545,
+		nil,
+		nil,
+		nil,
+		103
+	},
+	[104] = {
+		104,
+		1,
+		1,
+		nil,
+		nil,
+		151,
+		161,
+		1,
+		104
+	},
+	[105] = {
+		105,
+		1,
+		1,
+		nil,
+		nil,
+		152,
+		nil,
+		nil,
+		105
+	},
+	[106] = {
+		106,
+		1,
+		1,
+		nil,
+		nil,
+		190,
+		nil,
+		nil,
+		106
+	},
+	[107] = {
+		107,
+		1,
+		1,
+		nil,
+		nil,
+		nil,
+		109,
+		1,
+		107
+	},
+	[108] = {
+		108,
+		1,
+		1,
+		0,
+		dup._350,
+		153,
+		nil,
+		nil,
+		108
+	},
+	[201] = {
+		201,
+		3,
+		3,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		201
+	},
+	[202] = {
+		202,
+		3,
+		3,
+		3,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		202
+	},
+	[203] = {
+		203,
+		3,
+		3,
+		301,
+		{
+			227,
+			14
+		},
+		nil,
+		nil,
+		nil,
+		203
+	},
+	[204] = {
+		204,
+		3,
+		3,
+		nil,
+		nil,
+		nil,
+		361,
+		nil,
+		204
+	},
+	[205] = {
+		205,
+		3,
+		3,
+		nil,
+		nil,
+		351,
+		363,
+		1,
+		205
+	},
+	[206] = {
+		206,
+		3,
+		3,
+		nil,
+		nil,
+		352,
+		nil,
+		nil,
+		206
+	},
+	[207] = {
+		207,
+		3,
+		3,
+		nil,
+		nil,
+		353,
+		nil,
+		nil,
+		207
+	},
+	[208] = {
+		208,
+		3,
+		3,
+		nil,
+		nil,
+		390,
+		nil,
+		nil,
+		208
+	},
+	[209] = {
+		209,
+		3,
+		3,
+		0,
+		dup._1545,
+		nil,
+		nil,
+		nil,
+		209
+	},
+	[301] = {
+		301,
+		4,
+		4,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		301
+	},
+	[302] = {
+		302,
+		4,
+		4,
+		4,
+		dup._1544,
+		nil,
+		nil,
+		nil,
+		302
+	},
+	[303] = {
+		303,
+		4,
+		4,
+		nil,
+		nil,
+		nil,
+		461,
+		nil,
+		303
+	},
+	[304] = {
+		304,
+		4,
+		4,
+		nil,
+		nil,
+		452,
+		462,
+		1,
+		304
+	},
+	[305] = {
+		305,
+		4,
+		4,
+		nil,
+		nil,
+		490,
+		nil,
+		nil,
+		305
+	},
+	[306] = {
+		306,
+		4,
+		4,
+		4,
+		dup._1018,
+		nil,
+		nil,
+		nil,
+		306
+	},
+	[307] = {
+		307,
+		4,
+		4,
+		nil,
+		nil,
+		453,
+		nil,
+		nil,
+		307
+	},
+	[401] = {
+		401,
+		2,
+		2,
+		2,
+		dup._196,
+		nil,
+		nil,
+		nil,
+		401
+	},
+	[402] = {
+		402,
+		2,
+		2,
+		2,
+		dup._1544,
+		nil,
+		nil,
+		nil,
+		402
+	},
+	[403] = {
+		403,
+		2,
+		2,
+		0,
+		{
+			59
+		},
+		nil,
+		nil,
+		nil,
+		403
+	},
+	[404] = {
+		404,
+		2,
+		2,
+		nil,
+		nil,
+		251,
+		261,
+		1,
+		404
+	},
+	[405] = {
+		405,
+		2,
+		2,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		405
+	},
+	[406] = {
+		406,
+		2,
+		2,
+		nil,
+		nil,
+		290,
+		nil,
+		nil,
+		406
+	},
+	[407] = {
+		407,
+		2,
+		2,
+		2,
+		{
+			61,
+			227
+		},
+		nil,
+		nil,
+		nil,
+		407
+	},
+	[501] = {
+		501,
+		5,
+		5,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		501
+	},
+	[502] = {
+		502,
+		5,
+		5,
+		5,
+		dup._196,
+		nil,
+		nil,
+		nil,
+		502
+	},
+	[503] = {
+		503,
+		5,
+		5,
+		5,
+		dup._99,
+		nil,
+		nil,
+		nil,
+		503
+	},
+	[504] = {
+		504,
+		5,
+		5,
+		5,
+		dup._1018,
+		nil,
+		nil,
+		nil,
+		504
+	},
+	[505] = {
+		505,
+		5,
+		5,
+		nil,
+		nil,
+		590,
+		nil,
+		nil,
+		505
+	},
+	[506] = {
+		506,
+		5,
+		5,
+		5,
+		nil,
+		553,
+		nil,
+		nil,
+		506
+	},
+	[507] = {
+		507,
+		5,
+		5,
+		5,
+		nil,
+		554,
+		nil,
+		nil,
+		507
+	},
+	[601] = {
+		601,
+		6,
+		6,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		601
+	},
+	[602] = {
+		602,
+		6,
+		6,
+		nil,
+		nil,
+		652,
+		661,
+		1,
+		602
+	},
+	[603] = {
+		603,
+		6,
+		6,
+		nil,
+		nil,
+		653,
+		nil,
+		nil,
+		603
+	},
+	[604] = {
+		604,
+		6,
+		6,
+		601,
+		dup._1018,
+		nil,
+		nil,
+		nil,
+		604
+	},
+	[605] = {
+		605,
+		6,
+		6,
+		nil,
+		nil,
+		654,
+		662,
+		1,
+		605
+	},
+	[606] = {
+		606,
+		6,
+		6,
+		nil,
+		nil,
+		690,
+		nil,
+		nil,
+		606
+	},
+	[607] = {
+		607,
+		6,
+		6,
+		6,
+		{
+			53,
+			227
+		},
+		nil,
+		nil,
+		nil,
+		607
+	},
+	[701] = {
+		701,
+		7,
+		7,
+		7,
+		dup._196,
+		nil,
+		nil,
+		nil,
+		701
+	},
+	[702] = {
+		702,
+		7,
+		7,
+		7,
+		dup._1544,
+		nil,
+		nil,
+		nil,
+		702
+	},
+	[703] = {
+		703,
+		7,
+		7,
+		nil,
+		nil,
+		751,
+		761,
+		1,
+		703
+	},
+	[704] = {
+		704,
+		7,
+		7,
+		nil,
+		nil,
+		752,
+		nil,
+		nil,
+		704
+	},
+	[705] = {
+		705,
+		7,
+		7,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		705
+	},
+	[706] = {
+		706,
+		7,
+		7,
+		nil,
+		nil,
+		753,
+		nil,
+		nil,
+		706
+	},
+	[707] = {
+		707,
+		7,
+		7,
+		nil,
+		nil,
+		790,
+		nil,
+		nil,
+		707
+	},
+	[801] = {
+		801,
+		8,
+		8,
+		8,
+		dup._194,
+		nil,
+		nil,
+		nil,
+		801
+	},
+	[802] = {
+		802,
+		8,
+		8,
+		nil,
+		nil,
+		851,
+		nil,
+		nil,
+		802
+	},
+	[803] = {
+		803,
+		8,
+		8,
+		nil,
+		nil,
+		852,
+		861,
+		1,
+		803
+	},
+	[804] = {
+		804,
+		8,
+		8,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		804
+	},
+	[805] = {
+		805,
+		8,
+		8,
+		nil,
+		nil,
+		890,
+		nil,
+		nil,
+		805
+	},
+	[806] = {
+		806,
+		8,
+		8,
+		8,
+		dup._196,
+		nil,
+		nil,
+		nil,
+		806
+	},
+	[807] = {
+		807,
+		8,
+		8,
+		nil,
+		nil,
+		853,
+		nil,
+		nil,
+		807
+	},
+	[901] = {
+		901,
+		9,
+		9,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		901
+	},
+	[902] = {
+		902,
+		9,
+		9,
+		9,
+		dup._408,
+		nil,
+		nil,
+		nil,
+		902
+	},
+	[903] = {
+		903,
+		9,
+		9,
+		9,
+		{
+			227,
+			70
+		},
+		nil,
+		nil,
+		nil,
+		903
+	},
+	[904] = {
+		904,
+		9,
+		9,
+		9,
+		{
+			54
+		},
+		nil,
+		nil,
+		nil,
+		904
+	},
+	[905] = {
+		905,
+		9,
+		9,
+		nil,
+		nil,
+		990,
+		nil,
+		nil,
+		905
+	},
+	[906] = {
+		906,
+		9,
+		9,
+		9,
+		nil,
+		952,
+		nil,
+		nil,
+		906
+	},
+	[907] = {
+		907,
+		9,
+		9,
+		9,
+		{
+			304
+		},
+		nil,
+		nil,
+		nil,
+		907
+	},
+	[1001] = {
+		1001,
+		10,
+		10,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		1001
+	},
+	[1002] = {
+		1002,
+		10,
+		10,
+		1001,
+		dup._1018,
+		nil,
+		nil,
+		nil,
+		1002
+	},
+	[1003] = {
+		1003,
+		10,
+		10,
+		nil,
+		nil,
+		1051,
+		nil,
+		nil,
+		1003
+	},
+	[1004] = {
+		1004,
+		10,
+		10,
+		nil,
+		nil,
+		1052,
+		nil,
+		nil,
+		1004
+	},
+	[1005] = {
+		1005,
+		10,
+		10,
+		nil,
+		nil,
+		1090,
+		nil,
+		nil,
+		1005
+	},
+	[1006] = {
+		1006,
+		10,
+		10,
+		nil,
+		nil,
+		1008,
+		1061,
+		1,
+		1006
+	},
+	[1007] = {
+		1007,
+		10,
+		10,
+		nil,
+		nil,
+		1053,
+		nil,
+		nil,
+		1007
+	},
+	[1101] = {
+		1101,
+		11,
+		11,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		1101
+	},
+	[1102] = {
+		1102,
+		11,
+		11,
+		11,
+		dup._411,
+		nil,
+		nil,
+		nil,
+		1102
+	},
+	[1103] = {
+		1103,
+		11,
+		11,
+		nil,
+		nil,
+		1151,
+		1161,
+		1,
+		1103
+	},
+	[1104] = {
+		1104,
+		11,
+		11,
+		11,
+		{
+			82
+		},
+		nil,
+		nil,
+		nil,
+		1104
+	},
+	[1105] = {
+		1105,
+		11,
+		11,
+		nil,
+		nil,
+		1152,
+		1162,
+		1,
+		1105
+	},
+	[1106] = {
+		1106,
+		11,
+		11,
+		nil,
+		nil,
+		1190,
+		nil,
+		nil,
+		1106
+	},
+	[1107] = {
+		1107,
+		11,
+		11,
+		nil,
+		nil,
+		1153,
+		nil,
+		nil,
+		1107
+	},
+	[1201] = {
+		1201,
+		12,
+		12,
+		0,
+		dup._350,
+		nil,
+		nil,
+		nil,
+		1201
+	},
+	[1202] = {
+		1202,
+		12,
+		12,
+		12,
+		dup._196,
+		nil,
+		nil,
+		nil,
+		1202
+	},
+	[1203] = {
+		1203,
+		12,
+		12,
+		nil,
+		nil,
+		nil,
+		1262,
+		nil,
+		1203
+	},
+	[1204] = {
+		1204,
+		12,
+		12,
+		1201,
+		{
+			264
+		},
+		nil,
+		nil,
+		nil,
+		1204
+	},
+	[1205] = {
+		1205,
+		12,
+		12,
+		12,
+		{
+			67
+		},
+		nil,
+		1263,
+		1,
+		1205
+	},
+	[1206] = {
+		1206,
+		12,
+		12,
+		nil,
+		nil,
+		1290,
+		nil,
+		nil,
+		1206
+	},
+	[1207] = {
+		1207,
+		12,
+		12,
+		nil,
+		nil,
+		nil,
+		1264,
+		nil,
+		1207
+	}
+}
+local mapKeyIndex = {
+	k8762374 = 5,
+	k14270899 = 2,
+	k9865036 = 4,
+	k14583718 = 6,
+	k1170968 = 3,
+	k8655535 = 9,
+	k1449045 = 8,
+	k1644150 = 1,
+	k7170577 = 7
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 4182
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_descSid" then
+			if table[9] == nil then
+				return nil
+			end
+
+			return SID["SID_GEM_EFFECT_DESCSID_" .. table[9]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 4182
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

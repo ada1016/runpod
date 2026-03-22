@@ -1,0 +1,42 @@
+local M = class("WeaponWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/WeaponWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(id, level)
+	if P._playerSkin:getEquipedSkin(id) == nil then
+		LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/weapon_%d", id), true)
+	else
+		LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/skin_%d", P._playerSkin:getEquipedSkin(id)), true)
+	end
+
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+	self._txtName:SetLocalize(D._weaponConfig[id]._skillNameSid)
+end
+
+function M:setProgress(cur, max)
+	self._txtProgress.text = string.format("%d/%d", cur, max)
+	self._sliBar.fillAmount = cur / max
+end
+
+function M:setLock(lock)
+	self._goLock:SetActive(lock)
+	self._goBar:SetActive(not lock)
+	self._goLevel:SetActive(not lock)
+end
+
+function M:setLockLevel(level)
+	self._txtUnLockLevel:SetLocalize(SID.TIP_UNLOCK_LEVEL, level)
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+return M

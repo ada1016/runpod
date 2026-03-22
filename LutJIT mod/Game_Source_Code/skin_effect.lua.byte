@@ -1,0 +1,742 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	[130201] = {
+		130201,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		2,
+		1,
+		1
+	},
+	[130301] = {
+		130301,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		3,
+		1,
+		1
+	},
+	[130401] = {
+		130401,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		4,
+		1,
+		1
+	},
+	[130501] = {
+		130501,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		5,
+		1,
+		1
+	},
+	[130601] = {
+		130601,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		6,
+		1,
+		1
+	},
+	[130701] = {
+		130701,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		7,
+		1,
+		1
+	},
+	[130801] = {
+		130801,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		8,
+		1,
+		1
+	},
+	[130901] = {
+		130901,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		9,
+		1,
+		1
+	},
+	[131001] = {
+		131001,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		10,
+		1,
+		1
+	},
+	[131101] = {
+		131101,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		11,
+		1,
+		1
+	},
+	[131201] = {
+		131201,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		12,
+		1,
+		1
+	},
+	[130202] = {
+		130202,
+		2,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		210,
+		1,
+		2
+	},
+	[130302] = {
+		130302,
+		3,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		308,
+		1,
+		2
+	},
+	[130402] = {
+		130402,
+		4,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		407,
+		1,
+		2
+	},
+	[130502] = {
+		130502,
+		5,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		508,
+		1,
+		2
+	},
+	[130602] = {
+		130602,
+		6,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		607,
+		1,
+		2
+	},
+	[130702] = {
+		130702,
+		7,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		704,
+		1,
+		2
+	},
+	[130802] = {
+		130802,
+		8,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		804,
+		1,
+		2
+	},
+	[130902] = {
+		130902,
+		9,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		907,
+		1,
+		2
+	},
+	[131002] = {
+		131002,
+		10,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1004,
+		1,
+		2
+	},
+	[131102] = {
+		131102,
+		11,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1104,
+		1,
+		2
+	},
+	[131202] = {
+		131202,
+		12,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1204,
+		1,
+		2
+	},
+	[130203] = {
+		130203,
+		2,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		311,
+		1,
+		2
+	},
+	[130303] = {
+		130303,
+		3,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		207,
+		1,
+		2
+	},
+	[130403] = {
+		130403,
+		4,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		505,
+		1,
+		2
+	},
+	[130503] = {
+		130503,
+		5,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		604,
+		1,
+		2
+	},
+	[130603] = {
+		130603,
+		6,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		404,
+		1,
+		2
+	},
+	[130703] = {
+		130703,
+		7,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		702,
+		1,
+		2
+	},
+	[130803] = {
+		130803,
+		8,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		825,
+		1,
+		2
+	},
+	[130903] = {
+		130903,
+		9,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		904,
+		1,
+		2
+	},
+	[131003] = {
+		131003,
+		10,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1007,
+		1,
+		2
+	},
+	[131103] = {
+		131103,
+		11,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1107,
+		1,
+		2
+	},
+	[131203] = {
+		131203,
+		12,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		1207,
+		1,
+		2
+	},
+	[120201] = {
+		120201,
+		2,
+		0,
+		nil,
+		261,
+		4
+	},
+	[120301] = {
+		120301,
+		3,
+		0,
+		nil,
+		361,
+		4
+	},
+	[120401] = {
+		120401,
+		4,
+		0,
+		nil,
+		461,
+		4
+	},
+	[120501] = {
+		120501,
+		5,
+		0,
+		nil,
+		561,
+		4
+	},
+	[120601] = {
+		120601,
+		6,
+		nil,
+		nil,
+		661,
+		4
+	},
+	[120701] = {
+		120701,
+		7,
+		nil,
+		nil,
+		761,
+		4
+	},
+	[120801] = {
+		120801,
+		8,
+		nil,
+		nil,
+		861,
+		4
+	},
+	[120901] = {
+		120901,
+		9,
+		nil,
+		nil,
+		961,
+		4
+	},
+	[121001] = {
+		121001,
+		10,
+		nil,
+		nil,
+		1061,
+		4
+	},
+	[121101] = {
+		121101,
+		11,
+		nil,
+		nil,
+		1161,
+		4
+	},
+	[121201] = {
+		121201,
+		12,
+		nil,
+		nil,
+		1261,
+		4
+	},
+	[120502] = {
+		120502,
+		5,
+		506,
+		nil,
+		562,
+		20
+	},
+	[120902] = {
+		120902,
+		9,
+		908,
+		nil,
+		962,
+		15
+	},
+	[120202] = {
+		120202,
+		2,
+		207,
+		nil,
+		262,
+		15
+	},
+	[120302] = {
+		120302,
+		3,
+		321,
+		nil,
+		362,
+		24
+	},
+	[120402] = {
+		120402,
+		4,
+		421,
+		nil,
+		462,
+		36
+	},
+	[121102] = {
+		121102,
+		11,
+		1121,
+		nil,
+		1162,
+		12
+	},
+	[120602] = {
+		120602,
+		6,
+		621,
+		nil,
+		662,
+		6
+	},
+	[120802] = {
+		120802,
+		8,
+		821,
+		nil,
+		862,
+		24
+	},
+	[121002] = {
+		121002,
+		10,
+		1021,
+		nil,
+		1062,
+		6
+	},
+	[120702] = {
+		120702,
+		7,
+		721,
+		nil,
+		762,
+		6
+	},
+	[121202] = {
+		121202,
+		12,
+		1221,
+		nil,
+		1262,
+		40
+	},
+	[10021] = {
+		10021,
+		100,
+		10021,
+		nil,
+		nil,
+		nil,
+		nil,
+		10021,
+		1
+	},
+	[10022] = {
+		10022
+	},
+	[10023] = {
+		10023,
+		100,
+		10024,
+		nil,
+		nil,
+		nil,
+		nil,
+		10024,
+		1
+	},
+	[10024] = {
+		10024,
+		100,
+		10025,
+		nil,
+		nil,
+		nil,
+		nil,
+		10025,
+		1
+	},
+	[10025] = {
+		10025,
+		100,
+		10027,
+		nil,
+		nil,
+		nil,
+		nil,
+		10026,
+		1
+	},
+	[10026] = {
+		10026,
+		100,
+		10028
+	},
+	[10028] = {
+		10028,
+		100,
+		nil,
+		nil,
+		10028
+	},
+	[10027] = {
+		10027,
+		100,
+		10029
+	},
+	[10030] = {
+		10030,
+		100,
+		10030,
+		nil,
+		10030,
+		[7] = {
+			100,
+			0,
+			0
+		}
+	},
+	[10031] = {
+		10031,
+		100,
+		10032,
+		nil,
+		10031
+	}
+}
+local mapKeyIndex = {
+	k8762374 = 4,
+	k1449045 = 9,
+	k9865036 = 3,
+	k14583718 = 5,
+	k14916475 = 10,
+	k6578482 = 7,
+	k14270899 = 2,
+	k5301100 = 6,
+	k1644150 = 1,
+	k7170577 = 8
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -8314
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -8314
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

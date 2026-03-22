@@ -1,0 +1,217 @@
+local M = class("BattleRanger_208_Sub")
+local STAGE_IDLE = 1
+local STAGE_MOVE = 2
+local STAGE_ATTACK = 3
+local STAGE_APPEAR = 4
+local STAGE_END = 5
+local circle_circle_intersect = BattleMathLib.circle_circle_intersect
+
+function M:ctor(ranger)
+	self._ranger = ranger
+	self._battleSession = ranger._battleSession
+	self._mainSkill = ranger._mainSkill
+	self._radius = 0.3
+	self._speed = ranger._cfg._subSpeed
+	self._position = Vector2.retain(0, 0)
+	self._stage = STAGE_IDLE
+	self._dir = {
+		0,
+		0
+	}
+
+	if self._ranger._view then
+		self._view = self._battleSession._sessionView:createRanger("Ranger_150008_Sub")
+
+		self._view:SetActive(false)
+
+		self._tf = self._view.transform
+		self._ator = self._view:GetChild(0):GetComponent("Animator")
+		self._vfx = self._view:GetChild(1)
+
+		self._vfx:SetActive(false)
+
+		self._viewAni = self._view:GetComponent("Animation")
+	end
+end
+
+function M:step(dt)
+	if self._stage == STAGE_MOVE then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stageCD = 0.4
+			self._stage = STAGE_APPEAR
+			self._position.x = self._targetPosX
+			self._position.y = self._targetPosY
+
+			if self._view then
+				self._tf:DOScale(1, 0.3)
+				self._ator:SetTrigger("fly")
+				self._view:SetPosition(self._position.x, self._position.y, 0)
+			end
+		end
+	elseif self._stage == STAGE_APPEAR then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self:doAttack()
+		end
+	elseif self._stage == STAGE_END then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = STAGE_IDLE
+		end
+	elseif self._stage == STAGE_ATTACK then
+		self._atkInterval = self._atkInterval - dt
+
+		if self._atkInterval <= 0 then
+			self._atkInterval = self._mainSkill:getProp(BattlePropEnum.AtkInterval)
+
+			if self._atkCount > 0 then
+				self:createBullet()
+
+				self._atkIndex = self._atkIndex + 1
+				self._atkCount = self._atkCount - 1
+
+				if self._view then
+					if self._advance then
+						self._viewAni:Play("Ranger_150008_Sub_Scale2")
+					else
+						self._viewAni:Play("Ranger_150008_Sub")
+					end
+				end
+			else
+				self._stage = STAGE_IDLE
+
+				self._ranger:onEnd()
+
+				return
+			end
+		end
+
+		if self._ranger:getEffect(20801) then
+			local speed = self._mainSkill:getProp(BattlePropEnum.BattlePropParam2, 0)
+			self._position.y = self._position.y + dt * speed
+			self._position.y = self._battleSession:limitEnemyPositionY(self._position.y)
+
+			if self._view then
+				self._view:SetPosition(self._position.x, self._position.y, 0)
+			end
+		end
+	end
+end
+
+function M:createBullet()
+	self._advance = nil
+	local triggerSkill = self._ranger:getSkill(20801)
+
+	if triggerSkill then
+		self._advance = self._atkIndex % self._mainSkill:getProp(BattlePropEnum.BattlePropParam1) == 0
+	end
+
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(self._position.x, self._position.y)
+
+	bullet._angle = 90
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	if self._advance then
+		local b1 = triggerSkill:createBullet()
+
+		b1:setPos(self._position.x, self._position.y)
+		b1:setScale(bullet._scale)
+
+		b1._angle = 90
+
+		if b1._view then
+			b1._view:posEvent()
+			b1._view:scaleEvent()
+		end
+	end
+
+	local combWeapon = self._battleSession:getWeapon(4)
+
+	if combWeapon then
+		local triggerSkill = self._ranger:getSkill(20802)
+
+		if triggerSkill then
+			local num = triggerSkill:getProp(BattlePropEnum.BattlePropParam3, 1)
+
+			for i = 1, num do
+				local b1 = triggerSkill:createBullet()
+				local x, y = BattleMathLib.random_inside_circle(bullet._radius)
+
+				b1:setPos(self._position.x + x, self._position.y + y)
+
+				if b1._view then
+					b1._view:posEvent()
+				end
+			end
+		end
+	end
+end
+
+function M:doAttack()
+	if self._view then
+		self._ator:SetTrigger("attack")
+		self._vfx:SetActive(true)
+
+		self._allEffect = self._ranger:getEffect(20802)
+
+		if self._allEffect then
+			Client.playBattleSound("se_Ranger_150008_max_bgm_1")
+		else
+			Client.playBattleSound("se_Ranger_150008_Initial_bgm_1")
+		end
+	end
+
+	self._stage = STAGE_ATTACK
+	self._atkInterval = 0
+	self._atkCount = self._mainSkill:getProp(BattlePropEnum.DamageNum) * (1 + self._mainSkill:getProp(BattlePropEnum.DamageNumAddPer, 0) / 100)
+	self._atkIndex = 1
+end
+
+function M:doStart(targetEnemy)
+	self._targetEnemy = targetEnemy
+	self._stage = STAGE_MOVE
+	self._stageCD = 0.6
+	self._position.x = self._ranger._position.x
+	self._position.y = self._ranger._position.y + 0.932
+	self._targetPosX = targetEnemy._position.x
+	self._targetPosY = targetEnemy._position.y
+
+	if self._view then
+		self._tf:SetLocalScale(1)
+		self._view:SetPosition(self._position.x, self._position.y, 0)
+		self._view:SetActive(true)
+		self._tf:DOScale(0, 0.3)
+		self._ator:SetTrigger("back")
+		self._ranger._view._followVFX:SetActive(false)
+	end
+end
+
+function M:doEnd()
+	self._advance = nil
+	self._stage = STAGE_END
+
+	if self._view then
+		self._ator:SetTrigger("back")
+		self._tf:DOScale(0, 0.3)
+		self._vfx:SetActive(false)
+
+		if self._allEffect then
+			Client.stopFadeOut("se_Ranger_150008_max_bgm_1")
+		else
+			Client.stopFadeOut("se_Ranger_150008_Initial_bgm_1")
+		end
+
+		self._ranger._view._followVFX:SetActive(true)
+	end
+end
+
+return M

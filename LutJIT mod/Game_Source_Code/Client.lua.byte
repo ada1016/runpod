@@ -1,0 +1,649 @@
+local AppConst = AppConst
+local lc = lc
+local log = log
+local opt = opt
+local table = table
+local string = string
+local M = {}
+
+declare("C", M)
+
+Client = M
+
+requireLua("ClientExtAudio")
+requireLua("ClientExtTime")
+requireLua("ClientExtSaveData")
+
+M.SystemLanguage = {
+	Danish = 8,
+	Polish = 27,
+	Korean = 23,
+	Faroese = 12,
+	Afrikaans = 0,
+	Arabic = 1,
+	Ukrainian = 38,
+	Japanese = 22,
+	German = 15,
+	Russian = 30,
+	Dutch = 9,
+	Slovak = 32,
+	Latvian = 24,
+	Spanish = 34,
+	Turkish = 37,
+	English = 10,
+	ChineseSimplified = 40,
+	Icelandic = 19,
+	Basque = 2,
+	Hungarian = 18,
+	Unknown = 42,
+	Romanian = 29,
+	Catalan = 5,
+	Estonian = 11,
+	Belarusian = 3,
+	Indonesian = 20,
+	Italian = 21,
+	Greek = 16,
+	SerboCroatian = 31,
+	French = 14,
+	Vietnamese = 39,
+	Hugarian = 18,
+	Finnish = 13,
+	Hebrew = 17,
+	Swedish = 35,
+	Slovenian = 33,
+	Chinese = 6,
+	Czech = 7,
+	Portuguese = 28,
+	Lithuanian = 25,
+	Norwegian = 26,
+	Thai = 36,
+	ChineseTraditional = 41,
+	Bulgarian = 4
+}
+M.LangPackageName = {
+	[M.SystemLanguage.English] = "en_US",
+	[M.SystemLanguage.French] = "fr",
+	[M.SystemLanguage.German] = "de",
+	[M.SystemLanguage.Portuguese] = "pt",
+	[M.SystemLanguage.Spanish] = "es",
+	[M.SystemLanguage.ChineseSimplified] = "zh_CN",
+	[M.SystemLanguage.ChineseTraditional] = "zh_Hant",
+	[M.SystemLanguage.Japanese] = "ja",
+	[M.SystemLanguage.Korean] = "ko"
+}
+
+function M.SupportLang(langId)
+	return M.LangPackageName[langId] ~= nil
+end
+
+M.Lang_Str = {
+	[M.SystemLanguage.English] = "English",
+	[M.SystemLanguage.French] = "Français",
+	[M.SystemLanguage.German] = "Deutsch",
+	[M.SystemLanguage.Portuguese] = "Português",
+	[M.SystemLanguage.Spanish] = "Español",
+	[M.SystemLanguage.ChineseSimplified] = "简体中文",
+	[M.SystemLanguage.ChineseTraditional] = "繁體中文",
+	[M.SystemLanguage.Japanese] = "日本語",
+	[M.SystemLanguage.Korean] = "한국어"
+}
+M.SupportSwitchLanguage = {
+	M.SystemLanguage.English,
+	M.SystemLanguage.German,
+	M.SystemLanguage.Spanish,
+	M.SystemLanguage.Portuguese,
+	M.SystemLanguage.French,
+	M.SystemLanguage.ChineseTraditional,
+	M.SystemLanguage.Japanese,
+	M.SystemLanguage.Korean
+}
+
+function M.SupportSwitchLang(langId)
+	return table.findArray(M.SupportSwitchLanguage, langId) ~= nil
+end
+
+M.SpecialLanguage = {
+	M.SystemLanguage.Japanese,
+	M.SystemLanguage.Korean,
+	M.SystemLanguage.ChineseTraditional
+}
+
+function M.IsSpecialLang(langId)
+	return table.findArray(M.SpecialLanguage, langId) ~= nil
+end
+
+M.PrefKey = {
+	sound_volume = "sound_volume",
+	music_volume = "music_volume",
+	lang_id = "lang_type",
+	sound_volume_factor = "sound_volume_factor",
+	music_switch = "n_switch_music",
+	sync_group = "sync_group",
+	player_info_cache = "player_info_cache",
+	is_saving = "is_saving",
+	toogle_vibra = "toogle_vibra",
+	upload_player_info = "upload_player_info",
+	sound_switch = "n_switch_sound",
+	shake_camera = "shake_camera",
+	music_volume_factor = "music_volume_factor"
+}
+
+function M.init()
+	M.initAppInfo()
+	M.loadJsonConfig()
+	M.loadLangPackage()
+
+	M._isSavingWhenStart = lc.getIntKeyValue(C.PrefKey.is_saving, 1)
+	M._musicVolume = lc.getIntKeyValue(M.PrefKey.music_volume, 100)
+	M._soundVolume = lc.getIntKeyValue(M.PrefKey.sound_volume, 100)
+	M._musicVolumeFactor = lc.getIntKeyValue(M.PrefKey.music_volume_factor, 100)
+	M._soundVolumeFactor = lc.getIntKeyValue(M.PrefKey.sound_volume_factor, 100)
+	M._toogleVibraOn = lc.getIntKeyValue(M.PrefKey.toogle_vibra, 1)
+	M._shakeCameraOn = lc.getIntKeyValue(M.PrefKey.shake_camera, 1)
+	M._timezoneOffset = ServerTimestamp.GetTimezoneOffset()
+	M._todayTimestamp = M.getTodayZeroTimestamp()
+	M._nativeTodayTimestamp = M.getNativeTodayZeroTimestamp()
+	M._nativeMondayTimestamp = M.getNativeMondayTimestamp()
+	M._musicFlag = lc.getIntKeyValue(M.PrefKey.music_switch, 1)
+	M._soundFlag = lc.getIntKeyValue(M.PrefKey.sound_switch, 1)
+	M._enterBackgroundTimestamp = 0
+	M._enterForegroundTime = M.getCurTime()
+
+	if C.isAlpha() then
+		Client._config.skipAdVideo = true
+		Client._config.jumpIap = true
+		Client._config.disableGuide = true
+	end
+
+	requireLua("NetPack")
+	requireLua("Network")
+	requireLua("Request")
+end
+
+function M.initAppInfo()
+	local appConfig = json.decode(AppConst.csvStr)
+	M._appConfig = appConfig
+	M._patchVersion = string.split(appConfig.version, ".")[4] or 0
+	M._isPvPBeta = appConfig.isBetaPvP
+	M._minPvPVersion = appConfig.minPvPVersion
+	M._appId = AppConst.appId
+	M._clientVersion = AppConst.clientVersion
+end
+
+function M.isDev()
+	return M._appId == "10001" or M._appId == "10003" or M._appId == "10004"
+end
+
+function M.isAlpha()
+	return M._appId == "10002"
+end
+
+function M.isReleasePreview()
+	return M._appId == "20002"
+end
+
+function M.isReleasePublish()
+	return M._appId == "20001" or M._appId == "20002"
+end
+
+function M.isInReview()
+	if lc._isAndroid or lc._isWebGLAndroid or lc._isWebGLPC then
+		return false
+	end
+
+	return lc._appVersion == C._appConfig.inReviewVersion
+end
+
+function M.getVersion()
+	return table.concat({
+		M._clientVersion,
+		".",
+		M._patchVersion
+	})
+end
+
+function M.loadJsonConfig()
+	M._config = {}
+
+	if lc._isMobile then
+		return
+	end
+
+	local file = io.open("config.json", "r")
+
+	if file then
+		local content = ""
+		local lines = {}
+
+		for line in io.lines("config.json") do
+			if not string.find(line, "//") then
+				lines[#lines + 1] = line
+			end
+		end
+
+		if string.sub(lines[#lines - 1], -1) == "," then
+			lines[#lines - 1] = string.sub(lines[#lines - 1], 1, -2)
+		end
+
+		content = table.concat(lines)
+		M._config = json.decode(content)
+
+		if M._config.ignoreLog then
+			local types = M._config.ignoreLog:split(",")
+
+			for i = 1, i < #types do
+				log[types[i]] = opt.empty_func
+			end
+		end
+	end
+end
+
+function M.loadLangPackage()
+	local defaultId = M.SystemLanguage.English
+	local systemLangId = LuaHelper.GetSystemLanguage()
+
+	if M.SupportLang(systemLangId) and M.SupportSwitchLang(systemLangId) then
+		defaultId = systemLangId
+	end
+
+	if not lc._isRelease or lc._isCN then
+		defaultId = M.SystemLanguage.ChineseSimplified
+	end
+
+	local langId = lc.getIntKeyValue(M.PrefKey.lang_id, defaultId)
+	M._langId = langId
+
+	lc.setIntKeyValue(M.PrefKey.lang_id, langId)
+	LcLocalization.loadLangPackage(M.LangPackageName[langId] or M.LangPackageName[10])
+end
+
+function M.getLangId()
+	return M._langId
+end
+
+function M.switchLanguage()
+	if M._langId == M.SystemLanguage.ChineseSimplified then
+		M._langId = M.SystemLanguage.English
+
+		lc.setIntKeyValue(M.PrefKey.lang_id, M._langId)
+		LcLocalization.loadLangPackage(M.LangPackageName[M.SystemLanguage.English])
+	else
+		M._langId = M.SystemLanguage.ChineseSimplified
+
+		lc.setIntKeyValue(M.PrefKey.lang_id, M._langId)
+		LcLocalization.loadLangPackage(M.LangPackageName[M.SystemLanguage.ChineseSimplified])
+	end
+
+	lc.saveSetValues()
+end
+
+function M.switchShake(value)
+	M._shakeCameraOn = value
+
+	lc.setIntKeyValue(M.PrefKey.shake_camera, M._shakeCameraOn)
+end
+
+function M.tryPurchase(iapType, callback, channel)
+	if not iapType then
+		return
+	end
+
+	local shop = D._iapConfig[iapType]._shop
+
+	if shop == D.ShopType.Main then
+		-- Nothing
+	elseif shop == D.ShopType.ArkRebuild then
+		if not P._playerActivity:isArkRebuildOpening() then
+			V.showToast(SID.TIP_EVENT_END)
+
+			return
+		end
+	elseif shop == D.ShopType.Monopoly then
+		if not P._playerActivity:isMonopolyOpening() then
+			V.showToast(SID.TIP_EVENT_END)
+
+			return
+		end
+	elseif shop == D.ShopType.SparkScout then
+		if not P._playerActivity:isSparkScoutOpening() then
+			V.showToast(SID.TIP_EVENT_END)
+
+			return
+		end
+	elseif shop == D.ShopType.Anniversary and not P._playerActivity:isAnniversaryOpening() then
+		V.showToast(SID.TIP_EVENT_END)
+
+		return
+	end
+
+	channel = channel or D.PurchaseChannel.Main
+
+	if lc._isCN then
+		SimpleEvent.emit("iap.waiting", true)
+		Request.sendIAPStartReq(function ()
+			if lc._isWebGLiOS then
+				SimpleEvent.emit("iap.waiting", false)
+			end
+
+			P._playerStore:tryPurchase(iapType, callback, channel)
+		end)
+	elseif lc._isMobile then
+		SimpleEvent.emit("iap.waiting", true)
+		P._playerStore:tryPurchase(iapType, callback, channel)
+	else
+		lc.delayFunc(0.5, function ()
+			FileDialogUtil.ShowMessageBox("提示", string.format("确认购买 %s 吗？", iapType), function (ret)
+				lc.delayFunc(1, function ()
+					if ret == 1 then
+						P._playerStore:tryPurchase(iapType, callback, channel)
+					else
+						OnSDKEvent(LCSDKLibrary.EventName.PURCHASE_FAILED, "", "UserCancelled")
+					end
+				end, nil, true)
+			end)
+		end, nil, true)
+	end
+end
+
+function M.OnApplicationPause()
+	Time.timeScale = 0
+	local curTime = C.getCurTime()
+	Client._enterBackgroundTimestamp = curTime
+
+	Trace.AF_traceSession("end", curTime - C._enterForegroundTime)
+
+	if P then
+		P._playerRecord:addOnlineTime(curTime - C._enterForegroundTime)
+
+		if P._playerActivity:isArkRebuildOpening() then
+			P._playerActivityArkRebuild:recordPlayTime()
+		end
+
+		P._playerNotification:OnApplicationPause()
+		C.trySaveGameDataToLocal()
+	end
+end
+
+function M.OnApplicationFocus()
+	if BattleManager then
+		Time.timeScale = BattleManager:getRealTimeScale()
+	else
+		Time.timeScale = 1
+	end
+
+	C._enterForegroundTime = C.getCurTime()
+
+	Trace.AF_traceSession("begin", 0)
+
+	if P then
+		if P._playerActivity:isArkRebuildOpening() and P._inArkRebulid then
+			P._playerActivityArkRebuild:recordEnterArkRebuildTime()
+		end
+
+		if not lc._isWebGL and LcNotifycationConsole.Instance:HasLastRespondedNotification() then
+			Trace.traceDesign("Notify_OpenGame")
+		end
+
+		P._playerNotification:OnApplicationFocus()
+	end
+
+	Client._enterBackgroundTimestamp = 0
+
+	if Client._watchingAd then
+		Client._watchingAd = false
+	end
+end
+
+function M.getLastNumbeFromAppsFlyerId()
+	local uid = LuaHelper.GetAppsFlyerId()
+
+	if uid:len() == 0 then
+		uid = C._firebaseId
+	end
+
+	local s = uid:len()
+	local breakIndex = 1
+
+	while true do
+		local a = string.sub(uid, s, s)
+
+		if tonumber(a) then
+			return tonumber(a)
+		end
+
+		s = s - 1
+
+		if breakIndex >= 100 then
+			break
+		end
+
+		breakIndex = breakIndex + 1
+	end
+
+	return 0
+end
+
+function M.getIsGuest()
+	if not lc._isMobile or lc._isCN then
+		return true
+	end
+
+	local isGuest = true
+	local userProvider = FirebaseManager:GetUserProvider()
+
+	if string.find(userProvider, "apple") or string.find(userProvider, "google") or string.find(userProvider, "facebook") then
+		isGuest = false
+	end
+
+	return isGuest
+end
+
+function M.getGoogleEmail()
+	return C._firebaseEmails and C._firebaseEmails["google.com"]
+end
+
+function M.getAppleEmail()
+	return C._firebaseEmails and C._firebaseEmails["apple.com"]
+end
+
+function M.queryRankDataV2(col, doc, callback, defaultValue)
+	if defaultValue then
+		LuaHelper.queryRankDataV2(col, doc, callback, defaultValue)
+	else
+		LuaHelper.queryRankDataV2(col, doc, callback)
+	end
+end
+
+function M.uploadRankDataV2(col, doc, key, data, callback)
+	if Client._forbidUpload then
+		return
+	end
+
+	P:checkCouldUploadRankData()
+
+	if Client._forbidUpload then
+		return
+	end
+
+	V.uploadPlayerInfo()
+	LuaHelper.uploadRankDataV2(col, doc, key, data, callback)
+end
+
+function M.uploadRankDataV3(col, doc, key, data, delKeys, callback)
+	if Client._forbidUpload then
+		return
+	end
+
+	P:checkCouldUploadRankData()
+
+	if Client._forbidUpload then
+		return
+	end
+
+	V.uploadPlayerInfo()
+	LuaHelper.uploadRankDataV3(col, doc, key, data, delKeys, callback)
+end
+
+function M.tryReportODM()
+	local key = "firebase.odm.reported"
+
+	if lc.getIntKeyValue(key, 0) == 0 then
+		for _, email in pairs(C._firebaseEmails) do
+			if string.find(email, "@") and not string.find(email, "privaterelay") then
+				Trace.AF_traceEvent("e02_report_odm", {
+					{
+						_key = "strParam",
+						_value = email
+					}
+				})
+				FirebaseManager:ReportEmailForODM(email)
+				lc.setIntKeyValue(key, 1)
+
+				break
+			end
+		end
+	end
+end
+
+function M.updateFirebaseEmails()
+	if lc._isCN then
+		return
+	end
+
+	local emails = FirebaseManager:GetUserEmails()
+	M._firebaseEmails = {}
+	local parts = string.split(emails, ";")
+
+	for i = 1, #parts do
+		local part = parts[i]
+		local keyValue = string.split(part, ":")
+		M._firebaseEmails[keyValue[1]] = keyValue[2]
+	end
+
+	M.tryReportODM()
+end
+
+function M.linkAccount(specifiedPlatform)
+	if lc._isAndroid or specifiedPlatform == "google" then
+		local loginType = FirebaseManager.FIREBASE_AUTH_TYPE_GOOGLE
+		V._savediOSAuthType = loginType
+
+		if C.getGoogleEmail() then
+			FirebaseManager:SwitchLogin(loginType)
+		else
+			FirebaseManager:LinkGoogle()
+		end
+	elseif lc._isiOS or specifiedPlatform == "apple" then
+		local loginType = FirebaseManager.FIREBASE_AUTH_TYPE_APPLE
+		V._savediOSAuthType = loginType
+
+		if C.getAppleEmail() then
+			FirebaseManager:SwitchLogin(loginType)
+		else
+			FirebaseManager:LinkApple()
+		end
+	end
+end
+
+function M.backupEnv(docType, t)
+	local cjson = LuaTableJson.encodeToCJson(t)
+
+	FirebaseManager:BackupToStore(C._firebaseId, cjson, docType)
+end
+
+local pingStoreCallback, pingStoreTimeoutCallback = nil
+
+local function check_network_async(callback, timeoutCallback, delayWaitingTime)
+	UIManager.showWaiting(nil, , delayWaitingTime or 0.5)
+	MainGameRoot:showGlobalMask()
+
+	pingStoreCallback = callback
+	pingStoreTimeoutCallback = timeoutCallback
+
+	FirebaseManager:PingStore()
+end
+
+function M.onStorePinged(status)
+	MainGameRoot:hideGlobalMask()
+	UIManager.hideWaiting()
+
+	if status then
+		local cb = pingStoreCallback
+
+		if cb then
+			pingStoreCallback = nil
+
+			cb()
+		end
+	else
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+
+		local cb = pingStoreTimeoutCallback
+
+		if cb then
+			pingStoreTimeoutCallback = nil
+
+			cb()
+		end
+
+		Trace.AF_traceEvent("e_network_error")
+	end
+end
+
+function M.checkNetworkAsync(callback, timeoutCallback, delayWaitingTime)
+	if lc.isNetworkNotReachable() then
+		V.showToast(SID.NETWORK_NOTREACHABLE)
+
+		return
+	end
+
+	if C._isNeedCheckNetwork then
+		check_network_async(callback, timeoutCallback, delayWaitingTime)
+
+		return
+	end
+
+	if C._appConfig.needCheckNetwork then
+		check_network_async(callback, timeoutCallback, delayWaitingTime)
+
+		return
+	end
+
+	callback()
+end
+
+function M.tryExchangeIfCheckNet(exchangeId, count, finishCallback, delegateCallback)
+	local ret, param = P._playerExchange:checkExchange(exchangeId, count)
+
+	if ret ~= ResultCode.OK then
+		V.showResultCode(ret, param)
+
+		return
+	end
+
+	if D._exchangeConfig[exchangeId]._checkNet then
+		Client.checkNetworkAsync(function ()
+			delegateCallback(finishCallback)
+		end)
+	else
+		delegateCallback(finishCallback)
+	end
+end
+
+function M.isPvPBeta()
+	if C._minPvPVersion then
+		if lc._appVersion < C._minPvPVersion then
+			return true
+		else
+			return C._isPvPBeta
+		end
+	else
+		return C._isPvPBeta
+	end
+end
+
+function M.fixGameGameCache(placement)
+	if lc._appVersion == 1 or lc._appVersion >= 1205 then
+		LuaHelper.FileClearUpdate(placement)
+	end
+end

@@ -1,0 +1,1383 @@
+local M = class("PlayerRanger")
+local BattlePropEnum = BattlePropEnum
+local EGG_SLOT_MAX = 3
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._rangers = lc.assignTable(meta, "rangers")
+	self._dockLevel = meta.dockLevel or 0
+	self._docks = lc.assignTable(meta, "docks")
+	self._eggSlots = lc.assignTable(meta, "eggSlots")
+	self._meta.eggNumIdx = meta.eggNumIdx or 0
+	self._eggNumByQuality = lc.assignTable(meta, "eggNumByQuality")
+	self._meta.eggBirthNum = meta.eggBirthNum or 0
+	self._equips = lc.assignTable(meta, "equips")
+	self._equipLocks = lc.assignTable(meta, "equipLocks")
+	self._equipIndex = meta.equipIndex or 1
+	self._equipsDirty = true
+	self._meta.todayClaimEggNum = meta.todayClaimEggNum or 0
+	self._incubatingNum = 0
+	self._equipUnusedTypeCounts = {}
+
+	for k, v in pairs(self._equips) do
+		if not v.ranger then
+			local type = v.cid % 100
+			self._equipUnusedTypeCounts[type] = (self._equipUnusedTypeCounts[type] or 0) + 1
+		end
+	end
+end
+
+function M:start()
+	self:updateIncubateGameClockTime()
+end
+
+function M:dailyReset()
+	self._meta.todayClaimEggNum = 0
+end
+
+function M:isIncubateSlotFull()
+	for slotIdx = 1, EGG_SLOT_MAX do
+		if self._eggSlots[slotIdx] == nil then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:findEmptyEggSlot()
+	for i = 1, EGG_SLOT_MAX do
+		if not self._eggSlots[i] then
+			return i
+		end
+	end
+end
+
+function M:checkDrawEgg()
+	local emptySlot = self:findEmptyEggSlot()
+
+	if not emptySlot then
+		return ResultCode.RANGER_SLOT_FULL
+	end
+
+	local r1, p1 = self:checkTicketDrawEgg()
+	local r2, p2 = self:checkDiamondDrawEgg()
+
+	if r1 == ResultCode.OK or r2 == ResultCode.OK then
+		return ResultCode.OK
+	end
+
+	if not r1 == ResultCode.OK then
+		return r1, p1
+	end
+
+	if not r2 == ResultCode.OK then
+		return r2, p2
+	end
+
+	return ResultCode.OK
+end
+
+function M:checkTicketDrawEgg()
+	local cost1 = P._playerAsset:isAssetEnough(D.ResType.ranger_draw_token, 1)
+
+	if not cost1 then
+		return D.ResType.ranger_draw_token, 1
+	end
+
+	return ResultCode.OK
+end
+
+function M:checkDiamondDrawEgg()
+	local cost2 = P._playerAsset:isAssetEnough(D.ResType.diamond, self:readDiamondDrawCost())
+
+	if not cost2 then
+		return D.ResType.diamond, self:readDiamondDrawCost()
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryDrawEgg()
+	local r1, p1 = self:checkDrawEgg()
+
+	if r1 ~= ResultCode.OK then
+		return r1, p1
+	end
+
+	local costEnd = false
+
+	if not costEnd and P._playerAsset:isAssetEnough(D.ResType.ranger_draw_token, 1) then
+		P._playerAsset:decreaseAssetNum(D.ResType.ranger_draw_token, 1, D.LogWay.ranger_draw_egg)
+
+		costEnd = true
+	end
+
+	local diamondCost = self:readDiamondDrawCost()
+
+	if not costEnd and P._playerAsset:isAssetEnough(D.ResType.diamond, diamondCost) then
+		P._playerAsset:decreaseAssetNum(D.ResType.diamond, diamondCost, D.LogWay.ranger_draw_egg)
+
+		costEnd = true
+	end
+
+	local ct = C.getCurTime()
+	local dropId = self:getDrawDropId()
+	local ret = DropHelper.getByDropId(dropId)
+	local quality = math.max(2, math.min(ret, 7))
+	local eggNumByQ = self._eggNumByQuality[quality] or 0
+	local newEggData = {
+		incubateEndTime = 0,
+		incubateRealEndTime = 0,
+		params = 0,
+		adJumpNum = 0,
+		incubateStartTime = 0,
+		isFirstEgg = eggNumByQ == 0,
+		eggQuality = quality,
+		eggIdx = self._meta.eggNumIdx + 1
+	}
+	local emptySlot = self:findEmptyEggSlot()
+	self._eggSlots[emptySlot] = newEggData
+	self._meta.eggNumIdx = self._meta.eggNumIdx + 1
+	self._eggNumByQuality[quality] = (self._eggNumByQuality[quality] or 0) + 1
+
+	P:saveGameData(true)
+
+	return ResultCode.OK
+end
+
+function M:getDrawDropIdCommon()
+	local cfg = D._lotteryConfig[3]
+
+	return cfg._drop
+end
+
+function M:getDrawDropId()
+	local cfg = D._lotteryConfig[3]
+	local nextDrawIdx = self:getDrawNum() + 1
+
+	if cfg._fixCounts then
+		local index = table.findArray(cfg._fixCounts, nextDrawIdx)
+
+		if index then
+			return cfg._fixDrops[index]
+		end
+	end
+
+	if nextDrawIdx % cfg._loopCount == 0 then
+		return cfg._loopDrop
+	else
+		return cfg._drop
+	end
+end
+
+function M:getBaseDrawLeftNum()
+	local cfg = D._lotteryConfig[3]
+
+	return cfg._loopCount - self:getDrawNum() % cfg._loopCount
+end
+
+function M:getDrawNum()
+	return self._meta.eggNumIdx or 0
+end
+
+function M:getJumpBirthCost(slotIdx)
+	local data = self:getEggData(slotIdx)
+	local deltaTime = data.incubateRealEndTime - C.getCurTime()
+
+	if deltaTime <= 0 then
+		return 0
+	end
+
+	local cost = self:readQuickIncubateCost(data.eggQuality)
+	local costDiamond = math.max(math.ceil(deltaTime / 60 / cost[1]), 1) * cost[2]
+
+	return costDiamond
+end
+
+function M:checkCanIncubate(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	if not eggData or eggData.incubateStartTime > 0 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:getIncubatingNumRealTime() > 0 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryStartIncubateBySlot(slotIdx)
+	local ret = self:checkCanIncubate(slotIdx)
+
+	if ret ~= ResultCode.OK then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local eggData = self:getEggData(slotIdx)
+	eggData.incubateStartTime = C.getCurTime()
+	eggData.incubateEndTime = eggData.incubateStartTime + 3600 * self:readEggIncubateHour(eggData.eggQuality)
+	eggData.incubateRealEndTime = eggData.incubateEndTime
+	eggData.adJumpNum = 0
+
+	self:updateIncubateGameClockTime()
+	SimpleEvent.emit("ranger.egg.startIncubate")
+
+	return ResultCode.OK
+end
+
+function M:getLeftIncubateSeconds(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	return eggData.incubateRealEndTime - C.getCurTime()
+end
+
+function M:checkCancelIncubate(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	if not eggData then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryCancelIncubate(slotIdx)
+	local ret = self:checkCancelIncubate(slotIdx)
+
+	if ret ~= ResultCode.OK then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	Trace.traceDesign("DeleteEgg:%d", self._eggSlots[slotIdx].eggQuality)
+
+	self._eggSlots[slotIdx] = nil
+
+	self:updateIncubateGameClockTime()
+	SimpleEvent.emit("ranger.egg.cancelIncubate")
+
+	return ResultCode.OK
+end
+
+function M:canAdReduceIncubate(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	return eggData and eggData.adJumpNum < self:readEggAdReduceMaxNum(eggData.eggQuality)
+end
+
+function M:getEggAdNum(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	return eggData and eggData.adJumpNum or 0
+end
+
+function M:tryReduceIncubateTimeByAd(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	if not self:canAdReduceIncubate(slotIdx) then
+		return ResultCode.AD_NUM_MAX
+	end
+
+	local reduceSeconds = self:readEggAdReduceHour(eggData.eggQuality) * 3600
+	eggData.incubateRealEndTime = eggData.incubateRealEndTime - reduceSeconds
+	eggData.adJumpNum = eggData.adJumpNum + 1
+
+	self:updateIncubateGameClockTime()
+	SimpleEvent.emit("ranger.egg.canBirth")
+
+	return ResultCode.OK
+end
+
+function M:tryReduceIncubateTimeByGM(reduceSeconds)
+	for slotIdx = 1, 3 do
+		local eggData = self:getEggData(slotIdx)
+
+		if eggData then
+			eggData.incubateRealEndTime = eggData.incubateRealEndTime - (reduceSeconds or 3600)
+
+			self:updateIncubateGameClockTime()
+			SimpleEvent.emit("ranger.egg.canBirth")
+		end
+	end
+end
+
+function M:tryJumpIncubateTime(slotIdx)
+	local cost = self:getJumpBirthCost(slotIdx)
+	local r1 = P._playerAsset:getAssetNum(D.ResType.ranger_egg_speed_up)
+	local r2 = P._playerAsset:getAssetNum(D.ResType.diamond)
+
+	if cost > r1 + r2 then
+		return D.ResType.diamond, cost
+	end
+
+	local eggData = self:getEggData(slotIdx)
+	local qualityLogway = string.format("%s_%d", D.LogWay.ranger_egg_incubate_speedup, eggData.eggQuality)
+
+	if cost <= r1 then
+		P._playerAsset:decreaseAssetNum(D.ResType.ranger_egg_speed_up, cost, qualityLogway)
+	else
+		if r1 > 0 then
+			P._playerAsset:decreaseAssetNum(D.ResType.ranger_egg_speed_up, r1, qualityLogway)
+		end
+
+		P._playerAsset:decreaseAssetNum(D.ResType.diamond, cost - r1, qualityLogway)
+	end
+
+	eggData.incubateRealEndTime = C.getCurTime() - 1
+
+	self:updateIncubateGameClockTime()
+	SimpleEvent.emit("ranger.egg.canBirth")
+
+	return ResultCode.OK
+end
+
+function M:canBirth(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+
+	if not eggData then
+		return false
+	end
+
+	local startTime = eggData.incubateStartTime
+	local endTime = eggData.incubateRealEndTime
+
+	if startTime == 0 or endTime == 0 then
+		return false
+	end
+
+	if C.getCurTime() < endTime then
+		return false
+	end
+
+	return true
+end
+
+function M:tryBirthEgg(slotIdx)
+	local eggData = self:getEggData(slotIdx)
+	local startTime = eggData.incubateStartTime
+	local endTime = eggData.incubateRealEndTime
+
+	if startTime == 0 or endTime == 0 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if C.getCurTime() < endTime then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local quality = eggData.eggQuality
+	local rewards = {}
+	local isFirst = eggData.isFirstEgg or false
+	local props = self:readEggDropProp(quality)
+	local dropProp1 = math.random(1, 100)
+	local dropId1 = self:readEggDropId1(quality, isFirst)
+
+	if dropId1 and (dropProp1 <= props[1] or isFirst) then
+		local cid1, num1 = DropHelper.getByDropId(dropId1)
+
+		table.insert(rewards, {
+			cid1,
+			num1
+		})
+	end
+
+	local dropProp2 = math.random(1, 100)
+	local dropId2 = self:readEggDropId2(quality, isFirst)
+
+	if dropId2 and (dropProp2 <= props[2] or isFirst) then
+		local cid2, num2 = DropHelper.getByDropId(dropId2)
+
+		table.insert(rewards, {
+			cid2,
+			num2
+		})
+	end
+
+	local dropProp3 = math.random(1, 100)
+	local dropId3 = self:readEggDropId3(quality, isFirst)
+
+	if dropId3 and (dropProp3 <= props[3] or isFirst) then
+		local cid3, num3 = DropHelper.getByDropId(dropId3)
+
+		table.insert(rewards, {
+			cid3,
+			num3
+		})
+	end
+
+	rewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.ranger_egg_incubate)
+
+	Trace.traceDesign("ReceiveEgg:%d", self._eggSlots[slotIdx].eggQuality)
+	TaskHelper:increaseTaskValue(D.TaskType.BIRTH_RANGER_EGG, 1)
+
+	self._eggSlots[slotIdx] = nil
+
+	if P._playerBPRanger:isStatusOpen() and self:getTodayClaimEggNum() < D._globalConfig._bp_ranger_daily_exp then
+		self._meta.todayClaimEggNum = self._meta.todayClaimEggNum + 1
+
+		P._playerBPRanger:addExp(1)
+	end
+
+	self._lastDrawRewards = rewards
+
+	SimpleEvent.emit("ranger.egg.birth")
+	RedDotManager.update("city.role.ranger")
+	P:saveGameData(true)
+
+	return ResultCode.OK, rewards
+end
+
+function M:readDailyBPExp()
+	return D._globalConfig._bp_ranger_daily_exp
+end
+
+function M:getMinIncubatingTimestamp()
+	local minIncubateTime = 0
+
+	for slotIdx, eggData in pairs(self._eggSlots) do
+		local endTime = eggData.incubateRealEndTime
+
+		if endTime > 0 and C.getCurTime() < endTime then
+			if minIncubateTime == 0 then
+				minIncubateTime = endTime
+			elseif endTime < minIncubateTime then
+				minIncubateTime = endTime
+			end
+		end
+	end
+
+	return minIncubateTime
+end
+
+function M:updateIncubateGameClockTime()
+	GameClock:removeTimeCallback("ranger_egg_incubate")
+
+	self._incubatingNum = 0
+	local minIncubateTime = 0
+
+	for slotIdx, eggData in pairs(self._eggSlots) do
+		local endTime = eggData.incubateRealEndTime
+
+		if endTime > 0 and C.getCurTime() < endTime then
+			if minIncubateTime == 0 then
+				minIncubateTime = endTime
+				self._incubatingNum = self._incubatingNum + 1
+			elseif endTime < minIncubateTime then
+				minIncubateTime = endTime
+				self._incubatingNum = self._incubatingNum + 1
+			end
+		end
+	end
+
+	if minIncubateTime == 0 then
+		return
+	end
+
+	GameClock:registerTimeCallback("ranger_egg_incubate", minIncubateTime, function ()
+		self:updateIncubateGameClockTime()
+		SimpleEvent.emit("ranger.egg.canBirth")
+	end)
+end
+
+function M:getTodayClaimEggNum()
+	return self._meta.todayClaimEggNum or 0
+end
+
+function M:getIncubatingNum()
+	return self._incubatingNum
+end
+
+function M:getFoundryDot()
+	for slotIdx = 1, EGG_SLOT_MAX do
+		if self._eggSlots[slotIdx] ~= nil and self:canBirth(slotIdx) then
+			return true
+		end
+	end
+end
+
+function M:getIncubatingNumRealTime()
+	self._incubatingNum = 0
+
+	for slotIdx, eggData in pairs(self._eggSlots) do
+		local endTime = eggData.incubateRealEndTime
+
+		if endTime > 0 and C.getCurTime() < endTime then
+			self._incubatingNum = self._incubatingNum + 1
+		end
+	end
+
+	return self._incubatingNum
+end
+
+function M:getDockLevel()
+	return self._dockLevel
+end
+
+function M:getDockUpgradeCost()
+	local level = self._dockLevel
+	local cfg = D._rangerBaseUpgradeConfig[level + 1]
+
+	if cfg then
+		return cfg._costCids, cfg._costNums
+	else
+		return nil
+	end
+end
+
+function M:canUpgradeDock()
+	local cids, nums = self:getDockUpgradeCost()
+
+	if not cids then
+		return false
+	end
+
+	for i = 1, #cids do
+		if not P._playerAsset:isAssetEnough(cids[i], nums[i]) then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:tryUpgradeDock()
+	local cids, nums = self:getDockUpgradeCost()
+
+	for i = 1, #cids do
+		if not P._playerAsset:isAssetEnough(cids[i], nums[i]) then
+			return cids[i], ResultCode.RESOURCE_NOT_ENOUGH
+		end
+	end
+
+	self._dockLevel = self._dockLevel + 1
+	self._meta.dockLevel = self._dockLevel
+
+	for i = 1, #cids do
+		P._playerAsset:increaseAssetNum(cids[i], -nums[i], D.LogWay.dock_upgrade)
+	end
+
+	Trace.AF_traceUpgrade("Dock", 0, self._dockLevel)
+	Trace.traceDesign("DockLevelUpgrade:%d", self._dockLevel)
+
+	if self._dockLevel > 1 then
+		local atkPercentChanged = D._rangerBaseUpgradeConfig[self._dockLevel - 1]._atkPercentAdd < D._rangerBaseUpgradeConfig[self._dockLevel]._atkPercentAdd
+		local docks = self:getDocks()
+
+		if docks[1] or docks[2] then
+			P._playerRole:dirtyAttack(atkPercentChanged)
+		else
+			P._playerRole:dirtyAttack()
+		end
+	else
+		P._playerRole:dirtyAttack()
+	end
+
+	RedDotManager.update("city.role.ranger")
+	SimpleEvent.emit("ranger.dock.upgrade")
+
+	return ResultCode.OK
+end
+
+function M:checkUpgradeRanger(rangerId)
+	return ResultCode.OK
+end
+
+function M:tryUpgradeRanger(rangerId)
+	local level = self:getRangerLevel(rangerId)
+	local fragId = D.toFragment(rangerId)
+	local fragNum = D._rangerConfig[rangerId]._costPieceNum[level + 1]
+	local fragEnough = P._playerAsset:isAssetEnough(fragId, fragNum)
+	local rangerEnough = P._playerAsset:isAssetEnough(rangerId, 1)
+
+	if level == 0 and not rangerEnough and not fragEnough then
+		return fragId, fragNum
+	elseif level > 0 and not fragEnough then
+		return fragId, fragNum
+	else
+		if not self._rangers[rangerId] then
+			self._rangers[rangerId] = {
+				level = 0,
+				equips = {}
+			}
+		end
+
+		self._rangers[rangerId].level = self._rangers[rangerId].level + 1
+
+		if level == 0 and rangerEnough then
+			P._playerAsset:increaseAssetNum(rangerId, -1, self._rangers[rangerId].level == 1 and D.LogWay.ranger_unlock or D.LogWay.ranger_upgrade)
+		else
+			P._playerAsset:increaseAssetNum(fragId, -fragNum, self._rangers[rangerId].level == 1 and D.LogWay.ranger_unlock or D.LogWay.ranger_upgrade)
+		end
+
+		if level == 0 and not P._playerGuide:isGroupFinished(D.GuideGroupId.RangerDeploy) then
+			SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.RangerDeploy)
+		end
+
+		Trace.AF_traceUpgrade("Ranger", rangerId, self._rangers[rangerId].level)
+		Trace.traceDesign("RangerStarUpgrade:%d:%d", rangerId, self._rangers[rangerId].level)
+		SimpleEvent.emit("ranger.upgrade", rangerId)
+
+		return ResultCode.OK
+	end
+end
+
+function M:equipRangerEquip(id, rangerId, index)
+	if not self._rangers[rangerId] then
+		self._rangers[rangerId] = {
+			level = 0,
+			equips = {}
+		}
+	end
+
+	for i, eid in pairs(self._rangers[rangerId].equips) do
+		if D._rangerEquipConfig[self._equips[eid].cid]._level == D._rangerEquipConfig[self._equips[id].cid]._level then
+			index = i
+
+			break
+		end
+	end
+
+	if self._rangers[rangerId].equips[index] then
+		self._equips[self._rangers[rangerId].equips[index]].ranger = nil
+	end
+
+	self._rangers[rangerId].equips[index] = id
+	self._equips[id].ranger = rangerId
+	self._equipUnusedTypeCounts[self._equips[id].cid % 100] = (self._equipUnusedTypeCounts[self._equips[id].cid % 100] or 0) - 1
+
+	SimpleEvent.emit("ranger.equip", rangerId)
+	RedDotManager.update("city.role.ranger")
+end
+
+function M:unequipRangerEquip(id, rangerId)
+	if not self._rangers[rangerId] then
+		self._rangers[rangerId] = {
+			level = 0,
+			equips = {}
+		}
+	end
+
+	local index = nil
+
+	for i, eid in pairs(self._rangers[rangerId].equips) do
+		if eid == id then
+			index = i
+
+			break
+		end
+	end
+
+	self._rangers[rangerId].equips[index] = nil
+	self._equips[id].ranger = nil
+	self._equipUnusedTypeCounts[self._equips[id].cid % 100] = (self._equipUnusedTypeCounts[self._equips[id].cid % 100] or 0) + 1
+
+	SimpleEvent.emit("ranger.equip", rangerId)
+	RedDotManager.update("city.role.ranger")
+end
+
+function M:getAvailableRangerEquips(rangerId)
+	if not self._equipsDirty and self._availableEquips then
+		return self._availableEquips
+	end
+
+	local equips = {}
+
+	for id, ranger in pairs(self._rangers) do
+		if not rangerId or id == rangerId then
+			for _, id in pairs(ranger.equips) do
+				equips[id] = true
+			end
+		end
+	end
+
+	local availableEquips = {}
+
+	for id, equip in pairs(self._equips) do
+		if not equips[id] then
+			local info = {
+				cid = equip.cid,
+				skill1 = equip.skill1,
+				skill2 = equip.skill2,
+				id = id,
+				ranger = equip.ranger
+			}
+			availableEquips[#availableEquips + 1] = info
+		end
+	end
+
+	table.sort(availableEquips, function (a, b)
+		return b.cid < a.cid
+	end)
+
+	self._availableEquips = availableEquips
+
+	return availableEquips
+end
+
+function M:getRangerEquipTypeCounts()
+	return self._equipUnusedTypeCounts
+end
+
+function M:insertRangerEquip(equip)
+	self._equips[self._equipIndex] = equip
+	self._equipIndex = self._equipIndex + 1
+	self._meta.equipIndex = self._equipIndex
+end
+
+function M:getRangerEquipById(id)
+	return self._equips[id]
+end
+
+function M:addRangerEquip(cid)
+	local equip = self:randomRangerEquipByCid(cid)
+
+	self:insertRangerEquip(equip)
+
+	self._equipUnusedTypeCounts[cid % 100] = (self._equipUnusedTypeCounts[cid % 100] or 0) + 1
+
+	SimpleEvent.emit("ranger.equips.dirty")
+
+	return equip
+end
+
+function M:randomRangerEquipByCid(cid, excludeEquip)
+	local cfg = D._rangerEquipConfig[cid]
+	local quality = cfg._quality
+	local level = cfg._level
+	local bucket = quality * 100 + level
+	local skill1 = DropHelper.dropFromGroupWithCustomWeight(D._rangerEquipSkillConfigDropList[bucket], function (e)
+		return e._weight1 > 0 and (not excludeEquip or e._id ~= excludeEquip.skill1)
+	end, "_weight1")._id
+
+	if table.contains(P._playerGuide._waitGuideTriggers, D.GuideGroupId.Ranger) then
+		skill1 = DropHelper.dropFromGroupWithCustomWeight(D._rangerEquipSkillConfigDropList[bucket], function (e)
+			return e._weight1 > 0 and e._effect == 1
+		end, "_weight1")._id
+		self._meta.guideComplete = true
+	end
+
+	local skill2 = nil
+
+	if D.Quality.Blue < quality then
+		skill2 = DropHelper.dropFromGroupWithCustomWeight(D._rangerEquipSkillConfigDropList[bucket], function (e)
+			return e._weight2 > 0 and (not excludeEquip or e._id ~= excludeEquip.skill2) and e._id ~= skill1
+		end, "_weight2")._id
+	end
+
+	local equip = {
+		cid = cid,
+		skill1 = skill1,
+		skill2 = skill2
+	}
+
+	return equip
+end
+
+function M:randomRangerEquipByQuality(quality, excludeEquip)
+	local cid = DropHelper.dropFromGroup(D._rangerEquipConfigDropList, function (e)
+		return e._quality == quality
+	end)._id
+
+	return self:randomRangerEquipByCid(cid, excludeEquip)
+end
+
+function M:tryRefineRangerEquip(id)
+	local equip = self._equips[id]
+	local cid = equip.cid
+	local quality = D._rangerEquipConfig[cid]._quality
+	local cost = D._rangerEquipConfig[cid]._refineCost
+
+	if not P._playerAsset:isAssetEnough(D.ResType.ranger_equip_refine_mat, cost) then
+		return D.ResType.ranger_equip_refine_mat, cost
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.ranger_equip_refine_mat, -cost, D.LogWay.ranger_equip_refine)
+
+	self._regeneratedEquip = self:randomRangerEquipByQuality(quality, equip)
+
+	Trace.traceDesign("ResonanceCoreREcast:%d", quality)
+	P:saveGameData(true)
+
+	return ResultCode.OK, self._regeneratedEquip
+end
+
+function M:acceptRefinedRangerEquip(id)
+	self._equips[id] = self._regeneratedEquip
+
+	SimpleEvent.emit("ranger.equips.dirty")
+end
+
+function M:abandonRefinedRangerEquip(id)
+	self._regeneratedEquip = nil
+end
+
+function M:isRangerEquipLocked(id)
+	return self._equipLocks[id]
+end
+
+function M:lockRangerEquip(id)
+	self._equipLocks[id] = 1
+
+	SimpleEvent.emit("ranger.equip.locked", true)
+end
+
+function M:unlockRangerEquip(id)
+	self._equipLocks[id] = nil
+
+	SimpleEvent.emit("ranger.equip.locked", false)
+end
+
+function M:getTargetReplaceEquip(rangerId, id)
+	local type = D._rangerEquipConfig[self:getRangerEquipById(id).cid]._level
+	local ranger = self._rangers[rangerId]
+	local firstEmptySlot = nil
+	local level = self:getRangerLevel(rangerId)
+	local maxSlot = level > 0 and math.min(D.RANGER_EQUIP_SLOT_NUM, math.floor(level / 5) + 1) or 0
+
+	for i = 1, maxSlot do
+		local eid = ranger.equips[i]
+
+		if eid and eid ~= id then
+			local equip = self:getRangerEquipById(eid)
+
+			if D._rangerEquipConfig[equip.cid]._level == type then
+				return equip, i
+			end
+		elseif firstEmptySlot == nil then
+			firstEmptySlot = i
+		end
+	end
+
+	if firstEmptySlot then
+		return nil, firstEmptySlot
+	else
+		return nil, 
+	end
+end
+
+function M:getUnlockedEquipSlot(rangerId)
+	local level = self:getRangerLevel(rangerId)
+
+	return level > 0 and math.floor(level / 5) + 1 or 0
+end
+
+function M:tryUpBattle(rangerId, dockIdx)
+	local dockIdx = dockIdx or self:getDockIndex()
+	self:getDocks()[dockIdx] = rangerId
+end
+
+function M:tryDownBattle(rangerId)
+	local dockIdx = self:getDockIndex(rangerId)
+	self:getDocks()[dockIdx] = nil
+end
+
+function M:decomposeRangerEquips(equipIds)
+	local decomposeMat = 0
+	local curEquips = {}
+
+	for _, id in pairs(equipIds) do
+		if self._equips[id] and not self._equips[id].ranger then
+			local isEquiping = curEquips[id]
+
+			if not isEquiping then
+				decomposeMat = decomposeMat + D._rangerEquipConfig[self._equips[id].cid]._decomposeGain
+				local type = self._equips[id].cid % 100
+				self._equipUnusedTypeCounts[type] = (self._equipUnusedTypeCounts[type] or 0) - 1
+
+				Trace.traceResChanged(self._equips[id].cid, true, 1, 0, D.LogWay.ranger_decompose_equip)
+
+				self._equips[id] = nil
+			end
+		end
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.ranger_equip_refine_mat, decomposeMat, D.LogWay.ranger_decompose_equip)
+
+	self._equipsDirty = true
+
+	SimpleEvent.emit("ranger.equips.dirty")
+end
+
+function M:getDockRanger(dockIdx)
+	return self:getDocks()[dockIdx]
+end
+
+function M:getDockIndex(rangerId)
+	local docks = self:getDocks()
+
+	for i = 1, 2 do
+		if docks[i] == rangerId then
+			return i
+		end
+	end
+end
+
+function M:isDockUnlock(dockIdx)
+	if dockIdx == 1 then
+		return true
+	end
+
+	return true
+end
+
+function M:isDockFull()
+	local docks = self:getDocks()
+
+	for i = 1, self:getDockNum() do
+		if not docks[i] then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:getDocks()
+	if self._docks[P._playerRole:getGemGroup()] then
+		return self._docks[P._playerRole:getGemGroup()]
+	else
+		self._docks[P._playerRole:getGemGroup()] = {}
+
+		return self._docks[P._playerRole:getGemGroup()]
+	end
+end
+
+function M:clearDocks()
+	table.clear(self:getDocks())
+end
+
+function M:pasteDocks(from, to)
+	if from == to then
+		return
+	end
+
+	for i = 1, 2 do
+		self._docks[to][i] = self._docks[from][i]
+	end
+end
+
+function M:canUpBattle(dockIdx)
+	return true
+end
+
+function M:isMaxLevel(rangerId)
+	return self:getRangerLevel(rangerId) == D.MAX_RANGER_STAR
+end
+
+function M:getRangerPieceId(rangerId)
+	return rangerId + 1000
+end
+
+function M:calcTransformTokenNum(rangerId, newNum)
+	local canTransform = self:getRangerLevel(rangerId) + P._playerAsset:getAssetNum(rangerId) > 0
+
+	return canTransform and newNum or newNum - 1
+end
+
+function M:calcTransformCommonTokenNum(rangerId, rangerPieceId, newNum)
+	local lv = self:getRangerLevel(rangerId)
+	local cfg = D._rangerConfig[rangerId]
+	local remainNeed = 0
+
+	for i = lv + 1, D.MAX_RANGER_STAR do
+		remainNeed = remainNeed + cfg._costPieceNum[i]
+	end
+
+	return math.min(newNum, P._playerAsset:getAssetNum(rangerPieceId) + newNum - remainNeed)
+end
+
+function M:canUpgradeRanger(rangerId)
+	local level = self:getRangerLevel(rangerId)
+
+	if D.MAX_RANGER_STAR <= level then
+		return false
+	end
+
+	local fragId = D.toFragment(rangerId)
+	local fragNum = D._rangerConfig[rangerId]._costPieceNum[level + 1]
+	local fragEnough = P._playerAsset:isAssetEnough(fragId, fragNum)
+
+	if level == 0 then
+		return P._playerAsset:isAssetEnough(rangerId, 1) or fragEnough
+	end
+
+	return fragEnough
+end
+
+function M:canUpgradeAnyRanger()
+	for rangerId, _ in pairs(D._rangerConfig) do
+		if self:canUpgradeRanger(rangerId) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:hasEmptyEquipSlot(rangerId)
+	local ranger = self._rangers[rangerId]
+	local maxSlot = math.min(D.RANGER_EQUIP_SLOT_NUM, self:getRangerEquipSlotNum(rangerId))
+
+	for i = 1, maxSlot do
+		if not ranger.equips[i] then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:hasRangerEquipDot(rangerId)
+	local ranger = self._rangers[rangerId]
+
+	if self:hasEmptyEquipSlot(rangerId) then
+		local hasType = {}
+
+		for _, eid in pairs(ranger.equips) do
+			local equip = self:getRangerEquipById(eid)
+			local type = equip.cid % 100
+			hasType[type] = 1
+		end
+
+		for type, num in pairs(self._equipUnusedTypeCounts) do
+			if num > 0 and not hasType[type] then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:hasDockRangerEquipDot()
+	local docks = self:getDocks()
+
+	for i = 1, 2 do
+		if docks[i] and self:hasRangerEquipDot(docks[i]) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:genBattleRangerInput(input)
+	input.ranger = {}
+	local rangers = {}
+	local effects = {}
+	local docks = self:getDocks()
+
+	for i = 1, 2 do
+		if docks[i] then
+			local rangerId = docks[i]
+			local ranger = self._rangers[rangerId]
+			local levelProps = {}
+			local levelSkills = {}
+
+			for _, eid in pairs(ranger.equips) do
+				local equip = self._equips[eid]
+				local level = D._rangerEquipConfig[equip.cid]._level
+				local skill1 = equip.skill1
+				local cfg = D._rangerEquipSkillConfig[skill1]
+
+				if cfg._propId < 1000 then
+					if not levelProps[level] then
+						levelProps[level] = {}
+					end
+
+					levelProps[level][#levelProps[level] + 1] = {
+						cfg._propId,
+						cfg._value[1],
+						equip.cid
+					}
+				elseif cfg._rougeId then
+					if not levelSkills[level] then
+						levelSkills[level] = {}
+					end
+
+					levelSkills[level][#levelSkills[level] + 1] = {
+						cfg._rougeId,
+						equip.cid
+					}
+				end
+
+				local skill2 = equip.skill2
+
+				if skill2 then
+					cfg = D._rangerEquipSkillConfig[skill2]
+
+					if cfg._propId < 1000 then
+						if not levelProps[level] then
+							levelProps[level] = {}
+						end
+
+						levelProps[level][#levelProps[level] + 1] = {
+							cfg._propId,
+							cfg._value[1],
+							equip.cid
+						}
+					elseif cfg._ranger == rangerId then
+						if not levelSkills[level] then
+							levelSkills[level] = {}
+						end
+
+						levelSkills[level][#levelSkills[level] + 1] = {
+							cfg._propId,
+							equip.cid
+						}
+					end
+				end
+			end
+
+			rangers[i] = {
+				id = rangerId,
+				atk = self:getRangerAtk(rangerId),
+				levelProps = levelProps,
+				levelSkills = levelSkills
+			}
+		end
+	end
+
+	effects[15] = self:getTotalEliteDmg()
+	input.ranger.rangers = rangers
+	input.ranger.effects = effects
+
+	return input
+end
+
+function M:getTotalEliteDmg()
+	local dmg = 0
+
+	for rangerId, ranger in pairs(self._rangers) do
+		local cfg = self:getCfg(rangerId)
+
+		if cfg._eliteDamageAdd and ranger.level > 0 then
+			dmg = dmg + cfg._eliteDamageAdd[ranger.level]
+		end
+	end
+
+	return dmg
+end
+
+function M:getOrderedRangers()
+	local rangerStars = {}
+
+	for id, cfg in pairs(D._rangerConfig) do
+		if not cfg._hidden then
+			local v = 0
+			local level = self:getRangerLevel(id)
+
+			if level == 0 and (P._playerAsset:isAssetEnough(id, 1) or P._playerAsset:isAssetEnough(D.toFragment(id), cfg._costPieceNum[1])) then
+				v = 999
+			elseif level > 0 then
+				v = 1
+			else
+				v = 0
+			end
+
+			rangerStars[#rangerStars + 1] = {
+				id,
+				v
+			}
+		end
+	end
+
+	table.sort(rangerStars, function (a, b)
+		local cfg1 = self:getCfg(a[1])
+		local cfg2 = self:getCfg(b[1])
+
+		if a[2] == b[2] then
+			if cfg1._quality == cfg2._quality then
+				local id1 = cfg1._index > 0 and cfg1._index or 9999
+				local id2 = cfg2._index > 0 and cfg2._index or 9999
+
+				return id1 < id2
+			else
+				return cfg2._quality < cfg1._quality
+			end
+		else
+			return b[2] < a[2]
+		end
+	end)
+
+	local displayRangers = {}
+
+	for i = 1, #rangerStars do
+		displayRangers[i] = rangerStars[i][1]
+	end
+
+	return displayRangers
+end
+
+function M:getTotalStar()
+	local total = 0
+
+	for _, ranger in pairs(self._rangers) do
+		local level = ranger.level
+		total = total + level
+	end
+
+	return math.floor(total)
+end
+
+function M:getUsingRangerId(equipId)
+	return self._equips[equipId] and self._equips[equipId].ranger
+end
+
+function M:getRangerEquips(rangerId)
+	return self._rangers[rangerId] and self._rangers[rangerId].equips or {}
+end
+
+function M:getRangerLevel(rangerId)
+	return self._rangers[rangerId] and self._rangers[rangerId].level or 0
+end
+
+function M:getRangerAtk(rangerId)
+	local level = self:getRangerLevel(rangerId)
+	local cfg = D._rangerConfig[rangerId]
+	local playerAtk = P._playerRole:getPlayerAtk()
+	local classProp = BattlePropEnum.AtkNatureGuard + D._rangerConfig[rangerId]._dmgType
+	playerAtk = playerAtk + (P._playerRole:getClassAtk()[classProp] or 0)
+	local baseAtkPercent = D._rangerBaseUpgradeConfig[self:getDockLevel()] and D._rangerBaseUpgradeConfig[self:getDockLevel()]._atkPercentAdd or 0
+
+	return playerAtk * (cfg._atkPercents[level] or cfg._atkPercents[1]) / 100 * (100 + baseAtkPercent) / 100
+end
+
+function M:getRangerEquipSlotNum(rangerId)
+	local level = self._rangers[rangerId] and self._rangers[rangerId].level or 0
+
+	if level > 0 then
+		return math.floor(level / 5) + 1
+	else
+		return 0
+	end
+end
+
+function M:getDockAtk()
+	local level = self:getDockLevel()
+
+	return D._rangerBaseUpgradeConfig[level] and D._rangerBaseUpgradeConfig[level]._atk or 0
+end
+
+function M:getDockEggSlotNum()
+	return 3
+end
+
+function M:getDockNum()
+	return 2
+end
+
+function M:getPlayerRangerInfo()
+	local info = {}
+
+	for id, ranger in pairs(self._rangers) do
+		info[id] = {
+			cid = ranger.id,
+			level = ranger.level,
+			atk = math.floor(self:getRangerAtk(id)),
+			equips = {}
+		}
+
+		for i, equipId in pairs(ranger.equips) do
+			info[id].equips[i] = self._equips[equipId]
+		end
+	end
+
+	return info
+end
+
+function M:getRangerInfo(id)
+	local info = {}
+	local ranger = self._rangers[id]
+	info.cid = id
+	info.level = ranger.level
+	info.atk = math.floor(self:getRangerAtk(id))
+	info.equips = {}
+
+	for i, equipId in pairs(ranger.equips) do
+		info.equips[i] = self._equips[equipId]
+	end
+
+	return info
+end
+
+function M:getEggData(slotIdx)
+	return self._eggSlots[slotIdx]
+end
+
+function M:readEggAdReduceHour(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._adReduceHour
+end
+
+function M:readEggAdReduceHour(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._adReduceHour
+end
+
+function M:readEggAdReduceMaxNum(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._adReduceMaxNum
+end
+
+function M:readEggIncubateHour(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._birthHour
+end
+
+function M:readEggDropProp(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._prop
+end
+
+function M:readEggShowRewards(eggQuality)
+	local cfg = self:getRangerEggCfg(eggQuality)
+
+	return cfg._showRewardCids, cfg._showRewardNums
+end
+
+function M:readEggDropId1(eggQuality, isFirst)
+	if isFirst then
+		return self:getRangerEggCfg(eggQuality)._firstDropId1
+	end
+
+	return self:getRangerEggCfg(eggQuality)._dropId1
+end
+
+function M:readEggDropId2(eggQuality, isFirst)
+	if isFirst then
+		return self:getRangerEggCfg(eggQuality)._firstDropId2
+	end
+
+	return self:getRangerEggCfg(eggQuality)._dropId2
+end
+
+function M:readEggDropId3(eggQuality, isFirst)
+	if isFirst then
+		return self:getRangerEggCfg(eggQuality)._firstDropId3
+	end
+
+	return self:getRangerEggCfg(eggQuality)._dropId3
+end
+
+function M:readQuickIncubateCost(eggQuality)
+	return self:getRangerEggCfg(eggQuality)._diamondJumpCost
+end
+
+function M:getRangerEggCfg(eggQuality)
+	return D._rangerEggConfig[eggQuality]
+end
+
+function M:getCfg(rangerId)
+	return D._rangerConfig[rangerId]
+end
+
+function M:readDiamondDrawCost()
+	return D._globalConfig._ranger_egg_diamond_cost
+end
+
+function M:canJumpDrawAnim()
+	return D._globalConfig._ranger_egg_drawanim_jump_num <= self:getDrawNum()
+end
+
+return M

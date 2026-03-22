@@ -1,0 +1,69 @@
+local M = class("ChipAttributePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+end
+
+local function unpackEffectValue(effect, value)
+	if effect == 401 then
+		value = value / 5
+	elseif effect == 502 then
+		value = value / 2
+	elseif effect == 701 then
+		value = value / 20 * 100
+	elseif effect == 806 then
+		value = value / 5
+	end
+
+	return value
+end
+
+function M:init(effects)
+	self._effects = {}
+
+	for k, v in pairs(effects) do
+		table.insert(self._effects, {
+			k,
+			v
+		})
+	end
+
+	if #self._effects == 0 then
+		self._goEmpty:SetActive(true)
+	else
+		for i = 1, #self._effects do
+			local goCell = GameObject.Instantiate(self._goTemplate, self._tfContainer)
+
+			goCell:SetActive(true)
+
+			if type(self._effects[i][2]) == "number" then
+				V.loadChipDescription(goCell.transform:Find("Text"):GetComponent("TMP_Text"), D._gemEffectConfig[self._effects[i][1]], unpackEffectValue(self._effects[i][1], self._effects[i][2]), nil)
+			else
+				local values = clone(self._effects[i][2])
+
+				if self._effects[i][1] == 36 then
+					values[2] = values[2] / math.min(D._globalConfig._chip_level_atk_limit / 2, P:getLevel())
+				elseif self._effects[i][1] == 503 then
+					values[2] = values[2] * 100 / 10
+				end
+
+				V.loadChipDescription(goCell.transform:Find("Text"):GetComponent("TMP_Text"), D._gemEffectConfig[self._effects[i][1]], nil, values)
+			end
+		end
+	end
+end
+
+function M:updateUI()
+end
+
+return M

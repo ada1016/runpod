@@ -1,0 +1,129 @@
+local math = math
+local Mathf = Mathf
+local BattleDefine = BattleDefine
+local Vector3 = Vector3
+local opt = opt
+local is_ray_segment_intersect = BattleMathLib.is_ray_segment_intersect
+local is_ray_circle_intersect = BattleMathLib.is_ray_circle_intersect
+local M = class("BattleWeapon_PulsedLaser", requireLua("BattleBattery_Rotatable"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._bullet = nil
+	self._effect201Params = D.getBattleEffectParams(201)
+	self._effect205Params = D.getBattleEffectParams(205)
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:createSubBullet(castSkill, dtAngle, canStrafe)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	bullet:setDirByAngle(self._angle + dtAngle)
+
+	if canStrafe then
+		bullet._length = 30
+	else
+		bullet:initSegs()
+	end
+
+	return bullet
+end
+
+function M:createMainBullet(angle)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+	bullet:setDirByAngle(angle or self._angle)
+	bullet:setSegIndex(1)
+	bullet:initSegs()
+
+	if bullet._view then
+		bullet:updateView()
+	end
+
+	return bullet
+end
+
+function M:castSkill()
+	self._isChanneling = true
+	local bullet = nil
+
+	if self._skinEffect61Actived and self._skillCastedCount % self._skinEffect61Param == 0 then
+		local count = self._skinSkillParam1 + 1
+		bullet = self:createMainBullet(self._angle + (1 - (1 + count) / 2) * 5)
+
+		for i = 2, count do
+			self:createMainBullet(self._angle + (i - (1 + count) / 2) * 5)
+		end
+	else
+		bullet = self:createMainBullet(self._angle)
+	end
+
+	local castSkill = self:getSkill(201)
+
+	if castSkill then
+		local b = self:createSubBullet(castSkill, self._effect205Params[1])
+
+		if b._view then
+			b:updateView()
+		end
+
+		local b = self:createSubBullet(castSkill, self._effect205Params[2])
+
+		if b._view then
+			b:updateView()
+		end
+	end
+
+	local liveTime = bullet._atkInterval * bullet._releaseAtkNum
+	local left = self._battleRandomLib:random() < 0.5
+	local strafeSkill = self:getSkill(202)
+
+	if strafeSkill then
+		local dtAngle = left and self._effect201Params[2] or self._effect201Params[3]
+
+		self:createStrafeBullet(strafeSkill, dtAngle, liveTime)
+	end
+
+	local effPar = self:getEffect(251)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) then
+		local params = D.getBattleEffectParams(251)
+		local strafeSkill = self:getSkill(205)
+		local dtAngle = left and self._effect201Params[3] or self._effect201Params[2]
+
+		self:createStrafeBullet(strafeSkill, dtAngle, liveTime)
+	end
+end
+
+function M:createStrafeBullet(strafeSkill, dtAngle, liveTime)
+	local bullet = self:createSubBullet(strafeSkill, dtAngle, true)
+	bullet._angle = self._angle
+
+	bullet:setStrafe(true, dtAngle, liveTime)
+
+	if bullet._view then
+		bullet:updateView()
+	end
+end
+
+function M:onSubEnemyKilled()
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._battleSkill == self._mainSkill then
+		self._isChanneling = false
+
+		self:onChannelingEnd()
+	end
+end
+
+return M

@@ -1,0 +1,125 @@
+local M = class("FAQPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnMail = Types.Button,
+	btnRestore = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+
+	self._parts = {}
+	self._partLoaded = {}
+	self._partTitles = {}
+	self._partContents = {}
+	self._partArrows = {}
+	self._partBtns = {}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnMail, function ()
+		lc.openUrl(D.URL_FEEDBACK_GOOGLE_FORM)
+	end)
+	self:setClick(self._btnRestore, function ()
+		V.showMessageBox({
+			_type = 2,
+			_showClose = true,
+			_title = SID.STR_RESTOER_PURCHASE,
+			_content = SID.RESTART_TO_RESTORE_PURCHASE,
+			_confirmCallback = function ()
+				MainGameRoot:showGlobalMask()
+				lc.setTimer(function ()
+					if lc._isiOS then
+						Application.Quit()
+					else
+						LuaHelper.RestartApp()
+					end
+				end, 0.2)
+			end
+		})
+	end)
+end
+
+function M:init()
+	self._cfg = D._supportConfig
+	local showSupportIds = {}
+	self._showSupportIds = showSupportIds
+
+	for idx = 1, #self._cfg do
+		if not self._cfg[idx]._hide then
+			showSupportIds[#showSupportIds + 1] = idx
+		end
+	end
+
+	for idx = 1, #showSupportIds do
+		local supportId = showSupportIds[idx]
+		local tfPart = self._tfContainer:GetChild(idx - 1)
+		self._parts[idx] = tfPart
+
+		self._parts[idx]:SetActive(true)
+
+		self._partTitles[idx] = tfPart:GetChild(1):GetChild(0):GetComponent("TMP_Text")
+
+		self._partTitles[idx]:SetLocalize(self._cfg[supportId]._titleSid)
+
+		self._partContents[idx] = tfPart:GetChild(2)
+		self._partBtns[idx] = tfPart:GetChild(1):GetChild(1):GetComponent("Button")
+		self._partArrows[idx] = self._partBtns[idx].transform:GetChild(0):GetComponent("Image")
+
+		self:setClick(self._partBtns[idx], function ()
+			self:expandPart(idx)
+		end)
+		self._partContents[idx]:SetActive(false)
+	end
+end
+
+function M:expandPart(index)
+	if self._partLoaded[index] == nil then
+		self:loadPart(index)
+
+		self._partLoaded[index] = true
+	else
+		self._partLoaded[index] = not self._partLoaded[index]
+	end
+
+	self:updatePartUI(index)
+end
+
+function M:updatePartUI(part)
+	self._partContents[part]:SetActive(self._partLoaded[part] == true)
+	lc.setLocalEulerAngles(self._partArrows[part], 0, 0, self._partLoaded[part] and 180 or 270)
+end
+
+function M:loadPart(index)
+	local supportId = self._showSupportIds[index]
+	local tfContainer = self._partContents[index]
+	local txtTMP = tfContainer:GetChild(0):GetChild(1):GetComponent("TMP_Text")
+
+	if supportId == 6 then
+		local str = string.format("<color=#86FFF1><u><link=%s>%s</link></u></color>", D.URL_DISCORD_SUPPORT_INVITE, LcLocalization.getTextStr(SID.STR_CLICK_TO_JOIN))
+
+		txtTMP:SetLocalizeS(self._cfg[supportId]._descSid, str)
+
+		local compLink = txtTMP.gameObject:GetOrAddComponent(typeof(TMP_Text_LinkHandler))
+
+		if not compLink then
+			return
+		end
+
+		compLink:SetLinkClick(function (linkId)
+			lc.openUrl(linkId)
+		end)
+	else
+		txtTMP:SetLocalize(self._cfg[supportId]._descSid)
+	end
+end
+
+return M

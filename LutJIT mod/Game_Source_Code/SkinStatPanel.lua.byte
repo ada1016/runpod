@@ -1,0 +1,163 @@
+local M = class("SkinStatPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goContent = Types.GameObject,
+	goContentTemplate = Types.GameObject
+}
+local SkinStatWidget = requireLua("SkinStatWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._contents = {}
+
+	lc.prefabVarPeer(self._goContent)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init(skinType, weaponId)
+	self._skinType = skinType
+	self._weaponId = weaponId
+	local orderedSkins = P._playerSkin:getOrderedSkins(self._skinType)
+	local battleInput = {}
+
+	if skinType == D.SkinType.Role or skinType == D.SkinType.Weapon then
+		P._playerSkin:genBattleSkinInput(battleInput)
+	end
+
+	local scrollContent = self._goContent.transform.parent
+
+	for i = 1, #orderedSkins do
+		local skinId = orderedSkins[i]
+
+		if skinId ~= D.DEFAULT_GATLIN_SKIN and skinId ~= D.DEFAULT_ROLE_SKIN and skinId ~= D.DEFAULT_DOME_SKIN then
+			local star = P._playerSkin:getSkinLevel(skinId)
+
+			if star > 0 then
+				if skinType == D.SkinType.Gatlin then
+					local widget = SkinStatWidget.create(self._goContent._tfContainer)
+
+					widget:init(skinId, "_damageAdd")
+				else
+					local weaponId = P._playerSkin:readWeapon(skinId)
+
+					if skinType == D.SkinType.Role then
+						if not self._contents[weaponId] then
+							self._contents[weaponId] = GameObject.Instantiate(self._goContentTemplate, scrollContent)
+
+							self._contents[weaponId]:SetActive(true)
+							lc.prefabVarPeer(self._contents[weaponId])
+						end
+
+						if D._weaponConfig[weaponId] then
+							self._contents[weaponId]._txtPropName:SetLocalize(SID.STR_TOTAL_FINAL_DAMAGE_ADD, -D._weaponConfig[weaponId]._skillNameSid)
+
+							self._contents[weaponId]._txtPropValue.text = "+" .. battleInput.skins.props[weaponId][BattlePropEnum.DmgFinalAddPer] .. "%"
+						elseif weaponId == 0 then
+							self._contents[weaponId]._txtPropName:SetLocalize(SID.STR_ALL_FINAL_DAMAGE_NAME)
+
+							self._contents[weaponId]._txtPropValue.text = "+" .. battleInput.skins.props[D.WEAPON_GATLIN + 1][BattlePropEnum.DmgFinalAllAddPerOnlyBattery] .. "%"
+						elseif weaponId >= 1000 then
+							local effectWeapon = 1000
+
+							if weaponId >= 1000 then
+								effectWeapon = weaponId - 1000
+							end
+
+							self._contents[weaponId]._txtPropName:SetLocalize(SID.STR_ALL_DAMAGE_NAME)
+
+							self._contents[weaponId]._txtPropValue.text = "+" .. battleInput.skins.props[D.WEAPON_GATLIN + 1][BattlePropEnum.DmgOutAddPerOnlyBattery] .. "%"
+						end
+
+						local widget = SkinStatWidget.create(self._contents[weaponId]._tfContainer)
+
+						widget:init(skinId, "_damageAdd")
+
+						widget = SkinStatWidget.create(self._goContent._tfContainer)
+
+						widget:init(skinId, "_critDmgAdd")
+					elseif skinType == D.SkinType.Weapon then
+						local dmgType = D._weaponConfig[weaponId]._dmgType
+
+						if not self._contents[dmgType] then
+							self._contents[dmgType] = GameObject.Instantiate(self._goContentTemplate, scrollContent)
+
+							self._contents[dmgType]:SetActive(true)
+							lc.prefabVarPeer(self._contents[dmgType])
+						end
+
+						self._contents[dmgType]._txtPropName:SetLocalize(SID.STR_DAMAGE_NAME, -SID["STR_NATURE_" .. dmgType])
+
+						self._contents[dmgType]._txtPropValue.text = "+" .. battleInput.skins.props[0][BattlePropEnum.DamageNature1Per - 1 + D._weaponConfig[weaponId]._dmgType] .. "%"
+						local widget = SkinStatWidget.create(self._contents[dmgType]._tfContainer)
+
+						widget:init(skinId, "_damageAdd")
+
+						widget = SkinStatWidget.create(self._goContent._tfContainer)
+
+						widget:init(skinId, "_critDmgAdd")
+					elseif skinType == D.SkinType.Dome then
+						local cfg = D._skinDomeConfig[skinId]
+						local key = cfg._domeHpPercent > 0 and 0 or 1
+
+						if not self._contents[key] then
+							self._contents[key] = GameObject.Instantiate(self._goContentTemplate, scrollContent)
+
+							self._contents[key]:SetActive(true)
+							lc.prefabVarPeer(self._contents[key])
+							self._contents[key]._txtPropName:SetLocalize(key == 0 and SID.STR_DOME_SKIN_HP_PERCENT_ADD or SID.STR_DOME_HP_ADD)
+						end
+
+						local widget = SkinStatWidget.create(self._contents[key]._tfContainer)
+
+						if cfg._domeHpPercent > 0 then
+							widget:init(skinId, "_domeHpPercent")
+						else
+							widget:init(skinId, "_domeHp")
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if skinType == D.SkinType.Gatlin then
+		self._goContent._txtPropName:SetLocalize(SID.STR_TOTAL_FINAL_DAMAGE_ADD, -D._weaponConfig[D.WEAPON_GATLIN]._skillNameSid)
+
+		self._goContent._txtPropValue.text = "+" .. P._playerSkin:getGatlinSkinDmgAdd() .. "%"
+	elseif skinType == D.SkinType.Dome then
+		self._goContent:SetActive(false)
+
+		if self._contents[1] then
+			self._contents[1]._txtPropValue.text = "+" .. P._playerSkin:getTotalDomeHp(true)
+		end
+
+		if self._contents[0] then
+			self._contents[0]._txtPropValue.text = "+" .. P._playerSkin:getTotalDomeHpPercent() .. "%"
+		end
+	else
+		self._goContent._txtPropName:SetLocalize(SID.WEAPON_TOTAL_CRIT)
+
+		self._goContent._txtPropValue.text = "+" .. P._playerSkin:getTotalCritDmg(skinType) .. "%"
+	end
+
+	if self._contents[1000] then
+		self._contents[1000].transform:SetSiblingIndex(0)
+	end
+
+	if self._contents[0] then
+		self._contents[0].transform:SetSiblingIndex(0)
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+return M

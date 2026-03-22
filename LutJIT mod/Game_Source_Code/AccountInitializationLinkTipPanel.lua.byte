@@ -1,0 +1,31 @@
+local M = class("AccountInitializationLinkTipPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnConfirm = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		UIManager.showWaiting(30)
+		Client.linkAccount("google")
+	end)
+end
+
+function M:addEvents()
+	self:on("link.succeed", function ()
+		self:closePanel()
+	end)
+end
+
+function M:init()
+end
+
+function M:updateUI()
+end
+
+return M

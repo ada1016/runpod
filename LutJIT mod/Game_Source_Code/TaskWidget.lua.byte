@@ -1,0 +1,86 @@
+local M = class("TaskWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent, taskClass)
+	local go = nil
+
+	if taskClass == D.TaskClass.Anniversary then
+		go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TaskWidget_Anniversary.prefab", parent)
+	else
+		go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/TaskWidget.prefab", parent)
+	end
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	lc.prefabVarPeer(go)
+	ItemWidget.noCreate(go._goItem)
+	setmetatable(go.peer, M)
+
+	return go
+end
+
+function M:init(tid)
+	self._taskId = tid
+	local TaskHelper = TaskHelper
+
+	self:setFillAmount(TaskHelper:getTaskPercent(tid))
+	self:setFinished(TaskHelper:isFinished(tid))
+	self:setClaimed(TaskHelper:isClaimed(tid))
+	V.updateTaskDescProgress(tid, {
+		showBreifDesc = false,
+		red = "D7FFD5",
+		green = "D7FFD5",
+		txtDesc = self._txtDesc,
+		txtProgress = self._txtProgress
+	})
+	self._goItem:init(TaskHelper:getTaskRewardCids(tid)[1], TaskHelper:getTaskRewardNums(tid)[1])
+end
+
+function M:setFinished(finished)
+	if not finished then
+		self._btnClaim.enabled = false
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+
+		self._txtClaim:SetLocalize(SID.STR_NOT_COMPLETE)
+		self._imgDot:SetActive(false)
+	else
+		self._btnClaim.enabled = true
+		self._btnClaim:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+		self._imgClaimLight.color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+
+		self._imgDot:SetActive(true)
+		self._txtClaim:SetLocalize(SID.STR_CLAIM)
+	end
+end
+
+function M:setFillAmount(amount)
+	self._imgBar.fillAmount = amount
+end
+
+function M:setClaimed(claimed)
+	self._goUnclaimed:SetActive(not claimed)
+	self._goClaimed:SetActive(claimed)
+end
+
+function M:initAnimStatus()
+	self:setCellShow(false)
+end
+
+function M:setCellShow(show)
+	self._atorWidget:SetInteger("status", show and 2 or 0)
+end
+
+function M:playShowAnim()
+	self._atorWidget:ResetTrigger("showAnim")
+	self._atorWidget:SetTrigger("showAnim")
+	self._atorWidget:SetInteger("status", 1)
+end
+
+return M

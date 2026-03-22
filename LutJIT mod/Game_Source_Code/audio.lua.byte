@@ -1,0 +1,1015 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	music_battle = {
+		"music_battle",
+		"event:/Music/music_battle"
+	},
+	music_city = {
+		"music_city",
+		"event:/Music/music_city"
+	},
+	["2d_tap"] = {
+		"2d_tap",
+		"event:/Sound2D/2d_tap"
+	},
+	ui_Open_panel_1 = {
+		"ui_Open_panel_1",
+		"event:/Sound2D/ui_Open_panel_1"
+	},
+	ui_Tap_page_1 = {
+		"ui_Tap_page_1",
+		"event:/Sound2D/ui_Tap_page_1"
+	},
+	ui_Close_panel_1 = {
+		"ui_Close_panel_1",
+		"event:/Sound2D/ui_Close_panel_1"
+	},
+	ui_Toast_1 = {
+		"ui_Toast_1",
+		"event:/Sound2D/ui_Toast_1"
+	},
+	ui_Rewards_1 = {
+		"ui_Rewards_1",
+		"event:/Sound2D/ui_Rewards_1"
+	},
+	ui_Draw_1 = {
+		"ui_Draw_1",
+		"event:/Sound2D/ui_Draw_1"
+	},
+	ui_Open_Gift_1 = {
+		"ui_Open_Gift_1",
+		"event:/Sound2D/ui_Open_Gift_1"
+	},
+	ui_Play_1 = {
+		"ui_Play_1",
+		"event:/Sound2D/ui_Play_1"
+	},
+	ui_Boss_1 = {
+		"ui_Boss_1",
+		"event:/Sound2D/ui_Boss_1"
+	},
+	ui_Success_1 = {
+		"ui_Success_1",
+		"event:/Sound2D/ui_Success_1"
+	},
+	ui_Fail_1 = {
+		"ui_Fail_1",
+		"event:/Sound2D/ui_Fail_1"
+	},
+	se_Bullet_1 = {
+		"se_Bullet_1",
+		"event:/SoundSE/se_Bullet_1"
+	},
+	se_Bullet_1_shell = {
+		"se_Bullet_1_shell",
+		"event:/SoundSE/se_Bullet_1_shell"
+	},
+	se_Bullet_101 = {
+		"se_Bullet_101",
+		"event:/SoundSE/se_Bullet_101"
+	},
+	se_Bullet_104 = {
+		"se_Bullet_104",
+		"event:/SoundSE/se_Bullet_104"
+	},
+	se_General_fire_boom = {
+		"se_General_fire_boom",
+		"event:/SoundSE/se_General_fire_boom"
+	},
+	se_Bullet_1_thunder = {
+		"se_Bullet_1_thunder",
+		"event:/SoundSE/se_Bullet_1_thunder"
+	},
+	se_Bullet_1_Laser = {
+		"se_Bullet_1_Laser",
+		"event:/SoundSE/se_Bullet_1_Laser"
+	},
+	se_Bullet_2 = {
+		"se_Bullet_2",
+		"event:/SoundSE/se_Bullet_2"
+	},
+	se_Bullet_3 = {
+		"se_Bullet_3",
+		"event:/SoundSE/se_Bullet_3"
+	},
+	se_Bullet_3_boom = {
+		"se_Bullet_3_boom",
+		"event:/SoundSE/se_Bullet_3_boom"
+	},
+	se_Bullet_303 = {
+		"se_Bullet_303",
+		"event:/SoundSE/se_Bullet_303"
+	},
+	se_Bullet_304_boom = {
+		"se_Bullet_304_boom",
+		"event:/SoundSE/se_Bullet_304_boom"
+	},
+	se_Bullet_5 = {
+		"se_Bullet_5",
+		"event:/SoundSE/se_Bullet_5"
+	},
+	se_Bullet_4 = {
+		"se_Bullet_4",
+		"event:/SoundSE/se_Bullet_4"
+	},
+	se_Bullet_4_hit = {
+		"se_Bullet_4_hit",
+		"event:/SoundSE/se_Bullet_4_hit"
+	},
+	se_Bullet_4_chain = {
+		"se_Bullet_4_chain",
+		"event:/SoundSE/se_Bullet_4_chain"
+	},
+	se_Bullet_5_portal = {
+		"se_Bullet_5_portal",
+		"event:/SoundSE/se_Bullet_5_portal"
+	},
+	se_General_forcefield_boom = {
+		"se_General_forcefield_boom",
+		"event:/SoundSE/se_General_forcefield_boom"
+	},
+	se_Bullet_6 = {
+		"se_Bullet_6",
+		"event:/SoundSE/se_Bullet_6"
+	},
+	se_Bullet_6_hit = {
+		"se_Bullet_6_hit",
+		"event:/SoundSE/se_Bullet_6_hit"
+	},
+	se_Bullet_6_boom = {
+		"se_Bullet_6_boom",
+		"event:/SoundSE/se_Bullet_6_boom"
+	},
+	se_Bullet_6_boom_center = {
+		"se_Bullet_6_boom_center",
+		"event:/SoundSE/se_Bullet_6_boom_center"
+	},
+	se_Bullet_7 = {
+		"se_Bullet_7",
+		"event:/SoundSE/se_Bullet_7"
+	},
+	se_Bullet_7_refractor = {
+		"se_Bullet_7_refractor",
+		"event:/SoundSE/se_Bullet_7_refractor"
+	},
+	se_Bullet_8 = {
+		"se_Bullet_8",
+		"event:/SoundSE/se_Bullet_8"
+	},
+	se_Bullet_801 = {
+		"se_Bullet_801",
+		"event:/SoundSE/se_Bullet_801"
+	},
+	se_Bullet_9 = {
+		"se_Bullet_9",
+		"event:/SoundSE/se_Bullet_9"
+	},
+	se_Bullet_9_hit = {
+		"se_Bullet_9_hit",
+		"event:/SoundSE/se_Bullet_9_hit"
+	},
+	se_Bullet_901 = {
+		"se_Bullet_901",
+		"event:/SoundSE/se_Bullet_901"
+	},
+	se_Bullet_902 = {
+		"se_Bullet_902",
+		"event:/SoundSE/se_Bullet_902"
+	},
+	se_Enemy_general_hit = {
+		"se_Enemy_general_hit",
+		"event:/SoundSE/se_Enemy_general_hit"
+	},
+	se_Enemy_general_bullet_hit = {
+		"se_Enemy_general_bullet_hit",
+		"event:/SoundSE/se_Enemy_general_bullet_hit"
+	},
+	se_Enemy_general_death = {
+		"se_Enemy_general_death",
+		"event:/SoundSE/se_Enemy_general_death"
+	},
+	se_Enemy_1_boom = {
+		"se_Enemy_1_boom",
+		"event:/SoundSE/se_Enemy_1_boom"
+	},
+	se_Enemy_16_split = {
+		"se_Enemy_16_split",
+		"event:/SoundSE/se_Enemy_16_split"
+	},
+	se_Enemy_21_boom = {
+		"se_Enemy_21_boom",
+		"event:/SoundSE/se_Enemy_21_boom"
+	},
+	se_Enemy_104_fire = {
+		"se_Enemy_104_fire",
+		"event:/SoundSE/se_Enemy_104_fire"
+	},
+	se_Enemy_23_laser = {
+		"se_Enemy_23_laser",
+		"event:/SoundSE/se_Enemy_23_laser"
+	},
+	se_Enemy_23_boom = {
+		"se_Enemy_23_boom",
+		"event:/SoundSE/se_Enemy_23_boom"
+	},
+	se_Enemy_17_ink = {
+		"se_Enemy_17_ink",
+		"event:/SoundSE/se_Enemy_17_ink"
+	},
+	se_Enemy_22_eat = {
+		"se_Enemy_22_eat",
+		"event:/SoundSE/se_Enemy_22_eat"
+	},
+	se_Enemy_22_boom = {
+		"se_Enemy_22_boom",
+		"event:/SoundSE/se_Enemy_22_boom"
+	},
+	se_Enemy_18_move = {
+		"se_Enemy_18_move",
+		"event:/SoundSE/se_Enemy_18_move"
+	},
+	se_General_reborn_wave = {
+		"se_General_reborn_wave",
+		"event:/SoundSE/se_General_reborn_wave"
+	},
+	se_Bullet_1_1 = {
+		"se_Bullet_1_1",
+		"event:/SoundSE/se_Bullet_1_1"
+	},
+	se_Bullet_1_2 = {
+		"se_Bullet_1_2",
+		"event:/SoundSE/se_Bullet_1_2"
+	},
+	se_Bullet_1_3 = {
+		"se_Bullet_1_3",
+		"event:/SoundSE/se_Bullet_1_3"
+	},
+	se_Bullet_1_shell_1 = {
+		"se_Bullet_1_shell_1",
+		"event:/SoundSE/se_Bullet_1_shell_1"
+	},
+	se_Bullet_1_shell_2 = {
+		"se_Bullet_1_shell_2",
+		"event:/SoundSE/se_Bullet_1_shell_2"
+	},
+	se_Bullet_1_shell_3 = {
+		"se_Bullet_1_shell_3",
+		"event:/SoundSE/se_Bullet_1_shell_3"
+	},
+	se_Bullet_1_shell_4 = {
+		"se_Bullet_1_shell_4",
+		"event:/SoundSE/se_Bullet_1_shell_4"
+	},
+	se_Bullet_10_ready = {
+		"se_Bullet_10_ready",
+		"event:/SoundSE/se_Bullet_10_ready"
+	},
+	se_Bullet_10 = {
+		"se_Bullet_10",
+		"event:/SoundSE/se_Bullet_10"
+	},
+	se_Bullet_10_hit = {
+		"se_Bullet_10_hit",
+		"event:/SoundSE/se_Bullet_10_hit"
+	},
+	se_Bullet_10_matrix = {
+		"se_Bullet_10_matrix",
+		"event:/SoundSE/se_Bullet_10_matrix"
+	},
+	se_Bullet_11 = {
+		"se_Bullet_11",
+		"event:/SoundSE/se_Bullet_11"
+	},
+	se_Bullet_11_portal = {
+		"se_Bullet_11_portal",
+		"event:/SoundSE/se_Bullet_11_portal"
+	},
+	se_Dome_mine_boom = {
+		"se_Dome_mine_boom",
+		"event:/SoundSE/se_Dome_mine_boom"
+	},
+	se_Dome_nano_appear = {
+		"se_Dome_nano_appear",
+		"event:/SoundSE/se_Dome_nano_appear"
+	},
+	se_Dome_boom = {
+		"se_Dome_boom",
+		"event:/SoundSE/se_Dome_boom"
+	},
+	se_Enemy_3401_summon = {
+		"se_Enemy_3401_summon",
+		"event:/SoundSE/se_Enemy_3401_summon"
+	},
+	se_Enemy_3401_move = {
+		"se_Enemy_3401_move",
+		"event:/SoundSE/se_Enemy_3401_move"
+	},
+	se_Enemy_3401_ready = {
+		"se_Enemy_3401_ready",
+		"event:/SoundSE/se_Enemy_3401_ready"
+	},
+	se_Enemy_3401_hit = {
+		"se_Enemy_3401_hit",
+		"event:/SoundSE/se_Enemy_3401_hit"
+	},
+	se_Bullet_3401_boom_small = {
+		"se_Bullet_3401_boom_small",
+		"event:/SoundSE/se_Bullet_3401_boom_small"
+	},
+	se_Blank = {
+		"se_Blank",
+		"event:/SoundSE/se_Blank"
+	},
+	se_Enemy_3401_boom = {
+		"se_Enemy_3401_boom",
+		"event:/SoundSE/se_Enemy_3401_boom"
+	},
+	ui_Refine_1 = {
+		"ui_Refine_1",
+		"event:/Sound2D/ui_Refine_1"
+	},
+	ui_Lock_1 = {
+		"ui_Lock_1",
+		"event:/Sound2D/ui_Lock_1"
+	},
+	ui_Unlock_1 = {
+		"ui_Unlock_1",
+		"event:/Sound2D/ui_Unlock_1"
+	},
+	ui_Changezone_1 = {
+		"ui_Changezone_1",
+		"event:/Sound2D/ui_Changezone_1"
+	},
+	music_earth = {
+		"music_earth",
+		"event:/Music/music_earth"
+	},
+	music_dome = {
+		"music_dome",
+		"event:/Music/music_dome"
+	},
+	ui_Draw_come = {
+		"ui_Draw_come",
+		"event:/Sound2D/ui_Draw_come"
+	},
+	ui_Draw_2 = {
+		"ui_Draw_2",
+		"event:/Sound2D/ui_Draw_2"
+	},
+	ui_Draw_open = {
+		"ui_Draw_open",
+		"event:/Sound2D/ui_Draw_open"
+	},
+	ui_Draw_open_color = {
+		"ui_Draw_open_color",
+		"event:/Sound2D/ui_Draw_open_color"
+	},
+	ui_Draw_open_skip = {
+		"ui_Draw_open_skip",
+		"event:/Sound2D/ui_Draw_open_skip"
+	},
+	ui_Draw_1_skip = {
+		"ui_Draw_1_skip",
+		"event:/Sound2D/ui_Draw_1_skip"
+	},
+	ui_Draw_3 = {
+		"ui_Draw_3",
+		"event:/Sound2D/ui_Draw_3"
+	},
+	ui_Draw_4 = {
+		"ui_Draw_4",
+		"event:/Sound2D/ui_Draw_4"
+	},
+	ui_Draw_5 = {
+		"ui_Draw_5",
+		"event:/Sound2D/ui_Draw_5"
+	},
+	ui_Draw_6 = {
+		"ui_Draw_6",
+		"event:/Sound2D/ui_Draw_6"
+	},
+	ui_Point_claim_1 = {
+		"ui_Point_claim_1",
+		"event:/Sound2D/ui_Point_claim_1"
+	},
+	se_Enemy_3301_summon = {
+		"se_Enemy_3301_summon",
+		"event:/SoundSE/se_Enemy_3301_summon"
+	},
+	se_Enemy_3301_boom = {
+		"se_Enemy_3301_boom",
+		"event:/SoundSE/se_Enemy_3301_boom"
+	},
+	ui_Skin_unlock_1 = {
+		"ui_Skin_unlock_1",
+		"event:/Sound2D/ui_Skin_unlock_1"
+	},
+	ui_Skin_ascend_1 = {
+		"ui_Skin_ascend_1",
+		"event:/Sound2D/ui_Skin_ascend_1"
+	},
+	ui_Draw_process_1 = {
+		"ui_Draw_process_1",
+		"event:/Sound2D/ui_Draw_process_1"
+	},
+	ui_Draw_result_1 = {
+		"ui_Draw_result_1",
+		"event:/Sound2D/ui_Draw_result_1"
+	},
+	ui_Draw_resultwin_1 = {
+		"ui_Draw_resultwin_1",
+		"event:/Sound2D/ui_Draw_resultwin_1"
+	},
+	ui_Draw_glassbroken = {
+		"ui_Draw_glassbroken",
+		"event:/Sound2D/ui_Draw_glassbroken"
+	},
+	ui_Draw_glassbroken_loud = {
+		"ui_Draw_glassbroken_loud",
+		"event:/Sound2D/ui_Draw_glassbroken_loud"
+	},
+	ui_Draw_unlock = {
+		"ui_Draw_unlock",
+		"event:/Sound2D/ui_Draw_unlock"
+	},
+	se_Bullet_12 = {
+		"se_Bullet_12",
+		"event:/SoundSE/se_Bullet_12"
+	},
+	se_Bullet_12_open = {
+		"se_Bullet_12_open",
+		"event:/SoundSE/se_Bullet_12_open"
+	},
+	se_Bullet_12_evolve = {
+		"se_Bullet_12_evolve",
+		"event:/SoundSE/se_Bullet_12_evolve"
+	},
+	se_Bullet_12_division = {
+		"se_Bullet_12_division",
+		"event:/SoundSE/se_Bullet_12_division"
+	},
+	se_Bullet_12_wave = {
+		"se_Bullet_12_wave",
+		"event:/SoundSE/se_Bullet_12_wave"
+	},
+	se_Bullet_12_elect = {
+		"se_Bullet_12_elect",
+		"event:/SoundSE/se_Bullet_12_wave"
+	},
+	se_Dome_skin1_skill_1 = {
+		"se_Dome_skin1_skill_1",
+		"event:/SoundSE/se_Dome_skin1_skill_1"
+	},
+	se_Dome_skin2_skill_1 = {
+		"se_Dome_skin2_skill_1",
+		"event:/SoundSE/se_Dome_skin2_skill_1"
+	},
+	ui_Ark_show_1 = {
+		"ui_Ark_show_1",
+		"event:/Sound2D/ui_Ark_show_1"
+	},
+	music_ark_main = {
+		"music_ark_main",
+		"event:/Music/music_ark_main"
+	},
+	music_ark_battle = {
+		"music_ark_battle",
+		"event:/Music/music_ark_battle"
+	},
+	ui_Ark_slot_unlock_1 = {
+		"ui_Ark_slot_unlock_1",
+		"event:/Sound2D/ui_Ark_slot_unlock_1"
+	},
+	ui_Ark_cardpack_come_1 = {
+		"ui_Ark_cardpack_come_1",
+		"event:/Sound2D/ui_Ark_cardpack_come_1"
+	},
+	ui_Ark_cardpack_open_1 = {
+		"ui_Ark_cardpack_open_1",
+		"event:/Sound2D/ui_Ark_cardpack_open_1"
+	},
+	ui_Ark_card_use_1 = {
+		"ui_Ark_card_use_1",
+		"event:/Sound2D/ui_Ark_card_use_1"
+	},
+	ui_Ark_atkboost_1 = {
+		"ui_Ark_atkboost_1",
+		"event:/Sound2D/ui_Ark_atkboost_1"
+	},
+	se_Mod_skill_19 = {
+		"se_Mod_skill_19",
+		"event:/SoundSE/se_Mod_skill_19"
+	},
+	se_Mod_skill_25 = {
+		"se_Mod_skill_25",
+		"event:/SoundSE/se_Mod_skill_25"
+	},
+	se_Mod_skill_26 = {
+		"se_Mod_skill_26",
+		"event:/SoundSE/se_Mod_skill_26"
+	},
+	ui_Monopoly_dice_run_1 = {
+		"ui_Monopoly_dice_run_1",
+		"event:/Sound2D/ui_Monopoly_dice_run_1"
+	},
+	ui_Chess_jump_normal_1 = {
+		"ui_Chess_jump_normal_1",
+		"event:/Sound2D/ui_Chess_jump_normal_1"
+	},
+	ui_Chess_jump_special_1 = {
+		"ui_Chess_jump_special_1",
+		"event:/Sound2D/ui_Chess_jump_special_1"
+	},
+	ui_Monopoly_portal_enter_1 = {
+		"ui_Monopoly_portal_enter_1",
+		"event:/Sound2D/ui_Monopoly_portal_enter_1"
+	},
+	ui_Monopoly_portal_out_1 = {
+		"ui_Monopoly_portal_out_1",
+		"event:/Sound2D/ui_Monopoly_portal_out_1"
+	},
+	ui_Monopoly_spin_1 = {
+		"ui_Monopoly_spin_1",
+		"event:/Sound2D/ui_Monopoly_spin_1"
+	},
+	ui_Monopoly_jackpot_1 = {
+		"ui_Monopoly_jackpot_1",
+		"event:/Sound2D/ui_Monopoly_jackpot_1"
+	},
+	se_Bullet_3 = {
+		"se_Bullet_3",
+		"event:/SoundSE/se_Bullet_3"
+	},
+	se_Bullet_3_boom = {
+		"se_Bullet_3_boom",
+		"event:/SoundSE/se_Bullet_3_boom"
+	},
+	ui_Point_claim_1 = {
+		"ui_Point_claim_1",
+		"event:/Sound2D/ui_Point_claim_1"
+	},
+	ui_Monopoly_multiplier_button_1 = {
+		"ui_Monopoly_multiplier_button_1",
+		"event:/Sound2D/ui_Monopoly_multi_button_1"
+	},
+	music_monopoly = {
+		"music_monopoly",
+		"event:/Music/music_monopoly"
+	},
+	se_Player_clone_1 = {
+		"se_Player_clone_1",
+		"event:/SoundSE/se_Player_clone_1"
+	},
+	se_Player_super_1 = {
+		"se_Player_super_1",
+		"event:/SoundSE/se_Player_super_1"
+	},
+	se_Bullet_7_forcefield = {
+		"se_Bullet_7_forcefield",
+		"event:/SoundSE/se_Bullet_7_forcefield"
+	},
+	se_Bullet_11_twins = {
+		"se_Bullet_11_twins",
+		"event:/SoundSE/se_Bullet_11_twins"
+	},
+	se_Dome_3_knockback = {
+		"se_Dome_3_knockback",
+		"event:/SoundSE/se_Dome_3_knockback"
+	},
+	se_Dome_4_jet = {
+		"se_Dome_4_jet",
+		"event:/SoundSE/se_Dome_4_jet"
+	},
+	music_3101 = {
+		"music_3101",
+		"event:/Music/music_3101"
+	},
+	music_3201 = {
+		"music_3201",
+		"event:/Music/music_3201"
+	},
+	music_3301 = {
+		"music_3301",
+		"event:/Music/music_3301"
+	},
+	music_3401 = {
+		"music_3401",
+		"event:/Music/music_3401"
+	},
+	music_3501 = {
+		"music_3501",
+		"event:/Music/music_3501"
+	},
+	se_Bullet_5_conical = {
+		"se_Bullet_5_conical",
+		"event:/SoundSE/se_Bullet_5_conical"
+	},
+	se_Bullet_9_strong = {
+		"se_Bullet_9_strong",
+		"event:/SoundSE/se_Bullet_9_strong"
+	},
+	se_Dome_skin5_skill_1 = {
+		"se_Dome_skin5_skill_1",
+		"event:/SoundSE/se_Dome_skin5_skill_1"
+	},
+	se_Dome_skin6_skill_1 = {
+		"se_Dome_skin6_skill_1",
+		"event:/SoundSE/se_Dome_skin6_skill_1"
+	},
+	se_Mod_skill_31 = {
+		"se_Mod_skill_31",
+		"event:/SoundSE/se_Mod_skill_31"
+	},
+	se_Mod_skill_38 = {
+		"se_Mod_skill_38",
+		"event:/SoundSE/se_Mod_skill_38"
+	},
+	se_Mod_skill_39 = {
+		"se_Mod_skill_39",
+		"event:/SoundSE/se_Mod_skill_39"
+	},
+	ui_Dome_rankup_1 = {
+		"ui_Dome_rankup_1",
+		"event:/Sound2D/ui_Dome_rankup_1"
+	},
+	ui_Dome_rankup_2 = {
+		"ui_Dome_rankup_2",
+		"event:/Sound2D/ui_Dome_rankup_2"
+	},
+	ui_Dome_ranksame_1 = {
+		"ui_Dome_ranksame_1",
+		"event:/Sound2D/ui_Dome_ranksame_1"
+	},
+	ui_Dome_rankdown_1 = {
+		"ui_Dome_rankdown_1",
+		"event:/Sound2D/ui_Dome_rankdown_1"
+	},
+	ui_Egg_draw_1 = {
+		"ui_Egg_draw_1",
+		"event:/Sound2D/ui_Egg_draw_1"
+	},
+	ui_Egg_bluegreen_light_1 = {
+		"ui_Egg_bluegreen_light_1",
+		"event:/Sound2D/ui_Egg_bluegreen_light_1"
+	},
+	ui_Egg_purple_light_1 = {
+		"ui_Egg_purple_light_1",
+		"event:/Sound2D/ui_Egg_purple_light_1"
+	},
+	ui_Egg_orange_light_1 = {
+		"ui_Egg_orange_light_1",
+		"event:/Sound2D/ui_Egg_orange_light_1"
+	},
+	ui_Egg_red_light_1 = {
+		"ui_Egg_red_light_1",
+		"event:/Sound2D/ui_Egg_red_light_1"
+	},
+	ui_Skin_unlock_schon_1 = {
+		"ui_Skin_unlock_schon_1",
+		"event:/Sound2D/ui_Skin_unlock_schon_1"
+	},
+	ui_Button_use_1 = {
+		"ui_Button_use_1",
+		"event:/Sound2D/ui_Button_use_1"
+	},
+	se_Ranger_150001_laser = {
+		"se_Ranger_150001_laser",
+		"event:/SoundSE/se_Ranger_150001_laser"
+	},
+	se_Ranger_150002_lighting = {
+		"se_Ranger_150002_lighting",
+		"event:/SoundSE/se_Ranger_150002_lighting"
+	},
+	se_Ranger_150003_bullet = {
+		"se_Ranger_150003_bullet",
+		"event:/SoundSE/se_Ranger_150003_bullet"
+	},
+	se_Ranger_150004_firlwheel = {
+		"se_Ranger_150004_firlwheel",
+		"event:/SoundSE/se_Ranger_150004_firlwheel"
+	},
+	se_Ranger_150005_bullet = {
+		"se_Ranger_150005_bullet",
+		"event:/SoundSE/se_Ranger_150005_bullet"
+	},
+	se_Ranger_150005_boom = {
+		"se_Ranger_150005_boom",
+		"event:/SoundSE/se_Ranger_150005_boom"
+	},
+	se_Ranger_150006_engulf = {
+		"se_Ranger_150006_engulf",
+		"event:/SoundSE/se_Ranger_150006_engulf"
+	},
+	se_Ranger_150006_boom = {
+		"se_Ranger_150006_boom",
+		"event:/SoundSE/se_Ranger_150006_boom"
+	},
+	se_Ranger_150007_bullet = {
+		"se_Ranger_150007_bullet",
+		"event:/SoundSE/se_Ranger_150007_bullet"
+	},
+	se_Ranger_150007_wave = {
+		"se_Ranger_150007_wave",
+		"event:/SoundSE/se_Ranger_150007_wave"
+	},
+	se_Ranger_150007_hit = {
+		"se_Ranger_150007_hit"
+	},
+	se_Ranger_150008_Initial_bgm_1 = {
+		"se_Ranger_150008_Initial_bgm_1",
+		"event:/SoundSE/se_Ranger_150008_Initial_bgm_1"
+	},
+	se_Ranger_150008_max_bgm_1 = {
+		"se_Ranger_150008_max_bgm_1",
+		"event:/SoundSE/se_Ranger_150008_max_bgm_1"
+	},
+	se_Ranger_150009_laser = {
+		"se_Ranger_150009_laser",
+		"event:/SoundSE/se_Ranger_150009_laser"
+	},
+	ui_Rebuild_canival_rankopen_1 = {
+		"ui_Rebuild_canival_rankopen_1",
+		"event:/Sound2D/ui_Rebuild_canival_rankopen_1"
+	},
+	ui_Rebuild_canival_firstopen_1 = {
+		"ui_Rebuild_canival_firstopen_1",
+		"event:/Sound2D/ui_Rebuild_canival_firstopen_1"
+	},
+	ui_Rebuild_canival_spin_10 = {
+		"ui_Rebuild_canival_spin_10",
+		"event:/Sound2D/ui_Rebuild_canival_spin_10"
+	},
+	ui_Critical_rewardlight_low_1 = {
+		"ui_Critical_rewardlight_low_1",
+		"event:/Sound2D/ui_Critical_rewardlight_low_1"
+	},
+	ui_Critical_rewardlight_high_1 = {
+		"ui_Critical_rewardlight_high_1",
+		"event:/Sound2D/ui_Critical_rewardlight_high_1"
+	},
+	se_Skin_120016_skill_1 = {
+		"se_Skin_120016_skill_1",
+		"event:/SoundSE/se_Skin_120016_skill_1"
+	},
+	se_Skin_120019_skill_1 = {
+		"se_Skin_120019_skill_1",
+		"event:/SoundSE/se_Skin_120019_skill_1"
+	},
+	se_Dome_skin8_skill_1 = {
+		"se_Dome_skin8_skill_1",
+		"event:/SoundSE/se_Dome_skin8_skill_1"
+	},
+	music_critical_main = {
+		"music_critical_main",
+		"event:/Music/music_critical_main"
+	},
+	ui_Weekmid_vs_start_1 = {
+		"ui_Weekmid_vs_start_1",
+		"event:/Sound2D/ui_Weekmid_vs_start_1"
+	},
+	ui_Weekmid_vs_end_1 = {
+		"ui_Weekmid_vs_end_1",
+		"event:/Sound2D/ui_Weekmid_vs_end_1"
+	},
+	ui_Weekmid_star_add_1 = {
+		"ui_Weekmid_star_add_1",
+		"event:/Sound2D/ui_Weekmid_star_add_1"
+	},
+	ui_Weekmid_star_reduce_1 = {
+		"ui_Weekmid_star_reduce_1",
+		"event:/Sound2D/ui_Weekmid_star_reduce_1"
+	},
+	ui_Weekmid_rankup_text_1 = {
+		"ui_Weekmid_rankup_text_1",
+		"event:/Sound2D/ui_Weekmid_rankup_text_1"
+	},
+	ui_Weekmid_rankdown_text_1 = {
+		"ui_Weekmid_rankdown_text_1",
+		"event:/Sound2D/ui_Weekmid_rankdown_text_1"
+	},
+	ui_Weekmid_chestopen_1 = {
+		"ui_Weekmid_chestopen_1",
+		"event:/Sound2D/ui_Weekmid_chestopen_1"
+	},
+	ui_Weekmid_bestofthree_1 = {
+		"ui_Weekmid_bestofthree_1",
+		"event:/Sound2D/ui_Weekmid_bestofthree_1"
+	},
+	ui_Weekmid_round_result_1 = {
+		"ui_Weekmid_round_result_1",
+		"event:/Sound2D/ui_Weekmid_round_result_1"
+	},
+	ui_Weekmid_show_1 = {
+		"ui_Weekmid_show_1",
+		"event:/Sound2D/ui_Weekmid_show_1"
+	},
+	music_scout_main = {
+		"music_scout_main",
+		"event:/Music/music_scout_main"
+	},
+	music_scout_battle_match = {
+		"music_scout_battle_match",
+		"event:/Music/music_scout_battle_match"
+	},
+	music_scout_battle_duel = {
+		"music_scout_battle_duel",
+		"event:/Music/music_scout_battle_duel"
+	},
+	se_Skin_120018_skill_1 = {
+		"se_Skin_120018_skill_1",
+		"event:/SoundSE/se_Skin_120018_skill_1"
+	},
+	se_Dome_skin10_skill_1 = {
+		"se_Dome_skin10_skill_1",
+		"event:/SoundSE/se_Dome_skin10_skill_1"
+	},
+	se_Dome_skin11_skill_1 = {
+		"se_Dome_skin11_skill_1",
+		"event:/SoundSE/se_Dome_skin11_skill_1"
+	},
+	se_Ranger_150010_thunder = {
+		"se_Ranger_150010_thunder",
+		"event:/SoundSE/se_Ranger_150010_thunder"
+	},
+	se_Ranger_150010_thunder_2 = {
+		"se_Ranger_150010_thunder_2",
+		"event:/SoundSE/se_Ranger_150010_thunder_2"
+	},
+	se_Ranger_150010_lighting = {
+		"se_Ranger_150010_lighting",
+		"event:/SoundSE/se_Ranger_150010_lighting"
+	},
+	se_Ranger_150012_fly = {
+		"se_Ranger_150012_fly",
+		"event:/SoundSE/se_Ranger_150012_fly"
+	},
+	se_Ranger_150012_swirl = {
+		"se_Ranger_150012_swirl",
+		"event:/SoundSE/se_Ranger_150012_swirl"
+	},
+	se_Ranger_150012_bullet = {
+		"se_Ranger_150012_bullet",
+		"event:/SoundSE/se_Ranger_150012_bullet"
+	},
+	se_Ranger_150012_boom = {
+		"se_Ranger_150012_boom",
+		"event:/SoundSE/se_Ranger_150012_boom"
+	},
+	se_Ranger_150013_spikes = {
+		"se_Ranger_150013_spikes",
+		"event:/SoundSE/se_Ranger_150013_spikes"
+	},
+	se_Ranger_150013_bullet = {
+		"se_Ranger_150013_bullet",
+		"event:/SoundSE/se_Ranger_150013_bullet"
+	},
+	se_Ranger_150014_bullet = {
+		"se_Ranger_150014_bullet",
+		"event:/SoundSE/se_Ranger_150014_bullet"
+	},
+	se_Ranger_150014_trapopen = {
+		"se_Ranger_150014_trapopen",
+		"event:/SoundSE/se_Ranger_150014_trapopen"
+	},
+	ui_Annvy_star_add_1 = {
+		"ui_Annvy_star_add_1",
+		"event:/Sound2D/ui_Annvy_star_add_1"
+	},
+	ui_Annvy_hunting_panel_1 = {
+		"ui_Annvy_hunting_panel_1",
+		"event:/Sound2D/ui_Annvy_hunting_panel_1"
+	},
+	ui_Annvy_hunting_panel_2 = {
+		"ui_Annvy_hunting_panel_2",
+		"event:/Sound2D/ui_Annvy_hunting_panel_2"
+	},
+	ui_Annvy_hunting_decoder_1 = {
+		"ui_Annvy_hunting_decoder_1",
+		"event:/Sound2D/ui_Annvy_hunting_decoder_1"
+	},
+	ui_Annvy_hunting_boom_1 = {
+		"ui_Annvy_hunting_boom_1",
+		"event:/Sound2D/ui_Annvy_hunting_boom_1"
+	},
+	ui_Annvy_hunting_itemshow_1 = {
+		"ui_Annvy_hunting_itemshow_1",
+		"event:/Sound2D/ui_Annvy_hunting_itemshow_1"
+	},
+	ui_Annvy_draw_flip_1 = {
+		"ui_Annvy_draw_flip_1",
+		"event:/Sound2D/ui_Annvy_draw_flip_1"
+	},
+	ui_Annvy_draw_ready_1 = {
+		"ui_Annvy_draw_ready_1",
+		"event:/Sound2D/ui_Annvy_draw_ready_1"
+	},
+	ui_Annvy_draw_close_1 = {
+		"ui_Annvy_draw_close_1",
+		"event:/Sound2D/ui_Annvy_draw_close_1"
+	},
+	ui_Annvy_draw_flip_orange_1 = {
+		"ui_Annvy_draw_flip_orange_1",
+		"event:/Sound2D/ui_Annvy_draw_flip_orange_1"
+	},
+	ui_Annvy_draw_flip_orange_2 = {
+		"ui_Annvy_draw_flip_orange_2",
+		"event:/Sound2D/ui_Annvy_draw_flip_orange_2"
+	},
+	ui_Annvy_draw_flip_red_1 = {
+		"ui_Annvy_draw_flip_red_1",
+		"event:/Sound2D/ui_Annvy_draw_flip_red_1"
+	},
+	ui_Annvy_draw_flip_red_2 = {
+		"ui_Annvy_draw_flip_red_2",
+		"event:/Sound2D/ui_Annvy_draw_flip_red_2"
+	},
+	ui_Annvy_draw_flip_color_1 = {
+		"ui_Annvy_draw_flip_color_1",
+		"event:/Sound2D/ui_Annvy_draw_flip_color_1"
+	},
+	ui_Annvy_draw_flip_color_2 = {
+		"ui_Annvy_draw_flip_color_2",
+		"event:/Sound2D/ui_Annvy_draw_flip_color_2"
+	},
+	music_anniversary_1 = {
+		"music_anniversary_1",
+		"event:/Music/music_anniversary_1"
+	}
+}
+local mapKeyIndex = {
+	k7784028 = 3,
+	k1644150 = 1,
+	k11686338 = 2
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -5018
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -5018
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

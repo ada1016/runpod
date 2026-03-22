@@ -1,0 +1,290 @@
+local M = class("SparkScoutRulePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtBaseRule1 = Types.TMP_Text,
+	txtBaseRule2 = Types.TMP_Text,
+	txtAdvRule3 = Types.TMP_Text,
+	txtAdvRule11 = Types.TMP_Text,
+	btnTab1 = Types.Button,
+	btnTab2 = Types.Button,
+	imgTab1 = Types.Image,
+	imgTab2 = Types.Image,
+	txtTab1 = Types.TMP_Text,
+	txtTab2 = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	goBigEnemyContent = Types.GameObject,
+	goBigEnemy = Types.GameObject,
+	tfDots = Types.Transform,
+	btnLeft = Types.Button,
+	btnRight = Types.Button,
+	tmpEnemyTitle = Types.TMP_Text,
+	goBigEnemyTitle = Types.GameObject,
+	tmpBigEnemyTitle = Types.TMP_Text,
+	goHaveBigEnemy = Types.GameObject,
+	goNoBigEnemy = Types.GameObject,
+	goSmallEnemyContent = Types.GameObject,
+	goSmallEnemyTitle = Types.GameObject,
+	tmpSmallEnemyTitle = Types.TMP_Text,
+	goEnemy1 = Types.GameObject,
+	goEnemy2 = Types.GameObject,
+	goEnemy3 = Types.GameObject
+}
+local EnemyWidget = requireLua("EnemyWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+	EnemyWidget.noCreate(self._goBigEnemy)
+
+	self._goEnemies = {
+		self._goEnemy1,
+		self._goEnemy2,
+		self._goEnemy3
+	}
+	self._tfEnemiesContent = self._goEnemy1.transform.parent
+
+	for i = 1, #self._goEnemies do
+		EnemyWidget.noCreate(self._goEnemies[i])
+		self:setClickWithoutAction(self["_goEnemy" .. i]._btnClick, function ()
+			self["_goEnemy" .. i]:clickCallback()
+		end)
+	end
+
+	self:setClickWithoutAction(self._goBigEnemy._btnClick, function ()
+		self._goBigEnemy:clickCallback()
+	end)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTab1,
+		self._btnTab2
+	}
+	self._imgTabs = {
+		self._imgTab1,
+		self._imgTab2
+	}
+	self._txtTabs = {
+		self._txtTab1,
+		self._txtTab2
+	}
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			if i == 2 then
+				V.checkRankVersion(function ()
+					self:changeTab(i)
+				end)
+			else
+				self:changeTab(i)
+			end
+		end, "ui_Tap_page_1")
+	end
+
+	self:setClick(self._btnLeft, function ()
+		self:changeSelectBigEnemy(-1)
+	end)
+	self:setClick(self._btnRight, function ()
+		self:changeSelectBigEnemy(1)
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init(tab)
+	self._txtTitle:SetLocalize(SID.SID_ACTIVITY_SPARK_SCOUT_NAMESID_1)
+	self._tmpEnemyTitle:SetLocalize(SID.STR_CURRENT_PERIOD_ENEMY)
+	self:initEnemy()
+	self:changeSelectBigEnemy(0)
+
+	local cfg = P._playerActivitySparkScout:readCurrentCfg()
+
+	self._txtBaseRule1:SetLocalize(SID.SID_TIPS_DESCSID_36, D.MAX_WEAPON_ID - #cfg._weaponBanList[1])
+	self._txtBaseRule2:SetLocalize(SID.SID_TIPS_DESCSID_37, #cfg._lowEnemyPool[1], #cfg._eliteEnemyPool[1])
+	self._txtAdvRule3:SetLocalize(SID.SID_TIPS_DESCSID_40, cfg._battleFreePackNum, cfg._pack3UnlockBattleCount)
+
+	local p1 = D._battleGlobalConfig._battle_pvp_rage_time
+	local p2 = D._battleGlobalConfig._battle_pvp_kill_time
+	local p3 = D._battleGlobalConfig._battle_pvp_kill_time_loss_hp
+
+	self._txtAdvRule11:SetLocalize(SID.SID_TIPS_DESCSID_48, p1, p2 - p1, p3)
+	self:changeTab(tab or 1)
+	self._goContent1:SetActive(self._tab == 1)
+	self._goContent2:SetActive(self._tab == 2)
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		LuaUnity.setTPSprite(self._imgTabs[1], tab == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		LuaUnity.setTPSprite(self._imgTabs[2], tab == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+		self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+		self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+		self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+		self._tab = tab
+
+		self._goContent1:SetActive(tab == 1)
+		self._goContent2:SetActive(tab == 2)
+	end
+end
+
+function M:changeSelectBigEnemy(offset)
+	if #self._bigEnemyCids == 0 then
+		return
+	end
+
+	self._bigEnemyIdx = self._bigEnemyIdx + offset
+
+	if self._bigEnemyIdx < 1 then
+		self._bigEnemyIdx = self._bigEnemyIdx + #self._bigEnemyCids
+	end
+
+	if self._bigEnemyIdx > #self._bigEnemyCids then
+		self._bigEnemyIdx = self._bigEnemyIdx - #self._bigEnemyCids
+	end
+
+	self:updateSelectBigEnemy()
+end
+
+function M:updateSelectBigEnemy()
+	if #self._bigEnemyCids == 0 then
+		return
+	end
+
+	local idx = self._bigEnemyIdx
+	local dotCount = self._tfDots.childCount
+	local max = math.max(dotCount, #self._bigEnemyCids)
+	local tempDot = self._tfDots:GetChild(0)
+
+	for i = 1, max do
+		if i <= #self._bigEnemyCids then
+			local tfDot = nil
+
+			if i <= dotCount then
+				tfDot = self._tfDots:GetChild(i - 1)
+
+				tfDot:SetActive(#self._bigEnemyCids > 1)
+			else
+				tfDot = GameObject.Instantiate(tempDot, self._tfDots)
+			end
+
+			if i == idx then
+				LuaUnity.setTPSprite(tfDot:GetComponent("Image"), "general/g_bg_24_2")
+			else
+				LuaUnity.setTPSprite(tfDot:GetComponent("Image"), "general/g_bg_24")
+			end
+		else
+			local tfDot = self._tfDots:GetChild(i - 1)
+
+			tfDot:SetActive(false)
+		end
+	end
+
+	self._goBigEnemy:init(self._bigEnemyCids[idx])
+end
+
+function M:initEnemy()
+	if self._initEnemy then
+		return
+	end
+
+	self._initEnemy = true
+	self._bigEnemyCids = {}
+	self._bigEnemyIdx = 1
+	local haveBoss = false
+	local haveElite = false
+	local showTitle = false
+	local smallEnemyScale = 1
+	self._enemyCids = {}
+	local isOpening = P._playerActivity:getSparkScoutActivityNum() > 0
+	local aid = nil
+
+	if isOpening then
+		local data = P._playerActivity:getSparkScoutData()
+		aid = data.id
+	else
+		local showPreview = false
+		showPreview, self._cfg = P._playerActivity:canPreview(D.ActivityType.SparkScout)
+		aid = self._cfg._id
+	end
+
+	self._enemyCids, self._bigEnemyCids = P._playerActivitySparkScout:getAvailableMissionEnemies(aid)
+	haveElite = #self._bigEnemyCids > 0
+
+	self._goBigEnemyTitle:SetActive(showTitle)
+	self._goSmallEnemyTitle:SetActive(showTitle)
+	self._goHaveBigEnemy:SetActive(haveBoss or haveElite)
+	self._goNoBigEnemy:SetActive(not haveBoss and not haveElite)
+
+	if haveBoss or haveElite then
+		self._goBigEnemy:init(self._bigEnemyCids[1])
+	end
+
+	self._btnLeft:SetActive(#self._bigEnemyCids > 1)
+	self._btnRight:SetActive(#self._bigEnemyCids > 1)
+
+	local goLine = self._tfEnemiesContent:GetChild(1).gameObject
+	local max = math.max(#self._enemyCids, #self._goEnemies)
+
+	for i = 1, max do
+		local widget = self._goEnemies[i]
+
+		if i <= #self._enemyCids then
+			if not self._goEnemies[i] then
+				GameObject.Instantiate(goLine, self._tfEnemiesContent)
+
+				widget = GameObject.Instantiate(self._goEnemies[1], self._tfEnemiesContent)
+
+				EnemyWidget.noCreate(widget)
+
+				self._goEnemies[i] = widget
+
+				self:setClickWithoutAction(self._goEnemies[i]._btnClick, function ()
+					self._goEnemies[i]:clickCallback()
+				end)
+			end
+
+			widget:init(self._enemyCids[i])
+			widget:setIconScale(smallEnemyScale)
+			widget:SetActive(true)
+
+			if i > 1 then
+				self._tfEnemiesContent:GetChild(2 * i - 1 - 2):SetActive(true)
+			end
+		else
+			widget:SetActive(false)
+
+			if i > 1 then
+				self._tfEnemiesContent:GetChild(2 * i - 1 - 2):SetActive(false)
+			end
+		end
+	end
+
+	if #self._enemyCids > 3 then
+		local cellWidth = 236.66666666666666
+		local contentWidth = 355
+
+		lc.setAnchoredPosition(self._tfEnemiesContent, cellWidth * (#self._enemyCids - 3) / 2 - cellWidth / 2, 0)
+	end
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+function M:clear()
+end
+
+function M:OnDestroy()
+	self:clear()
+end
+
+return M

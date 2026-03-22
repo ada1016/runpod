@@ -1,0 +1,210 @@
+local require = require
+
+function outputOneConfigValues(name)
+	print("<<<<<<<<<<<", name)
+
+	local config = requireLua(name)
+	local sort_ids = {}
+
+	for k, v in pairs(config) do
+		if type(k) == "number" then
+			sort_ids[#sort_ids + 1] = k
+		end
+	end
+
+	table.sort(sort_ids, function (a, b)
+		return a < b
+	end)
+
+	local keys = config.mapKeyIndexArray
+	local str_vals = {}
+
+	for i = 1, #sort_ids do
+		local row = config[sort_ids[i]]
+
+		for j = 1, #keys do
+			local v = row[keys[j]]
+
+			if type(v) == "table" then
+				local c = v.c or #v
+
+				for i = 1, c do
+					local vv = v[i]
+
+					if type(vv) == "table" then
+						local cc = vv.c or #vv
+
+						for i = 1, cc do
+							local vvv = vv[i]
+							str_vals[#str_vals + 1] = tostring(vvv) .. "\n"
+						end
+					else
+						str_vals[#str_vals + 1] = tostring(vv) .. "\n"
+					end
+				end
+			else
+				str_vals[#str_vals + 1] = tostring(v) .. "\n"
+			end
+		end
+	end
+
+	Application = UnityEngine.Application
+	local file, err = io.open(Application.persistentDataPath .. "/output2/" .. name .. ".txt", "w")
+	local result, errMsg = file:write(table.concat(str_vals))
+
+	file:close()
+	print("文件保存成功")
+end
+
+function outputConfigValues()
+	math.randomseed(tostring(os.time()):reverse():sub(1, 6))
+	require("app._automatical.LuaPath")
+	requireLua("StringEnums")
+
+	local requireLua = requireLua
+	lc._encryptOffset = math.random(-9999, 9999)
+
+	print("lc._encryptOffset", lc._encryptOffset)
+
+	local list_configs = {
+		"activity_ark_rebuild",
+		"activity_ark_rebuild_milestone",
+		"activity_monopoly",
+		"activity_monopoly_battlepass",
+		"activity_monopoly_cell",
+		"activity_monopoly_milestone",
+		"activity_time",
+		"activity_week_lottery",
+		"activity_week_lottery_2",
+		"ark_rebuild_atk_level",
+		"ark_rebuild_battlepass",
+		"ark_rebuild_module",
+		"battlepass",
+		"battlepass_dome",
+		"battlepass_key",
+		"battlepass_skin",
+		"challenge",
+		"chip",
+		"damage_type_enum",
+		"defender_upgrade",
+		"dome_upgrade",
+		"drop",
+		"drop_path",
+		"equip",
+		"equip_refine",
+		"equip_upgrade",
+		"exchange",
+		"gem_effect",
+		"gift",
+		"guide",
+		"guide_text",
+		"guide_trigger",
+		"iap",
+		"item",
+		"item_avatar",
+		"jump",
+		"levelfund",
+		"lottery",
+		"lottery_extra",
+		"mail",
+		"mission",
+		"mission_ark_rebuild",
+		"mission_dome",
+		"mission_elite",
+		"mission_global_defense",
+		"mission_offline",
+		"player_level",
+		"rank_ark_rebuild",
+		"rank_dome",
+		"rank_monopoly",
+		"rewards",
+		"seven_day",
+		"skin_dome",
+		"skin_effect",
+		"skin_gatlin",
+		"skin_role",
+		"skin_weapon",
+		"support",
+		"system_unlock",
+		"task",
+		"tips",
+		"weapon",
+		"weapon_grow",
+		"weapon_prop",
+		"weapon_upgrade"
+	}
+	package.loaded["app._config.duplicate_define"] = nil
+
+	for i = 1, #list_configs do
+		package.loaded["app._config." .. list_configs[i]] = nil
+	end
+
+	for i = 1, #list_configs do
+		outputOneConfigValues(list_configs[i])
+	end
+end
+
+function genCsvCode()
+	require("app._automatical.LuaPath")
+
+	local requireLua = requireLua
+	local b64chars = "0123456789+/AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
+	local pow2 = {
+		[0] = 1,
+		2,
+		4,
+		8,
+		16,
+		32,
+		64,
+		128,
+		256
+	}
+	lc = {
+		toBase64 = function (data)
+			local len = #data
+			data = data .. ({
+				"",
+				"  ",
+				" "
+			})[len % 3 + 1]
+
+			return data:gsub(".", function (x)
+				local r = ""
+				local b64 = nil
+				local n = x:byte()
+
+				for i = 8, 1, -1 do
+					r = r .. (n % pow2[i] - n % pow2[i - 1] > 0 and "1" or "0")
+				end
+
+				return r
+			end):gsub("%d%d%d%d%d%d", function (x)
+				local c = tonumber(x, 2) + 1
+
+				return b64chars:sub(c, c)
+			end)
+		end
+	}
+	local a = lc.toBase64(requireLua("CsvCode")._code)
+	local fa = io.open("../csvCode.txt", "w")
+
+	fa:write(a)
+	fa:close()
+end
+
+function main()
+	outputConfigValues()
+end
+
+function compute_y_from_x(x)
+	local n = math.log(x) / math.log(2)
+	local y = 2^((n - 3) / 2)
+
+	return math.ceil(y)
+end
+
+function logarithmicBinning()
+	local base = 3
+	local min = 1
+end

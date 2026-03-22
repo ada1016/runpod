@@ -1,0 +1,23 @@
+local M = class("SimpleRulePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tmpDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+return M

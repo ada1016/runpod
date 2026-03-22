@@ -1,0 +1,108 @@
+local M = class("ActivityMonopolyMilestonePanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	goTemplate = Types.GameObject
+}
+local CellWidget = requireLua("MonopolyMilestoneWidget", true)
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._exchangeIds = {}
+	self._module = P._playerActivityMonopoly
+	local cellHeight = 235
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		topPadding = 0,
+		cellMargin = 0,
+		cellInitCount = showCount + 1
+	})
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init(panel, milestonePeriod)
+	self._parentPanel = panel
+	self._milestonePeriod = milestonePeriod
+
+	self:updateUI()
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:updateUI()
+	local maxNum = self._module:getMilestoneMaxStep()
+	self._maxNum = maxNum
+	self._datas = self._module:readMilestoneCfg(self._milestonePeriod)
+	self._sortedOrder = {}
+
+	for i = 1, maxNum do
+		self._sortedOrder[i] = i
+	end
+
+	local currentIdx = self._module:getMilestoneClaimIdx()
+
+	self._scrollViewEx:reloadData()
+
+	local jumpIdx = math.min(currentIdx, maxNum)
+	local jumpDelta = jumpIdx - 1
+
+	self._scrollViewEx:moveToItemByIndex(jumpIdx, nil, true)
+end
+
+function M:updateShowCells()
+	local cells = self._scrollViewEx:getShowCellObjs()
+
+	for i, cell in ipairs(cells) do
+		cell:updateRewards()
+	end
+end
+
+function M:onCellNum()
+	return self._maxNum
+end
+
+function M:onCellHeight(index)
+	if index == self._maxNum then
+		return 300
+	else
+		return 235
+	end
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = CellWidget.create(self._tfContainer)
+
+		goCell:init(self)
+	end
+
+	local data = self._datas[self._sortedOrder[index]]
+
+	goCell:updateUI(data)
+	goCell:setClaimClick(self, function ()
+		self:updateShowCells()
+	end)
+
+	return goCell
+end
+
+return M

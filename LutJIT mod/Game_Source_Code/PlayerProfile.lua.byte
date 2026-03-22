@@ -1,0 +1,173 @@
+local M = class("PlayerProfile")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._level = ConfusedNumber.create(meta.level or 1, "PlayerLevel")
+	self._exp = meta.exp or 0
+	self._name = meta.name or "User" .. string.sub(C._userId, 1, 6)
+	self._avatar = meta.avatar
+	self._avatarFrame = meta.avatarFrame
+	self._avatarMedal = meta.avatarMedal
+end
+
+function M:start()
+	if self._avatar == nil then
+		for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+			if P._playerArmory:isWeaponUnlocked(i) then
+				P._playerRecord:flagAvatar(i)
+			end
+		end
+
+		self:setAvatar(1)
+		Trace.traceDesign("PlayerLevel:%s", 1)
+		Trace.AF_tracePlayerLevel(1)
+	end
+end
+
+function M:increaseExp(exp)
+	self._exp = self._exp + exp
+	local levelBefore = self._level()
+
+	while D._playerLevelConfig[levelBefore + 1] and D._playerLevelConfig[levelBefore]._exp <= self._exp do
+		self._exp = self._exp - D._playerLevelConfig[levelBefore]._exp
+
+		self:upLevel()
+	end
+
+	local levelAfter = self._level()
+
+	if levelBefore < levelAfter then
+		local totalRewards = {}
+
+		for i = levelBefore, levelAfter - 1 do
+			local rewardCids = D._playerLevelConfig[i]._rewardCids
+			local rewardNums = D._playerLevelConfig[i]._rewardNums
+			local n = lc.lenTable(rewardCids)
+
+			for j = 1, n do
+				P._playerAsset:increaseAssetNum(rewardCids[j], rewardNums[j], D.LogWay.level_up)
+
+				totalRewards[rewardCids[j]] = (totalRewards[rewardCids[j]] or 0) + rewardNums[j]
+			end
+		end
+
+		self:stashLevelUpgrade(levelBefore, levelAfter, totalRewards)
+		self:dealLevelDirty()
+	end
+
+	self._meta.exp = self._exp
+
+	SimpleEvent.emit("exp.dirty")
+end
+
+function M:dealLevelDirty()
+	P._playerGift:triggerGiftsByPlayer()
+	P._playerLevelFund:syncExp(self._level())
+
+	if P._playerRole:hasPlayerLevelAtkGem() then
+		P._playerRole:dirtyGemEffect()
+	end
+
+	if D.isSystemUnlocked(D.SystemType.DomeMission) then
+		P._playerDome:initDomeGradeAvatar()
+	end
+
+	SimpleEvent.emit("level.dirty")
+	RedDotManager.update("city.weapon")
+end
+
+function M:upLevel()
+	self._level = self._level + 1
+	self._meta.level = self._level()
+
+	TaskHelper:updateTaskValue(D.TaskType.PLAYER_LEVELUP, self._level())
+	P._playerArmory:dirtyUnlockedWeapons()
+	P:tryUnlockSystem()
+	SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Level, self._level())
+	Trace.traceDesign("PlayerLevel:%s", self._level())
+	Trace.AF_tracePlayerLevel(self._level())
+
+	if P._playerActivity:isAnniversaryOpening() and self._level() == D._anniversaryNewbieTaskConfig[D.AnniversaryNewbieTaskType.ReachLevel]._param then
+		P._playerActivityAnniversary:finishNewbieTask(D.AnniversaryNewbieTaskType.ReachLevel)
+	end
+end
+
+function M:getLevel()
+	return self._level()
+end
+
+function M:setLevel(level)
+	self._level:reset(level)
+
+	self._meta.level = level
+end
+
+function M:setName(name)
+	self._name = name
+	self._meta.name = self._name
+
+	SimpleEvent.emit("name.dirty")
+end
+
+function M:getAvatar()
+	return self._avatar
+end
+
+function M:setAvatar(avatar)
+	self._avatar = avatar
+	self._meta.avatar = self._avatar
+
+	SimpleEvent.emit("avatar.dirty")
+end
+
+function M:getAvatarFrame()
+	return self._avatarFrame
+end
+
+function M:setAvatarFrame(avatarFrame)
+	self._avatarFrame = avatarFrame
+	self._meta.avatarFrame = self._avatarFrame
+
+	SimpleEvent.emit("avatar.dirty")
+end
+
+function M:getAvatarMedal()
+	return self._avatarMedal
+end
+
+function M:setAvatarMedal(avatarMedal)
+	self._avatarMedal = avatarMedal
+	self._meta.avatarMedal = self._avatarMedal
+
+	SimpleEvent.emit("name.dirty")
+end
+
+function M:getExpProgress()
+	return self._exp / D._playerLevelConfig[self._level()]._exp
+end
+
+function M:stashLevelUpgrade(levelBefore, levelAfter, rewards)
+	self._levelBefore = levelBefore
+	self._levelAfter = levelAfter
+	self._levelRewards = rewards
+end
+
+function M:hasStashedLevelUpgrade()
+	return self._levelBefore ~= nil
+end
+
+function M:popStashedLevelUpgrade()
+	local levelBefore = self._levelBefore
+	local levelAfter = self._levelAfter
+	local rewards = self._levelRewards
+	self._levelRewards = nil
+	self._levelAfter = nil
+	self._levelBefore = nil
+
+	return levelBefore, levelAfter, rewards
+end
+
+return M

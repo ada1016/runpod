@@ -1,0 +1,74 @@
+local M = {}
+_G.BattleRandomLib = M
+local math = math
+
+function M.new(seed)
+	local tb = {}
+
+	setmetatable(tb, {
+		__index = M
+	})
+	tb:setSeed(seed)
+
+	return tb
+end
+
+function M:setSeed(seed)
+	self._seed = seed
+end
+
+function M:random()
+	self._seed = (self._seed * 1103515245 + 12345) % 65536
+
+	return self._seed / 65536
+end
+
+function M:randomN(n)
+	if n <= 1 then
+		return n
+	end
+
+	return math.min(math.floor(self:random() * n + 1), n)
+end
+
+function M:randomMN(m, n)
+	local c = n - m + 1
+
+	if c <= 1 then
+		return m
+	else
+		return self:randomN(c) + m - 1
+	end
+end
+
+function M:randomTrue(rate)
+	if rate then
+		return self:randomMN(1, 100) <= rate
+	else
+		return self:randomMN(1, 2) == 1
+	end
+end
+
+function M:randomOne(tbl)
+	for i = 1, #tbl do
+		local index = self:randomMN(1, #tbl)
+
+		if tbl[index] then
+			return tbl[index]
+		end
+	end
+end
+
+function M:randomTrueWithRange(rate, maxRate)
+	return self:randomMN(1, maxRate) <= rate
+end
+
+function M:randomShuffle(tbl)
+	for i = #tbl, 2, -1 do
+		local j = self:randomMN(1, i)
+		tbl[j] = tbl[i]
+		tbl[i] = tbl[j]
+	end
+end
+
+return M

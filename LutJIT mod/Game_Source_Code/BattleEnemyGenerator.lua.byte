@@ -1,0 +1,1002 @@
+local M = class("BattleEnemyGenerator")
+local math = math
+local Vector3 = Vector3
+local BattleEntityFactory = BattleEntityFactory
+local BattleDefine = BattleDefine
+local EnemyFormation = requireLua("EnemyFormation")
+local EnemyMovement = requireLua("EnemyMovement")
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+end
+
+function M:init(msType, msId, guideBattle)
+	self._enemyId = 1
+	self._summonEnemyId = 100000
+	self._enemyWaveIndex = 0
+	self._enemyWaveCounts = table.new(20, 0)
+	self._enemyWaveCount = 0
+	self._enemyWaveStatus = 0
+	self._enemySpawnInterval = 0
+	self._enemySpawnIntervalBase = 0
+	self._enemyWaveInterval = 0
+	self._enemyWaveIntervalCutted = false
+	self._waveEnemies = table.new(20, 0)
+	self._wave = 0
+	self._eliteWaves = nil
+	self._eliteIds = nil
+	self._eliteWavingIntervals = nil
+	self._bossWave = nil
+	self._levelExps = self._battleSession._levelExps
+	self._msType = msType
+	self._msId = msId
+	self._atkPercent = 100
+	self._hpPercent = 100
+	self._eliteAtkPercent = nil
+	self._eliteHpPercent = nil
+	self._waveAtkPercent = nil
+	self._waveHpPercent = nil
+	self._extraHpPercentWave = nil
+	self._waveEnemyRoutes = nil
+	self._waveEnemyFormations = nil
+	self._waveEnemyRouteTimes = nil
+	self._skipWaveCd = nil
+	self._isGuideBattle = guideBattle
+
+	if self._msType ~= D.MissionType.SparkScout then
+		self:initMissionTypeData(msType, msId)
+	end
+end
+
+function M:initMissionTypeData(msType, msId)
+	if msType == D.MissionType.Common or msType == D.MissionType.Elite or msType == D.MissionType.GlobalDefense then
+		self._enemyWaveTimes = D._globalConfig._common_mission_create_time
+		self._totalWave = #self._enemyWaveTimes
+		self._enemyWaveIntervals = D._globalConfig._common_mission_create_interval
+
+		if msType == D.MissionType.Common then
+			self._waveAtkPercent = D._globalConfig._common_mission_waves_atk
+			self._waveHpPercent = D._globalConfig._common_mission_waves_hp
+		elseif msType == D.MissionType.Elite then
+			self._waveAtkPercent = D._globalConfig._elite_mission_waves_atk
+			self._waveHpPercent = D._globalConfig._elite_mission_waves_hp
+		elseif msType == D.MissionType.GlobalDefense then
+			self._enemyWaveIntervals = D._globalConfig._global_defense_mission_create_interval
+			self._waveAtkPercent = D._globalConfig._global_defense_mission_waves_atk
+			self._waveHpPercent = D._globalConfig._global_defense_mission_waves_hp
+		end
+
+		for wave = 1, self._totalWave do
+			self._waveEnemies[wave] = table.new(3, 0)
+			self._enemyWaveCounts[wave] = 0
+		end
+
+		self:initMissionData(D._missionConfigs[msType][msId])
+	elseif msType == D.MissionType.Dome then
+		self._waveAtkPercent = {}
+		self._waveHpPercent = {}
+		self._enemyWaveTimes = D._globalConfig._dome_mission_create_time
+		self._enemyWaveIntervals = D._globalConfig._dome_mission_create_interval
+		self._totalWave = #self._enemyWaveTimes
+
+		for wave = 1, self._totalWave do
+			self._waveEnemies[wave] = table.new(3, 0)
+			self._enemyWaveCounts[wave] = 0
+		end
+
+		for i = 1, self._totalWave do
+			self:initMissionData(D._missionConfigs[msType][msId + i - 1])
+		end
+	elseif msType == D.MissionType.CrisisZone then
+		self._waveAtkPercent = {}
+		self._waveHpPercent = {}
+		self._enemyWaveIntervals = D._globalConfig._crisis_zone_create_time
+		self._totalWave = D._globalConfig._crisis_zone_total_wave
+
+		for i = 1, self._totalWave do
+			self:initMissionData(D._missionConfigs[msType][msId + i - 1])
+		end
+
+		self._skipWaveCd = D._globalConfig._crisis_zone_skip_cd
+		self._autoSkipWave = false
+		self._crisisZoneRewardEnemyGenerated = false
+	elseif msType == D.MissionType.ArkRebuild then
+		self._waveAtkPercent = {
+			0
+		}
+		self._waveHpPercent = {
+			P._playerActivityArkRebuild:getWinExtraHp()
+		}
+		self._totalWave = 1
+		self._waveEnemies[1] = table.new(3, 0)
+		self._enemyWaveCounts[1] = 0
+
+		self:initMissionData(D._missionConfigs[msType][msId])
+
+		local totalEnemyCount = 0
+		local missionEnemiess = P._playerActivityArkRebuild:getMissionEnemiess(msId)
+		local percent = 100
+		local v1 = self._battleSession:getEffect(20005)
+
+		if v1 then
+			percent = percent - v1
+		end
+
+		for i = 1, #self._waveEnemies[1] do
+			self._waveEnemies[1][i][1] = missionEnemiess[i]
+			self._waveEnemies[1][i][2] = math.floor(self._waveEnemies[1][i][2] * percent / 100)
+			totalEnemyCount = totalEnemyCount + self._waveEnemies[1][i][2]
+		end
+
+		local eliteNum = self._eliteIds[1]
+		self._eliteIds = {}
+
+		for i = 1, eliteNum do
+			self._eliteIds[#self._eliteIds + 1] = missionEnemiess[#self._waveEnemies[1] + i]
+		end
+
+		if #self._eliteIds == 0 then
+			self._eliteWaves = nil
+		end
+
+		self._enemyWaveCounts[1] = totalEnemyCount
+		self._levelExps[1] = totalEnemyCount
+		self._enemyWaveTimes = {
+			totalEnemyCount * P._playerActivityArkRebuild:readCurrentCfg()._enemySpawnInterval
+		}
+		self._enemyWaveIntervals = {
+			0
+		}
+	elseif self._msType == D.MissionType.SparkScout then
+		self._enemyWaveIntervals = D._globalConfig._spark_scout_mission_create_interval
+		self._enemyWaveTimes = D._globalConfig._spark_scout_mission_create_time
+		self._waveAtkPercent = D._globalConfig._spark_scout_mission_waves_atk
+		self._waveHpPercent = D._globalConfig._spark_scout_mission_waves_hp
+		self._totalWave = #self._waveAtkPercent
+
+		for wave = 1, self._totalWave do
+			self._waveEnemies[wave] = table.new(3, 0)
+			self._enemyWaveCounts[wave] = 0
+		end
+
+		self:initMissionData(D._missionConfigs[msType][msId])
+
+		local missionEnemiess = self._battleSession._missionEnemies[BattleManager:pvpCurRound()]
+
+		for wave = 1, self._totalWave do
+			for i = 1, #self._waveEnemies[wave] do
+				self._waveEnemies[wave][i][1] = missionEnemiess[i]
+
+				if missionEnemiess[i] == 0 then
+					self._waveEnemies[wave][i][2] = 0
+				end
+			end
+		end
+
+		self._eliteIds = {
+			missionEnemiess[4]
+		}
+	end
+end
+
+function M:initMissionData(cfg)
+	if cfg._enemyId then
+		for i = 1, #cfg._enemyId do
+			local enemy = cfg._enemyId[i]
+			local giveExp = D._battleEnemyConfig[enemy] and D._battleEnemyConfig[enemy]._giveExp or 1
+			local waves = cfg[string.format("_enemy%dWave", i)]
+			local nums = cfg[string.format("_enemy%dNum", i)]
+
+			for i = 1, #waves do
+				local wave = waves[i]
+
+				table.insert(self._waveEnemies[wave], {
+					enemy,
+					nums[i]
+				})
+
+				self._enemyWaveCounts[wave] = self._enemyWaveCounts[wave] + nums[i]
+				self._levelExps[wave] = (self._levelExps[wave] or 0) + giveExp * nums[i]
+			end
+		end
+	end
+
+	if self._msType ~= D.MissionType.CrisisZone then
+		if cfg._eliteWave then
+			self._eliteWaves = cfg._eliteWave
+		end
+
+		if cfg._eliteId then
+			self._eliteIds = cfg._eliteId
+		end
+	else
+		if not self._eliteIds then
+			self._eliteIds = {}
+			self._eliteWaves = {}
+		end
+
+		if cfg._eliteId then
+			for i = 1, #cfg._eliteId do
+				self._eliteIds[#self._eliteIds + 1] = cfg._eliteId[i]
+				self._eliteWaves[#self._eliteIds] = cfg._level
+			end
+		end
+	end
+
+	if cfg._bossWave then
+		self._bossWave = cfg._bossWave
+	end
+
+	if cfg._bossId then
+		self._bossId = cfg._bossId
+	end
+
+	if self._isGuideBattle then
+		self._hpPercent = D._battleGlobalConfig._battle_mission_config10001[1] or 100
+		self._atkPercent = D._battleGlobalConfig._battle_mission_config10001[2] or 100
+	else
+		if cfg._atkPercent then
+			self._atkPercent = cfg._atkPercent
+		end
+
+		if cfg._hpPercent then
+			self._hpPercent = cfg._hpPercent
+		end
+	end
+
+	if cfg._eliteAtkPercent then
+		self._eliteAtkPercent = cfg._eliteAtkPercent
+	end
+
+	if cfg._eliteHpPercent then
+		self._eliteHpPercent = cfg._eliteHpPercent
+	end
+
+	if cfg._hpPercentWave then
+		self._extraHpPercentWave = cfg._hpPercentWave
+	end
+
+	if cfg._waveEnemyRoutes then
+		self._waveEnemyRoutes = cfg._waveEnemyRoutes
+	end
+
+	if cfg._waveEnemyFormations then
+		self._waveEnemyFormations = cfg._waveEnemyFormations
+	end
+
+	if cfg._waveEnemyRouteTimes then
+		self._waveEnemyRouteTimes = cfg._waveEnemyRouteTimes
+	end
+
+	if cfg._waveEnemyFormationTimes then
+		self._waveEnemyFormationTimes = cfg._waveEnemyFormationTimes
+	end
+
+	if cfg._waveEnemyRouteTimes then
+		self._enemyWaveTimes = cfg._enemyWaveTimes
+	end
+
+	if self._msType == D.MissionType.Dome then
+		self._waveAtkPercent[cfg._enemy1Wave[1]] = self._atkPercent - 100
+		self._waveHpPercent[cfg._enemy1Wave[1]] = self._hpPercent - 100
+		self._atkPercent = 100
+		self._hpPercent = 100
+	end
+
+	if self._msType == D.MissionType.CrisisZone then
+		self._waveAtkPercent[cfg._level] = self._atkPercent - 100
+		self._waveHpPercent[cfg._level] = self._hpPercent - 100
+		self._atkPercent = 100
+		self._hpPercent = 100
+	end
+end
+
+function M:step(dt, elapsedTime)
+	if self._battleSession._stepEnemyStop then
+		return
+	end
+
+	if self._skipWaveCd and self._skipWaveCd > 0 then
+		self._skipWaveCd = self._skipWaveCd - dt
+	end
+
+	if #self._battleSession._battleEnemys == 0 then
+		self._skipWaveCd = 0
+	end
+
+	self:stepWave(dt, elapsedTime)
+
+	if self._autoSkipWave and self._skipWaveCd <= 0 then
+		self:forceStepWave(D._globalConfig._crisis_zone_skip_num)
+	end
+end
+
+function M:stepWave(dt, elapsedTime, skipWave)
+	if self._enemyWaveStatus == 0 then
+		if self._enemyWaveInterval <= 0 then
+			if self._totalWave < self._enemyWaveIndex + 1 then
+				self._enemyWaveStatus = 2
+
+				return
+			end
+
+			self._enemyWaveIndex = self._enemyWaveIndex + 1
+			self._enemyWaveStatus = 1
+			self._enemyWaveCount = self._enemyWaveCounts[self._enemyWaveIndex] or 0
+			self._enemySpawnIntervalBase = self._enemyWaveCount > 0 and self._enemyWaveTimes[self._enemyWaveIndex] / self._enemyWaveCount or 0
+			self._enemySpawnInterval = self._enemySpawnIntervalBase
+			self._enemyWaveInterval = self._enemyWaveIntervals[self._enemyWaveIndex] or self._enemyWaveIntervals[#self._enemyWaveIntervals]
+			self._enemyWaveIntervalCutted = false
+
+			if self._msType == D.MissionType.Elite and (self._enemyWaveIndex == 1 or self._enemyWaveIndex == 10 or self._enemyWaveIndex == 20) then
+				SimpleEvent.emit("elite.wave.coming", self._enemyWaveIndex)
+			end
+
+			if self._msType == D.MissionType.GlobalDefense then
+				if self._enemyWaveIndex == 4 or self._enemyWaveIndex == 8 or self._enemyWaveIndex == 12 or self._enemyWaveIndex == 16 then
+					SimpleEvent.emit("globalDefense.wave.coming", self._enemyWaveIndex)
+				end
+
+				local x1 = self._battleSession._battleFieldEdgeX1 * 0.8
+				local x2 = self._battleSession._battleFieldEdgeX2 * 0.8
+				local y1 = self._battleSession._screenEdgeY2 * 0.8
+				local y2 = self._battleSession._screenEdgeY2 * 0.4
+				self._waveFormation = EnemyFormation[self._waveEnemyFormations[self._enemyWaveIndex]](x1, x2, y1, y2, self._enemyWaveCount)
+				self._waveFormationT = self._waveEnemyFormationTimes[self._enemyWaveIndex]
+				local maxRouteTime = 0
+
+				for _, id in ipairs(self._waveEnemyRoutes[self._enemyWaveIndex]) do
+					local routesData = EnemyMovement.PATHES[id]
+					local routeTime = routesData[2] / routesData[3]
+
+					if maxRouteTime < routeTime then
+						maxRouteTime = routeTime
+					end
+				end
+
+				self._enemyWaveInterval = self._enemyWaveInterval + self._waveFormationT + maxRouteTime
+				self._waveEndTime = elapsedTime + self._enemyWaveTimes[self._enemyWaveIndex] + maxRouteTime + self._waveFormationT
+			end
+
+			if self._eliteWaves then
+				for i = 1, #self._eliteWaves do
+					if self._eliteWaves[i] == self._enemyWaveIndex then
+						if self._msType ~= D.MissionType.ArkRebuild then
+							self._eliteWavingInterval = 0
+						else
+							self._eliteWavingIntervals = {}
+
+							for j = 1, #self._eliteIds do
+								local eliteId = self._eliteIds[j]
+								local normalId = self._waveEnemies[1][1][1]
+								local eliteSpeed = D._battleEnemyConfig[eliteId]._speed
+								local normalSpeed = D._battleEnemyConfig[normalId]._speed
+
+								if eliteSpeed > normalSpeed * 1.1 then
+									self._eliteWavingIntervals[j] = math.ceil(self._enemyWaveCount / 2) * self._enemySpawnIntervalBase
+								elseif eliteSpeed < normalSpeed * 0.9 then
+									self._eliteWavingIntervals[j] = 0
+								else
+									self._eliteWavingIntervals[j] = math.ceil(self._enemyWaveCount / 4) * self._enemySpawnIntervalBase
+								end
+							end
+						end
+					end
+				end
+			end
+
+			if self._msType == D.MissionType.CrisisZone then
+				if self._battleRandomLib:randomN(100) <= D._globalConfig._crisis_zone_bonus_appear_rate and not self._crisisZoneRewardEnemyGenerated then
+					self:generateEnemy(2484, self._battleRandomLib:randomTrue(), true)
+
+					self._crisisZoneRewardEnemyGenerated = true
+				end
+
+				if self._battleSession._battleView then
+					BattlePanel:updateCrisisZoneRemainNum(self._totalWave - self._enemyWaveIndex)
+				end
+			end
+		else
+			self._enemyWaveInterval = self._enemyWaveInterval - dt
+
+			if self._msType ~= D.MissionType.CrisisZone then
+				local numLimit = self._msType == D.MissionType.GlobalDefense and self._enemyWaveCounts[self._enemyWaveIndex] / 5 or 0
+
+				if not self._enemyWaveIntervalCutted and self._enemyWaveCount == 0 and numLimit >= #self._battleSession._battleEnemys then
+					if self._msType == D.MissionType.GlobalDefense then
+						self._enemyWaveInterval = 0
+					else
+						self._enemyWaveInterval = self._enemyWaveInterval / 2
+					end
+
+					self._enemyWaveIntervalCutted = true
+				end
+			elseif skipWave then
+				self._enemyWaveInterval = 0
+			end
+		end
+	elseif self._enemyWaveStatus == 1 then
+		self._enemySpawnInterval = self._enemySpawnInterval - dt
+
+		if self._eliteWavingInterval then
+			self._eliteWavingInterval = self._eliteWavingInterval - dt
+		end
+
+		if self._eliteWavingIntervals then
+			for i = 1, #self._eliteIds do
+				if self._eliteWavingIntervals[i] then
+					self._eliteWavingIntervals[i] = self._eliteWavingIntervals[i] - dt
+				end
+			end
+		end
+
+		if self._enemySpawnInterval > 0 then
+			return
+		end
+
+		self._enemySpawnInterval = self._enemySpawnIntervalBase + self._enemySpawnInterval
+
+		if self._enemyWaveCount > 0 then
+			local rand = self._battleRandomLib:randomN(self._enemyWaveCount)
+			local enemyMetaId = 1
+			local spawnCount = 1
+
+			for i = 1, #self._waveEnemies[self._enemyWaveIndex] do
+				rand = rand - self._waveEnemies[self._enemyWaveIndex][i][2]
+
+				if rand <= 0 then
+					enemyMetaId = self._waveEnemies[self._enemyWaveIndex][i][1]
+
+					if enemyMetaId == 1408 or enemyMetaId == 2408 then
+						spawnCount = self._waveEnemies[self._enemyWaveIndex][i][2]
+					end
+
+					self._waveEnemies[self._enemyWaveIndex][i][2] = self._waveEnemies[self._enemyWaveIndex][i][2] - spawnCount
+
+					break
+				end
+			end
+
+			self._enemyWaveCount = self._enemyWaveCount - spawnCount
+
+			if self._enemyWaveCount == 0 then
+				self._enemyWaveStatus = 0
+			end
+
+			if enemyMetaId == 1 then
+				return
+			end
+
+			for i = 1, spawnCount do
+				self:generateEnemy(enemyMetaId)
+			end
+		else
+			self._enemyWaveStatus = 0
+		end
+
+		if self._eliteWavingInterval and self._eliteWavingInterval <= 0 then
+			local count = 1
+
+			for i = 1, #self._eliteWaves do
+				local randomLeftRight = self._battleRandomLib:randomTrue() and 0 or 1
+
+				if self._eliteWaves[i] == self._enemyWaveIndex then
+					local leftOrRight = nil
+
+					if self._msType == D.MissionType.GlobalDefense then
+						leftOrRight = count == randomLeftRight
+					end
+
+					count = count + 1
+					local eliteId = self._eliteId or self._eliteIds[i]
+
+					if eliteId == 2583 then
+						self:createEnemy2583()
+					else
+						self:generateEnemy(eliteId, leftOrRight)
+					end
+				end
+			end
+
+			self._eliteWavingInterval = nil
+		end
+
+		if self._eliteWavingIntervals then
+			for j = 1, #self._eliteIds do
+				if self._eliteWavingIntervals[j] and self._eliteWavingIntervals[j] <= 0 then
+					for i = 1, #self._eliteWaves do
+						if self._eliteWaves[i] == self._enemyWaveIndex then
+							self:generateEnemy(self._eliteId or self._eliteIds[j], self._battleRandomLib:randomTrue())
+						end
+					end
+
+					self._eliteWavingIntervals[j] = nil
+				end
+			end
+		end
+
+		if self._bossWave == self._enemyWaveIndex then
+			self:generateEnemy(self._bossId)
+
+			self._bossWave = nil
+		end
+	end
+end
+
+function M:forceStepWave(stepCount)
+	if self._skipWaveCd and self._skipWaveCd <= 0 then
+		self._skipWaveCd = D._globalConfig._crisis_zone_skip_cd
+		local x1 = BattleDefine.BATTLE_FIELD_EDGE_X1
+		local x2 = self._battleSession._battleFieldEdgeX2
+		local y1 = self._battleSession._screenEdgeY2 * 0.9
+		local y2 = self._battleSession._screenEdgeY2 * 0.6
+		self._forceSpawnRange = {
+			x1,
+			x2,
+			y1,
+			y2
+		}
+
+		for i = 1, stepCount * 3 do
+			self:stepWave(0, self._battleSession._elapsedTime, true)
+		end
+
+		self._forceSpawnRange = nil
+	end
+end
+
+function M:createEnemy2583()
+	local battleEnemy1 = self:generateEnemy(2583)
+
+	battleEnemy1:setPos(self._battleSession._enemyBornEdgeX1 + 1, self._battleSession._enemyBornEdgeY1 + 2)
+
+	if battleEnemy1._view then
+		battleEnemy1._view:posEvent()
+	end
+
+	local battleEnemy2 = self:generateEnemy(2584)
+
+	battleEnemy2:setPos(self._battleSession._enemyBornEdgeX2 - 1, self._battleSession._enemyBornEdgeY1 + 2)
+
+	battleEnemy2._isSummon = true
+
+	if battleEnemy2._view then
+		battleEnemy2._view:posEvent()
+	end
+end
+
+function M:randomX(x1, x2)
+	x1 = (self._battleSession._enemyBornEdgeX1 + (x1 or 0)) * 100
+	x2 = (self._battleSession._enemyBornEdgeX2 + (x2 or 0)) * 100
+	local x = self._battleRandomLib:randomMN(x1, x2) / 100
+	x = math.limit(x, self._battleSession._enemyBornEdgeX1 + 0.01, self._battleSession._enemyBornEdgeX2 - 0.01)
+
+	return x
+end
+
+function M:randomY(y1, y2)
+	if BattleManager:isMissionPVP() then
+		return self._battleSession._enemyBornEdgeY1
+	else
+		y1 = (self._battleSession._enemyBornEdgeY1 + (y1 or 0)) * 100
+		y2 = (self._battleSession._enemyBornEdgeY1 + 1 + (y2 or 0)) * 100
+
+		return self._battleRandomLib:randomMN(y1, y2) / 100
+	end
+end
+
+function M:setEnemyPos(enemy, x, y)
+	if self._forceSpawnRange then
+		if enemy._totalSeg then
+			if enemy._id % 2 == 1 then
+				x = -2
+			else
+				x = 2
+			end
+		else
+			x = self._forceSpawnRange[1] + self._battleRandomLib:random() * (self._forceSpawnRange[2] - self._forceSpawnRange[1])
+		end
+
+		y = self._forceSpawnRange[3] + self._battleRandomLib:random() * (self._forceSpawnRange[4] - self._forceSpawnRange[3])
+	end
+
+	enemy:setPos(x, y)
+end
+
+function M:generateEnemy(enemyMetaId, leftOrRight, isSummon)
+	local battleEnemy = nil
+	local enemyConfig = D._battleEnemyConfig[enemyMetaId]
+
+	if enemyConfig == nil then
+		local a = nil
+	end
+
+	local moveMode = enemyConfig._moveMode
+	local x, y, angle = nil
+	battleEnemy = self:createEnemy(enemyMetaId, isSummon)
+	moveMode = battleEnemy._moveMode
+
+	if moveMode == 1 then
+		x, y, angle = self:enemyBornPosition(enemyMetaId, leftOrRight)
+
+		self:setEnemyPos(battleEnemy, x, y)
+		battleEnemy:setDirByAngle(angle)
+	elseif moveMode == 3 then
+		x, y, angle = self:enemyBornPosition3(enemyMetaId, battleEnemy)
+
+		self:setEnemyPos(battleEnemy, x, y)
+		battleEnemy:setDirByAngle(angle)
+
+		if battleEnemy._originId == 1306 and battleEnemy._view then
+			if battleEnemy._dir[1] < 0 then
+				battleEnemy._view:playSpriteAnimation(3)
+			else
+				battleEnemy._view:playSpriteAnimation(4)
+			end
+		end
+	elseif moveMode == 5 then
+		y = self:randomY()
+
+		if leftOrRight ~= nil then
+			if leftOrRight then
+				angle = -25
+			else
+				angle = -155
+			end
+		elseif self._battleRandomLib:randomTrue() then
+			angle = -25
+		else
+			angle = -155
+		end
+
+		if angle == -25 then
+			x = self:randomX(-5, -2)
+		else
+			x = self:randomX(2, 5)
+		end
+
+		self:setEnemyPos(battleEnemy, x, y)
+		battleEnemy:setDirByAngle(angle)
+	elseif moveMode == 7 then
+		local enemyCfg = D._battleEnemyConfig[enemyMetaId]
+		x = self._battleSession._screenEdgeX2 + enemyCfg._spawnX[1]
+		y = self._battleSession._screenEdgeY2 + enemyCfg._spawnOffsetY
+		angle = -160
+
+		battleEnemy:setPos(x, y)
+		battleEnemy:setDirByAngle(angle)
+	elseif moveMode == 9 then
+		battleEnemy._moveMode = 1
+	elseif moveMode > 100 then
+		local funcMovement = EnemyMovement[battleEnemy._moveMode] or EnemyMovement[0]
+
+		funcMovement(battleEnemy, 0)
+	else
+		x, y = self:enemyBornPosition2(enemyMetaId, leftOrRight)
+
+		self:setEnemyPos(battleEnemy, x, y)
+	end
+
+	if battleEnemy._view then
+		if P._playerRecord:isNewEnemy(enemyMetaId) then
+			P._playerRecord:recordNewEnemyId(enemyMetaId)
+			SimpleEvent.emit("battle.enemy.new", enemyMetaId)
+		end
+
+		battleEnemy._view:posEvent()
+		battleEnemy._view:rotationEvent()
+		battleEnemy._view:initAngleEvent()
+	end
+
+	return battleEnemy
+end
+
+function M:enemyBornPosition3(enemyMetaId, battleEnemy)
+	local enemyCfg = D._battleEnemyConfig[enemyMetaId]
+	local x = self:randomX(battleEnemy._radius, -battleEnemy._radius)
+	local y = self:randomY()
+	local angle = self._battleRandomLib:randomTrue() and -45 or -135
+
+	if enemyCfg._spawnOffsetY then
+		y = y + enemyCfg._spawnOffsetY
+	end
+
+	if enemyCfg._spawnX then
+		x = self._battleRandomLib:randomMN(enemyCfg._spawnX[1] * 10, enemyCfg._spawnX[2] * 10) / 10
+	end
+
+	if self._msType == D.MissionType.CrisisZone and enemyCfg._originId == nil then
+		x = 0
+	end
+
+	return x, y, angle
+end
+
+function M:enemyBornPosition2(enemyMetaId, leftOrRight)
+	local x = nil
+
+	if leftOrRight ~= nil then
+		if leftOrRight then
+			x = self:randomX(-5, -1)
+		else
+			x = self:randomX(1, 5)
+		end
+	else
+		x = self:randomX()
+	end
+
+	local y = self:randomY()
+	local enemyCfg = D._battleEnemyConfig[enemyMetaId]
+
+	if enemyCfg._spawnOffsetY then
+		y = y + enemyCfg._spawnOffsetY
+	end
+
+	if not BattleManager:isMissionPVP() and enemyCfg._spawnX then
+		x = self._battleRandomLib:randomMN(enemyCfg._spawnX[1] * 10, enemyCfg._spawnX[2] * 10) / 10
+	end
+
+	if self._msType == D.MissionType.CrisisZone and enemyCfg._originId == nil then
+		x = 0
+	end
+
+	return x, y
+end
+
+function M:enemyBornPosition(enemyMetaId, leftOrRight)
+	local x = nil
+
+	if leftOrRight ~= nil then
+		if leftOrRight then
+			x = self:randomX(-5, -1)
+		else
+			x = self:randomX(1, 5)
+		end
+	else
+		x = self:randomX(-5, 5)
+	end
+
+	local y = self:randomY()
+	local enemyCfg = D._battleEnemyConfig[enemyMetaId]
+
+	if enemyCfg._spawnOffsetY then
+		y = y + enemyCfg._spawnOffsetY
+	end
+
+	if enemyCfg._spawnX then
+		x = self._battleRandomLib:randomMN(enemyCfg._spawnX[1] * 10, enemyCfg._spawnX[2] * 10) / 10
+	end
+
+	if self._msType == D.MissionType.CrisisZone and enemyCfg._originId == nil then
+		x = 0
+	end
+
+	local randomTargetX = self._battleRandomLib:randomMN(-3, 3)
+
+	if enemyCfg._spawnX then
+		randomTargetX = 0
+	end
+
+	local targetPosY = 0
+	local angle = math.deg(math.atan2(targetPosY - y, randomTargetX - x))
+
+	return x, y, angle
+end
+
+function M:createEnemy(enemyMetaId, isSummon)
+	local enemyId = self:assignEnemyId(isSummon)
+	local battleEnemy = self._battleSession:createOrGetEnemy(enemyId, enemyMetaId)
+	battleEnemy._isSummon = false
+	local enemyConfig = D._battleEnemyConfig[enemyMetaId]
+
+	if self._msType == D.MissionType.CrisisZone and enemyConfig._type == BattleDefine.EnemyType.Elite then
+		local hasOrigin = D._battleEnemyConfig[enemyMetaId]._originId ~= nil
+
+		if enemyMetaId == 2484 or enemyMetaId == 2583 or enemyMetaId == 2584 then
+			battleEnemy._totalSeg = 10
+		elseif isSummon or hasOrigin then
+			battleEnemy._totalSeg = nil
+		else
+			battleEnemy._totalSeg = 10
+		end
+	end
+
+	battleEnemy:init(enemyId, enemyMetaId)
+	self._battleSession:pushEnemy(battleEnemy)
+
+	local initScale = enemyConfig._initScale
+	local scale = self._battleRandomLib:randomMN(initScale[1], initScale[2]) / 100
+
+	battleEnemy:setScale(scale)
+
+	battleEnemy._atk = battleEnemy._atk * self._atkPercent / 100
+	battleEnemy._hp = battleEnemy._hp * self._hpPercent / 100
+
+	if enemyConfig._type == BattleDefine.EnemyType.Elite or enemyConfig._type == BattleDefine.EnemyType.Boss then
+		battleEnemy._atk = battleEnemy._atk * self._eliteAtkPercent / 100
+		battleEnemy._hp = battleEnemy._hp * self._eliteHpPercent / 100
+
+		if self._msType == D.MissionType.CrisisZone then
+			local hasOrigin = enemyConfig._originId ~= nil
+
+			if enemyMetaId == 2484 or enemyMetaId == 2583 or enemyMetaId == 2584 then
+				local factors = D._globalConfig._crisis_zone_elite_enemy_factor
+				battleEnemy._hp = battleEnemy._hp * factors[2] / 100
+				battleEnemy._atk = battleEnemy._atk * factors[3] / 100
+
+				battleEnemy:setScale(scale * factors[1] / 100)
+			elseif hasOrigin then
+				local factors = D._globalConfig._crisis_zone_enemy_factor
+				battleEnemy._hp = battleEnemy._hp * factors[2] / 100
+				battleEnemy._atk = battleEnemy._atk * factors[3] / 100
+
+				battleEnemy:setScale(scale * factors[1] / 100)
+			else
+				local factors = D._globalConfig._crisis_zone_elite_enemy_factor
+				battleEnemy._hp = battleEnemy._hp * factors[2] / 100
+				battleEnemy._atk = battleEnemy._atk * factors[3] / 100
+
+				battleEnemy:setScale(scale * factors[1] / 100)
+
+				battleEnemy._ignoreRegulateBuf = true
+
+				battleEnemy:addBuff(58, 12000)
+			end
+		end
+	end
+
+	if self._waveAtkPercent then
+		battleEnemy._atk = battleEnemy._atk + battleEnemy._atk * self._waveAtkPercent[self._enemyWaveIndex] / 100
+	end
+
+	local waveHpPercent = 0
+
+	if self._waveHpPercent then
+		waveHpPercent = waveHpPercent + self._waveHpPercent[self._enemyWaveIndex]
+	end
+
+	if enemyConfig._type == BattleDefine.EnemyType.Normal and self._extraHpPercentWave then
+		waveHpPercent = waveHpPercent + self._extraHpPercentWave[self._enemyWaveIndex] or 0
+	end
+
+	battleEnemy._hp = battleEnemy._hp + battleEnemy._hp * waveHpPercent / 100
+
+	if battleEnemy._view then
+		battleEnemy._view:scaleEvent()
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.HP) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.HP)
+		battleEnemy._hp = battleEnemy._hp * (1 + prop[1] / 100)
+	end
+
+	battleEnemy._maxHp = battleEnemy._hp
+
+	if battleEnemy._type == BattleDefine.EnemyType.Elite then
+		local v1 = self._battleSession:getEffect(20022)
+
+		if v1 then
+			battleEnemy._hp = battleEnemy._hp - math.ceil(battleEnemy._hp * v1 / 100)
+
+			battleEnemy._view:syncHp()
+		end
+	end
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.SPEED) then
+		local prop = self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.SPEED)
+		battleEnemy._speed = battleEnemy._speed * (1 + prop[1] / 100)
+	end
+
+	battleEnemy._speed = battleEnemy._speed * self._battleSession._zoomScale
+	local v1 = self._battleSession:getEffect(20020)
+
+	if v1 then
+		battleEnemy._speed = battleEnemy._speed * (1 + v1 / 100)
+	end
+
+	battleEnemy._damageReduceBuffParams = nil
+	battleEnemy._dmgReduceDt = nil
+	battleEnemy._dmgReducePer = nil
+	battleEnemy._dmgReduceMaxStack = nil
+	battleEnemy._dmgReduceStack = nil
+
+	if self._battleSession:hasEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_REDUCE) then
+		battleEnemy._damageReduceBuffParams = clone(self._battleSession:getEnemyProp(BattleDefine.EnemyBuffType.DAMAGE_REDUCE))
+		battleEnemy._dmgReduceDt = battleEnemy._damageReduceBuffParams[1]
+		battleEnemy._dmgReducePer = battleEnemy._damageReduceBuffParams[2]
+		battleEnemy._dmgReduceMaxStack = battleEnemy._damageReduceBuffParams[3]
+		battleEnemy._dmgReduceStack = 0
+	end
+
+	if self._msType == D.MissionType.GlobalDefense and not isSummon and battleEnemy._type == BattleDefine.EnemyType.Normal then
+		local routeLen = #self._waveEnemyRoutes[self._enemyWaveIndex]
+		local route = self._waveEnemyRoutes[self._enemyWaveIndex][battleEnemy._id % routeLen + 1]
+		battleEnemy._moveMode = route
+		battleEnemy._runPathTime = 0
+		battleEnemy._routing = true
+		battleEnemy._pathEndTime = self._waveEnemyRouteTimes[self._enemyWaveIndex]
+
+		if self._waveFormation then
+			battleEnemy._formationPos = self._waveFormation[1]
+
+			table.remove(self._waveFormation, 1)
+
+			battleEnemy._formationT = self._waveFormationT
+			battleEnemy._formationMoveTime = self._waveEndTime
+			battleEnemy._inMatrix = true
+		end
+	end
+
+	if isSummon then
+		battleEnemy._giveExp = 0
+		battleEnemy._isSummon = true
+	end
+
+	if self._battleSession:pvpIsRangeTime() then
+		battleEnemy:addBuff(58, 999)
+	end
+
+	if battleEnemy._scriptBehavior and battleEnemy._scriptBehavior.enemyCreated then
+		battleEnemy._scriptBehavior.enemyCreated(battleEnemy)
+	end
+
+	self._battleSession:onEnemyCreated(battleEnemy)
+
+	return battleEnemy
+end
+
+function M:createSummonEnemy(enemyMetaId)
+	local battleEnemy = self:createEnemy(enemyMetaId, true)
+
+	return battleEnemy
+end
+
+function M:assignEnemyId(isSummon)
+	if not isSummon then
+		local enemyId = self._enemyId
+		self._enemyId = self._enemyId + 1
+
+		return enemyId
+	else
+		local enemyId = self._summonEnemyId
+		self._summonEnemyId = self._summonEnemyId + 1
+
+		return enemyId
+	end
+end
+
+function M:jumpWave(wave)
+	local cnt = #self._battleSession._battleEnemys
+
+	for i = 1, cnt do
+		local battleEnemy = self._battleSession._battleEnemys[i]
+		battleEnemy._giveExp = 0
+	end
+
+	self._enemyWaveIndex = wave - 1
+	self._enemyWaveStatus = 0
+	self._enemyWaveInterval = 0
+
+	self._battleSession._lv:reset(wave)
+
+	self._battleSession._exp = 0
+
+	if BattlePanel then
+		BattlePanel:updateLevel(wave, 0, 100)
+	end
+end
+
+function M:onPvPRoundBegan()
+	self._totalWave = 1
+	self._enemyWaveIndex = 0
+	self._enemyWaveStatus = 0
+	self._enemyWaveInterval = 0
+	self._enemyWaveCount = 0
+	self._enemySpawnInterval = 0
+	self._enemySpawnIntervalBase = 0
+
+	self:initMissionTypeData(self._msType, self._msId)
+end
+
+return M

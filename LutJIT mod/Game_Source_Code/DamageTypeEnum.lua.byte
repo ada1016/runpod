@@ -1,0 +1,12 @@
+local M = {
+	Fire = 2,
+	Attack = 1,
+	Thunder = 3,
+	Burst = 6,
+	Reax = 4,
+	Drone = 7,
+	Energy = 5
+}
+_G.DamageTypeEnum = M
+
+return M

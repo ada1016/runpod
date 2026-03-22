@@ -1,0 +1,40 @@
+local M = class("RangerBaseTipPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtBaseLevel = Types.TMP_Text,
+	goEntryTemplate = Types.GameObject,
+	tfContainer = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	for i = 1, #D._rangerBaseUpgradeConfig do
+		local cfg = D._rangerBaseUpgradeConfig[i]
+
+		if cfg._unlockDescSid then
+			local entry = self._goEntryTemplate:Instantiate(self._tfContainer)
+
+			entry:SetActive(true)
+			lc.prefabVarPeer(entry)
+			entry._txtLevel:SetLocalize(SID.STR_LEVEL_X, cfg._id)
+			entry._txtDesc:SetLocalize(cfg._unlockDescSid)
+		end
+	end
+
+	self._txtBaseLevel:SetLocalize(SID.STR_LEVEL_X, P._playerRanger:getDockLevel())
+end
+
+return M

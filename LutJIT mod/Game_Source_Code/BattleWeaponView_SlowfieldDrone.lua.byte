@@ -1,0 +1,39 @@
+local M = class("BattleWeaponView_SlowfieldDrone")
+local BattleSkillGroupEnum = BattleSkillGroupEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(weapon)
+	self._weapon = weapon
+	local prefab = weapon._prefab
+
+	if not BattleManager:isMissionArkRebuild() then
+		local skinId = self._battleSession:getEquipedSkin(BattleSkillGroupEnum.SlowfieldDrone)
+
+		if skinId then
+			prefab = D._skinWeaponConfig[skinId]._skinPrefab
+		end
+	end
+
+	self._obj = self._sessionView:createWeapon(prefab, weapon._index)
+
+	self._obj:SetPosition(weapon._position.x, weapon._position.y, 0)
+end
+
+function M:launchEvent()
+end
+
+function M:shotEvent()
+end
+
+function M:addEffectEvent(id)
+	if id == 10000 and self._weapon._superDecoPrefab then
+		self._sessionView:addVFX(self._weapon._superDecoPrefab, self._obj.transform)
+	end
+end
+
+return M

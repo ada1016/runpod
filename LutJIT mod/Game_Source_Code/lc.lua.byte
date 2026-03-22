@@ -1,0 +1,837 @@
+local lc = {}
+
+declare("lc", lc)
+
+local math = math
+local type = type
+local string = string
+local io = io
+local os = os
+local setmetatable = setmetatable
+local tonumber = tonumber
+local Application = Application
+local DOTween = DOTween
+local LuaHelper = LuaHelper
+local Util = Util
+local Vector3 = Vector3
+local Color = Color
+local Timer = Timer
+local Time = Time
+local ServerTimestamp = ServerTimestamp
+local LuaTableStr = requireLua("LuaTableStr")
+lc.Ease = DG.Tweening.Ease
+local SystemInfo = UnityEngine.SystemInfo
+local f_print = f_print
+
+function print(...)
+	if lc._isMobile then
+		return
+	end
+end
+
+function lc.versionStr2Number(verstionStr)
+	local versionArgs = string.split(verstionStr, ".")
+
+	return versionArgs[3] + tonumber(versionArgs[2]) * 100 + tonumber(versionArgs[1]) * 10000
+end
+
+function lc.versionAGreaterThanB(va, vb)
+	return lc.versionStr2Number(vb) < lc.versionStr2Number(va)
+end
+
+lc._isRelease = AppConst.Release
+lc._isMobile = false
+lc._isiOS = false
+lc._isAndroid = false
+lc._isCN = AppConst.IsCN
+lc._preFrame = 60
+lc._appVersionStr = Application.version
+lc._appVersion = lc.versionStr2Number(Application.version)
+
+if AppConst.Platform == AppConst.webgl then
+	lc._isWebGL = true
+	lc._useWebGLVFX = true
+	lc._isMobile = not Application.isEditor
+	local str = Util.GetDeviceInfo()
+	lc._deviceInfo = json.decode(str)
+	lc._isWebGLAndroid = lc._deviceInfo.platform == "android" or lc._deviceInfo.platform == "ohos" or lc._deviceInfo.platform == "devtools"
+	lc._isWebGLiOS = lc._deviceInfo.platform == "ios"
+	lc._isWebGLPC = not lc._isWebGLiOS and not lc._isWebGLAndroid
+	lc._preFrame = lc._isWebGLPC and 60 or 30
+elseif Application.isMobilePlatform then
+	lc._isMobile = true
+
+	if AppConst.Platform == AppConst.ios then
+		lc._isiOS = true
+	else
+		lc._isAndroid = true
+	end
+end
+
+lc._graphicsQuality = LuaHelper.PrefsGetInt("graphic_quality", -1)
+lc._dynamicFPS = 60
+lc._highFPS = 60
+lc._lowFPS = 30
+lc._designWidth = 810
+lc._designHeight = 1440
+lc._designAspectRatio = lc._designWidth / lc._designHeight
+lc._originScreenHeight = Screen.height
+lc._originScreenWidth = Screen.width
+lc._screenHeight = Screen.height
+lc._screenWidth = Screen.width
+lc._uiScreenRate = lc._originScreenWidth / lc._designWidth
+lc._battleScreenRate = 1
+lc._screenRate = lc._uiScreenRate
+local screenScale = lc._originScreenHeight / lc._originScreenWidth / (lc._designHeight / lc._designWidth)
+
+if screenScale >= 1 then
+	lc._canvasScale = lc._originScreenWidth / lc._designWidth
+	lc._floatHeight = lc._screenHeight - lc._designHeight * lc._canvasScale
+	lc._floatWidth = 0
+else
+	lc._canvasScale = lc._originScreenHeight / lc._designHeight
+	lc._floatHeight = 0
+	lc._floatWidth = lc._screenWidth - lc._designWidth * lc._screenRate
+end
+
+lc._bestFitScale = lc._canvasScale
+
+function lc.getUI2ScreenScale()
+	return lc._canvasScale * lc._screenRate / lc._uiScreenRate
+end
+
+local csArray = Screen.resolutions
+local array = {}
+
+for i = 0, csArray.Length - 1 do
+	array[i + 1] = {
+		width = csArray[i].width,
+		height = csArray[i].height,
+		refreshRate = csArray[i].refreshRate
+	}
+end
+
+lc.supportResolutions = array
+
+function lc.setResolution(screenRate)
+	if not lc._isMobile or lc._isWebGL then
+		return
+	end
+
+	local dstWidth = lc._designWidth * screenRate
+	lc._screenHeight = dstWidth * lc._screenHeight / lc._screenWidth
+	lc._screenWidth = dstWidth
+
+	Screen.SetResolution(lc._screenWidth, lc._screenHeight, true)
+
+	lc._screenRate = screenRate
+end
+
+if lc._graphicsQuality == -1 then
+	if lc._isAndroid then
+		local gpuMemorySize = SystemInfo.graphicsMemorySize
+		local systemMemorySize = SystemInfo.systemMemorySize
+		local screenRate = 1
+
+		if gpuMemorySize < 2000 then
+			lc._graphicsQuality = 1
+			lc._dynamicFPS = lc._lowFPS
+			screenRate = 0.8 * lc._battleScreenRate
+		else
+			lc._graphicsQuality = 2
+		end
+
+		if lc._graphicsQuality < 2 then
+			-- Nothing
+		end
+
+		Application.targetFrameRate = lc._dynamicFPS
+	else
+		lc._graphicsQuality = 2
+	end
+elseif lc._graphicsQuality == 2 then
+	lc._dynamicFPS = lc._highFPS
+else
+	lc._dynamicFPS = lc._lowFPS
+end
+
+function lc.setGraphicsQuality(quality)
+	lc._graphicsQuality = quality
+
+	lc.setIntKeyValue("graphic_quality", quality)
+
+	if lc._graphicsQuality == 2 then
+		lc._dynamicFPS = lc._highFPS
+	else
+		lc._dynamicFPS = lc._lowFPS
+	end
+
+	Application.targetFrameRate = lc._dynamicFPS
+end
+
+Application.targetFrameRate = lc._dynamicFPS
+
+function lc.appendFunctions(dest, ori)
+	for k, v in pairs(ori) do
+		dest[k] = v
+	end
+end
+
+local tostring = tostring
+
+function lc.tostring(var, depth, prefix)
+	prefix = prefix or ""
+
+	if type(var) ~= "table" then
+		return prefix .. tostring(var)
+	elseif var.__cname == "list" then
+		return lc.tostring(var:values())
+	else
+		local str = ""
+
+		if depth ~= 0 then
+			local prefix_next = prefix .. ", "
+			local isFirst = true
+			str = str .. prefix .. "{"
+
+			for k, v in pairs(var) do
+				str = str .. (isFirst and "" or prefix_next) .. k .. " = "
+				isFirst = false
+
+				if type(v) ~= "table" or type(depth) == "number" and depth <= 1 then
+					if type(v) == "boolean" then
+						str = str .. (v and "true" or "false")
+					elseif type(v) == "function" then
+						str = str .. "Func"
+					else
+						str = str .. tostring(v)
+					end
+				elseif depth == nil then
+					str = str .. lc.tostring(v, nil, prefix_next)
+				else
+					str = str .. lc.tostring(v, depth - 1, prefix_next)
+				end
+			end
+
+			str = str .. prefix .. "}"
+		end
+
+		return str
+	end
+end
+
+function lc.getDeviceInfoString()
+	return Util.GetDeviceInfo()
+end
+
+function lc.getDeviceId()
+	return SystemInfo.deviceUniqueIdentifier
+end
+
+function lc.getUdid()
+	if lc._isCN then
+		local udid = lc.getStringKeyValue("UDID", "")
+
+		if udid == "" then
+			udid = tostring(math.floor(math.random() * 4294967295.0))
+
+			lc.setStringKeyValue("UDID", udid)
+			lc.saveSetValues()
+		end
+
+		return udid
+	elseif lc._isMobile then
+		return Util.GetUDID()
+	end
+end
+
+function lc.getChannelName()
+	local appId = C._appId
+
+	if appId == "10001" then
+		return "DEV"
+	elseif appId == "10002" then
+		return "DEV"
+	elseif appId == "10003" or appId == "10004" then
+		return "ALPHA"
+	end
+
+	if lc._isMobile then
+		if lc._isiOS then
+			return "APPSTORE"
+		else
+			return "GOOGLEPLAY"
+		end
+	else
+		return "DEV"
+	end
+end
+
+function lc.addLongPress(objInst, delegate, agrs)
+	local listener = objInst.gameObject:GetComponent("LongPressEventListener")
+
+	if listener == nil then
+		listener = objInst.gameObject:AddComponent(typeof(LongPressEventListener))
+	end
+
+	listener:UnlistenAll()
+	listener.onLongPress:AddListener(function ()
+		if delegate.onLongPress then
+			delegate:onLongPress(agrs)
+		end
+	end)
+end
+
+function lc.addListeners(objInst, delegate, agrs)
+	local listener = objInst.gameObject:GetComponent("InputEventListener")
+
+	if listener == nil then
+		listener = objInst.gameObject:AddComponent(typeof(InputEventListener))
+	end
+
+	listener:UnlistenAll()
+	listener.onBeginDrag:AddListener(function (eventData)
+		if delegate.onTouchBegan then
+			delegate:onTouchBegan(eventData, agrs)
+		end
+	end)
+	listener.onDrag:AddListener(function (eventData)
+		if delegate.onTouchMoved then
+			delegate:onTouchMoved(eventData, agrs)
+		end
+	end)
+	listener.onEndDrag:AddListener(function (eventData)
+		if delegate.onTouchEnded then
+			delegate:onTouchEnded(eventData, agrs)
+		end
+	end)
+end
+
+function lc.screenPosToUIPos(objInst, position, camera)
+	return Util.ScreenPosToUIPos(objInst.transform, position, camera)
+end
+
+function lc.convertToScreenPoint(x, y, z)
+	return LuaHelper.ConvertToScreenPoint(x, y, z, LuaOutF, LuaOutF, LuaOutF)
+end
+
+function lc.worldToUIPoint()
+	return LuaHelper.ConvertToUIPoint(x, y, z, LuaOutF, LuaOutF, LuaOutF)
+end
+
+function lc.covert2NodePos(obj, dest)
+	local wp = obj.transform:TransformPoint(Vector3.static(0, 0, 0))
+	local p = dest.transform:InverseTransformPoint(wp)
+
+	return p
+end
+
+function lc.setParticleSystemStoppedEvent(obj, callback)
+	obj:GetComponent("ParticleSystemStoppedEvent"):SetStoppedAction(callback)
+end
+
+function lc.setAnimationCompletedEvent(obj, callback)
+	obj:GetComponent("AnimationEventCallback"):AddAnimationEvent(callback)
+end
+
+function lc.isFileExist(name)
+	local f = io.open(name, "rb")
+
+	if f then
+		f:close()
+	end
+
+	return f ~= nil
+end
+
+function lc.sequence(...)
+	local arg = {
+		...
+	}
+	local seq = DOTween.Sequence()
+
+	for i = 1, #arg do
+		local tween = arg[i]
+
+		if type(tween) == "function" then
+			seq:AppendCallback(tween)
+		elseif type(tween) == "number" then
+			seq:AppendInterval(tween)
+		else
+			seq:Append(tween)
+		end
+	end
+
+	return seq
+end
+
+function lc.delayFunc(dt, callback, target, unscaledTime)
+	local seq = lc.sequence(dt, callback)
+
+	if unscaledTime then
+		seq:SetUpdate(0, true)
+	end
+
+	if target then
+		seq:SetLink(target)
+	end
+end
+
+function lc.runStringCode(code)
+	if #code == 0 then
+		return "[ERROR] Empty code!"
+	end
+
+	local ok, ret = pcall(function ()
+		local chunk, err = loadstring(code)
+
+		if chunk == nil then
+			return string.format("parse patch error: %s", err)
+		end
+
+		return chunk()
+	end)
+
+	if ok then
+		return ret ~= nil and tostring(ret) or "execute ok"
+	else
+		return ret
+	end
+end
+
+function lc.setInterval(callback, n, unscaledTime)
+	if unscaledTime == nil then
+		unscaledTime = false
+	end
+
+	return lc.startNewTimer(callback, n, -1, unscaledTime)
+end
+
+function lc.setTimer(callback, n, unscaledTime)
+	if unscaledTime == nil then
+		unscaledTime = false
+	end
+
+	return lc.startNewTimer(callback, n, 1, unscaledTime)
+end
+
+function lc.startNewTimer(callback, n, loop, unscaledTime)
+	local timer = Timer.New(function ()
+		callback()
+	end, n, loop, unscaledTime)
+
+	timer:Start()
+
+	return timer
+end
+
+function lc.stopTimer(timer)
+	if timer == nil then
+		return
+	end
+
+	timer:Stop()
+end
+
+function lc.stopTimers(timers)
+	if timers == nil then
+		return
+	end
+
+	for i = 1, #timers do
+		lc.stopTimer(timers[i])
+	end
+end
+
+local function hexStrToNum(hexStr)
+	return (tonumber(hexStr, 16) or 255) / 255
+end
+
+local KEY_SHARP = "#"
+
+function lc.hexStrToClr(clrStr)
+	if clrStr[1] == KEY_SHARP then
+		clrStr = string.sub(clrStr, 2)
+	end
+
+	local len = string.len(clrStr)
+
+	if len < 6 then
+		return 1, 1, 1, 1
+	end
+
+	local r = hexStrToNum(string.sub(clrStr, 1, 2))
+	local g = hexStrToNum(string.sub(clrStr, 3, 4))
+	local b = hexStrToNum(string.sub(clrStr, 5, 6))
+	local a = hexStrToNum(string.sub(clrStr, 7, 8))
+
+	return r, g, b, a
+end
+
+function lc.numberLerp(from, to, t)
+	t = math.min(1, math.max(0, t))
+
+	return from + (to - from) * t
+end
+
+function lc.numberClamp(value, min, max)
+	return math.min(max, math.max(min, value))
+end
+
+function lc.numberClamp01(value)
+	return math.min(1, math.max(0, value))
+end
+
+function lc.setIntKeyValue(key, val)
+	if val ~= nil then
+		LuaHelper.PrefsSetInt(key, val)
+	else
+		LuaHelper.PrefsDeleteKey(key)
+	end
+end
+
+function lc.getIntKeyValue(key, defaultVal)
+	return LuaHelper.PrefsGetInt(key, defaultVal)
+end
+
+function lc.setStringKeyValue(key, val)
+	if val ~= nil then
+		LuaHelper.PrefsSetString(key, val)
+	else
+		LuaHelper.PrefsDeleteKey(key)
+	end
+end
+
+function lc.getStringKeyValue(key, defaultVal)
+	return LuaHelper.PrefsGetString(key, defaultVal)
+end
+
+function lc.setTableKeyValue(k, v)
+	if v then
+		LuaHelper.PrefsSetString(k, LuaTableStr.encode(v))
+	else
+		LuaHelper.PrefsDeleteKey(k)
+	end
+end
+
+function lc.getTableKeyValue(k, defV)
+	local str = LuaHelper.PrefsGetString(k, "")
+
+	if str and string.len(str) > 0 then
+		return LuaTableStr.decode(str)
+	else
+		return defV
+	end
+end
+
+function lc.saveSetValues()
+	LuaHelper.PrefsSave()
+end
+
+local PrefabVar = requireLua("PrefabVar")
+
+function lc.prefabVarPeer(obj)
+	LuaUnity.setPeer(obj)
+	lc.prefabVar(obj, obj.peer)
+end
+
+function lc.prefabVar(obj, data)
+	PrefabVar.initPrefabVar(obj, data)
+end
+
+function lc.prefabVarNumber(obj, data)
+	PrefabVar.initPrefabVarNumber(obj, data)
+end
+
+function lc.prefabVarArray(obj, data)
+	PrefabVar.initPrefabVarArray(obj, data)
+end
+
+function lc.encodeString(str)
+	str = FileUtils.deflateCompressByte(str, 0, string.len(str))
+	str = string.encrypt(LuaHelper.ToLuaByteBuffer(str), userKey)
+	str = EncryptHelper.RawBase64Encode(str)
+	str = EncryptHelper.AESEncrypt(str, securityKeyForContent)
+
+	return str
+end
+
+function lc.decodeString(str)
+	str = EncryptHelper.AESDecrypt(str, securityKeyForContent)
+	str = LuaHelper.ToLuaByteBuffer(EncryptHelper.RawBase64Decode(str))
+	str = string.decrypt(str, userKey)
+	str = LuaHelper.ToLuaByteBuffer(FileUtils.deflateDeCompressByte(str, 0, string.len(str)))
+
+	return str
+end
+
+local __serialize = nil
+
+function __serialize(obj, out)
+	local t = type(obj)
+
+	if t == "number" then
+		out[#out + 1] = tostring(obj)
+	elseif t == "boolean" then
+		out[#out + 1] = tostring(obj)
+	elseif t == "string" then
+		out[#out + 1] = string.format("%q", obj)
+	elseif t == "table" then
+		if obj.__cname then
+			if obj.__type == "number" then
+				out[#out + 1] = tostring(obj())
+			end
+		else
+			out[#out + 1] = "{"
+			local count = 0
+
+			for k, v in pairs(obj) do
+				if count > 0 then
+					out[#out + 1] = ","
+				end
+
+				count = count + 1
+				local tk = type(k)
+				local tv = type(v)
+
+				if tk == "number" then
+					out[#out + 1] = string.format("[%d]=", k)
+
+					__serialize(v, out)
+				elseif tk == "string" then
+					out[#out + 1] = string.format("[\"%s\"]=", k)
+
+					__serialize(v, out)
+				else
+					error("can not serialize a k" .. k .. " type.")
+				end
+			end
+
+			out[#out + 1] = "}"
+		end
+	elseif t ~= "nil" then
+		error("can not serialize a t" .. t .. " type.")
+	end
+end
+
+function lc.serialize(obj)
+	local out = table.new(4096, 0)
+	out[1] = "return "
+
+	__serialize(obj, out)
+
+	return table.concat(out)
+end
+
+function lc.assignTable(tbl, k)
+	if tbl[k] == nil then
+		tbl[k] = {}
+	end
+
+	return tbl[k]
+end
+
+function lc.confuseTable(tbl, tag)
+	for k, v in pairs(tbl) do
+		tbl[k] = ConfusedNumber.create(v, tag)
+	end
+end
+
+function lc.getSeedRandom(seed, maxVal)
+	seed = (seed * 1103515245 + 12345) % 65536
+
+	return seed, seed / 65536 * maxVal
+end
+
+function lc.unique(a)
+	local b = {}
+
+	for k, v in ipairs(a) do
+		if #b == 0 then
+			b[1] = v
+		else
+			local index = 0
+
+			for i = 1, #b do
+				if v == b[i] then
+					break
+				end
+
+				index = index + 1
+			end
+
+			if index == #b then
+				b[#b + 1] = v
+			end
+		end
+	end
+
+	return b
+end
+
+local function swap(t, i, j)
+	t[j] = t[i]
+	t[i] = t[j]
+end
+
+local function partition(t, low, high, compare)
+	local pivot = t[low]
+	local left = low + 1
+	local right = high
+
+	while left <= right do
+		if compare(t[left], pivot) then
+			left = left + 1
+		elseif compare(pivot, t[right]) then
+			right = right - 1
+		else
+			swap(t, left, right)
+
+			left = left + 1
+			right = right - 1
+		end
+	end
+
+	swap(t, low, right)
+
+	return right
+end
+
+function lc.stableQuickSort(t, low, high, compare)
+	if low < high then
+		local pivotIndex = partition(t, low, high, compare)
+
+		lc.stableQuickSort(t, low, pivotIndex - 1, compare)
+		lc.stableQuickSort(t, pivotIndex + 1, high, compare)
+	end
+end
+
+function lc.isNameStrValid(nameStr)
+	return nameStr:match("^[%w_]+$") ~= nil
+end
+
+function lc.isNetworkNotReachable()
+	return LuaHelper.IsNetworkNotReachable()
+end
+
+local b64chars = "0123456789+/AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
+local pow2 = {
+	[0] = 1,
+	2,
+	4,
+	8,
+	16,
+	32,
+	64,
+	128,
+	256
+}
+
+function lc.toBase64(data)
+	local len = #data
+	data = data .. ({
+		"",
+		"  ",
+		" "
+	})[len % 3 + 1]
+
+	return data:gsub(".", function (x)
+		local r = ""
+		local b64 = nil
+		local n = x:byte()
+
+		for i = 8, 1, -1 do
+			r = r .. (n % pow2[i] - n % pow2[i - 1] > 0 and "1" or "0")
+		end
+
+		return r
+	end):gsub("%d%d%d%d%d%d", function (x)
+		local c = tonumber(x, 2) + 1
+
+		return b64chars:sub(c, c)
+	end)
+end
+
+function lc.fromBase64(data)
+	return data:gsub(".", function (x)
+		local r = ""
+		local f = b64chars:find(x) - 1
+
+		for i = 6, 1, -1 do
+			r = r .. (f % pow2[i] - f % pow2[i - 1] > 0 and "1" or "0")
+		end
+
+		return r
+	end):gsub("%d%d%d%d%d%d%d%d", function (x)
+		return string.char(tonumber(x, 2))
+	end)
+end
+
+function lc.lenTable(tbl)
+	return tbl.c or #tbl
+end
+
+function lc.getVal(val)
+	if type(val) == "number" then
+		return val
+	end
+
+	if val.__cname then
+		return val()
+	end
+
+	return val
+end
+
+function lc.toStr(val)
+	if math.abs(math.round(val) - val) < 0.01 then
+		return tostring(val)
+	elseif math.abs(math.round(val * 10) - val * 10) < 0.01 then
+		return string.format("%.1f", val)
+	else
+		return string.format("%.2f", val)
+	end
+end
+
+function lc.priceBinning(p)
+	local x = math.log(p) / math.log(2)
+	local n = 2^((x - 3) / 2)
+	n = math.ceil(n)
+	local n1 = math.floor(p / n)
+	local n2 = p - n1 * (n - 1)
+	local t = {}
+
+	for i = 1, n - 1 do
+		t[#t + 1] = n1
+	end
+
+	if n2 > 0 then
+		t[#t + 1] = n2
+	end
+
+	return t
+end
+
+function lc.placeUIAtScreenYPoint(rt, yPoint)
+	local canvas = rt:GetComponentInParent(typeof(UnityEngine.Canvas))
+	local screenCenter = Vector2.new(UnityEngine.Screen.width * 0.5, UnityEngine.Screen.height * (yPoint or 0.5))
+	local parentRT = rt.parent
+	local cam = nil
+	local localPoint = Vector2.new(0, 0)
+	local ok, p1 = UnityEngine.RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRT, screenCenter, cam, localPoint)
+
+	if ok then
+		rt.anchoredPosition = p1
+	else
+		rt.anchoredPosition = Vector2.static(0, 0)
+	end
+end
+
+function lc.openUrl(url)
+	if lc._isWebGL then
+		LuaHelper.SetClipboardData(url)
+		V.showToast(SID.URL_COPIED)
+	else
+		LuaHelper.OpenUrl(url)
+	end
+end

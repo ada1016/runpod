@@ -1,0 +1,35 @@
+local M = class("RangerAtkBubbleWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RangerAtkBubbleWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(rangerId)
+	local star = P._playerRanger:getRangerLevel(rangerId)
+
+	self._txtFinalAtk:SetLocalize(SID.TIP_RANGER_ATK_TOTAL, math.floor(P._playerRanger:getRangerAtk(rangerId)))
+	self._txtPlayerAtk:SetLocalizeS(SID.TIP_ATK_TOTAL, "<sprite name=\"atk\">" .. P._playerRole:getPlayerAtk())
+
+	local classProp = BattlePropEnum.AtkNatureGuard + D._rangerConfig[rangerId]._dmgType
+
+	self._txtClassAtk:SetLocalize(SID.TIP_CLASS_ATK_TOTAL, -SID["STR_ATK_NATURE_" .. D._rangerConfig[rangerId]._dmgType], P._playerRole:getClassAtk()[classProp] or 0)
+	self._txtInheritAtk:SetLocalize(SID.TIP_RANGER_ATK_INHERIT, D._rangerConfig[rangerId]._atkPercents[star])
+
+	local dockLevel = P._playerRanger:getDockLevel()
+	local baseAtkPercent = D._rangerBaseUpgradeConfig[dockLevel] and D._rangerBaseUpgradeConfig[dockLevel]._atkPercentAdd or 0
+
+	self._txtAtkDockImprove:SetLocalize(SID.TIP_RANGER_ATK_DOCK_IMPROVE, baseAtkPercent)
+end
+
+function M:initClick(panel)
+	panel:setClick(self._btnClick, function ()
+		self.gameObject:SetActive(false)
+	end)
+end
+
+return M

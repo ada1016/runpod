@@ -1,0 +1,58 @@
+local M = class("AnniversaryInviteRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversaryInviteRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:updateUI(id, cid, num, claimed, percent, requirePoint)
+	self._txtId.text = id
+
+	self._goItem:init(cid, num)
+	self._goClaimed:SetActive(claimed)
+
+	local canClaim = not claimed and percent >= 1
+
+	self._goItem:setCanClaim(canClaim)
+	self._goItem:setClaimed(isClaimed)
+	self._goVfxClaim:SetActive(canClaim)
+
+	if percent < 0 then
+		self._imgBarLeft.fillAmount = 0
+	elseif percent > 1 then
+		self._imgBarLeft.fillAmount = 1
+	else
+		self._imgBarLeft.fillAmount = percent
+	end
+
+	self._txtPoint.text = requirePoint
+end
+
+function M:updateRightBarAmount(percent)
+	self._imgBarRight:SetActive(percent > 0)
+
+	if percent < 0 then
+		self._imgBarRight.fillAmount = 0
+	elseif percent > 1 then
+		self._imgBarRight.fillAmount = 1
+	else
+		self._imgBarRight.fillAmount = percent
+	end
+end
+
+return M

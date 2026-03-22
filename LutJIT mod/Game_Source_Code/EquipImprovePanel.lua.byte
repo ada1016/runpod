@@ -1,0 +1,717 @@
+local M = class("EquipImprovePanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	goResourceRefineMat = Types.GameObject,
+	goTargetEquip = Types.GameObject,
+	goEquipContainer = Types.GameObject,
+	goTargetSlot = Types.GameObject,
+	goSlotContainer = Types.GameObject,
+	btnPage1 = Types.LCButton,
+	btnPage2 = Types.Button,
+	txtPage1 = Types.TMP_Text,
+	txtPage2 = Types.TMP_Text,
+	imgPageLock1 = Types.Image,
+	imgPageLock2 = Types.Image,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	txtTargetEquipPart = Types.TMP_Text,
+	txtLevel = Types.TMP_Text,
+	txtLevelNext = Types.TMP_Text,
+	txtLevelAtk = Types.TMP_Text,
+	txtLevelNextAtk = Types.TMP_Text,
+	btnEnhance = Types.Button,
+	btnEnhanceAll = Types.Button,
+	goCostArea = Types.GameObject,
+	imgCostCoin = Types.Image,
+	imgCostShard = Types.Image,
+	txtCostCoin = Types.TMP_Text,
+	txtCostShard = Types.TMP_Text,
+	txtLevelTab2 = Types.TMP_Text,
+	txtRefineTitle = Types.TMP_Text,
+	goNoProp = Types.GameObject,
+	goProp1 = Types.GameObject,
+	goProp2 = Types.GameObject,
+	goProp3 = Types.GameObject,
+	goProp4 = Types.GameObject,
+	goCostDiamond = Types.GameObject,
+	imgCostMat = Types.Image,
+	imgCostDiamond = Types.Image,
+	txtCostMat = Types.TMP_Text,
+	txtCostDiamond = Types.TMP_Text,
+	goRefineBtnArea = Types.GameObject,
+	btnRefineTip = Types.Button,
+	btnRefine = Types.Button,
+	goRefineResultBtnArea = Types.GameObject,
+	goRefineMaxArea = Types.GameObject,
+	btnAbondon = Types.Button,
+	btnAccept = Types.Button,
+	goPopResultContent = Types.GameObject,
+	txtPlayerAtk = Types.TMP_Text,
+	goPopProp1 = Types.GameObject,
+	goPopProp2 = Types.GameObject,
+	goPopProp3 = Types.GameObject,
+	goPopProp4 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._firstEnhanceWidget = nil
+	self._refineLocks = {}
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goTargetEquip)
+
+	self._goEquips = {}
+
+	for i = 1, D.PART_NUM do
+		self._goEquips[i] = self._goEquipContainer:GetChild(i - 1)
+
+		ItemWidget.noCreate(self._goEquips[i])
+	end
+
+	lc.prefabVarPeer(self._goTargetSlot)
+
+	self._goSlots = {}
+
+	for i = 1, D.PART_NUM do
+		self._goSlots[i] = self._goSlotContainer:GetChild(i - 1)
+
+		lc.prefabVarPeer(self._goSlots[i])
+	end
+
+	self._goProps = {
+		self._goProp1,
+		self._goProp2,
+		self._goProp3,
+		self._goProp4
+	}
+
+	for i = 1, #self._goProps do
+		lc.prefabVarPeer(self._goProps[i])
+	end
+
+	self._goPopProps = {
+		self._goPopProp1,
+		self._goPopProp2,
+		self._goPopProp3,
+		self._goPopProp4
+	}
+
+	for i = 1, #self._goPopProps do
+		lc.prefabVarPeer(self._goPopProps[i])
+	end
+
+	self._imgPageHighlights = {}
+	self._goBtnPages = {
+		self._btnPage1,
+		self._btnPage2
+	}
+	self._txtPages = {
+		self._txtPage1,
+		self._txtPage2
+	}
+	self._goContents = {
+		self._goContent1,
+		self._goContent2
+	}
+	self._imgPageLocks = {
+		self._imgPageLock1,
+		self._imgPageLock2
+	}
+end
+
+function M:addClicks()
+	for i = 1, D.PART_NUM do
+		self:setClick(self._goEquips[i]._btnClick, function ()
+			if self._equip:refineResult() then
+				UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+					_type = 2,
+					_content = SID.TIP_CONFIRM_ABANDON_SMELT,
+					_confirmCallback = function ()
+						self._equip:abandonRefine()
+						self:updateRefine(true, true)
+
+						self._part = i
+						self._equip = P._playerRole:getEquipById(self._equipSlots[self._part])
+
+						table.clear(self._refineLocks)
+
+						self._btnRefine:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+						self._btnRefine.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+						self._btnRefine.enabled = true
+
+						self:updateUI()
+					end
+				})
+
+				return
+			end
+
+			self._part = i
+			self._equip = P._playerRole:getEquipById(self._equipSlots[self._part])
+
+			table.clear(self._refineLocks)
+
+			self._btnRefine:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+			self._btnRefine.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+			self._btnRefine.enabled = true
+
+			self:updateUI()
+		end)
+		self:setClick(self._goSlots[i]._btnClick, function ()
+			self._part = i
+			self._equip = P._playerRole:getEquipById(self._equipSlots[self._part])
+
+			self:updateUI()
+		end)
+	end
+
+	for i = 1, #self._goBtnPages do
+		self:setClick(self._goBtnPages[i], function ()
+			if i == 1 and self._equip:refineResult() then
+				UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+					_type = 2,
+					_content = SID.TIP_CONFIRM_ABANDON_SMELT,
+					_confirmCallback = function ()
+						self._equip:abandonRefine()
+						self:updateRefine(true, true)
+
+						self._part = i
+						self._equip = P._playerRole:getEquipById(self._equipSlots[self._part])
+
+						table.clear(self._refineLocks)
+						self:changePage(i)
+					end
+				})
+			else
+				self:changePage(i)
+			end
+		end)
+	end
+
+	self:setClick(self._btnEnhance, function ()
+		if self._maxLevel then
+			V.showToast(SID.TIP_MAX_LEVEL)
+
+			return
+		end
+
+		local ret, param = P._playerRole:tryUpgradeChip(self._part)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			V.showEnhanceToast()
+			self:updateUI()
+		end
+	end)
+	self:setClick(self._btnEnhanceAll, function ()
+		local ret, param = P._playerRole:tryUpgradeChipAll()
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			V.showEnhanceToast()
+			self:updateUI()
+		end
+	end)
+	self:setClick(self._btnRefine, function ()
+		local diamondCost = #self._refineLocks * D._globalConfig._equip_refine_lock_cost
+
+		if P._playerAsset:getAssetNum(D.ResType.diamond) < diamondCost then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, function ()
+				self:updateRefine()
+			end)
+
+			return
+		end
+
+		local equipId = self._equipSlots[self._part]
+		local ret, param = P._playerRole:tryRefineEquip(equipId, self._refineLocks)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			self:updateRefineResult()
+			Client.playSound("ui_Refine_1")
+		end
+	end)
+	self:setClick(self._btnAbondon, function ()
+		self._equip:abandonRefine()
+		self:updateRefine(true)
+	end)
+	self:setClick(self._btnAccept, function ()
+		self._oldClassAtks = clone(P._playerRole:getClassAtk())
+
+		self._equip:acceptRefine()
+		self:updateRefine(true)
+		self:showRefinePopResult()
+		V.showEnhanceToast()
+	end)
+	self:setClick(self._btnRefineTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_REFINE_MAT_WILL_RETURN
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnRefineTip.gameObject
+		})
+	end)
+
+	for i = 1, 4 do
+		self:setClick(self._goProps[i]._btnLock, function ()
+			local locked = table.contains(self._refineLocks, i)
+
+			if locked then
+				table.erase(self._refineLocks, i)
+
+				if #self._refineLocks == #self._equip:extra() - 1 then
+					self._btnRefine:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow)
+					self._btnRefine.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_ad_yellow_light)
+					self._btnRefine.enabled = true
+				end
+
+				Client.playSound("ui_Unlock_1")
+			else
+				table.insert(self._refineLocks, i)
+
+				if #self._refineLocks == #self._equip:extra() then
+					self._btnRefine:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+					self._btnRefine.transform:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+					self._btnRefine.enabled = false
+				end
+
+				Client.playSound("ui_Lock_1")
+			end
+
+			self:updateRefine()
+		end)
+	end
+
+	self:setClick(self._btnClose, function ()
+		if self._equip:refineResult() then
+			UIManager.openPanel(PrefabDefine.MessageBoxPanel, {
+				_type = 2,
+				_content = SID.TIP_CONFIRM_ABANDON_SMELT,
+				_confirmCallback = function ()
+					self._equip:abandonRefine()
+					self:closePanel()
+				end
+			})
+
+			return
+		else
+			self:closePanel()
+		end
+	end)
+end
+
+function M:addEvents()
+	self:on("prop.dirty", function (cid, num)
+		if cid == D.ResType.diamond and num > 0 then
+			self:updateUI()
+		end
+	end)
+end
+
+function M:init(part, page)
+	self._equipSlots = P._playerRole:getCurrentEquips()
+
+	for i = 1, D.PART_NUM do
+		local equip = P._playerRole:getEquipById(self._equipSlots[i])
+		local cid = equip:cid()
+
+		self._goEquips[i]:init(cid, 1)
+		self._goEquips[i]:setNum(false)
+		self._goEquips[i]:setEquipQuality(equip:quality(), equip:grade())
+		LuaUnity.setTPSprite(self._goSlots[i]._imgIcon, "general/g_icon_center_" .. i, true)
+		self._goSlots[i]._txtLevel:SetLocalize(SID.STR_LEVEL_X, P._playerRole:getChipSystemLevelByPart(i))
+	end
+
+	if P._playerGuide:isInGuide() and P._playerGuide:getGuideArgs()._group == D.GuideGroupId.EquipRefine then
+		for i = 1, D.PART_NUM do
+			local quality = P._playerRole:getEquipById(self._equipSlots[i]):quality()
+
+			if D.Quality.Purple <= quality then
+				part = i
+
+				break
+			end
+		end
+	end
+
+	self._part = part or 1
+	self._equip = P._playerRole:getEquipById(self._equipSlots[self._part])
+
+	self._goTargetEquip:setNum(false)
+
+	self._page = 1
+
+	self._goContent1:SetActive(true)
+	self._goContent2:SetActive(false)
+	self._imgPageLock1:SetActive(false)
+	self._imgPageLock2:SetActive(true)
+	self._goPopResultContent:SetActive(false)
+
+	if P._playerGuide:isInGroup(D.GuideGroupId.EquipRefine) or P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine) then
+		self._btnPage1:SetActive(true)
+		self._btnPage2:SetActive(true)
+	else
+		self._btnPage1:SetActive(false)
+		self._btnPage2:SetActive(false)
+	end
+
+	if page then
+		self:changePage(page)
+	else
+		self:updateUI()
+	end
+end
+
+function M:changePage(page)
+	if page ~= self._page then
+		self._goContents[self._page]:SetActive(false)
+		self._imgPageLocks[self._page]:SetActive(true)
+
+		self._txtPages[self._page].color = Color.str2Static(V.COMMON_COLOR.tabtxt_unselect)
+		self._page = page
+
+		self._goContents[self._page]:SetActive(true)
+		self._imgPageLocks[self._page]:SetActive(false)
+
+		self._txtPages[self._page].color = Color.str2Static(V.COMMON_COLOR.tabtxt_select)
+
+		self._goTargetEquip:SetActive(page == 2)
+		self._goTargetSlot:SetActive(page == 1)
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if self._page == 1 then
+		self._goResourceRefineMat:SetActive(false)
+		self:updateEquip()
+		self:updateLevelCost()
+	else
+		self._goResourceRefineMat:SetActive(true)
+		self:updateEquip()
+		self:updateRefine()
+	end
+
+	local canUpgrade = P._playerRole:canUpgradeEquip()
+
+	self._btnPage1.dot:SetActive(canUpgrade)
+
+	local canRefine = P._playerGuide:isGroupFinished(D.GuideGroupId.EquipRefine) and P._playerRole:hasRefineFlagEquip()
+
+	self._btnPage2.dot:SetActive(canRefine)
+end
+
+function M:updateEquip()
+	self._txtTargetEquipPart:SetLocalize(SID["STR_PART_" .. self._part])
+
+	for i = 1, D.PART_NUM do
+		local equip = P._playerRole:getEquipById(self._equipSlots[i])
+		local cid = equip:cid()
+
+		self._goEquips[i]:setChoose(i == self._part)
+
+		local canUpgrade = P._playerRole:canUpgradeEquip(i) and self._page == 1
+		local canRefine = P._playerRole:hasRefineFlagEquip(self._equipSlots[i]) and self._page == 2
+
+		self._goEquips[i]:setDot(canRefine)
+
+		if canUpgrade and not self._firstEnhanceWidget then
+			self._firstEnhanceWidget = self._goSlots[i]._btnClick
+		end
+
+		self._goSlots[i]._imgLight:SetActive(i == self._part)
+		self._goSlots[i]._imgChoose:SetActive(i == self._part)
+		self._goSlots[i]._imgDot:SetActive(canUpgrade)
+		self._goSlots[i]._txtLevel:SetLocalize(SID.STR_LEVEL_X, P._playerRole:getChipSystemLevelByPart(i))
+
+		local scale = i == self._part and 1 or 0.92
+
+		lc.setLocalScale(self._goSlots[i], scale, scale, scale)
+
+		if i == self._part then
+			self._goTargetEquip:init(cid, 1)
+			self._goTargetEquip:setEquipQuality(equip:quality(), equip:grade())
+			LuaUnity.setTPSprite(self._goTargetSlot._imgIcon, "general/g_icon_center_" .. i, true)
+			self._goTargetSlot._txtLevel:SetLocalize(SID.STR_LEVEL_X, P._playerRole:getChipSystemLevelByPart(i))
+		end
+	end
+end
+
+function M:updateLevelCost()
+	self._maxLevel = false
+	local level = P._playerRole:getChipSystemLevelByPart(self._part)
+	local nextLevel = level < D.MAX_EQUIP_LEVEL and level + 1 or level
+
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+	self._txtLevelAtk:SetLocalize(SID.STR_ATK_ADD, P._playerRole:getChipSystemLevelAtk(level))
+
+	local nextAtk = P._playerRole:getChipSystemLevelAtk(level + 1)
+
+	if nextAtk == 0 then
+		self._txtLevelNext:SetLocalize(SID.TIP_MAX_LEVEL)
+		self._txtLevelNextAtk:SetLocalize(SID.TIP_MAX_LEVEL)
+
+		self._maxLevel = true
+	else
+		self._txtLevelNext:SetLocalize(SID.STR_LEVEL_X, nextLevel)
+		self._txtLevelNextAtk:SetLocalize(SID.STR_ATK_ADD, nextAtk)
+	end
+
+	self._goCostArea:SetActive(not self._maxLevel)
+
+	if not self._maxLevel then
+		V.loadItemCost(self._imgCostCoin, self._txtCostCoin, D.ResType.coin, P._playerRole:getUpgradeCoinCost(level), self)
+		V.loadItemCost(self._imgCostShard, self._txtCostShard, D.ChipShardId[self._part], P._playerRole:getUpgradeShardCost(level), self)
+	end
+
+	self._btnEnhance.dot:SetActive(P._playerRole:canUpgradeEquip(self._part))
+end
+
+function M:updateRefine(isFinish, immediate)
+	self._btnRefineTip:SetActive(true)
+	self._goRefineResultBtnArea:SetActive(false)
+
+	local level = P._playerRole:getChipSystemLevelByPart(self._part)
+
+	self._txtLevelTab2:SetLocalize(SID.STR_LEVEL_X, level)
+	self._txtRefineTitle:SetLocalize(SID.TITLE_EXTRA_STATUS)
+
+	local equip = self._equip
+
+	self._goRefineBtnArea:SetActive(not equip:isMaxRefine(self._refineLocks))
+	self._goRefineMaxArea:SetActive(equip:isMaxRefine(self._refineLocks))
+
+	if P._playerRole:hasRefineFlagEquip(self._equipSlots[self._part]) then
+		P._playerRole:removeFlagRefineEquip(self._equipSlots[self._part])
+		self._goEquips[self._part]:setDot(false)
+	end
+
+	local conf = D._equipRefineConfig[equip:grade() * 10 + equip:quality()]
+	local extra = equip:extra()
+
+	if extra then
+		self._goNoProp:SetActive(false)
+
+		for i = 1, 4 do
+			if extra[i] then
+				local id = extra[i][1]
+				local value = extra[i][2]
+				local goProp = self._goProps[i]
+
+				goProp:SetActive(true)
+				V.loadAtkClassText(goProp._txtTitleCurrent, id)
+
+				goProp._txtNum.text = "+" .. value
+
+				goProp._imgArrow:SetActive(false)
+
+				goProp._btnLock.enabled = true
+				local locked = table.contains(self._refineLocks, i)
+
+				LuaUnity.setTPSprite(goProp._imgLockBg, locked and "general/g_btn_03_2" or "general/g_btn_03")
+
+				goProp._imgLock.color = Color.str2Static(locked and "1A3C3C" or "83DBCC")
+
+				LuaUnity.setTPSprite(goProp._imgLock, locked and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+
+				if isFinish then
+					if table.contains(self._refineLocks, i) then
+						goProp._aniEntry:Play("anim_EquipRefine04")
+
+						if immediate then
+							V.resetAnimToEndFrame(goProp._aniEntry, "anim_EquipRefine04")
+						end
+					else
+						goProp._aniEntry:Play("anim_EquipRefine03")
+
+						if immediate then
+							V.resetAnimToEndFrame(goProp._aniEntry, "anim_EquipRefine03")
+						end
+					end
+				end
+			else
+				self._goProps[i]:SetActive(false)
+			end
+		end
+	else
+		for i = 1, 4 do
+			self._goProps[i]:SetActive(false)
+		end
+
+		self._goNoProp:SetActive(true)
+	end
+
+	self:updateRefineCost()
+end
+
+function M:updateRefineCost()
+	local equip = self._equip
+	local conf = D._equipRefineConfig[equip:grade() * 10 + equip:quality()]
+	local extra = equip:extra()
+
+	if extra then
+		local cost = conf._cost
+		local diamondCost = #self._refineLocks * 20
+
+		V.loadItemCost(self._imgCostMat, self._txtCostMat, D.ResType.equip_refine_mat, cost, self)
+
+		if diamondCost > 0 then
+			self._goCostDiamond:SetActive(true)
+			V.loadItemCost(self._imgCostDiamond, self._txtCostDiamond, D.ResType.diamond, diamondCost, self)
+		else
+			self._goCostDiamond:SetActive(false)
+		end
+	else
+		self._goRefineBtnArea:SetActive(false)
+		self._goRefineMaxArea:SetActive(false)
+	end
+end
+
+function M:updateRefineResult()
+	self._btnRefineTip:SetActive(false)
+	self._txtRefineTitle:SetLocalize(SID.TITLE_REFINE_RESULT)
+	self._goRefineResultBtnArea:SetActive(true)
+	self._goRefineBtnArea:SetActive(false)
+	self._goRefineMaxArea:SetActive(false)
+
+	local equip = self._equip
+	local oldExtra = equip:extra()
+	local newExtra = equip:refineResult()
+
+	for i = 1, #oldExtra do
+		local oldEntry = oldExtra[i]
+		local newEntry = newExtra[i]
+		local goProp = self._goProps[i]
+
+		V.loadAtkClassText(goProp._txtTitleBefore, oldEntry[1])
+		V.loadAtkClassText(goProp._txtTitleAfter, newEntry[1])
+
+		goProp._btnLock.enabled = false
+
+		if oldEntry[1] == newEntry[1] then
+			goProp._imgArrow:SetActive(false)
+
+			goProp._txtNum.text = ""
+
+			goProp._aniEntry:Play("anim_EquipRefine02")
+		else
+			goProp._goVfx:SetActive(false)
+			goProp._goVfx:SetActive(true)
+			goProp._imgArrow:SetActive(true)
+			goProp._aniEntry:Play("anim_EquipRefine01")
+		end
+	end
+
+	for i = #oldExtra + 1, 4 do
+		self._goProps[i]:SetActive(false)
+	end
+end
+
+function M:showRefinePopResult()
+	self._goPopResultContent:SetActive(false)
+	self._goPopResultContent:SetActive(true)
+
+	self._txtPlayerAtk.text = P._playerRole:getPlayerAtk()
+	local oldClassAtks = self._oldClassAtks
+	local newClassAtks = P._playerRole:getClassAtk()
+	local index = 0
+	local texts = {}
+	local baseScores = {}
+	local deltaScores = {}
+	local targetScores = {}
+
+	for i = BattlePropEnum.AtkNatureGuard, BattlePropEnum.AtkNature5 do
+		local oldAtk = oldClassAtks[i] or 0
+		local newAtk = newClassAtks[i] or 0
+
+		if oldAtk < newAtk then
+			index = index + 1
+			local goPopProp = self._goPopProps[index]
+
+			goPopProp:SetActive(true)
+			goPopProp._txtPropName:SetLocalize(SID["STR_ATK_NATURE_" .. i - BattlePropEnum.AtkNatureGuard])
+
+			goPopProp._txtPropValue.text = newAtk
+			goPopProp._txtPropChange.text = "+" .. newAtk - oldAtk
+			texts[#texts + 1] = goPopProp._txtPropValue
+			baseScores[#baseScores + 1] = oldAtk
+			deltaScores[#deltaScores + 1] = newAtk - oldAtk
+			targetScores[#targetScores + 1] = newAtk
+		end
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		local oldAtk = oldClassAtks[i] or 0
+		local newAtk = newClassAtks[i] or 0
+
+		if oldAtk < newAtk then
+			index = index + 1
+			local goPopProp = self._goPopProps[index]
+
+			goPopProp:SetActive(true)
+			goPopProp._txtPropName:SetLocalize(SID.STR_WEAPON_ATK, -D._weaponConfig[i]._skillNameSid)
+
+			goPopProp._txtPropValue.text = newAtk
+			goPopProp._txtPropChange.text = "+" .. newAtk - oldAtk
+			texts[#texts + 1] = goPopProp._txtPropValue
+			baseScores[#baseScores + 1] = oldAtk
+			deltaScores[#deltaScores + 1] = newAtk - oldAtk
+			targetScores[#targetScores + 1] = newAtk
+		end
+	end
+
+	if index > 0 then
+		self._timer = lc.setTimer(function ()
+			self:startScoreChangeAnim(texts, baseScores, deltaScores, targetScores)
+		end, 0.3)
+	end
+
+	for i = index + 1, 4 do
+		self._goPopProps[i]:SetActive(false)
+	end
+end
+
+function M:startScoreChangeAnim(texts, baseScores, deltaScores, targetScores)
+	self._timer = lc.setInterval(function ()
+		for i = 1, #texts do
+			baseScores[i] = baseScores[i] + deltaScores[i] / 7
+			texts[i].text = math.floor(baseScores[i])
+		end
+
+		if targetScores[1] <= baseScores[1] then
+			for i = 1, #texts do
+				texts[i].text = math.floor(targetScores[i])
+			end
+
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+		end
+	end, 0.03333333333333333)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+end
+
+return M

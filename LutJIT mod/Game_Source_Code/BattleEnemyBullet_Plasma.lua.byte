@@ -1,0 +1,85 @@
+local M = class("BattleEnemyBullet")
+local BattleDefine = BattleDefine
+local BattleEntityFactory = BattleEntityFactory
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._position = Vector2.retain(0, 0)
+	self._targetPosition = Vector2.retain(0, 0)
+	self._atkInterval = nil
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleEnemyBulletView_Plasma").new(battleSession)
+	end
+end
+
+function M:init(enemy)
+	self._enemy = enemy
+	self._cid = enemy._cid
+	self._isToBeDestroyed = false
+
+	if self._view then
+		self._view:init(self, enemy)
+	end
+
+	if enemy._originId == 1105 or enemy._originId == 1107 or enemy._originId == 1408 or enemy._originId == 2283 or enemy._originId == 2483 then
+		self._targetPosition.x = enemy._position.x
+		self._targetPosition.y = BattleMathLib.find_circle_y(0, BattleDefine.DOME_CENTER, BattleDefine.DOME_RADIUS, enemy._position.x) - 0.1
+	else
+		self._targetPosition.x = 0
+		self._targetPosition.y = BattleDefine.DOME_POSY
+	end
+end
+
+function M:lockPos(pos)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	local pos = self._enemy._position
+
+	if self._cid == 1105 then
+		self._position.x = pos.x
+		self._position.y = pos.y - 0.28 * self._enemy._scale
+	elseif self._cid == 2105 then
+		self._position.x = pos.x
+		self._position.y = pos.y - 0.8 * self._enemy._scale
+	elseif self._cid == 2483 then
+		self._position.x = pos.x
+		self._position.y = pos.y - 0.7
+	else
+		self._position.x = pos.x
+		self._position.y = pos.y
+	end
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:hit()
+	if self._view then
+		self._view:hitEvent()
+	end
+end
+
+function M:markToBeDestroyed()
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._isToBeDestroyed = true
+
+	if self._view then
+		self._view:destroyedEvent()
+	end
+end
+
+function M:destroy()
+end
+
+return M

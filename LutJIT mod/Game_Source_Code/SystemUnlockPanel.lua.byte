@@ -1,0 +1,96 @@
+local M = class("SystemUnlockPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	tfIcon = Types.Transform,
+	flyAtor = Types.Animator,
+	txtDesc = Types.TMP_Text,
+	txtName = Types.TMP_Text,
+	cgTotal = Types.CanvasGroup,
+	cgIcon = Types.CanvasGroup,
+	goCloseTip = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(params)
+	self._params = params
+	local fly = params.fly or false
+
+	self._txtDesc.gameObject:SetActive(params.descSid ~= nil)
+
+	if params.descSid then
+		self._txtDesc:SetLocalize(params.descSid)
+	end
+
+	if params.nameSid then
+		self._txtName:SetLocalize(params.nameSid)
+	end
+
+	self._goCloseTip:SetActive(false)
+
+	self._btnMask.enabled = false
+
+	lc.delayFunc(1, function ()
+		self._btnMask.enabled = true
+
+		self._goCloseTip:SetActive(true)
+	end)
+
+	self._waitClose = fly
+end
+
+function M:flyIcon()
+	local baseAnimTime = 1.5
+	local main = UIManager.getMainPanel()
+
+	if not main then
+		return
+	end
+
+	local page = main:getPageLb(3)
+
+	if not page then
+		return
+	end
+
+	local x, y, z = page:getArkBtnPosition()
+	local scale = 0.6
+
+	self._tfIcon:GetComponent("CanvasGroup"):DOFade(0, 0.7):SetLink(self.gameObject)
+	self._tfIcon:DOMove(Vector3.static(x, y, z), 0.309):SetLink(self.gameObject)
+	self._tfIcon:DOScale(Vector3.static(scale, scale, scale), 0.3):SetLink(self.gameObject)
+	self._cgTotal:DOFade(0, 0.3)
+
+	self._cgIcon.ignoreParentGroups = true
+
+	lc.delayFunc(1, function ()
+		self:closePanel(true)
+	end, self.gameObject)
+	Client.playSound("ui_Toast_1")
+end
+
+function M:closePanel(force)
+	if force then
+		M.super.closePanel(self)
+
+		return
+	end
+
+	if not self._waitClose then
+		M.super.closePanel(self)
+
+		return
+	end
+
+	if self._closing then
+		return
+	end
+
+	self._closing = true
+
+	self:flyIcon()
+end
+
+return M

@@ -1,0 +1,109 @@
+local M = class("UnionTransferPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnConfirm = Types.Button,
+	btnRole1 = Types.Button,
+	btnRole2 = Types.Button,
+	btnRole3 = Types.Button,
+	btnRole4 = Types.Button,
+	goSyncWaiting = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._lastBtn = nil
+end
+
+function M:Start()
+end
+
+function M:initPrefabVar()
+end
+
+function M:addClicks()
+	self:on("union.appoint.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+		self:closePanel()
+	end)
+	self:setClick(self._btnConfirm, function ()
+		V.showMessageBox({
+			_showClose = true,
+			_type = 2,
+			_content = SID.UNION_ADJUEST_TIPS1,
+			_cParams = {
+				self._data.name,
+				LcLocalization.getTextStr(SID["UNION_ROLE_" .. self._toRole])
+			},
+			_confirmCallback = function ()
+				self._goSyncWaiting:SetActive(true)
+				P._playerUnion:tryAdjuestRole(self._data, self._toRole)
+			end
+		})
+	end)
+	self:setClick(self._btnRole1, function ()
+		self._toRole = D.UnionRole.PRESIDENT
+
+		self:onChoose(self._btnRole1)
+	end)
+	self:setClick(self._btnRole2, function ()
+		self._toRole = D.UnionRole.VICE_PRESIDENT
+
+		self:onChoose(self._btnRole2)
+	end)
+	self:setClick(self._btnRole3, function ()
+		self._toRole = D.UnionRole.COORDINATOR
+
+		self:onChoose(self._btnRole3)
+	end)
+	self:setClick(self._btnRole4, function ()
+		self._toRole = D.UnionRole.NONE
+
+		self:onChoose(self._btnRole4)
+	end)
+end
+
+function M:init(data)
+	self._data = data
+	local selfInfo = P._playerUnion._selfInfo
+
+	if selfInfo.role == D.UnionRole.PRESIDENT then
+		if D._globalConfig._union_viceleader_limit <= P._playerUnion._role2Count then
+			self._btnRole2:SetActive(false)
+		end
+	elseif selfInfo.role == D.UnionRole.VICE_PRESIDENT then
+		self._btnRole1:SetActive(false)
+		self._btnRole2:SetActive(false)
+
+		if D._globalConfig._union_elder_limit <= P._playerUnion._role2Count then
+			self._btnRole3:SetActive(false)
+		end
+	elseif selfInfo.role == D.UnionRole.COORDINATOR then
+		self._btnRole1:SetActive(false)
+		self._btnRole2:SetActive(false)
+		self._btnRole3:SetActive(false)
+	else
+		self._btnRole1:SetActive(false)
+		self._btnRole2:SetActive(false)
+		self._btnRole3:SetActive(false)
+		self._btnRole4:SetActive(false)
+	end
+
+	self._toRole = D.UnionRole.NONE
+
+	self:onChoose(self._btnRole4)
+end
+
+function M:onChoose(btn)
+	if self._lastBtn then
+		self._lastBtn.transform:GetChild(1):SetActive(false)
+	end
+
+	btn.transform:GetChild(1):SetActive(true)
+
+	self._lastBtn = btn
+end
+
+return M

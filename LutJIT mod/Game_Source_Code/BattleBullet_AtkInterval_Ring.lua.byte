@@ -1,0 +1,46 @@
+local M = class("BattleBullet_AtkInterval_Ring", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local BattlePropEnum = BattlePropEnum
+local MAX_SCALE = 2
+local SCALE_STEP_ADD = 2
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._scaleStepAdd = SCALE_STEP_ADD
+	self._scale = 0
+
+	self:setScale(self._scale)
+
+	if self._view then
+		self._view:scaleEvent()
+	end
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._scale = self._scale + self._scaleStepAdd * dt
+
+	if self._scaleStepAdd > 0 then
+		if MAX_SCALE <= self._scale then
+			self._scale = MAX_SCALE
+			self._scaleStepAdd = -self._scaleStepAdd
+		end
+	elseif self._scaleStepAdd < 0 and self._scale <= 0 then
+		self._scale = 0
+		self._scaleStepAdd = -self._scaleStepAdd
+	end
+
+	self:setScale(self._scale)
+
+	if self._view then
+		self._view:scaleEvent()
+	end
+end
+
+return M

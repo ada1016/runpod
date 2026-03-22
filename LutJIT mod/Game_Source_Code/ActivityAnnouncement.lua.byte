@@ -1,0 +1,118 @@
+local M = class("ActivityAnnouncement", requireLua("BasePanel"))
+M.args = {
+	goAnnounce = Types.GameObject,
+	textAnnounce = Types.TMP_Text,
+	playernameColor = Types.String,
+	btnShowAll = Types.Button,
+	btnBg = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goAnnounce:SetActive(false)
+	self:on("activity.announcement.self.insert", function (id, data)
+		if id ~= self._id then
+			return
+		end
+
+		self:insertSelfAnnounce(data)
+	end)
+	self:setClick(self._btnShowAll, function ()
+		UIManager.openPanel(PrefabDefine.ActivityLotteryHistroyPanel, self._id, self._selfData)
+	end)
+	self:setClickWithoutAction(self._btnBg, function ()
+		UIManager.openPanel(PrefabDefine.ActivityLotteryHistroyPanel, self._id, self._selfData)
+	end)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:init(id)
+	self._id = id or 1
+
+	self:updateLoadAnnounce()
+end
+
+function M:updateLoadAnnounce()
+	local datas = P._playerActivity:getDrawData(self._id, function (datas)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		table.sort(datas, function (a, b)
+			return b.time < a.time
+		end)
+
+		for k, v in pairs(datas) do
+			local cid = v.drawGetReward
+
+			if cid and D._itemConfig[cid] then
+				self._showAnnounceData = v
+
+				break
+			end
+		end
+
+		self:updateShowAnnounce()
+	end)
+
+	if datas and #datas > 0 then
+		table.sort(datas, function (a, b)
+			return b.time < a.time
+		end)
+
+		for k, v in pairs(datas) do
+			if v.drawGetReward and D._itemConfig[v.drawGetReward] then
+				self._showAnnounceData = v
+
+				break
+			end
+		end
+
+		self:updateShowAnnounce()
+	end
+end
+
+function M:insertSelfAnnounce(data)
+	self._selfData = data
+	self._showAnnounceData = data
+
+	self:updateShowAnnounce()
+end
+
+function M:updateShowAnnounce()
+	local data = self._showAnnounceData
+
+	if not data then
+		self._goAnnounce:SetActive(false)
+
+		return
+	end
+
+	self._goAnnounce:SetActive(true)
+
+	local name = data.name or "???"
+	local nameColor = data.nameColor or 0
+	local drawNum = data.drawNum or 0
+	local drawGetReward = data.drawGetReward or 1
+	local drawGetRewardNum = data.drawGetRewardNum or 1
+	local rewardSid = D.toNameSid(drawGetReward)
+	local rewardStr = rewardSid and LcLocalization.getTextStr(rewardSid) or "???"
+	rewardStr = string.format("%s x%d", rewardStr, drawGetRewardNum)
+	rewardStr = string.format(V.COMMON_RICH_STR_COLOR, "FF5D7A", rewardStr)
+
+	self._textAnnounce:SetLocalizeEx(SID.ACTIVITY_ANNOUNCE1, {
+		{
+			type = "str",
+			value = V.getPlayerNameStr(name, nameColor, self.args.playernameColor)
+		},
+		{
+			type = "str",
+			value = rewardStr
+		}
+	})
+end
+
+return M

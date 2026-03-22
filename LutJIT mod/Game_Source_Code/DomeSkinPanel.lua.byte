@@ -1,0 +1,334 @@
+local M = class("DomeSkinPanel", requireLua("BasePanel"))
+local Types = Types
+local COLOR_ANIMS = {
+	"anim_GatlinSkinColorPurple",
+	"anim_GatlinSkinColorOrange",
+	"anim_GatlinSkinColorRed"
+}
+local RoleSkinWidget = requireLua("RoleSkinWidget")
+M.args = {
+	animColors = Types.Animation,
+	btnSkill = Types.Button,
+	btnStat = Types.Button,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	txtName = Types.TMP_Text,
+	goStarArea = Types.GameObject,
+	goStarContainer = Types.GameObject,
+	rawImgSkin = Types.RawImage,
+	goPropArea = Types.GameObject,
+	txtDomeHpName = Types.TMP_Text,
+	txtDomeHpAdd = Types.TMP_Text,
+	btnPrev = Types.Button,
+	btnNext = Types.Button,
+	btnUnlock = Types.Button,
+	btnUpgrade = Types.Button,
+	btnEquip = Types.Button,
+	btnRemove = Types.Button,
+	goMaxStar = Types.GameObject,
+	goCostArea = Types.GameObject,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	txtTotalCritDmgAdd = Types.TMP_Text,
+	txtSkillLevel = Types.TMP_Text,
+	goSkillStarContainer = Types.GameObject,
+	btnSkillView = Types.Button,
+	goSkillArea = Types.GameObject,
+	goSkillArea2 = Types.GameObject,
+	imgSkillWeapon = Types.Image,
+	tfCommingSoon = Types.Transform,
+	txtGuardianDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnUnlock, function ()
+		local ret, param = P._playerSkin:tryUpgradeSkin(self._selectedSkinId)
+
+		if ret == ResultCode.OK then
+			UIManager.openPanel(PrefabDefine.SkinUpgradePanel, self._selectedSkinId)
+			self._selectedSkinWidget:init(self._selectedSkinId)
+			self._btnSkill:SetActive(#P._playerSkin:getAvailableSkills(self._skinType) > 0)
+			self._btnStat:SetActive(P._playerSkin:getTotalDomeHp() > 0 or P._playerSkin:getTotalDomeHpPercent() > 0)
+			self:updateOrder()
+			self:updateDisplaySkin()
+		else
+			V.showResultCode(ret, param)
+
+			return
+		end
+	end)
+	self:setClick(self._btnUpgrade, function ()
+		UIManager.openPanel(PrefabDefine.SkinRefitPanel, self._selectedSkinId, function ()
+			self._selectedSkinWidget:init(self._selectedSkinId)
+			self:updateDisplaySkin()
+
+			for _, widget in pairs(self._skinWidgets) do
+				widget:updateDot()
+			end
+		end)
+	end)
+	self:setClick(self._btnEquip, function ()
+		if P._playerSkin:getSkinLevel(self._selectedSkinId) > 0 then
+			P._playerSkin:setEquipedSkin(self._weaponId, self._selectedSkinId)
+
+			if self._equipedSkinId then
+				self._skinWidgets[self._equipedSkinId]:init(self._equipedSkinId)
+			end
+
+			self._equipedSkinId = P._playerSkin:getEquipedSkin(self._weaponId)
+
+			self._selectedSkinWidget:init(self._selectedSkinId)
+			self:updateDisplaySkin()
+
+			for _, widget in pairs(self._skinWidgets) do
+				widget:updateDot()
+			end
+		end
+	end)
+	self:setClick(self._btnRemove, function ()
+		P._playerSkin:setEquipedSkin(self._weaponId, nil)
+
+		self._equipedSkinId = P._playerSkin:getEquipedSkin(self._weaponId)
+
+		self._selectedSkinWidget:init(self._selectedSkinId)
+		self:updateDisplaySkin()
+
+		for _, widget in pairs(self._skinWidgets) do
+			widget:updateDot()
+		end
+	end)
+	self:setClick(self._btnPrev, function ()
+		if self._selectedSkinWidget then
+			self._selectedSkinWidget:setChoose(false)
+
+			local prev = self._selectedSkinWidget._index - 1
+
+			if prev == 0 then
+				prev = #self._displaySkins
+			end
+
+			self._selectedSkinId = self._displaySkins[prev]
+			self._selectedSkinWidget = self._skinWidgets[self._selectedSkinId]
+
+			self._selectedSkinWidget:setChoose(true)
+
+			self._displaySwith = false
+
+			self:updateDisplaySkin()
+		end
+	end)
+	self:setClick(self._btnNext, function ()
+		if self._selectedSkinWidget then
+			self._selectedSkinWidget:setChoose(false)
+
+			local next = self._selectedSkinWidget._index + 1
+
+			if next == #self._displaySkins + 1 then
+				next = 1
+			end
+
+			self._selectedSkinId = self._displaySkins[next]
+			self._selectedSkinWidget = self._skinWidgets[self._selectedSkinId]
+
+			self._selectedSkinWidget:setChoose(true)
+
+			self._displaySwith = false
+
+			self:updateDisplaySkin()
+		end
+	end)
+	self:setClick(self._btnSkill, function ()
+		UIManager.openPanel(PrefabDefine.DomeSelectSkillPanel, self._skinType, function ()
+			self:updateDisplaySkin()
+		end)
+		self._btnSkill.dot:SetActive(false)
+	end)
+	self:setClick(self._btnSkillView, function ()
+		local cfg = P._playerSkin:getCfg(self._selectedSkinId)
+		local level = math.max(P._playerSkin:getSkinLevel(self._selectedSkinId), 1)
+
+		V.showSkinSkillDescBubble(cfg, level, self._btnSkillView.gameObject)
+	end)
+	self:setClick(self._btnStat, function ()
+		UIManager.openPanel(PrefabDefine.SkinStatPanel, self._skinType, self._weaponId)
+	end)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:init(parent)
+	self._weaponId = D.WEAPON_DOME
+	self._displaySwith = false
+	self._skinType = D.SkinType.Dome
+	local playerSkin = P._playerSkin
+	self._selectedSkinWidget = nil
+	self._equipedSkinId = playerSkin:getEquipedSkin(self._weaponId)
+	self._selectedSkinId = self._equipedSkinId
+	self._displaySkins = {}
+	self._skinWidgets = {}
+	self._displaySkins = P._playerSkin:getOrderedSkins(self._skinType, self._weaponId)
+	local hasAnySkin = false
+
+	for i = 1, #self._displaySkins do
+		local id = self._displaySkins[i]
+
+		if id ~= D.DEFAULT_ROLE_SKIN and P._playerSkin:getSkinLevel(id) > 0 then
+			hasAnySkin = true
+		end
+
+		local widget = self._skinWidgets[id] or RoleSkinWidget.create(self._tfScrollContainer)
+		widget._index = i
+
+		widget:init(id)
+
+		self._skinWidgets[id] = widget
+
+		if id == self._selectedSkinId then
+			self._selectedSkinWidget = widget
+
+			widget:setChoose(true)
+		end
+
+		if self._selectedSkinId == nil then
+			self._selectedSkinWidget = widget
+			self._selectedSkinId = id
+
+			widget:setChoose(true)
+		end
+
+		self:setClick(widget._btnClick, function ()
+			if self._selectedSkinWidget then
+				self._selectedSkinWidget:setChoose(false)
+			end
+
+			self._selectedSkinWidget = widget
+			self._selectedSkinId = id
+
+			widget:setChoose(true)
+
+			self._displaySwith = false
+
+			self:updateDisplaySkin()
+		end)
+	end
+
+	self:updateDisplaySkin()
+	self._btnSkill:SetActive(#P._playerSkin:getAvailableSkills(self._skinType) > 0)
+	self._btnPrev:SetActive(#self._displaySkins > 1)
+	self._btnNext:SetActive(#self._displaySkins > 1)
+	self._btnStat:SetActive(P._playerSkin:getTotalDomeHp() > 0 or P._playerSkin:getTotalDomeHpPercent() > 0)
+end
+
+function M:updateOrder()
+	self._displaySkins = P._playerSkin:getOrderedSkins(self._skinType, self._weaponId)
+
+	for i = 1, #self._displaySkins do
+		local id = self._displaySkins[i]
+		local widget = self._skinWidgets[id]
+		widget._index = i
+
+		widget.transform:SetSiblingIndex(i - 1)
+	end
+end
+
+function M:updateDisplaySkin()
+	local playerSkin = P._playerSkin
+	local level = playerSkin:getSkinLevel(self._selectedSkinId)
+	local quality = playerSkin:readQuality(self._selectedSkinId, self._skinType)
+	local cfg = playerSkin:getCfg(self._selectedSkinId)
+	local canCfgUpgrade = playerSkin:canCfgUpgradeSkin(self._selectedSkinId)
+
+	if canCfgUpgrade then
+		V.setSkinQualityStar(self._goSkillStarContainer, quality, math.max(1, level))
+		self._goSkillStarContainer:SetActive(true)
+	end
+
+	self._txtSkillLevel.transform.parent:SetActive(false)
+
+	local equipedSkinSkills = P._playerSkin:getEquipedSkinSkills(self._skinType)
+
+	for i = 1, 3 do
+		for j = 1, 3 do
+			if equipedSkinSkills[i][j] == self._selectedSkinId then
+				self._goSkillStarContainer:SetActive(false)
+				self._txtSkillLevel.transform.parent:SetActive(true)
+				self._txtSkillLevel:SetLocalize(SID.STR_EQUIPED)
+			end
+		end
+	end
+
+	self._animColors:Play(COLOR_ANIMS[quality - D.Quality.Blue])
+	self._btnUnlock:SetActive(level == 0)
+	self._btnUpgrade:SetActive(level > 0 and level < D.MAX_SKIN_STAR and canCfgUpgrade)
+	self._btnEquip:SetActive(level > 0 and self._equipedSkinId ~= self._selectedSkinId)
+
+	if self._skinType == D.SkinType.Weapon then
+		self._btnRemove:SetActive(level > 0 and self._equipedSkinId == self._selectedSkinId)
+	else
+		self._btnRemove:SetActive(false)
+	end
+
+	local isGuardian = cfg._index == 0
+
+	self._goMaxStar:SetActive(not isGuardian and level == D.MAX_SKIN_STAR)
+
+	if level == 0 and not isGuardian then
+		self._goCostArea:SetActive(true)
+		V.loadItemCost(self._imgCost, self._txtCost, self._selectedSkinId, 1, self, true)
+		self._btnUnlock.dot:SetActive(playerSkin:canUpgradeSkin(self._selectedSkinId))
+	else
+		self._btnEquip.dot:SetActive(playerSkin:isNewSkin(self._selectedSkinId))
+		self._btnUpgrade.dot:SetActive(playerSkin:canUpgradeSkin(self._selectedSkinId))
+		self._goCostArea:SetActive(false)
+		self._btnEquip.transform:GetChild(1):GetComponent("TMP_Text"):SetLocalize(self._skinType == D.SkinType.Role and SID.STR_MIMICRY_BTN or SID.STR_EQUIP)
+	end
+
+	local isEquiped = self._selectedSkinId == self._equipedSkinId and playerSkin:getSkinLevel(self._selectedSkinId) > 0
+
+	V.setBtnStyle(self._btnRemove, isEquiped and V.BTN_STYLE.green or V.BTN_STYLE.yellow, isEquiped and SID.STR_UNEQUIP or SID.STR_EQUIP)
+	V.setSkinQualityStar(self._goStarContainer, quality, level)
+	self._txtName:SetLocalize(cfg._nameSid)
+	LuaUnity.setTexture(self._rawImgSkin, string.format("img_%d", self._selectedSkinId), true)
+	self._goStarArea:SetActive(canCfgUpgrade)
+
+	if not isGuardian then
+		local hpPercentAdd = cfg._domeHpPercent
+
+		if hpPercentAdd ~= 0 then
+			self._txtDomeHpName:SetLocalize(SID.STR_DOME_SKIN_HP_PERCENT_ADD)
+
+			self._txtDomeHpAdd.text = string.format("+%d%%", hpPercentAdd)
+		else
+			self._txtDomeHpName:SetLocalize(SID.STR_DOME_HP_ADD)
+
+			self._txtDomeHpAdd.text = string.format("+%d", cfg._domeHp * math.max(1, level))
+
+			LuaUnity.setTPSprite(self._imgSkillWeapon, "skill/item_skill_" .. self._selectedSkinId, true)
+		end
+
+		self._goPropArea:SetActive(true)
+		self._goSkillArea:SetActive(true)
+		self._goSkillArea2:SetActive(cfg._weapon ~= 0)
+		self._txtGuardianDesc.gameObject:SetActive(false)
+	else
+		self._goPropArea:SetActive(false)
+		self._goSkillArea:SetActive(false)
+		self._txtGuardianDesc.gameObject:SetActive(true)
+		self._txtGuardianDesc:SetLocalize(cfg._skillDescSid)
+	end
+
+	self._tfCommingSoon:SetAsLastSibling()
+	self._btnSkill.dot:SetActive(playerSkin:hasNewSkillFlag(self._skinType))
+end
+
+return M

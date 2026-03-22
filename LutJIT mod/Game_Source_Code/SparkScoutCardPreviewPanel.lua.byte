@@ -1,0 +1,181 @@
+local M = class("SparkScoutCardPreviewPanel", requireLua("BasePanel"))
+local ArkRebuildCardWidget = requireLua("ArkRebuildCardWidget")
+M.args = {
+	btnMask = Types.Button,
+	tfContainer1 = Types.Transform,
+	goEmpty = Types.GameObject,
+	tfContainer2 = Types.Transform,
+	goBpActived = Types.GameObject,
+	btnGotoBP = Types.Button,
+	txtPrivilege1 = Types.TMP_Text,
+	txtPrivilege2 = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goAllCards = {}
+end
+
+function M:addClicks()
+	self:setClick(self._btnGotoBP, function ()
+		self:closePanel()
+		UIManager.closePanel(PrefabDefine.SparkScoutEditPanel)
+		UIManager.openPanel(PrefabDefine.SparkScoutStorePanel, 2)
+	end)
+end
+
+function M:init(ids)
+	self._ids = ids
+	local p1, p2, p3 = unpack(D._battleGlobalConfig._battle_pvp_bp_effect_parmas)
+
+	self._txtPrivilege1:SetLocalize(D._itemConfig[D.ResType.spark_scout_10056]._descSid, p1, p2, p3)
+	self._txtPrivilege2:SetLocalize(D._itemConfig[D.ResType.spark_scout_10062]._descSid)
+	self._goBpActived:SetActive(P._playerActivitySparkScout:hasPrivilege2())
+	self._btnGotoBP:SetActive(not P._playerActivitySparkScout:hasPrivilege2())
+	self:updateUI(ids)
+end
+
+function M:updateUI(ids)
+	local cards1 = {}
+	local cards2 = {}
+	local idIndexes = {}
+
+	for i = 1, #ids do
+		idIndexes[ids[i]] = i
+
+		for j = 1, 3 do
+			local stageCards = D._weaponCardConfig[ids[i]][j]
+			local rouges = stageCards
+			local deckCards = D._sparkScoutWeaponCardConfig[P._playerActivitySparkScout:getWeaponDeck(ids[i])]._cardIds
+
+			if rouges then
+				for k = 1, #rouges do
+					local id = rouges[k]._id
+
+					if not table.contains(deckCards, id) then
+						local type = rouges[k]._type
+
+						if type == 1 and rouges[k]._weaponTreeType and (rouges[k]._stage == 3 or rouges[k]._stage == 2) then
+							local hasPrev = false
+
+							if rouges[k]._prevRougeCards then
+								for i = 1, #rouges[k]._prevRougeCards do
+									if table.contains(deckCards, rouges[k]._prevRougeCards[i]) then
+										hasPrev = true
+									end
+								end
+							end
+
+							if hasPrev then
+								cards1[#cards1 + 1] = rouges[k]
+							end
+						end
+
+						if type == 3 and P._playerActivitySparkScout:getWeaponDeck(rouges[k]._unlockWeaponCards[4]) then
+							if not table.contains(ids, rouges[k]._unlockWeaponCards[4]) then
+								cards2[#cards2 + 1] = rouges[k]
+							else
+								cards1[#cards1 + 1] = rouges[k]
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if #cards1 > 0 then
+		table.sort(cards1, function (a, b)
+			if a._type ~= b._type then
+				return b._type < a._type
+			else
+				return idIndexes[a._belongWeapon] < idIndexes[b._belongWeapon]
+			end
+		end)
+
+		for i = 1, #cards1 do
+			local id = cards1[i]._id
+			local card = self._goAllCards[id] or ArkRebuildCardWidget.create(self._tfContainer1)
+			self._goAllCards[id] = card
+
+			card:SetActive(true)
+			card:updateUI(id)
+			card:setFront()
+			self:setClick(card._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.WeaponTreePanel, id, true)
+			end)
+		end
+
+		self._tfContainer1:SetActive(true)
+		self._goEmpty:SetActive(false)
+	else
+		self._tfContainer1:SetActive(false)
+		self._goEmpty:SetActive(true)
+	end
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if not table.contains(ids, i) and P._playerActivitySparkScout:getWeaponDeck(i) then
+			for j = 1, 3 do
+				local stageCards = D._weaponCardConfig[i][j]
+				local rouges = stageCards
+				local deckCards = D._sparkScoutWeaponCardConfig[P._playerActivitySparkScout:getWeaponDeck(i)]._cardIds
+
+				if rouges then
+					for k = 1, #rouges do
+						local id = rouges[k]._id
+
+						if not table.contains(deckCards, id) then
+							local type = rouges[k]._type
+
+							if type == 1 and rouges[k]._weaponTreeType and (rouges[k]._stage == 3 or rouges[k]._stage == 2) then
+								local hasPrev = false
+
+								if rouges[k]._prevRougeCards then
+									for i = 1, #rouges[k]._prevRougeCards do
+										if table.contains(deckCards, rouges[k]._prevRougeCards[i]) then
+											hasPrev = true
+										end
+									end
+								end
+
+								if hasPrev then
+									cards2[#cards2 + 1] = rouges[k]
+								end
+							end
+
+							if type == 3 and P._playerActivitySparkScout:getWeaponDeck(rouges[k]._unlockWeaponCards[4]) then
+								cards2[#cards2 + 1] = rouges[k]
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	table.sort(cards2, function (a, b)
+		if a._type ~= b._type then
+			return b._type < a._type
+		else
+			return a._belongWeapon < b._belongWeapon
+		end
+	end)
+
+	for i = 1, #cards2 do
+		local id = cards2[i]._id
+		local card = self._goAllCards[id] or ArkRebuildCardWidget.create(self._tfContainer2)
+		self._goAllCards[id] = card
+
+		card:SetActive(true)
+		card:updateUI(id)
+		card:setFront()
+		self:setClick(card._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.WeaponTreePanel, id, true)
+		end)
+	end
+end
+
+return M

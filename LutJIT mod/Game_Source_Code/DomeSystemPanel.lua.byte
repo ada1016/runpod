@@ -1,0 +1,179 @@
+local M = class("DomeSystemPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tfPageContainer = Types.Transform,
+	btnUpgradeLv = Types.Button,
+	btnSkin = Types.Button
+}
+local PAGE_PREFAB_PATH_HOLDER = "Assets/FW/Prefabs/UI/page/%s.prefab"
+local colors = {
+	TitleUnselect = "2f736c",
+	Title = "7CFFF1"
+}
+local PageCfg = {
+	{
+		PanelName = "DomeImprovePanel",
+		RedPath = "city.role.dome.upgrade",
+		SystemId = D.SystemType.Dome,
+		BtnTitle = SID.STAGE_UPGRADE
+	},
+	{
+		PanelName = "DomeSkinPanel",
+		RedPath = "city.role.dome.skin",
+		SystemId = D.SystemType.Dome,
+		BtnTitle = SID.STR_DOME_SKIN
+	}
+}
+local PageNum = #PageCfg
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._pages = {}
+
+	for i = 1, PageNum do
+		RedDotManager.add(self._btnPages[i], PageCfg[i].RedPath, true)
+	end
+end
+
+function M:OnDestroy()
+	for i = 1, PageNum do
+		RedDotManager.remove(PageCfg[i].RedPath)
+	end
+
+	M.super.OnDestroy(self)
+end
+
+function M:initPrefabVar()
+end
+
+function M:addEvents()
+end
+
+function M:addClicks()
+	self._btnPages = {
+		self._btnUpgradeLv,
+		self._btnSkin
+	}
+
+	for i = 1, PageNum do
+		self:setClick(self._btnPages[i], function ()
+			self:changePage(i)
+		end)
+	end
+
+	self:setClick(self._btnClose, function ()
+		if P._playerArmory:canUpgradeDomeTech() then
+			P._playerArmory:ignoreWeaponUpgrade(D.WEAPON_DOME)
+			RedDotManager.update("city.role")
+		end
+
+		self:closePanel()
+	end)
+end
+
+function M:init(showPage, callback)
+	self._callback = callback
+
+	self:changePage(showPage or 1, true)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateBottomArea()
+	self:updateBottomDot()
+end
+
+function M:canShowPage(pageIdx)
+	if not PageCfg[pageIdx] or not D.isSystemUnlocked(PageCfg[pageIdx].SystemId) then
+		return false
+	end
+
+	return true
+end
+
+function M:changePage(pageIdx, isStartPage)
+	if pageIdx == self._pageIdx then
+		return
+	end
+
+	if not self:canShowPage(pageIdx) then
+		return
+	end
+
+	local lastPage = self._pages[self._pageIdx]
+
+	if lastPage and lastPage.hideInternal then
+		lastPage:hideInternal()
+	end
+
+	self._pageIdx = pageIdx
+	local lb = self:getOrCreatePage(pageIdx)
+	self._lastPage = lb
+
+	Client.playSound("ui_Open_panel_1")
+
+	if not isStartPage then
+		self:OnPanelOpened()
+	end
+
+	self:updateBottomArea()
+end
+
+function M:OnPanelOpened()
+	local lb = self._pages[self._pageIdx]
+
+	if lb.OnPageOpened then
+		lb:OnPageOpened()
+	end
+end
+
+function M:getOrCreatePage(index)
+	local lb = self._pages[index]
+
+	if lb == nil then
+		local go = LuaUnity.createGameObject(string.format(PAGE_PREFAB_PATH_HOLDER, PageCfg[index].PanelName), self._tfPageContainer)
+		lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self, PageCfg[index].ParamFunc and PageCfg[index].ParamFunc() or nil)
+
+		self._pages[index] = lb
+	elseif lb.showInternal then
+		lb:showInternal()
+	end
+
+	return lb
+end
+
+function M:updateBottomArea()
+	for i = 1, PageNum do
+		local canShow = self:canShowPage(i)
+		local btn = self._btnPages[i]
+		local tmp = btn.transform:Find("BgName"):GetChild(0):GetComponent("TMP_Text")
+
+		tmp:SetLocalize(PageCfg[i].BtnTitle)
+		btn.transform:Find("ImgLock"):SetActive(self._pageIdx ~= i)
+
+		tmp.color = self._pageIdx == i and Color.str2Static(colors.Title) or Color.str2Static(colors.TitleUnselect)
+		btn.interactable = canShow
+
+		if PageCfg[i].BtnShowCond then
+			btn.transform:SetActive(canShow and PageCfg[i].BtnShowCond())
+		else
+			btn.transform:SetActive(canShow)
+		end
+	end
+end
+
+function M:updateBottomDot()
+	self._btnUpgradeLv.dot:SetActive(RedDotManager.getPathFlag(PageCfg[1].RedPath))
+	self._btnSkin.dot:SetActive(RedDotManager.getPathFlag(PageCfg[2].RedPath))
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+	self:updateBottomDot()
+end
+
+return M

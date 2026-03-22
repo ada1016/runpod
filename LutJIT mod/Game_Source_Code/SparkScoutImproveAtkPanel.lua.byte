@@ -1,0 +1,95 @@
+local M = class("SparkScoutImproveAtkPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	anim = Types.Animation,
+	txtLevel = Types.TMP_Text,
+	txtLevelNext = Types.TMP_Text,
+	txtLevelAtk = Types.TMP_Text,
+	txtLevelNextAtk = Types.TMP_Text,
+	txtLevelDomeHp = Types.TMP_Text,
+	txtLevelNextDomeHp = Types.TMP_Text,
+	btnUpgrade = Types.Button,
+	btnUpgrade2 = Types.Button,
+	imgCost = Types.Image,
+	txtCost = Types.TMP_Text,
+	imgCost2 = Types.Image,
+	txtCost2 = Types.TMP_Text,
+	imgArrow1 = Types.Image,
+	imgArrow2 = Types.Image,
+	imgArrow3 = Types.Image,
+	goMax = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerActivitySparkScout:tryUpgradeAtkLevel(D.ResType.spark_scout_wafer)
+
+		if ret == ResultCode.OK then
+			self._anim:Stop()
+			self._anim:Play()
+			self:updateUI()
+
+			if self._callback then
+				self._callback()
+			end
+
+			Client.playSound("ui_Ark_atkboost_1")
+		else
+			V.showResultCode(ret, param)
+		end
+	end)
+	self:setClick(self._btnUpgrade2, function ()
+		local ret, param = P._playerActivitySparkScout:tryUpgradeAtkLevel(D.ResType.spark_scout_sp_wafer)
+
+		if ret == ResultCode.OK then
+			self._anim:Stop()
+			self._anim:Play()
+			self:updateUI()
+
+			if self._callback then
+				self._callback()
+			end
+
+			Client.playSound("ui_Ark_atkboost_1")
+		else
+			V.showResultCode(ret, param)
+		end
+	end)
+end
+
+function M:init(callback)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local playerActivitySparkScout = P._playerActivitySparkScout
+
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, playerActivitySparkScout:getAtkLevel())
+	self._txtLevelNext:SetLocalize(SID.STR_LEVEL_X, playerActivitySparkScout:getAtkLevel() + 1)
+
+	self._txtLevelAtk.text = playerActivitySparkScout:getAtk()
+	local nextAtk = playerActivitySparkScout:getNextAtk()
+	self._txtLevelNextAtk.text = nextAtk
+	self._txtLevelDomeHp.text = playerActivitySparkScout:getDomeHp()
+	self._txtLevelNextDomeHp.text = playerActivitySparkScout:getNextDomeHp()
+
+	LuaUnity.setTPSprite(self._imgCost, D.toSprite(D.ResType.spark_scout_wafer), true)
+	LuaUnity.setTPSprite(self._imgCost2, D.toSprite(D.ResType.spark_scout_sp_wafer), true)
+
+	local cost1 = playerActivitySparkScout:getAtkUpgradeCost(D.ResType.spark_scout_wafer)
+	local cost2 = playerActivitySparkScout:getAtkUpgradeCost(D.ResType.spark_scout_sp_wafer)
+	local str1 = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_wafer)) .. cost1
+	local str2 = string.format(D.getTMPSpriteRichText("item_small_" .. D.ResType.spark_scout_sp_wafer)) .. cost2
+	self._txtCost.text = str1
+	self._txtCost2.text = str2
+end
+
+return M

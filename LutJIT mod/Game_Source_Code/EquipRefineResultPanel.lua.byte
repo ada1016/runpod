@@ -1,0 +1,110 @@
+local M = class("EquipRefineResultPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnBg = Types.Button,
+	btnAbondon = Types.Button,
+	btnAccept = Types.Button,
+	goProp1 = Types.GameObject,
+	goProp2 = Types.GameObject,
+	goProp3 = Types.GameObject,
+	goProp4 = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goProps = {
+		self._goProp1,
+		self._goProp2,
+		self._goProp3,
+		self._goProp4
+	}
+
+	for i = 1, #self._goProps do
+		lc.prefabVarPeer(self._goProps[i])
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnAbondon, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnAccept, function ()
+		self._equip:acceptRefine(self._willLocks)
+		self:closePanel()
+
+		if self._callback then
+			self._callback(self._willLocks)
+		end
+	end)
+
+	for i = 1, #self._goProps do
+		self:setClick(self._goProps[i]._btnLock, function ()
+			if table.contains(self._willLocks, i) then
+				table.erase(self._willLocks, i)
+			else
+				table.insert(self._willLocks, i)
+			end
+
+			self:updateUI()
+		end)
+	end
+end
+
+function M:init(equipId, locks, callback)
+	self._equip = P._playerRole:getEquipById(equipId)
+	self._willLocks = clone(locks)
+	self._callback = callback
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local oldExtra = self._equip:extra()
+	local newExtra = self._equip:refineResult()
+	local conf = D._equipRefineConfig[self._equip:grade() * 10 + self._equip:quality()]
+
+	for i = 1, #oldExtra do
+		local oldEntry = oldExtra[i]
+		local newEntry = newExtra[i]
+		local goProp = self._goProps[i]
+
+		V.loadAtkClassText(goProp._txtTitleBefore, oldEntry[1])
+		V.loadAtkClassText(goProp._txtTitleAfter, newEntry[1])
+
+		if oldEntry[1] == newEntry[1] then
+			goProp._imgArrow:SetActive(false)
+			goProp._txtTitleAfter.gameObject:SetActive(false)
+		else
+			goProp._imgArrow:SetActive(true)
+			goProp._txtTitleAfter.gameObject:SetActive(true)
+		end
+
+		local max = i == 1 and conf._guardAtkMax or conf._atkMax
+		local min = i == 1 and conf._guardAtkMin or conf._atkMin
+
+		if oldEntry[2] == newEntry[2] then
+			goProp._txtProgress.text = string.format("%d/%d", newEntry[2], max)
+		else
+			goProp._txtProgress.text = string.format("%d+%d/%d", oldEntry[2], newEntry[2] - oldEntry[2], max)
+		end
+
+		goProp._sliBar.fillAmount = oldEntry[2] / max
+		goProp._sliBar2.fillAmount = newEntry[2] / max
+		local locked = table.contains(self._willLocks, i)
+
+		LuaUnity.setTPSprite(goProp._imgLockBg, locked and "general/g_btn_03_2" or "general/g_btn_03")
+
+		self._goProps[i]._imgLock.color = Color.str2Static(locked and "1A3C3C" or "83DBCC")
+
+		LuaUnity.setTPSprite(goProp._imgLock, locked and "general/g_icon_lock_big" or "general/g_icon_lock02_big")
+	end
+
+	for i = #oldExtra + 1, 4 do
+		self._goProps[i]:SetActive(false)
+	end
+end
+
+return M

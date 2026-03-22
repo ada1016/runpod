@@ -1,0 +1,298 @@
+local M = class("SparkScoutChipEquipPanel", requireLua("BasePanel"))
+M.args = {
+	btnEquip = Types.Button,
+	btnEquipBg = Types.Button,
+	btnCover = Types.Button,
+	imgChip = Types.Image,
+	imgChipBg = Types.Image,
+	imgChipFrame = Types.Image,
+	txtName = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	txtWeapon = Types.TMP_Text,
+	tfChipContainer = Types.Transform,
+	tfCardContainer1 = Types.Transform,
+	tfCardContainer2 = Types.Transform,
+	goSelectSlot = Types.GameObject,
+	btnToggle = Types.Button,
+	animToggle = Types.Animation
+}
+local ArkRebuildCardWidget = requireLua("ArkRebuildCardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._equiping = false
+
+	self._btnEquipBg.gameObject:SetActive(false)
+	self._goSelectSlot:SetActive(false)
+end
+
+function M:initPrefabVar()
+	self._goCards = {}
+
+	for i = 1, self._tfCardContainer1.childCount do
+		local tf = self._tfCardContainer1:GetChild(i - 1)
+		self._goCards[#self._goCards + 1] = tf.gameObject
+	end
+
+	for i = 1, self._tfCardContainer2.childCount do
+		local tf = self._tfCardContainer2:GetChild(i - 1)
+		self._goCards[#self._goCards + 1] = tf.gameObject
+	end
+
+	for i = 1, #self._goCards do
+		ArkRebuildCardWidget.noCreate(self._goCards[i])
+	end
+
+	self._goChips = {}
+
+	for i = 1, self._tfChipContainer.childCount do
+		local tf = self._tfChipContainer:GetChild(i - 1)
+		self._goChips[#self._goChips + 1] = tf.gameObject
+
+		lc.prefabVarPeer(self._goChips[#self._goChips])
+		self:setClick(self._goChips[#self._goChips]._btnClick, function ()
+			if not self._equiping then
+				return
+			end
+
+			P._playerActivitySparkScout:equipChip(self._cid, i)
+
+			if self._equipCallback then
+				self._equipCallback(i)
+			else
+				self:closePanel()
+			end
+		end)
+	end
+end
+
+function M:addClicks()
+	local function equipFunc()
+		local weaponEquiped = false
+
+		for i = 1, 9 do
+			local weapon = P._playerActivitySparkScout:getPvpWeapon(i)
+
+			if weapon == self._weapon then
+				weaponEquiped = true
+			end
+		end
+
+		if not weaponEquiped then
+			V.showToast(SID.TIP_SPARK_SCOUT_WEAPON_NOT_EQUIPED)
+
+			return
+		end
+
+		if self._equipSlot then
+			if self._equipQuality < self._quality then
+				P._playerActivitySparkScout:equipChip(self._cid, self._equipSlot)
+
+				if self._equipCallback then
+					self._equipCallback(self._equipSlot)
+				else
+					self:closePanel()
+				end
+			else
+				self._goChips[self._equipSlot]._imgRed:DOKill()
+
+				if self._seq then
+					self._seq:Complete()
+				end
+
+				self._seq = DOTween.Sequence()
+
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0.3, 0.2))
+				self._seq:Append(self._goChips[self._equipSlot]._imgRed:DOFade(0, 0.2))
+				V.showToast(SID.RESULT_CODE_103)
+			end
+		else
+			self._equiping = true
+
+			self._goSelectSlot:SetActive(true)
+			self._btnEquipBg.gameObject:SetActive(true)
+
+			for i = 1, #self._goChips do
+				if not P._playerActivitySparkScout:isChipSlotLocked(100 + self._weapon, i) then
+					self._goChips[i]._aniWaitChoose.gameObject:SetActive(true)
+					self._goChips[i]._aniWaitChoose:Play()
+				end
+			end
+		end
+	end
+
+	self:setClick(self._btnEquip, equipFunc)
+	self:setClickWithoutAction(self._btnEquipBg, function ()
+		self._equiping = false
+
+		self._goSelectSlot:SetActive(false)
+		self._btnEquipBg.gameObject:SetActive(false)
+
+		for i = 1, #self._goChips do
+			self._goChips[i]._aniWaitChoose.gameObject:SetActive(false)
+			self._goChips[i]._aniWaitChoose:Stop()
+		end
+	end)
+	self:setClick(self._btnToggle, function ()
+		self._isHideWeaponInfo = not self._isHideWeaponInfo
+
+		if self._isHideWeaponInfo then
+			self._animToggle:Play("anim_sparkscout_chipinfo_list01")
+		else
+			self._animToggle:Play("anim_sparkscout_chipinfo_list02")
+		end
+	end)
+	self:setClickWithoutAction(self._btnCover, function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(cid, equipCallback, closeCallback)
+	self._cid = cid
+	self._quality = D._gemConfig[cid]._quality
+	self._effect = D._gemConfig[cid]._effect
+	self._weapon = D._gemEffectConfig[self._effect]._weaponId
+	self._equipQuality = 0
+	self._equipSlot = nil
+	self._equipCallback = equipCallback
+	self._closeCallback = closeCallback
+
+	self:updateUI()
+
+	if self._isHideWeaponInfo == nil then
+		self._isHideWeaponInfo = true
+
+		if self._isHideWeaponInfo then
+			V.resetAnimToStartFrame(self._animToggle, "anim_sparkscout_chipinfo_list02")
+		end
+	end
+end
+
+function M:updateUI()
+	local conf = D._gemConfig[self._cid]
+	local effectConf = D._gemEffectConfig[conf._effect]
+
+	self._txtName:SetLocalize(SID.STR_NAME_CHIP, -D._weaponConfig[self._weapon]._skillNameSid, -SID["STR_QUALITY_" .. conf._quality])
+	V.loadChipDescription(self._txtDesc, effectConf, conf._param, conf._params)
+	LuaUnity.setTPSprite(self._imgChip, D.toSprite(self._cid), true)
+	LuaUnity.setTPSprite(self._imgChipBg, string.format("item/frame-frame_%02d", conf._quality))
+	LuaUnity.setTPSprite(self._imgChipFrame, string.format("item/frame-frame_%02d_out", conf._quality))
+	self._txtWeapon:SetLocalize(D._weaponConfig[self._weapon]._skillNameSid)
+
+	local chips = P._playerActivitySparkScout:getEquipedChips(100 + self._weapon)
+
+	for i = 1, #self._goChips do
+		local goChip = self._goChips[i]
+
+		goChip._aniWaitChoose.gameObject:SetActive(false)
+
+		if P._playerActivitySparkScout:isChipSlotLocked(100 + self._weapon, i) then
+			goChip._btnClick.enabled = false
+
+			if P._playerActivitySparkScout:isChipSlotLocked(100 + self._weapon, i - 1) then
+				goChip._goLockPrev:SetActive(true)
+				goChip._goLock:SetActive(false)
+			else
+				goChip._goLockPrev:SetActive(false)
+				goChip._goLock:SetActive(true)
+			end
+
+			goChip._goChip:SetActive(false)
+
+			local cost = P._playerActivitySparkScout:getChipUnlockCost(100 + self._weapon, i - 1)
+			local costStr = string.format("<sprite name=\"item_small_10050\">%d", cost)
+
+			goChip._txtDiamondUnlock:SetLocalizeS(SID.TIP_REQUIRE_DIAMOND_UNLOCK, costStr)
+			self:setClick(goChip._btnDiamondUnlock, function ()
+				if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, cost) then
+					V.showResultCode(D.ResType.spark_scout_wafer, cost)
+
+					return
+				end
+
+				local promptKey = "spark_scout_unlock_weapon"
+				local showConfirm = lc.getIntKeyValue(promptKey, 0) < C.getCurTime()
+
+				if not showConfirm then
+					P._playerActivitySparkScout:tryUnlockChipSlot(100 + self._weapon, i)
+					self:updateUI()
+
+					return
+				end
+
+				UIManager.openPanel(PrefabDefine.PromptsPanel, {
+					_promptKey = promptKey,
+					_title = SID.TITLE_UNLOCK_CHIP_SLOT,
+					_content = SID.TIP_UNLOCK_CHIP_SLOT,
+					_txtConfirm = SID.STR_CONFIRM,
+					_cParams = D.getTMPSpriteRichText(string.format("item_small_%d", D.ResType.spark_scout_wafer)) .. cost,
+					_fcCancel = SID.STR_CANCEL,
+					_confirmCallback = function ()
+						P._playerActivitySparkScout:tryUnlockChipSlot(100 + self._weapon, i)
+						self:updateUI()
+					end,
+					_showResCid = D.ResType.spark_scout_wafer
+				})
+			end)
+		else
+			goChip._btnClick.enabled = true
+
+			goChip._goLock:SetActive(false)
+			goChip._goLockPrev:SetActive(false)
+
+			if chips[i] then
+				local conf = D._gemConfig[chips[i]]
+
+				if conf._effect == self._effect then
+					self._equipSlot = i
+					self._equipQuality = conf._quality
+				end
+
+				LuaUnity.setTPSprite(goChip._imgIcon, D.toSprite(chips[i]))
+				V.loadChipDescription(goChip._txtDesc, D._gemEffectConfig[conf._effect], conf._param, conf._params)
+				goChip._goEmpty:SetActive(false)
+				goChip._goChip:SetActive(true)
+			else
+				goChip._goEmpty:SetActive(true)
+				goChip._goChip:SetActive(false)
+
+				if not self._equipSlot then
+					self._equipSlot = i
+					self._equipQuality = 0
+				end
+			end
+		end
+	end
+
+	for i = 1, #self._goCards do
+		local cards = D._sparkScoutWeaponCardConfig[P._playerActivitySparkScout:getWeaponDeck(self._weapon)]._cardIds
+		local goCard = self._goCards[i]
+
+		goCard:updateUI(cards[i])
+		goCard._goLv:SetActive(false)
+		goCard._goCardBack:SetActive(false)
+	end
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._seq then
+		self._seq:Kill()
+
+		self._seq = nil
+	end
+end
+
+return M

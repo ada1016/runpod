@@ -1,0 +1,46 @@
+local M = class("AnniversaryLotteryPropWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/AnniversaryLotteryPropWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	ItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:updateUI(cid, num, prop1, prop2)
+	self._goItem:init(cid, num)
+
+	self._txtProp1.text = string.format("%.2f%%", prop1)
+	local addProp = prop2 - prop1
+
+	if addProp < 0.01 then
+		self._txtProp2.text = ""
+	else
+		self._txtProp2.text = string.format("+%.2f%%", addProp)
+	end
+
+	self._txtName:SetLocalize(D.toNameSid(cid))
+	self._goProp:SetActive(prop2 > 0)
+	self._goClaimed:SetActive(prop2 <= 0)
+end
+
+function M:setRewardsClick(panel)
+	panel:setClickWithoutAction(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+end
+
+return M

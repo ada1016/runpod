@@ -1,0 +1,212 @@
+local M = class("PromptsPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	ator = Types.Animator,
+	title = Types.TMP_Text,
+	content = Types.TMP_Text,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	goShowRes = Types.GameObject,
+	goCheckBoxArea = Types.GameObject,
+	btnCheckBox = Types.Button,
+	btnCheckBoxText = Types.Button,
+	imgCheckBox = Types.Image,
+	goCloseTips = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._checkNet then
+			Client.checkNetworkAsync(function ()
+				self:handleConfirm()
+			end)
+		else
+			self:handleConfirm()
+		end
+	end)
+	self:setClick(self._btnCancel, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClick(self._btnClose, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClickWithoutAction(self._btnMask, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClickWithoutAction(self._btnCheckBox, function ()
+		self:dealClickCheckBox()
+	end)
+	self:setClickWithoutAction(self._btnCheckBoxText, function ()
+		self:dealClickCheckBox()
+	end)
+end
+
+function M:init(param)
+	self._checkNet = param._checkNet
+	self._promptKey = param._promptKey
+	self._fcConfirm = param._confirmCallback
+	self._fcCancel = param._cancelCallback
+	self._confirmCheck = param._confirmCheck
+	self._confirmCheckFail = param._confirmCheckFail
+	self._delayCloseTime = param._delayCloseTime or 0
+	self._showResCid = param._showResCid or nil
+	self._fcSure = nil
+
+	self._goCheckBoxArea:SetActive(self._promptKey ~= nil)
+	self._goShowRes:SetActive(self._showResCid ~= nil)
+
+	if self._showResCid then
+		LuaHelper.GetLuaBehaviour(self._goShowRes):init(self._showResCid)
+	end
+
+	if type(param) == "string" then
+		self._title.text = ""
+		self._content.text = param
+
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	elseif type(param) == "number" then
+		self._title.text = ""
+
+		self._content:SetLocalize(param)
+		self._btnSure:SetActive(true)
+		self._btnConfirm:SetActive(false)
+		self._btnCancel:SetActive(false)
+	else
+		if param._title then
+			if type(param._title) == "string" then
+				self._title.text = param._title
+			else
+				self._title:SetLocalize(param._title)
+			end
+		else
+			self._title.text = ""
+		end
+
+		if type(param._content) == "string" then
+			self._content.text = param._content
+		elseif param._cParams then
+			if type(param._cParams) == "number" then
+				self._content:SetLocalize(param._content, param._cParams)
+			elseif type(param._cParams) == "string" then
+				self._content:SetLocalizeS(param._content, param._cParams)
+			else
+				self._content:SetLocalizeS(param._content, unpack(param._cParams))
+			end
+		else
+			self._content:SetLocalize(param._content)
+		end
+
+		self._textConfirm:SetLocalize(param._txtConfirm or SID.STR_CONFIRM)
+		self._textCancel:SetLocalize(param._txtCancel or SID.STR_CANCEL)
+
+		if param._type == 1 then
+			self._btnConfirm:SetActive(true)
+			self._btnCancel:SetActive(false)
+		else
+			self._btnConfirm:SetActive(true)
+			self._btnCancel:SetActive(true)
+		end
+
+		self._btnClose:SetActive(param._showClose == true)
+	end
+
+	local delay = self._delayCloseTime > 0
+	self._btnConfirm.enabled = not delay
+	self._btnClose.enabled = not delay
+	self._btnCancel.enabled = not delay
+	self._btnMask.enabled = not delay
+
+	self._goCloseTips:SetActive(not delay)
+
+	if self._delayCloseTime > 0 then
+		self._timer = lc.setTimer(function ()
+			self._btnConfirm.enabled = true
+			self._btnClose.enabled = true
+			self._btnCancel.enabled = true
+			self._btnMask.enabled = true
+
+			self._goCloseTips:SetActive(true)
+
+			self._timer = nil
+		end, self._delayCloseTime)
+	end
+end
+
+function M:dealClickCheckBox()
+	if not self._checkBoxSelected then
+		self._checkBoxSelected = true
+
+		self._imgCheckBox:SetActive(true)
+	else
+		self._checkBoxSelected = false
+
+		self._imgCheckBox:SetActive(false)
+	end
+end
+
+function M:handleConfirm()
+	if self._confirmCheck then
+		local ret, param = self._confirmCheck()
+
+		if ret then
+			if self._confirmCheckFail then
+				self._confirmCheckFail()
+			else
+				V.showResultCode(ret, param)
+			end
+
+			return
+		end
+	end
+
+	local fc = self._fcConfirm
+	self._fcConfirm = nil
+
+	self:closePanel()
+
+	if self._promptKey and self._checkBoxSelected then
+		lc.setIntKeyValue(self._promptKey, math.floor(C.getCurTime()) + D.DAY_SECONDS)
+	end
+
+	if fc then
+		fc()
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._timer)
+end
+
+return M

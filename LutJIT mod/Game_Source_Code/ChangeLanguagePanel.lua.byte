@@ -1,0 +1,72 @@
+local M = class("ChangeLanguagePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	ator = Types.Animator,
+	title = Types.TMP_Text,
+	content = Types.TMP_Text,
+	btnConfirm = Types.Button,
+	textConfirm = Types.TMP_Text,
+	btnCancel = Types.Button,
+	textCancel = Types.TMP_Text,
+	imgLanguage = Types.Image,
+	txtLanguage = Types.TMP_Text,
+	btnClose = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		if self._confirmCheck then
+			local ret, param = self._confirmCheck()
+
+			if ret then
+				if self._confirmCheckFail then
+					self._confirmCheckFail()
+				else
+					V.showResultCode(ret, param)
+				end
+
+				return
+			end
+		end
+
+		local fc = self._fcComfirm
+		self._fcComfirm = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+	self:setClick(self._btnClose, function ()
+		local fc = self._fcCancel
+		self._fcCancel = nil
+
+		self:closePanel()
+
+		if fc then
+			fc()
+		end
+	end)
+end
+
+function M:init(langId, confirm)
+	if Client.IsSpecialLang(langId) then
+		self._txtLanguage.gameObject:SetActive(false)
+		self._imgLanguage.gameObject:SetActive(true)
+		LuaUnity.setTPSprite(self._imgLanguage, string.format("general/icon_font_%d", langId), true)
+	else
+		self._txtLanguage.gameObject:SetActive(true)
+		self._imgLanguage.gameObject:SetActive(false)
+
+		self._txtLanguage.text = Client.Lang_Str[langId]
+	end
+
+	self._fcComfirm = confirm
+end
+
+return M

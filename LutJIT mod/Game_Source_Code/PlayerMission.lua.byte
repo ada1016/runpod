@@ -1,0 +1,795 @@
+local M = class("PlayerMission")
+
+local function generateMissionData()
+	return {
+		perfectRewardData = {
+			false,
+			false,
+			false
+		},
+		battleData = {
+			leftHp = 0,
+			battleTime = 0,
+			battleNum = 0
+		}
+	}
+end
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.missionId = self._meta.missionId or 10001
+	self._meta.eliteMissionId = self._meta.eliteMissionId or 10001
+	self._currentMission = self._meta.missionId
+	self._eliteMissionId = self._meta.eliteMissionId
+	self._meta.totalFailureNum = self._meta.totalFailureNum or 0
+	self._meta.mainMissionPassTimestamp = self._meta.mainMissionPassTimestamp or P:getCreateTime()
+	self._common = lc.assignTable(meta, "common")
+	self._elite = lc.assignTable(meta, "elite")
+	self._lastMsType = D.MissionType.Common
+	self._lastMsId = self._currentMission
+
+	if not self:isMissionExist(self._lastMsId) then
+		self._lastMsId = self._lastMsId - 1
+	end
+
+	self._missionsData = {
+		[D.MissionType.Common] = self._common,
+		[D.MissionType.Elite] = self._elite
+	}
+
+	if self._common[self._currentMission] == nil then
+		self:tryInitMissionData(self._currentMission, D.MissionType.Common)
+		self:tryInitMissionData(self._currentMission, D.MissionType.Elite)
+	end
+
+	self._firstUnPerfectMsId = {}
+
+	self:resetFirstUnPerfectMissionId(D.MissionType.Common, true)
+	self:resetFirstUnPerfectMissionId(D.MissionType.Elite, true)
+
+	self._firstUnClaimPerfectMsId = {}
+
+	self:resetFirstUnClaimPerfectReward(D.MissionType.Common, true)
+	self:resetFirstUnClaimPerfectReward(D.MissionType.Elite, true)
+
+	self._isNextMission = false
+end
+
+local function toTableId(msId, msType)
+	return msType == D.MissionType.Common and msId or msId + 10000
+end
+
+function M:dailyReset()
+end
+
+function M:getFailureNum()
+	return self._meta.totalFailureNum
+end
+
+function M:getMissionIdByType(type)
+	return type == D.MissionType.Elite and self._eliteMissionId or self._currentMission
+end
+
+function M:getDisplayMissionIdByType(type)
+	return type == D.MissionType.Elite and self._eliteMissionId + 10000 or self._currentMission
+end
+
+function M:getMissionId()
+	return self._currentMission
+end
+
+function M:getLastMissionIdType()
+	return self._lastMsId or self._currentMission, self._lastMsType or D.MissionType.Common
+end
+
+function M:setLastMissionIdType(lastMsId, lastMsType)
+	self._lastMsType = lastMsType
+	self._lastMsId = lastMsId
+end
+
+function M:isMissionReach(msId)
+	return msId <= self:getMissionId()
+end
+
+function M:isMissionComplete(msId, msType)
+	return self:getMissionBattleLeftHp(msId, msType) > 0
+end
+
+function M:resetFirstUnPerfectMissionId(msType, fromStart)
+	local msId = self:getMissionIdByType(msType)
+	fromStart = fromStart and D.MissionBegin or self._firstUnPerfectMsId[msType] or D.MissionBegin
+
+	for startMsId = fromStart, msId do
+		if not self:isMissionExist(startMsId) then
+			break
+		end
+
+		if self:getMissionBattleLeftHp(startMsId, msType) ~= 100 then
+			msId = startMsId
+
+			break
+		end
+	end
+
+	self._firstUnPerfectMsId[msType] = msId
+end
+
+function M:getFirstUnPerfectMissionId(msType)
+	return self._firstUnPerfectMsId[msType]
+end
+
+function M:getMissionPerfectType(msId, msType)
+	if self:getMissionIdByType(msType) <= msId then
+		return D.PerfectType.NotCleared
+	else
+		local leftHp = self:getMissionBattleLeftHp(msId, msType)
+
+		if leftHp >= 100 then
+			return D.PerfectType.Perfect
+		elseif leftHp >= 50 then
+			return D.PerfectType.HalfPerfect
+		else
+			return D.PerfectType.Success
+		end
+	end
+
+	return D.PerfectType.NotCleared
+end
+
+function M:tryInitMissionData(msId, msType)
+	if self._missionsData[msType][msId] == nil then
+		self._missionsData[msType][msId] = generateMissionData()
+	end
+end
+
+function M:getMissionData(msId, msType)
+	self:tryInitMissionData(msId, msType)
+
+	return self._missionsData[msType][msId]
+end
+
+function M:getRewardClaimData(msId, msType)
+	if self._missionsData[msType][msId] == nil then
+		self._missionsData[msType][msId] = generateMissionData()
+	end
+
+	return self:getMissionData(msId, msType).perfectRewardData
+end
+
+function M:getBattleData(msId, msType)
+	if self._missionsData[msType][msId] == nil then
+		self._missionsData[msType][msId] = generateMissionData()
+	end
+
+	return self:getMissionData(msId, msType).battleData
+end
+
+function M:getMissionBattleLeftHp(msId, msType)
+	return self:getBattleData(msId, msType).leftHp
+end
+
+function M:getMissionBattleTime(msId, msType)
+	return self:getBattleData(msId, msType).battleTime
+end
+
+function M:tryClaimPerfectReward(msId, msType, claimPerfectType)
+	local pt = self:getMissionPerfectType(msId, msType)
+
+	if pt < claimPerfectType then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isPerfectRewardClaimed(msId, msType, claimPerfectType) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local items = self:claimMissionRewards(msId, msType, claimPerfectType)
+
+	if lc._isCN then
+		P:saveGameData(true)
+	end
+
+	return ResultCode.OK, items
+end
+
+function M:tryClaimAllPerfectReward(msType, msId)
+	local startId = self._firstUnClaimPerfectMsId[msType]
+
+	if not startId then
+		return
+	end
+
+	local endMsId = self:getMissionIdByType(msType)
+	local result = nil
+
+	if msId then
+		local ptype = self:getMissionPerfectType(msId, msType)
+
+		if ptype > 0 then
+			for t = 1, ptype do
+				local claimed = self:isPerfectRewardClaimed(msId, msType, t)
+
+				if not claimed then
+					local rewards = self:claimMissionRewards(msId, msType, t, true)
+					result = result or {}
+
+					D.foldRewards(result, rewards)
+				end
+			end
+		end
+	else
+		for msId = startId, endMsId do
+			local ptype = self:getMissionPerfectType(msId, msType)
+
+			if ptype > 0 then
+				for t = 1, ptype do
+					local claimed = self:isPerfectRewardClaimed(msId, msType, t)
+
+					if not claimed then
+						local rewards = self:claimMissionRewards(msId, msType, t, true)
+						result = result or {}
+
+						D.foldRewards(result, rewards)
+					end
+				end
+			end
+		end
+	end
+
+	if not result then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	self:resetFirstUnClaimPerfectReward(msType)
+	SimpleEvent.emit("mission.reward.claim")
+
+	if lc._isCN then
+		P:saveGameData(true)
+	end
+
+	return ResultCode.OK, result
+end
+
+function M:resetFirstUnClaimPerfectReward(msType, fromStart)
+	local msId = nil
+	local endMsId = self:getMissionIdByType(msType)
+	fromStart = fromStart and D.MissionBegin or self._firstUnClaimPerfectMsId[msType] or D.MissionBegin
+
+	for startMsId = fromStart, endMsId do
+		local ptype = self:getMissionPerfectType(startMsId, msType)
+
+		if ptype == 0 then
+			break
+		end
+
+		for t = 1, ptype do
+			local claimed = self:isPerfectRewardClaimed(startMsId, msType, t)
+
+			if not claimed then
+				msId = startMsId
+
+				break
+			end
+		end
+
+		if msId then
+			break
+		end
+	end
+
+	self._firstUnClaimPerfectMsId[msType] = msId
+end
+
+function M:getFirstUnClaimPerfectReward(msType)
+	return self._firstUnClaimPerfectMsId[msType]
+end
+
+function M:isPerfectRewardClaimed(msId, msType, perfectType)
+	if self._currentMission < msId then
+		return true
+	end
+
+	return self:getMissionData(msId, msType).perfectRewardData[perfectType]
+end
+
+function M:isMissionExist(missionId, msType)
+	return self:getCfgByType(msType or D.MissionType.Common)[missionId] ~= nil
+end
+
+function M:claimMissionRewards(msId, msType, perfectType, batch)
+	local cids, nums = self:readMissionPerfectRewards(msId, msType, perfectType)
+	local result = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.mission_chest)
+	local rewardData = self:getRewardClaimData(msId, msType)
+	rewardData[perfectType] = true
+
+	if not batch then
+		self:resetFirstUnClaimPerfectReward(msType)
+		SimpleEvent.emit("mission.reward.claim", msId)
+	end
+
+	Trace.traceDesign("%sStageChest_Claim:%d_%d", msType == D.MissionType.Common and "Normal" or "Elite", msId, perfectType)
+
+	return result
+end
+
+function M:cacheMissionBattleData(msId, msType, leftHp, battleTime)
+	local missionData = self:getMissionData(msId, msType)
+	local battleData = missionData.battleData
+	local oldLeftHp = battleData.leftHp or 0
+	self._newRecord = leftHp > oldLeftHp or oldLeftHp == 0 and battleData.battleTime < battleTime
+	leftHp = math.max(leftHp, oldLeftHp)
+	battleData.leftHp = leftHp
+	battleTime = math.max(battleTime, battleData.battleTime)
+	battleData.battleTime = battleTime
+	battleData.battleNum = (battleData.battleNum or 0) + 1
+	local type = msType == D.MissionType.Common and "Normal" or "Elite"
+
+	if oldLeftHp == 0 and leftHp == 0 then
+		Trace.traceDesign("%sStageFailBefore1:%d", type, toTableId(msId, msType))
+	end
+
+	if oldLeftHp < leftHp then
+		if leftHp >= 100 then
+			Trace.traceDesign("%sStageChest_Complete:%d_%d", type, toTableId(msId, msType), 3)
+		end
+
+		if oldLeftHp == 0 then
+			Trace.traceDesign("%sStageChest_Complete:%d_%d", type, toTableId(msId, msType), 1)
+		end
+
+		if leftHp >= 50 then
+			Trace.traceDesign("%sStageChest_Complete:%d_%d", type, toTableId(msId, msType), 2)
+		end
+	end
+end
+
+function M:finishMission(msId, msType, result, battleHp, battleTime, lv, mainWeapon, mainWeaponLevel)
+	self:cacheMissionBattleData(msId, msType, result == D.BattleResult.Win and battleHp or 0, battleTime)
+
+	if result == D.BattleResult.Lose then
+		self._meta.totalFailureNum = self._meta.totalFailureNum + 1
+
+		P._playerGift:addFailureNum()
+	end
+
+	local tableMsId = toTableId(msId, msType)
+
+	if msType == D.MissionType.Common and msId == self._currentMission then
+		if result == D.BattleResult.Win then
+			self:nextMission()
+			TaskHelper:updateTaskValueMax(D.TaskType.FINISH_MISSION, tableMsId)
+
+			if D.isSystemUnlocked(D.SystemType.StageRank) then
+				self._meta.mainMissionPassTimestamp = C.getCurTime()
+
+				P._playerRanker:uploadMainMissionRankData(self:getMainMissionRankValue())
+			end
+
+			if P._playerActivity:isAnniversaryOpening() and msId == 10000 + D._anniversaryNewbieTaskConfig[D.AnniversaryNewbieTaskType.PassMission]._param then
+				P._playerActivityAnniversary:finishNewbieTask(D.AnniversaryNewbieTaskType.PassMission)
+			end
+		end
+	elseif msType == D.MissionType.Elite and msId == self._eliteMissionId and result == D.BattleResult.Win then
+		self:nextEliteMission()
+		TaskHelper:updateTaskValueMax(D.TaskType.FINISH_ELITE_MISSION, tableMsId)
+	end
+
+	local type = msType == D.MissionType.Common and "Normal" or "Elite"
+
+	if result == D.BattleResult.Win then
+		Trace.traceDesign("%sStageSuccess:%d", type, tableMsId)
+	else
+		Trace.traceDesign("%sStageFail:%d", type, tableMsId)
+	end
+
+	if tableMsId % 10000 == 1 or tableMsId % 10 == 0 then
+		Trace.traceDesign("%sStage_Weapon:%d:%d", type, tableMsId, mainWeapon)
+	end
+
+	local rewards = self:readMissionRewardsByWave(msId, msType, lv)
+	local firstMissionChipDrop = false
+	local hasMissionDrop = false
+
+	for i = 1, #rewards do
+		local cid = rewards[i][1]
+
+		if self._result == D.BattleResult.Quit and cid == D.ResType.coin then
+			rewards[i][2] = math.round(rewards[i][2] / 2)
+		elseif cid == 11000 then
+			rewards[i][2] = rewards[i][2] - lv
+		elseif cid == D.CHIP_DROP_NORMAL or cid == D.CHIP_DROP_ELITE then
+			if P._playerRecord:hasFirstMissionDrop() then
+				firstMissionChipDrop = true
+
+				P._playerRecord:removeFirstMissionDrop()
+			end
+
+			rewards[i][2] = 0
+			hasMissionDrop = true
+		end
+	end
+
+	if firstMissionChipDrop then
+		for i = 1, lc.lenTable(D._globalConfig._first_mission_chip_drop) do
+			rewards[#rewards + 1] = {
+				D._globalConfig._first_mission_chip_drop[i],
+				1
+			}
+		end
+	elseif hasMissionDrop then
+		self:dropMissionChip(msType, msId, rewards)
+	end
+
+	table.insert(rewards, 3, {
+		11000,
+		lv
+	})
+	P._playerAsset:increaseAssetNum(D.ResType.energy, -D._globalConfig._mission_cost_energy[msType], D.LogWay.finish_mission)
+
+	self._settleRewards = P._playerAsset:increaseAssetNumsByList(rewards, D.LogWay.finish_mission)
+
+	self:resetFirstUnPerfectMissionId(msType)
+	self:resetFirstUnClaimPerfectReward(msType)
+
+	if msType == D.MissionType.Elite then
+		TaskHelper:increaseTaskValue(D.TaskType.CHALLENGE_ELITE, 1)
+	end
+
+	P:tryUnlockSystem()
+end
+
+function M:readMissionChip(msType, msId)
+	local conf = self:getCfgByType(msType)[msId]
+	local weights = conf._winChipRate
+	local results = conf._winChipNum
+	local totalWeight = 0
+	local drops = {}
+
+	for i = 1, #weights do
+		local weight = weights[i]
+		local chip = results[i]
+		local quality = math.floor(chip / 10)
+		drops[quality] = (drops[quality] or 0) + weight
+		totalWeight = totalWeight + weight
+	end
+
+	return drops, totalWeight
+end
+
+function M:dropMissionChip(msType, msId, rewards)
+	local conf = self:getCfgByType(msType)[msId]
+	local weights = conf._winChipRate
+	local results = conf._winChipNum
+	local randIndex = DropHelper.randomIndexByWeights(weights)
+	local result = results[randIndex]
+	local quality = math.floor(result / 10)
+	local num = result % 10
+
+	for i = 1, num do
+		rewards[#rewards + 1] = {
+			DropHelper.dropOne(D._qualityGemConfig[quality])
+		}
+	end
+
+	return quality, num
+end
+
+function M:dropMissionOfflineChip(msType, rewards)
+	local conf = self:getCfgByType(msType)[self:getMissionIdByType(msType) - 1]
+	local weights = conf._winChipOfflineRate
+	local results = conf._winChipOfflineNum
+	local randIndex = DropHelper.randomIndexByWeights(weights)
+	local result = results[randIndex]
+	local quality = math.floor(result / 10)
+	local num = result % 10
+
+	for i = 1, num do
+		local cid, num = DropHelper.dropOne(D._qualityGemConfig[quality])
+		rewards[#rewards + 1] = {
+			cid,
+			num
+		}
+
+		P._playerAsset:increaseAssetNum(cid, num, D.LogWay.offline)
+	end
+
+	return quality, num
+end
+
+function M:isNewRecord()
+	return self._newRecord
+end
+
+function M:getSettleRewards()
+	return self._settleRewards
+end
+
+function M:nextMission()
+	local next = self._currentMission + 1
+	self._currentMission = next
+	self._meta.missionId = self._currentMission
+
+	if not self:isMissionExist(next) then
+		return
+	end
+
+	self._isNextMission = true
+
+	self:setLastMissionIdType(self._currentMission, D.MissionType.Common)
+	self:tryInitMissionData(self._currentMission, D.MissionType.Common)
+	self:tryInitMissionData(self._currentMission, D.MissionType.Elite)
+
+	local id = self:getMissionIdByType(D.MissionType.Elite)
+
+	if id < self._currentMission and self:isMissionComplete(id, D.MissionType.Elite) then
+		self:nextEliteMission(true)
+	end
+
+	P._playerGift:triggerGiftsByMission()
+end
+
+function M:changeMission(missionId)
+	if missionId > 20000 then
+		for i = self._eliteMissionId, missionId do
+			self:nextEliteMission()
+		end
+	else
+		for i = self._currentMission, missionId do
+			self:nextMission()
+		end
+	end
+end
+
+function M:nextEliteMission(ignoreSet)
+	local next = self._eliteMissionId + 1
+	self._eliteMissionId = next
+	self._meta.eliteMissionId = next
+
+	if not self:isMissionExist(next) then
+		return
+	end
+
+	self._isNextMission = true
+
+	if not ignoreSet then
+		self:setLastMissionIdType(self._eliteMissionId, D.MissionType.Elite)
+	end
+end
+
+function M:isNextMission()
+	return self._isNextMission
+end
+
+function M:removeNextMission()
+	self._isNextMission = nil
+end
+
+function M:readMissionRewardsByWave(msId, msType, lv)
+	lv = lv or 1
+	local cids1, nums1, lvs = self:readBaseMissionRewards(msId, msType)
+	local realCids = {}
+	local realNums = {}
+
+	for i = 1, #lvs do
+		if lvs[i] <= lv then
+			realCids[#realCids + 1] = cids1[i]
+			realNums[#realNums + 1] = nums1[i]
+		end
+	end
+
+	local cids2, nums2 = self:readExtraMissionRewards(msId, msType)
+
+	return D.foldCidsAndNums(realCids, realNums, cids2, nums2, lv)
+end
+
+function M:readBaseMissionRewards(msId, msType)
+	local msCfg = self:getCfgByType(msType)[msId]
+
+	return msCfg._rewardCids, msCfg._rewardNums, msCfg._rewardLvs
+end
+
+function M:readExtraMissionRewards(msId, msType)
+	local msCfg = self:getCfgByType(msType)[msId]
+
+	return msCfg._rewardExtraCids, msCfg._rewardExtraNums
+end
+
+function M:readTotalMissionRewards(msId, msType)
+	return self:readMissionRewardsByWave(msId, msType, D._globalConfig._common_mission_total_waves or 20)
+end
+
+function M:readMissionPerfectRewards(msId, msType, perfectType)
+	local msCfg = self:getCfgByType(msType)[msId]
+	local rewardId = msCfg._perfectRewardIds[perfectType]
+
+	return D._rewardsConfig[rewardId]._cid, D._rewardsConfig[rewardId]._num
+end
+
+function M:readMissionName(msId, msType)
+	return self:getCfgByType(msType)[msId]._nameSid
+end
+
+function M:readBoss(msId, msType)
+	return self:getCfgByType(msType)[msId]._bossId
+end
+
+function M:readElite(msId, msType)
+	return self:getCfgByType(msType)[msId]._eliteId
+end
+
+function M:readEnemy(msId, msType)
+	return self:getCfgByType(msType)[msId]._enemyId
+end
+
+function M:readOfflineId(msId, msType)
+	return self:getCfgByType(msType)[msId]._offlineId
+end
+
+function M:readBoxType(msId, msType)
+	return self:getCfgByType(msType)[msId]._boxType
+end
+
+function M:getCfgByType(msType)
+	return D._missionConfigs[msType or D.MissionType.Common]
+end
+
+function M:getRecommondData(msId, callback)
+	if not self._recommendData then
+		self._recommendData = {}
+	end
+
+	if not self._recommendData[msId] then
+		self._recommendData[msId] = {}
+	end
+
+	local today = Client.getDayOffset()
+
+	if self._recommendData[msId].day == today then
+		return self._recommendData[msId].data
+	end
+
+	local data = lc.getTableKeyValue("recommend_data_" .. msId)
+
+	if data then
+		self._recommendData[msId] = data
+
+		if self._recommendData[msId].day == today then
+			return self._recommendData[msId].data
+		end
+	end
+
+	local col = "recommend_data"
+
+	local function getDataCallback(data)
+		if self._recommendData[msId] then
+			self:loadRecommendData(msId, data)
+			lc.setTableKeyValue("recommend_data_" .. msId, self._recommendData[msId])
+			callback(self._recommendData[msId].data)
+		end
+	end
+
+	if lc._isCN then
+		Request.sendGetRankData(col, nil, msId, 500, getDataCallback)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = "recommend_" .. math.floor(msId % 1000)
+
+		Client.queryRankDataV2(col, doc, getDataCallback)
+	end
+end
+
+function M:loadRecommendData(msId, jsonStr)
+	self._recommendData[msId].day = Client.getDayOffset()
+	self._recommendData[msId].data = {}
+	local tbl = nil
+
+	if type(jsonStr) == "string" then
+		jsonStr = string.unicodeToUtf8(jsonStr)
+		tbl = LuaTableJson.decodeFromLuaJson(jsonStr)
+	else
+		tbl = jsonStr
+	end
+
+	local isEmptyMsg = false
+
+	if not next(tbl) then
+		isEmptyMsg = true
+
+		return
+	end
+
+	for key, data in pairs(tbl) do
+		data.time = data.time or 0
+		self._recommendData[msId].data[#self._recommendData[msId].data + 1] = data
+	end
+
+	table.sort(self._recommendData[msId].data, function (a, b)
+		return b.time < a.time
+	end)
+end
+
+function M:getMyRecommendData(msId)
+	local rogueList = lc.getTableKeyValue("my_recommend_data_" .. msId)
+
+	if rogueList then
+		local batteryInfo = rogueList[#rogueList]
+		rogueList[#rogueList] = nil
+
+		return batteryInfo, rogueList
+	else
+		return nil
+	end
+end
+
+function M:tryUploadRecommendData(msId, data, rogueList)
+	self:doUploadRecommendData(msId, math.random(1, 10), P:genMissionRecommendData(data))
+
+	rogueList = clone(rogueList)
+	rogueList[#rogueList + 1] = data
+
+	lc.setTableKeyValue("my_recommend_data_" .. msId, rogueList)
+end
+
+function M:doUploadRecommendData(msId, pos, data, noRetry)
+	if data.atk and (data.atk > P._playerRole:calcPlayerAtk() * 1.5 or math.max(4000, P._playerProfile:getLevel() * 200) < data.atk) then
+		Client.forbidLogin("atk")
+		Trace.AF_traceEvent("e_cheat", {
+			{
+				_key = "atk",
+				_value = data.atk
+			},
+			{
+				_key = "calcAtk",
+				_value = P._playerRole:calcPlayerAtk()
+			},
+			{
+				_key = "cheatWay",
+				_value = "atk"
+			}
+		})
+
+		return
+	end
+
+	local col = "recommend_data"
+
+	if lc._isCN then
+		Request.sendUploadRankData(col, nil, msId, LuaTableJson.encodeToCJson(data), pos)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = "recommend_" .. math.floor(msId % 1000)
+
+		if not noRetry then
+			Client.uploadRankDataV2(col, doc, tostring(pos), LuaTableJson.encodeToCJson(data), function ()
+				self:doUploadRecommendData(msId, pos, data, true)
+			end)
+		else
+			Client.uploadRankDataV2(col, doc, tostring(pos), LuaTableJson.encodeToCJson(data))
+		end
+	end
+
+	if self._recommendData then
+		self._recommendData[msId] = nil
+	end
+
+	lc.setTableKeyValue("recommend_data_" .. msId, nil)
+end
+
+function M:getMainMissionRankValue()
+	if lc._isCN then
+		return self._currentMission % 1000
+	else
+		return self._currentMission % 1000 * 10000000000.0 + (self._meta.mainMissionPassTimestamp and 10000000000.0 - self._meta.mainMissionPassTimestamp or 0)
+	end
+end
+
+return M

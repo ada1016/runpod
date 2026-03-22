@@ -1,0 +1,685 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		10063 - lc._encryptOffset,
+		9962 - lc._encryptOffset,
+		9963 - lc._encryptOffset
+	},
+	{
+		2,
+		10067 - lc._encryptOffset,
+		9963 - lc._encryptOffset,
+		9965 - lc._encryptOffset
+	},
+	{
+		3,
+		10075 - lc._encryptOffset,
+		9964 - lc._encryptOffset,
+		9967 - lc._encryptOffset
+	},
+	{
+		4,
+		10085 - lc._encryptOffset,
+		9965 - lc._encryptOffset,
+		9969 - lc._encryptOffset
+	},
+	{
+		5,
+		10099 - lc._encryptOffset,
+		9966 - lc._encryptOffset,
+		9971 - lc._encryptOffset
+	},
+	{
+		6,
+		10115 - lc._encryptOffset,
+		9967 - lc._encryptOffset,
+		9973 - lc._encryptOffset
+	},
+	{
+		7,
+		10135 - lc._encryptOffset,
+		9968 - lc._encryptOffset,
+		9975 - lc._encryptOffset
+	},
+	{
+		8,
+		10157 - lc._encryptOffset,
+		9969 - lc._encryptOffset,
+		9977 - lc._encryptOffset
+	},
+	{
+		9,
+		10183 - lc._encryptOffset,
+		9970 - lc._encryptOffset,
+		9979 - lc._encryptOffset
+	},
+	{
+		10,
+		10211 - lc._encryptOffset,
+		9971 - lc._encryptOffset,
+		9981 - lc._encryptOffset
+	},
+	{
+		11,
+		10243 - lc._encryptOffset,
+		9972 - lc._encryptOffset,
+		9984 - lc._encryptOffset
+	},
+	{
+		12,
+		10277 - lc._encryptOffset,
+		9973 - lc._encryptOffset,
+		9987 - lc._encryptOffset
+	},
+	{
+		13,
+		10315 - lc._encryptOffset,
+		9974 - lc._encryptOffset,
+		9990 - lc._encryptOffset
+	},
+	{
+		14,
+		10355 - lc._encryptOffset,
+		9975 - lc._encryptOffset,
+		9993 - lc._encryptOffset
+	},
+	{
+		15,
+		10399 - lc._encryptOffset,
+		9976 - lc._encryptOffset,
+		9996 - lc._encryptOffset
+	},
+	{
+		16,
+		10445 - lc._encryptOffset,
+		9977 - lc._encryptOffset,
+		9999 - lc._encryptOffset
+	},
+	{
+		17,
+		10495 - lc._encryptOffset,
+		9978 - lc._encryptOffset,
+		10002 - lc._encryptOffset
+	},
+	{
+		18,
+		10547 - lc._encryptOffset,
+		9979 - lc._encryptOffset,
+		10005 - lc._encryptOffset
+	},
+	{
+		19,
+		10603 - lc._encryptOffset,
+		9980 - lc._encryptOffset,
+		10008 - lc._encryptOffset
+	},
+	{
+		20,
+		10661 - lc._encryptOffset,
+		9981 - lc._encryptOffset,
+		10011 - lc._encryptOffset
+	},
+	{
+		21,
+		10723 - lc._encryptOffset,
+		9982 - lc._encryptOffset,
+		10015 - lc._encryptOffset
+	},
+	{
+		22,
+		10787 - lc._encryptOffset,
+		9983 - lc._encryptOffset,
+		10019 - lc._encryptOffset
+	},
+	{
+		23,
+		10855 - lc._encryptOffset,
+		9984 - lc._encryptOffset,
+		10023 - lc._encryptOffset
+	},
+	{
+		24,
+		10925 - lc._encryptOffset,
+		9985 - lc._encryptOffset,
+		10027 - lc._encryptOffset
+	},
+	{
+		25,
+		10999 - lc._encryptOffset,
+		9986 - lc._encryptOffset,
+		10031 - lc._encryptOffset
+	},
+	{
+		26,
+		11075 - lc._encryptOffset,
+		9987 - lc._encryptOffset,
+		10035 - lc._encryptOffset
+	},
+	{
+		27,
+		11155 - lc._encryptOffset,
+		9988 - lc._encryptOffset,
+		10039 - lc._encryptOffset
+	},
+	{
+		28,
+		11237 - lc._encryptOffset,
+		9989 - lc._encryptOffset,
+		10043 - lc._encryptOffset
+	},
+	{
+		29,
+		11323 - lc._encryptOffset,
+		9990 - lc._encryptOffset,
+		10047 - lc._encryptOffset
+	},
+	{
+		30,
+		11411 - lc._encryptOffset,
+		9991 - lc._encryptOffset,
+		10051 - lc._encryptOffset
+	},
+	{
+		31,
+		11503 - lc._encryptOffset,
+		9992 - lc._encryptOffset,
+		10056 - lc._encryptOffset
+	},
+	{
+		32,
+		11597 - lc._encryptOffset,
+		9993 - lc._encryptOffset,
+		10061 - lc._encryptOffset
+	},
+	{
+		33,
+		11695 - lc._encryptOffset,
+		9994 - lc._encryptOffset,
+		10066 - lc._encryptOffset
+	},
+	{
+		34,
+		11795 - lc._encryptOffset,
+		9995 - lc._encryptOffset,
+		10071 - lc._encryptOffset
+	},
+	{
+		35,
+		11899 - lc._encryptOffset,
+		9996 - lc._encryptOffset,
+		10076 - lc._encryptOffset
+	},
+	{
+		36,
+		12005 - lc._encryptOffset,
+		9997 - lc._encryptOffset,
+		10081 - lc._encryptOffset
+	},
+	{
+		37,
+		12115 - lc._encryptOffset,
+		9998 - lc._encryptOffset,
+		10086 - lc._encryptOffset
+	},
+	{
+		38,
+		12227 - lc._encryptOffset,
+		9999 - lc._encryptOffset,
+		10091 - lc._encryptOffset
+	},
+	{
+		39,
+		12343 - lc._encryptOffset,
+		10000 - lc._encryptOffset,
+		10096 - lc._encryptOffset
+	},
+	{
+		40,
+		12461 - lc._encryptOffset,
+		10001 - lc._encryptOffset,
+		10101 - lc._encryptOffset
+	},
+	{
+		41,
+		12583 - lc._encryptOffset,
+		10002 - lc._encryptOffset,
+		10107 - lc._encryptOffset
+	},
+	{
+		42,
+		12707 - lc._encryptOffset,
+		10003 - lc._encryptOffset,
+		10113 - lc._encryptOffset
+	},
+	{
+		43,
+		12835 - lc._encryptOffset,
+		10004 - lc._encryptOffset,
+		10119 - lc._encryptOffset
+	},
+	{
+		44,
+		12965 - lc._encryptOffset,
+		10005 - lc._encryptOffset,
+		10125 - lc._encryptOffset
+	},
+	{
+		45,
+		13099 - lc._encryptOffset,
+		10006 - lc._encryptOffset,
+		10131 - lc._encryptOffset
+	},
+	{
+		46,
+		13235 - lc._encryptOffset,
+		10007 - lc._encryptOffset,
+		10137 - lc._encryptOffset
+	},
+	{
+		47,
+		13375 - lc._encryptOffset,
+		10008 - lc._encryptOffset,
+		10143 - lc._encryptOffset
+	},
+	{
+		48,
+		13517 - lc._encryptOffset,
+		10009 - lc._encryptOffset,
+		10149 - lc._encryptOffset
+	},
+	{
+		49,
+		13663 - lc._encryptOffset,
+		10010 - lc._encryptOffset,
+		10155 - lc._encryptOffset
+	},
+	{
+		50,
+		13811 - lc._encryptOffset,
+		10011 - lc._encryptOffset,
+		10161 - lc._encryptOffset
+	},
+	{
+		51,
+		13963 - lc._encryptOffset,
+		10012 - lc._encryptOffset,
+		10168 - lc._encryptOffset
+	},
+	{
+		52,
+		14117 - lc._encryptOffset,
+		10013 - lc._encryptOffset,
+		10175 - lc._encryptOffset
+	},
+	{
+		53,
+		14275 - lc._encryptOffset,
+		10014 - lc._encryptOffset,
+		10182 - lc._encryptOffset
+	},
+	{
+		54,
+		14435 - lc._encryptOffset,
+		10015 - lc._encryptOffset,
+		10189 - lc._encryptOffset
+	},
+	{
+		55,
+		14599 - lc._encryptOffset,
+		10016 - lc._encryptOffset,
+		10196 - lc._encryptOffset
+	},
+	{
+		56,
+		14765 - lc._encryptOffset,
+		10017 - lc._encryptOffset,
+		10203 - lc._encryptOffset
+	},
+	{
+		57,
+		14935 - lc._encryptOffset,
+		10018 - lc._encryptOffset,
+		10210 - lc._encryptOffset
+	},
+	{
+		58,
+		15107 - lc._encryptOffset,
+		10019 - lc._encryptOffset,
+		10217 - lc._encryptOffset
+	},
+	{
+		59,
+		15283 - lc._encryptOffset,
+		10020 - lc._encryptOffset,
+		10224 - lc._encryptOffset
+	},
+	{
+		60,
+		15461 - lc._encryptOffset,
+		10021 - lc._encryptOffset,
+		10231 - lc._encryptOffset
+	},
+	{
+		61,
+		15643 - lc._encryptOffset,
+		10022 - lc._encryptOffset,
+		10239 - lc._encryptOffset
+	},
+	{
+		62,
+		15827 - lc._encryptOffset,
+		10023 - lc._encryptOffset,
+		10247 - lc._encryptOffset
+	},
+	{
+		63,
+		16015 - lc._encryptOffset,
+		10024 - lc._encryptOffset,
+		10255 - lc._encryptOffset
+	},
+	{
+		64,
+		16205 - lc._encryptOffset,
+		10025 - lc._encryptOffset,
+		10263 - lc._encryptOffset
+	},
+	{
+		65,
+		16399 - lc._encryptOffset,
+		10026 - lc._encryptOffset,
+		10271 - lc._encryptOffset
+	},
+	{
+		66,
+		16595 - lc._encryptOffset,
+		10027 - lc._encryptOffset,
+		10279 - lc._encryptOffset
+	},
+	{
+		67,
+		16795 - lc._encryptOffset,
+		10028 - lc._encryptOffset,
+		10287 - lc._encryptOffset
+	},
+	{
+		68,
+		16997 - lc._encryptOffset,
+		10029 - lc._encryptOffset,
+		10295 - lc._encryptOffset
+	},
+	{
+		69,
+		17203 - lc._encryptOffset,
+		10030 - lc._encryptOffset,
+		10303 - lc._encryptOffset
+	},
+	{
+		70,
+		17411 - lc._encryptOffset,
+		10031 - lc._encryptOffset,
+		10311 - lc._encryptOffset
+	},
+	{
+		71,
+		17623 - lc._encryptOffset,
+		10032 - lc._encryptOffset,
+		10320 - lc._encryptOffset
+	},
+	{
+		72,
+		17837 - lc._encryptOffset,
+		10033 - lc._encryptOffset,
+		10329 - lc._encryptOffset
+	},
+	{
+		73,
+		18055 - lc._encryptOffset,
+		10034 - lc._encryptOffset,
+		10338 - lc._encryptOffset
+	},
+	{
+		74,
+		18275 - lc._encryptOffset,
+		10035 - lc._encryptOffset,
+		10347 - lc._encryptOffset
+	},
+	{
+		75,
+		18499 - lc._encryptOffset,
+		10036 - lc._encryptOffset,
+		10356 - lc._encryptOffset
+	},
+	{
+		76,
+		18725 - lc._encryptOffset,
+		10037 - lc._encryptOffset,
+		10365 - lc._encryptOffset
+	},
+	{
+		77,
+		18955 - lc._encryptOffset,
+		10038 - lc._encryptOffset,
+		10374 - lc._encryptOffset
+	},
+	{
+		78,
+		19187 - lc._encryptOffset,
+		10039 - lc._encryptOffset,
+		10383 - lc._encryptOffset
+	},
+	{
+		79,
+		19423 - lc._encryptOffset,
+		10040 - lc._encryptOffset,
+		10392 - lc._encryptOffset
+	},
+	{
+		80,
+		19661 - lc._encryptOffset,
+		10041 - lc._encryptOffset,
+		10401 - lc._encryptOffset
+	},
+	{
+		81,
+		19903 - lc._encryptOffset,
+		10042 - lc._encryptOffset,
+		10411 - lc._encryptOffset
+	},
+	{
+		82,
+		20147 - lc._encryptOffset,
+		10043 - lc._encryptOffset,
+		10421 - lc._encryptOffset
+	},
+	{
+		83,
+		20395 - lc._encryptOffset,
+		10044 - lc._encryptOffset,
+		10431 - lc._encryptOffset
+	},
+	{
+		84,
+		20645 - lc._encryptOffset,
+		10045 - lc._encryptOffset,
+		10441 - lc._encryptOffset
+	},
+	{
+		85,
+		20899 - lc._encryptOffset,
+		10046 - lc._encryptOffset,
+		10451 - lc._encryptOffset
+	},
+	{
+		86,
+		21155 - lc._encryptOffset,
+		10047 - lc._encryptOffset,
+		10461 - lc._encryptOffset
+	},
+	{
+		87,
+		21415 - lc._encryptOffset,
+		10048 - lc._encryptOffset,
+		10471 - lc._encryptOffset
+	},
+	{
+		88,
+		21677 - lc._encryptOffset,
+		10049 - lc._encryptOffset,
+		10481 - lc._encryptOffset
+	},
+	{
+		89,
+		21943 - lc._encryptOffset,
+		10050 - lc._encryptOffset,
+		10491 - lc._encryptOffset
+	},
+	{
+		90,
+		22211 - lc._encryptOffset,
+		10051 - lc._encryptOffset,
+		10501 - lc._encryptOffset
+	},
+	{
+		91,
+		22483 - lc._encryptOffset,
+		10052 - lc._encryptOffset,
+		10513 - lc._encryptOffset
+	},
+	{
+		92,
+		22757 - lc._encryptOffset,
+		10053 - lc._encryptOffset,
+		10525 - lc._encryptOffset
+	},
+	{
+		93,
+		23035 - lc._encryptOffset,
+		10054 - lc._encryptOffset,
+		10537 - lc._encryptOffset
+	},
+	{
+		94,
+		23315 - lc._encryptOffset,
+		10055 - lc._encryptOffset,
+		10549 - lc._encryptOffset
+	},
+	{
+		95,
+		23599 - lc._encryptOffset,
+		10056 - lc._encryptOffset,
+		10561 - lc._encryptOffset
+	},
+	{
+		96,
+		23885 - lc._encryptOffset,
+		10057 - lc._encryptOffset,
+		10573 - lc._encryptOffset
+	},
+	{
+		97,
+		24175 - lc._encryptOffset,
+		10058 - lc._encryptOffset,
+		10585 - lc._encryptOffset
+	},
+	{
+		98,
+		24467 - lc._encryptOffset,
+		10059 - lc._encryptOffset,
+		10597 - lc._encryptOffset
+	},
+	{
+		99,
+		24763 - lc._encryptOffset,
+		10060 - lc._encryptOffset,
+		10609 - lc._encryptOffset
+	},
+	{
+		100,
+		25061 - lc._encryptOffset,
+		10061 - lc._encryptOffset,
+		10621 - lc._encryptOffset
+	}
+}
+local mapKeyIndex = {
+	k14587939 = 2,
+	k1644150 = 1,
+	k14944842 = 3,
+	k13922009 = 4
+}
+local mapKeyDimension = {
+	k13922009 = 0,
+	k14587939 = 0,
+	k14944842 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -9961
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -9961
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

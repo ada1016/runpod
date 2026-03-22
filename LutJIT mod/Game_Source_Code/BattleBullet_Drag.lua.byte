@@ -1,0 +1,21 @@
+local M = class("BattleBullet_Drag", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+local BattlePropEnum = BattlePropEnum
+
+function M:hitEnemy(enemy)
+	SUPER.hitEnemy(self, enemy)
+
+	if not enemy._isToBeDestroyed then
+		local duration = self._battleSkill:getProp(BattlePropEnum.AtkInterval)
+		local speed = self._battleSkill:getProp(BattlePropEnum.DragIntensity, 0) / 100
+		local addPer = self._battleSkill:getProp(BattlePropEnum.DragIntensityAddPer, 0)
+		speed = speed + speed * addPer / 100
+
+		enemy:beDraged(self._position, duration, speed)
+	end
+end
+
+return M

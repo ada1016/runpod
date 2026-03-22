@@ -1,0 +1,154 @@
+local M = class("CoinPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	tfGolds = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:init(callback)
+	self._callback = callback
+
+	self:updateGoldArea()
+end
+
+function M:updateGoldArea()
+	self:updateGoldAd(self._tfGolds:GetChild(0))
+	self:updateGoldFree(self._tfGolds:GetChild(1))
+	self:updateGoldDiamond(self._tfGolds:GetChild(2), 1)
+	self:updateGoldDiamond(self._tfGolds:GetChild(3), 2)
+end
+
+function M:updateGoldAd(tfWidget)
+	local exchangeId = D.ExchangeId.AdFreeCoin
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:GetChild(1):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:GetChild(2):GetComponent("TextMeshProUGUI")
+	local tfBtn = tfWidget:GetChild(1)
+	local imgAd = tfBtn:GetChild(0):GetComponent("Image")
+	local clickbtn = tfWidget:GetComponent("Button")
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(D.ResType.coin), getNum)
+
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	textLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+	V.loadAdButton1(tfBtn.gameObject, leftExchangeCount == 0)
+	self:setClick(clickbtn, function ()
+		local resultCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+		if resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode, param)
+
+			return
+		end
+
+		P._playerAd:tryStartRewardAd(D.AdType.Shop_Ad_Gold, function ()
+			local resultCode = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+				V.showRewardClaimPanel(rewards)
+				self:updateGoldAd(self._tfGolds:GetChild(0))
+			end)
+		end)
+	end)
+	clickbtn.dot:SetActive(false)
+end
+
+function M:updateGoldFree(tfWidget)
+	local exchangeId = D.ExchangeId.FreeCoin
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:Find("textLimit"):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local tfBtn = tfWidget:GetChild(1)
+	local imgAd = tfBtn:Find("icon"):GetComponent("Image")
+	local textFree = tfBtn:Find("text"):GetComponent("TextMeshProUGUI")
+	local clickbtn = tfWidget:GetComponent("Button")
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+
+	local leftExchangeCount = P._playerExchange:getLeftExchangeCount(exchangeId)
+	local str = V.getLeftStr(leftExchangeCount, maxExchangeNum)
+
+	textLimit:SetLocalizeS(SID.SHOP_DAILY_LIMIT, str)
+	imgAd.gameObject:SetActive(false)
+
+	if leftExchangeCount == 0 then
+		textFree:SetLocalize(SID.STR_CLAIMED)
+
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray)
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_gray_light)
+	else
+		textFree:SetLocalize(SID.STR_FREE)
+
+		tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+		tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+	end
+
+	self:setClick(clickbtn, function ()
+		local resultCode, param = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+			V.showRewardClaimPanel(rewards)
+			self:updateGoldFree(tfWidget)
+			RedDotManager.update("city.shop.resource")
+		end)
+
+		if resultCode ~= ResultCode.OK and resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode, param)
+
+			return
+		end
+	end)
+	clickbtn.dot:SetActive(P._playerExchange:getLeftExchangeCount(exchangeId) > 0)
+end
+
+function M:updateGoldDiamond(tfWidget, idx)
+	local exchangeId = D.ExchangeId.DiamondExchangeCoin1 - 1 + idx
+	local tf1 = tfWidget:GetChild(0)
+	local textLimit = tf1:Find("textLimit"):GetComponent("TextMeshProUGUI")
+	local textGetNum = tf1:Find("textDesc"):GetComponent("TextMeshProUGUI")
+	local tfExtra = tfWidget:GetChild(3)
+	local tfBtn = tfWidget:GetChild(1)
+	local tfImgAd = tfBtn:Find("icon")
+	local imgAd = tfImgAd:GetComponent("Image")
+	local clickbtn = tfWidget:GetComponent("Button")
+
+	tfImgAd:SetActive(true)
+
+	imgAd.color = Color.White
+	local maxExchangeNum = P._playerExchange:readExchangeBuyLimit(exchangeId)
+	local getCid, getNum = P._playerExchange:readExchangeGain(exchangeId)
+	local costCid, costNum = P._playerExchange:readExchangeCost(exchangeId)
+
+	V.loadItemNumWithLight(tfBtn, costCid, costNum)
+
+	tfBtn:GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue)
+	tfBtn:GetChild(0):GetComponent("Image").color = Color.str2Static(V.COMMON_COLOR.btn_blue_light)
+
+	textGetNum:SetLocalize(SID.RESOURCE_NUM, -D.toNameSid(getCid), getNum)
+	textLimit.gameObject:SetActive(false)
+	self:setClick(clickbtn, function ()
+		local resultCode, param = P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+			V.showRewardClaimPanel(rewards)
+		end)
+
+		if resultCode ~= ResultCode.OK then
+			V.showResultCode(resultCode)
+
+			return
+		end
+	end)
+	tfExtra:SetActive(true)
+	tfExtra:GetChild(0):GetComponent("TextMeshProUGUI"):SetLocalize(SID.SHOP_PRICE_OFF, P._playerExchange:readDiscount(exchangeId))
+end
+
+return M

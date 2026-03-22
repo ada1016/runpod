@@ -1,0 +1,188 @@
+local M = class("UnionWaitingPage", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	goSyncWaiting = Types.GameObject,
+	btnRetry = Types.Button,
+	goRetryTips = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self:on("server.maintain", function ()
+		self._goSyncWaiting:SetActive(false)
+		lc.stopTimer(self._timeoutTimer)
+
+		self._timeoutTimer = nil
+
+		self._goRetryTips:SetActive(true)
+		self._goSyncWaiting:SetActive(false)
+
+		if self._lb then
+			GameObject.Destroy(self._lb.gameObject)
+
+			self._lb = nil
+		end
+	end)
+	self:on("network.error", function ()
+		if P._playerUnion:isInUnion() then
+			return
+		end
+
+		lc.stopTimer(self._timeoutTimer)
+
+		self._timeoutTimer = nil
+
+		self._goRetryTips:SetActive(true)
+		self._goSyncWaiting:SetActive(false)
+
+		if self._lb then
+			GameObject.Destroy(self._lb.gameObject)
+
+			self._lb = nil
+		end
+	end)
+
+	self._lb = nil
+	_G.UnionWaitingPage = self
+
+	self._goSyncWaiting:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnRetry, function ()
+		self:showSyncWaitingTimeout()
+
+		self._timer = lc.setTimer(function ()
+			if P._playerUnion:isConnected() then
+				P._playerUnion:tryGetUnionDetailReq()
+			else
+				P._playerUnion:connectServer()
+			end
+		end, 0.5, true)
+	end)
+end
+
+function M:addEvents()
+	self:on("union.get.detail.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+
+		if P._playerUnion:isInUnion() then
+			Trace.traceDesign("UnionPage_Enter:%d", 1)
+		else
+			Trace.traceDesign("UnionPage_Enter:%d", 0)
+		end
+
+		self:createPage()
+	end)
+	self:on("union.leave.resp", function ()
+		self:createPage()
+	end)
+	self:on("union.join.resp", function ()
+		self._goSyncWaiting:SetActive(false)
+		self:createPage()
+	end)
+	self:on("union.not.in", function (chat)
+		self:createPage()
+	end)
+	self:on("sync.waiting", function (val)
+		self._goSyncWaiting:SetActive(val)
+	end)
+end
+
+function M:init()
+	if P._playerUnion:isConnected() then
+		self:createPage()
+	else
+		self:showSyncWaitingTimeout()
+		Trace.traceDesign("UnionPage_Click")
+
+		self._timer = lc.setTimer(function ()
+			P._playerUnion:connectServer()
+		end, 0.5, true)
+	end
+end
+
+function M:showSyncWaitingTimeout()
+	self._goRetryTips:SetActive(false)
+	self._goSyncWaiting:SetActive(true)
+
+	self._timeoutTimer = lc.setTimer(function ()
+		self._goRetryTips:SetActive(true)
+		self._goSyncWaiting:SetActive(false)
+	end, 5, true)
+end
+
+function M:createPage()
+	lc.stopTimer(self._timeoutTimer)
+
+	self._timeoutTimer = nil
+
+	if self._lb then
+		GameObject.Destroy(self._lb.gameObject)
+
+		self._lb = nil
+	end
+
+	self._goRetryTips:SetActive(false)
+
+	C._atUnionPage = false
+
+	if P._playerUnion:isInUnion() then
+		local go = LuaUnity.createGameObject("Assets/FW/Prefabs/UI/page/UnionChatPage.prefab", self.transform:GetChild(0))
+		local lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self)
+
+		self._lb = lb
+		C._atUnionPage = true
+	else
+		local go = LuaUnity.createGameObject("Assets/FW/Prefabs/UI/page/UnionJoinPage.prefab", self.transform:GetChild(0))
+		local lb = LuaHelper.GetLuaBehaviour(go)
+
+		lb:init(self)
+
+		self._lb = lb
+	end
+end
+
+function M:updateUI()
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+
+	if self._lb and self._lb.showInternal then
+		self._lb:showInternal()
+	end
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+
+	if self._lb and self._lb.hideInternal then
+		self._lb:hideInternal()
+	end
+end
+
+function M:showSyncWaiting()
+	self._goSyncWaiting:SetActive(true)
+end
+
+function M:hideSyncWaiting()
+	self._goSyncWaiting:SetActive(false)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._timeoutTimer)
+
+	self._timeoutTimer = nil
+
+	lc.stopTimer(self._timer)
+
+	self._timer = nil
+	_G.UnionWaitingPage = nil
+
+	M.super.OnDestroy(self)
+end
+
+return M

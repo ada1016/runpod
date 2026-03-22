@@ -1,0 +1,80 @@
+Types = {
+	LuaBehaviour = {
+		"LuaBehaviour"
+	},
+	GameObject = {
+		"GameObject"
+	},
+	Transform = {
+		"Transform"
+	},
+	Vector2 = {
+		"Vector2"
+	},
+	String = {
+		"String"
+	},
+	RectTransform = {
+		"RectTransform"
+	},
+	SpriteRenderer = {
+		"SpriteRenderer"
+	},
+	Camera = {
+		"Camera"
+	},
+	MeshRenderer = {
+		"MeshRenderer"
+	},
+	Image = {
+		"Image"
+	},
+	RawImage = {
+		"RawImage"
+	},
+	ScrollRect = {
+		"ScrollRect"
+	},
+	InputField = {
+		"InputField"
+	},
+	Button = {
+		"Button"
+	},
+	Text = {
+		"Text"
+	},
+	Slider = {
+		"Slider"
+	},
+	LCButton = {
+		"LCButton"
+	},
+	SkeletonGraphic = {
+		"SkeletonGraphic"
+	},
+	SlicedFilledImage = {
+		"SlicedFilledImage"
+	},
+	PlayableGroup = {
+		"PlayableGroup"
+	},
+	Animator = {
+		"Animator"
+	},
+	Animation = {
+		"Animation"
+	},
+	TMP_Text = {
+		"TMP_Text"
+	},
+	TMP_InputField = {
+		"TMP_InputField"
+	},
+	CanvasGroup = {
+		"CanvasGroup"
+	},
+	LayoutGroup = {
+		"LayoutGroup"
+	}
+}

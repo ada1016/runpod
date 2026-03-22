@@ -1,0 +1,83 @@
+local M = class("ArkRebuildCardDropWeightOverviewPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	tfContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	goTemplate = Types.GameObject,
+	goEmpty = Types.GameObject,
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfCardContainer = Types.Transform,
+	tmpTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+	self._goEmpty:SetActive(false)
+end
+
+function M:init(showCardType)
+	local cardPools = P._playerActivityArkRebuild:calcCardPools()
+	self._showCardType = showCardType
+
+	if showCardType == 6 then
+		self._tmpTitle:SetLocalize(SID.ARK_REBUILD_MODULE_TITLE)
+	else
+		self._tmpTitle:SetLocalize(SID["CARD_TYPE_TITLE_" .. showCardType - 1])
+	end
+
+	local cards = cardPools[showCardType]
+	local cfgs = showCardType == 6 and D._arkRebuildModuleConfig or D._battleRougeCardConfig
+	local cardNum = #cards
+	local totalCardNum = 0
+
+	for i = 1, cardNum do
+		if showCardType == 6 then
+			totalCardNum = totalCardNum + 1
+		else
+			local cfg = cards[i]
+			local id = cfg._id
+			local copyNum = cfg._selectMax - P._playerActivityArkRebuild:getCardNum(id)
+			copyNum = math.max(0, copyNum)
+			totalCardNum = totalCardNum + copyNum
+		end
+	end
+
+	local id, cfg = nil
+
+	for i = 1, cardNum do
+		local copyNum = 0
+
+		if showCardType == 6 then
+			id = -cards[i]
+			cfg = cfgs[id]
+		else
+			cfg = cards[i]
+			id = cfg._id
+			copyNum = cfg._selectMax - P._playerActivityArkRebuild:getCardNum(id) - 1
+			copyNum = math.max(0, copyNum)
+		end
+
+		local goCell = GameObject.Instantiate(self._goTemplate, self._tfCardContainer)
+
+		goCell:SetActive(true)
+
+		local tfTmps = goCell.transform:GetChild(0)
+		local tmpDesc = tfTmps:Find("Text"):GetComponent("TMP_Text")
+		local tmpWeight = tfTmps:Find("TextWeight"):GetComponent("TMP_Text")
+		tmpWeight.text = string.format("%.2f%%", math.floor(1 / totalCardNum * 10000) / 100)
+
+		tmpDesc:SetLocalize(cfg._nameSid)
+
+		if copyNum > 0 then
+			for c = 1, copyNum do
+				GameObject.Instantiate(goCell, self._tfCardContainer)
+			end
+		end
+	end
+
+	self._tfContainer:GetChild(0):SetActive(cardNum > 0)
+	self._goEmpty:SetActive(cardNum == 0)
+end
+
+return M

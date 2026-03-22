@@ -1,0 +1,129 @@
+local M = class("SparkScoutStatsWidget_Setting")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StatsWidgetOfSparkScoutSetting.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(weaponData)
+end
+
+function M:updateUI(weaponData1, weaponData2, panel)
+	local selfData = weaponData1
+	local otherData = weaponData2
+
+	self:loadWeaponDamages(selfData, self._tfSelfWeapons, panel, 1)
+	self:loadWeaponDamages(otherData, self._tfOtherWeapons, panel, 2)
+end
+
+function M:loadWeaponDamages(weaponDatas, tfContainer, panel, sessionId)
+	for i = 1, tfContainer.childCount do
+		local weapon = tfContainer:GetChild(i - 1).gameObject
+
+		weapon:SetActive(false)
+	end
+
+	for i = 1, #weaponDatas do
+		local pvpWeaponQueue = BattleManager:getSession(sessionId)._pvpWeaponQueue
+		local weaponData = weaponDatas[i]
+
+		if not weaponData.group then
+			local weaponGroupId = 1
+			local id = weaponData.id
+
+			for j = 1, 3 do
+				local breakAll = false
+				local weapons = pvpWeaponQueue[j]
+
+				for k, v in pairs(weapons) do
+					if v == id then
+						weaponGroupId = j
+						breakAll = true
+
+						break
+					end
+				end
+
+				if breakAll then
+					break
+				end
+			end
+
+			weaponData.group = weaponGroupId
+		end
+	end
+
+	table.sort(weaponDatas, function (a, b)
+		if a.group ~= b.group then
+			return a.group < b.group
+		end
+
+		if a.dmg ~= b.dmg then
+			return b.dmg < a.dmg
+		end
+
+		return b.id < a.id
+	end)
+
+	local cnt = #weaponDatas
+
+	for i = 1, cnt do
+		if weaponDatas[i].id == 100 then
+			weaponDatas[i] = nil
+
+			break
+		end
+	end
+
+	table.removeNilValues(weaponDatas, cnt)
+
+	for i = 1, #weaponDatas do
+		if tfContainer.childCount < i then
+			GameObject.Instantiate(tfContainer:GetChild(0).gameObject, tfContainer)
+		end
+
+		local weapon = tfContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(weapon)
+		weapon:SetActive(true)
+
+		local weaponData = weaponDatas[i]
+		local id = weaponData.id
+		local weaponGroupId = weaponData.group or 1
+		weapon._txtDamage.text = string.formatNumber(math.ceil(weaponData.dmg))
+
+		panel:setClickWithoutAction(weapon._btnIcon, function ()
+			UIManager.openPanel(PrefabDefine.BattleSkillDmgRecordPanel, id, sessionId)
+		end)
+
+		if id == D.WEAPON_DOME then
+			weapon._imgIcon:SetActive(true)
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. D.DEFAULT_DOME_SKIN, true)
+
+			weapon._tmpLv.text = 0
+
+			weapon._tmpLv.transform.parent:SetActive(false)
+		else
+			weapon._imgIcon:SetActive(true)
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. id, true)
+
+			weapon._tmpLv.text = weaponGroupId
+
+			weapon._tmpLv.transform.parent:SetActive(true)
+		end
+	end
+end
+
+return M

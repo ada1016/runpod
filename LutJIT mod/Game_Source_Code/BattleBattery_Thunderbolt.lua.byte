@@ -1,0 +1,319 @@
+local math = math
+local Mathf = Mathf
+local BattlePropEnum = BattlePropEnum
+local BattleDefine = BattleDefine
+local Ball = class("Ball")
+
+function Ball:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._left = self._battleRandomLib:randomTrue()
+	local s = D._battleGlobalConfig._battery_thunderball_move_speed
+	self._speed = self._left and s or -s
+	self._angle = self._battleRandomLib:randomMN(80, 100)
+	local x, y = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS, self._angle)
+	self._position = Vector2.retain(x, y + BattleDefine.DOME_CENTER)
+end
+
+function Ball:step(dt)
+	self._angle = self._angle + self._speed * dt
+	local x, y = BattleMathLib.point_in_circle_by_angle(BattleDefine.DOME_RADIUS, self._angle)
+	self._position.x = x
+	self._position.y = y + BattleDefine.DOME_CENTER
+
+	if x <= self._battleSession._battleFieldEdgeX1 then
+		self._speed = -math.abs(self._speed)
+	elseif self._battleSession._battleFieldEdgeX2 <= x then
+		self._speed = math.abs(self._speed)
+	end
+end
+
+local M = class("BattleBattery_Thunderbolt", requireLua("BattleBattery"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._ballCount = 0
+	self._balls = table.new(4, 0)
+	self._childBullets = table.new(16, 0)
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView_Thunderbolt").new(battleSession)
+	end
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+	self:addOneBall()
+end
+
+function M:addOneBall()
+	if self._ballCombineing then
+		self._ballCount = self._ballCount + 1
+	else
+		local ball = Ball.create(self._battleSession)
+		self._balls[#self._balls + 1] = ball
+		self._ballCount = self._ballCount + 1
+	end
+
+	if self._view then
+		self._view:addBallEvent()
+		self._view:posEvent()
+	end
+end
+
+function M:onPropDitry(k, v)
+	local addNum = 0
+
+	if k == BattlePropEnum.ThunderBallAdd then
+		addNum = v
+	elseif k == BattlePropEnum.ThunderBallAddPer then
+		addNum = self._ballCount * 2
+	end
+
+	for i = 1, addNum do
+		self:addOneBall()
+	end
+end
+
+function M:stepSeekingEnemy()
+	if self._isChanneling then
+		return
+	end
+
+	self._targetEnemy = self._battleSession._nearestEnemy
+end
+
+function M:step(dt)
+	SUPER.step(self, dt)
+
+	if self._stage == 1 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 2
+
+			for i = 1, self._ballCount do
+				self._totalCastCount = self._totalCastCount + 1
+				local ball = self._balls[i]
+
+				self:ballCastSkill(ball)
+			end
+		end
+
+		return
+	end
+
+	if self._isChanneling then
+		if self._twiceCastCD then
+			self._twiceCastCD = self._twiceCastCD - dt
+
+			if self._twiceCastCD <= 0 then
+				self._twiceCastCD = nil
+
+				for i = 1, self._ballCount do
+					if self._ballTwice[i] then
+						local ball = self._balls[i]
+
+						self:ballCastSkill(ball)
+					end
+				end
+			end
+		end
+
+		return
+	end
+
+	for i = 1, self._ballCount do
+		local ball = self._balls[i]
+
+		ball:step(dt)
+	end
+
+	if self._view then
+		self._view:posEvent()
+	end
+
+	if self:getEffect(452) then
+		self:tryEffect452()
+	end
+end
+
+function M:castSkill()
+	self._isChanneling = true
+	self._totalCastCount = 0
+
+	if self:getEffect(404) then
+		if self._ballTwice == nil then
+			self._ballTwice = table.new(4, 0)
+		else
+			table.clear(self._ballTwice)
+		end
+
+		self._twiceCastCD = 1
+		local params = D.getBattleEffectParams(404)
+
+		for i = 1, self._ballCount do
+			self._ballTwice[i] = self._battleRandomLib:randomTrue(params[1])
+
+			if self._ballTwice[i] then
+				self._totalCastCount = self._totalCastCount + 1
+			end
+		end
+	end
+
+	self._stage = 1
+	self._stageCD = 0.4
+
+	if self._view then
+		self._view:readyCastEvent()
+	end
+end
+
+function M:extraCastSkill()
+	for i = 1, self._ballCount do
+		local ball = self._balls[i]
+		local bullet = self:ballCastSkill(ball)
+		bullet._extraFlag = true
+	end
+end
+
+function M:ballCastSkill(ball)
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(ball._position.x, ball._position.y)
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	local skill408 = self._mainSkill:getSubSkill(408)
+
+	if skill408 then
+		local bu = skill408:createBullet()
+
+		bu:setPos(ball._position.x, ball._position.y)
+		bu:setDirByAngle(90)
+
+		if bu._view then
+			bu._view:posEvent()
+		end
+	end
+
+	return bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._extraFlag then
+		bullet._extraFlag = nil
+
+		return
+	end
+
+	if bullet._battleSkill == self._mainSkill then
+		self._totalCastCount = self._totalCastCount - 1
+
+		if self._totalCastCount == 0 then
+			self._isChanneling = false
+
+			self:onChannelingEnd()
+
+			self._stage = 0
+
+			for i = 1, self._ballCount do
+				local ball = self._balls[i]
+				ball._left = self._battleRandomLib:randomTrue()
+				local s = D._battleGlobalConfig._battery_thunderball_move_speed
+				ball._speed = ball._left and s or -s
+			end
+
+			if self._view then
+				self._view:castEndEvent()
+			end
+		end
+	end
+end
+
+function M:checkCollisionBallWithInput(bullet)
+	for i = 1, self._ballCount do
+		local ball = self._balls[i]
+
+		if BattleMathLib.circle_circle_intersect(ball._position, bullet._position, 0.5, bullet._radius) then
+			return true
+		end
+	end
+end
+
+function M:tryEffect452()
+	local allEnemys = self._battleSession._battleEnemys
+
+	for j = 1, self._ballCount do
+		local ball = self._balls[j]
+
+		if ball._effect452NextTimestamp == nil or ball._effect452NextTimestamp <= self._battleSession._elapsedTime then
+			for i = 1, #allEnemys do
+				local enemy = allEnemys[i]
+
+				if not enemy._isToBeDestroyed and BattleMathLib.circle_circle_intersect(ball._position, enemy._position, 0.5, enemy._radius) then
+					local castSkill = self:getSkill(405)
+					local bullet = castSkill:createBullet()
+
+					bullet:setPos(ball._position.x, ball._position.y)
+					bullet:setBeganTargt(ball)
+
+					local effPar = self:getEffect(452)
+					ball._effect452NextTimestamp = self._battleSession._elapsedTime + effPar
+
+					break
+				end
+			end
+		end
+	end
+end
+
+function M:castSkin62Effect()
+	local allEnemys = self._battleSession._battleEnemys
+
+	if #allEnemys == 0 then
+		return
+	end
+
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+	local enemy = self._battleRandomLib:randomOne(allEnemys)
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(enemy._position.x, enemy._position.y)
+
+	bullet._wallBounceNum = 99
+	bullet._bounceFlag = true
+	bullet._dir[1] = self._battleRandomLib:randomTrue() and 1 or -1
+	bullet._dir[2] = 0
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+end
+
+function M:pvpBeganRoundReady()
+	if self._view then
+		self._view._obj:GetChild(1):SetActive(true)
+	end
+end
+
+function M:pvpEndRound()
+	if self._view then
+		self._view._obj:GetChild(1):SetActive(false)
+	end
+end
+
+function M:pvpBeganRound()
+	if self._view then
+		self._view._obj:GetChild(1):SetActive(false)
+	end
+end
+
+return M

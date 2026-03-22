@@ -1,0 +1,1170 @@
+local M = class("BattlePanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	goJoyStick = Types.GameObject,
+	btnFaster = Types.Button,
+	tmpTimeScale = Types.TMP_Text,
+	imgFaster = Types.Image,
+	goSpeedUpVfx = Types.GameObject,
+	goTop = Types.GameObject,
+	goFull = Types.GameObject,
+	btnBack = Types.Button,
+	btnRogueInfo = Types.Button,
+	tmpTitle = Types.TMP_Text,
+	tmpTime = Types.TMP_Text,
+	tmpSeed = Types.TMP_Text,
+	pgsExp = Types.SlicedFilledImage,
+	tmpLevel = Types.TMP_Text,
+	tfWeapons = Types.Transform,
+	animBossComing = Types.Animation,
+	txtBossComming = Types.TMP_Text,
+	btnWeapons = Types.Button,
+	btnDraw = Types.Button,
+	btnAddBuf = Types.Button,
+	btnSettings = Types.Button,
+	btnZoom = Types.Button,
+	btnQ = Types.Button,
+	btnE = Types.Button,
+	btnR = Types.Button,
+	btnP = Types.Button,
+	btnBeganRound = Types.Button,
+	btnEndRound = Types.Button,
+	textSkill1 = Types.TMP_Text,
+	textSkill2 = Types.TMP_Text,
+	textSkill3 = Types.TMP_Text,
+	textSkill4 = Types.TMP_Text,
+	textSkill5 = Types.TMP_Text,
+	textEnemyCount = Types.TMP_Text,
+	tfHUD = Types.Transform,
+	goNewEnemyPanel = Types.GameObject,
+	btnNewEnemyBg = Types.Button,
+	goDebug = Types.GameObject,
+	goBossHp = Types.GameObject,
+	txtBossName = Types.TMP_Text,
+	imgHpBase = Types.Image,
+	imgHpValue = Types.Image,
+	imgHpChange = Types.Image,
+	txtBossHp = Types.TMP_Text,
+	goDomeBuffArea = Types.GameObject,
+	goGlobalDefenseBuffArea = Types.GameObject,
+	goInviteArea = Types.GameObject,
+	tfInviteAvatar = Types.Transform,
+	tmpInviteName = Types.TMP_Text,
+	tmpInviteMsg = Types.TMP_Text,
+	btnInviteClose = Types.Button,
+	goSVIPPurchaseButton = Types.GameObject,
+	btnOpenSVIP = Types.Button,
+	goLockElite = Types.GameObject,
+	btnLockElite = Types.Button,
+	btnNotLockElite = Types.Button,
+	goAutoBattle = Types.GameObject,
+	btnAutoBattle = Types.Button,
+	btnNotAutoBattle = Types.Button,
+	goSkillDmgContent = Types.GameObject,
+	textSkiilDmg1 = Types.TMP_Text,
+	textSkiilDmg2 = Types.TMP_Text,
+	textSkiilDmg3 = Types.TMP_Text,
+	textSkiilDmg4 = Types.TMP_Text,
+	textSkiilDmg5 = Types.TMP_Text,
+	textSkiilDmg100 = Types.TMP_Text,
+	btnSkillDmgReset = Types.Button,
+	textEnemyTakeDMG = Types.TMP_Text,
+	textEnemyRecvDMG = Types.TMP_Text,
+	txtEnemyNum = Types.TMP_Text,
+	textRangerSkillDmg = Types.TMP_Text,
+	goOptionBar = Types.GameObject,
+	goCrisisZoneLeftArea = Types.GameObject,
+	goCrisisZoneRightArea = Types.GameObject,
+	txtKillTotalNum = Types.TMP_Text,
+	txtRemainNum = Types.TMP_Text,
+	btnSkipWave = Types.Button,
+	btnSkipWaveDisabled = Types.Button,
+	txtSkipCd = Types.TMP_Text,
+	btnAuto = Types.Button,
+	goAutoVfx = Types.GameObject,
+	goBag = Types.GameObject,
+	btnOpenBag = Types.Button,
+	txtBagRewardNum = Types.TMP_Text,
+	tfAbsolutelyCenter = Types.Transform,
+	goPopArea = Types.GameObject,
+	goPopCard = Types.GameObject,
+	goPopAreaOpp = Types.GameObject,
+	goPopCardOpp = Types.GameObject
+}
+local CRISIS_ZONE_ENABLE_AUTO = "crisis_zone_enable_auto_%d"
+local RogueCardInfoWidget = requireLua("RogueCardInfoWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	_G.BattlePanel = self
+
+	self._goNewEnemyPanel:SetActive(true)
+	self:initJoystick()
+
+	if not Client.isDev() then
+		self._goDebug:SetActive(false)
+	end
+
+	self._goBossHp:SetActive(false)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goDomeBuffArea)
+	lc.prefabVarPeer(self._goGlobalDefenseBuffArea)
+
+	if self._goPopCard then
+		RogueCardInfoWidget.noCreate(self._goPopCard)
+		RogueCardInfoWidget.noCreate(self._goPopCardOpp)
+	end
+end
+
+function M:Start()
+	self:initNewEnemy()
+
+	self._tmpSkillCD = {
+		self._tmpSkill1CD,
+		[16] = self._tmpSkill2CD,
+		[51] = self._tmpSkill3CD
+	}
+
+	self._goLockElite:SetActive(BattleView._showLockEliteFlag)
+	self._btnNotLockElite:SetActive(not BattleView._lockEliteFlag)
+	self._btnLockElite:SetActive(BattleView._lockEliteFlag)
+	self._goAutoBattle:SetActive(self._msType == D.MissionType.ArkRebuild and P._playerActivityArkRebuild:isModuleActive(D.ModuleType.AUTO_BATTLE))
+	self._btnAutoBattle:SetActive(self._msType == D.MissionType.ArkRebuild and P._playerActivityArkRebuild:isAutoBattle())
+	self._btnNotAutoBattle:SetActive(self._msType == D.MissionType.ArkRebuild and not P._playerActivityArkRebuild:isAutoBattle())
+
+	if self._msType == D.MissionType.CrisisZone then
+		self._remainZero = false
+
+		self._goCrisisZoneLeftArea:SetActive(true)
+		self._goCrisisZoneRightArea:SetActive(true)
+		self._btnSkipWave:SetActive(true)
+		self._btnSkipWaveDisabled:SetActive(false)
+		self._goBag:SetActive(true)
+
+		if BattleManager._isTrainMode then
+			self._goCrisisZoneRightArea:SetActive(false)
+		end
+
+		if not self._enableAuto then
+			self._btnAuto:SetActive(false)
+		end
+
+		self._txtKillTotalNum.transform.parent:SetActive(true)
+		self:updateCrisisZoneKillNum(0, D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+		self:updateCrisisZoneRemainNum(D.CRISIS_ZONE_MAX_ENEMY_COUNT)
+		self:setClick(self._btnSkipWave, function ()
+			self._battleSession._battleEnemyGenerator:forceStepWave(D._globalConfig._crisis_zone_skip_num)
+
+			if not self._remainZero then
+				self._btnSkipWave:SetActive(false)
+				self._txtSkipCd.transform.parent:SetActive(true)
+			end
+		end)
+
+		if self._enableAuto then
+			local difficulty = D._missionCrisisConfig[self._msId]._difficulty
+			self._battleSession._battleEnemyGenerator._autoSkipWave = false
+
+			self._goAutoVfx:SetActive(self._battleSession._battleEnemyGenerator._autoSkipWave)
+			self:setClick(self._btnAuto, function ()
+				self._battleSession._battleEnemyGenerator._autoSkipWave = not self._battleSession._battleEnemyGenerator._autoSkipWave
+
+				self._goAutoVfx:SetActive(self._battleSession._battleEnemyGenerator._autoSkipWave)
+			end)
+		end
+	else
+		self._goCrisisZoneLeftArea:SetActive(false)
+		self._goCrisisZoneRightArea:SetActive(false)
+		self._goBag:SetActive(false)
+		self._txtKillTotalNum.transform.parent:SetActive(false)
+	end
+
+	self._goOptionBar:SetActive(true)
+end
+
+function M:addClicks()
+	self:setClick(self._btnFaster, function ()
+		self:handleFasterBtn()
+	end)
+	self:setClick(self._btnRogueInfo, function ()
+		BattleManager:stopTime()
+		UIManager.openPanel(PrefabDefine.BattleCardsBrowsePanel)
+	end)
+	self:setClick(self._btnBack, function ()
+		self:handleBackBtn()
+	end)
+	self:setClick(self._btnNewEnemyBg, function ()
+		self:hideEnemy()
+	end)
+	self:setClick(self._btnSettings, function ()
+		BattleManager:stopTime()
+		UIManager.openPanel(PrefabDefine.BattleProfilerPanel, "debug")
+	end)
+	self:setClick(self._btnInviteClose, function ()
+		self._goInviteArea:GetChild(0):GetComponent("Animator"):SetTrigger("hide")
+	end)
+	self:setClick(self._btnOpenSVIP, function ()
+		Trace.AF_traceKey("click_ad_banner")
+		self:openRightsCardPanel(D.PurchaseChannel.AdBanner)
+	end)
+	self:setClick(self._btnLockElite, function ()
+		self._btnNotLockElite:SetActive(true)
+		self._btnLockElite:SetActive(false)
+
+		BattleView._lockEliteFlag = false
+		self._battleSession._lockEliteFlag = false
+
+		lc.setIntKeyValue(BattleDefine.EffectParam[5].key, 0)
+	end)
+	self:setClick(self._btnNotLockElite, function ()
+		self._btnLockElite:SetActive(true)
+		self._btnNotLockElite:SetActive(false)
+
+		BattleView._lockEliteFlag = true
+		self._battleSession._lockEliteFlag = true
+
+		lc.setIntKeyValue(BattleDefine.EffectParam[5].key, 1)
+	end)
+
+	if BattleManager:isMissionPVP() then
+		self:setClick(self._btnBeganRound, function ()
+			BattleManager:startNextPVPRound()
+		end)
+		self:setClick(self._btnEndRound, function ()
+			BattleManager:settlePvpEndRound(self._battleSession)
+		end)
+	end
+
+	self:setClick(self._btnOpenBag, function ()
+		BattleManager:stopTime()
+		UIManager.openPanel(PrefabDefine.CrisisZoneBagPanel)
+	end)
+end
+
+function M:openRightsCardPanel(channel)
+	BattleManager:stopTime()
+	UIManager.openPanel(PrefabDefine.RightCardPanel, channel, function ()
+		BattleManager:revertStopTime()
+		self:updateStop()
+
+		if P._playerRight:isForever(D.RightCardType.SVIP) then
+			BattleManager:dealspeedUp()
+			self:updateFaster()
+		end
+	end)
+end
+
+function M:initDebugClicks()
+	self._btnDraw.gameObject:SetActive(Client.isDev())
+
+	if Client.isDev() then
+		self:setClick(self._btnWeapons, function ()
+			if self._msType == D.MissionType.Dome then
+				self._battleSession:pushWaitingRouge(D.RougeType.Dome)
+			else
+				self._battleSession:pushWaitingRouge(D.RougeType.Level)
+			end
+		end)
+		self:setClick(self._btnDraw, function ()
+			self._battleSession:pushWaitingRouge(D.RougeType.Elite)
+		end)
+	end
+
+	self:setClick(self._btnAddBuf, function ()
+		BattleManager:pauseBattle(true)
+		UIManager.openPanel(PrefabDefine.InputBoxPanel, {
+			_title = "Input Rouge Id",
+			_confirmCallback = function (rougeStr)
+				BattleManager:pauseBattle(false)
+
+				if rougeStr == nil then
+					return
+				end
+
+				Client._config.no_rouge = true
+				Client._config.test_rouge = true
+				local args = string.split(rougeStr, ",")
+
+				for i = 1, #args do
+					self._battleSession._rougeIds = {
+						tonumber(args[i])
+					}
+
+					self._battleSession:selectRogueCard(tonumber(args[i]))
+				end
+			end,
+			_cancelCallback = function (rougeId)
+				self._battleSession:pauseBattle(false)
+			end
+		})
+	end)
+	self:setClick(self._btnZoom, function ()
+		self._sessionView:zoomField()
+	end)
+	self:setClick(self._btnQ, function ()
+		self._battleSession._battleActor:shiftBooster()
+
+		if self._battleSession._battleAtorClone then
+			self._battleSession._battleAtorClone:shiftBooster()
+		end
+	end)
+	self:setClick(self._btnE, function ()
+		if lc._isMobile then
+			self._battleSession:pauseBattle(true)
+			UIManager.openPanel(PrefabDefine.InputBoxPanel, {
+				_title = "Input Enemy Id",
+				_confirmCallback = function (enemyId)
+					if enemyId == nil then
+						return
+					end
+
+					enemyId = tonumber(enemyId)
+
+					if D._battleEnemyConfig[enemyId] == nil then
+						return
+					end
+
+					self._battleSession:pauseBattle(false)
+
+					Client._config.enemy_id = enemyId
+				end,
+				_cancelCallback = function (rougeId)
+					self._battleSession:pauseBattle(false)
+				end
+			})
+		else
+			BattleLogger:exportLogs()
+		end
+	end)
+	self:setClick(self._btnR, function ()
+		BattleView:reStart()
+	end)
+
+	ContinueBattle = nil
+
+	function ContinueBattle()
+		while true do
+			if self._battleSession._result then
+				break
+			end
+
+			if Client._waitOpStep then
+				Client._waitOpStep = Client._waitOpStep - 1
+
+				if Client._waitOpStep == 0 then
+					Client._waitOpStep = nil
+					self._battleSession._stop = false
+				end
+			elseif not self._battleSession._stop then
+				self._battleSession:Update(0.0167)
+			end
+		end
+	end
+
+	self:setClick(self._btnP, function ()
+		Client._skipBattle = true
+
+		ContinueBattle()
+	end)
+
+	if Client._config.showDebug then
+		self._textSkill1.transform.parent:SetActive(true)
+	end
+
+	self:setClick(self._btnSkillDmgReset, function ()
+		self._battleSession._skillRecordDmgs = {}
+	end)
+
+	self._textSkillDmgs = {
+		self._textSkiilDmg1,
+		self._textSkiilDmg2,
+		self._textSkiilDmg3,
+		self._textSkiilDmg4,
+		self._textSkiilDmg5,
+		[100] = self._textSkiilDmg100
+	}
+end
+
+function M:addEvents()
+	self:on("iap.purchase.fail", function (errorStr)
+		UIManager.hideWaiting()
+
+		if errorStr == "UserCancelled" then
+			V.showToast(SID.PURCHASE_CANCEL)
+		elseif errorStr == "invalid pay" then
+			V.showToast(SID.PURCHASE_FAIL)
+		elseif errorStr == "Unknown" then
+			V.showToast(SID.PURCHASE_WRONG)
+		elseif errorStr == "ProductUnavailable" then
+			V.showToast(SID.PURCHASE_UNAVAILABLE)
+		else
+			V.showToast(SID.PURCHASE_FAIL)
+		end
+	end)
+	self:on("iap.purchase.success", function (iapType)
+		V.showToast(SID.PURCHASE_SUCCESS)
+	end)
+	self:on("ad.notready", function ()
+		V.showToast(SID.AD_NOT_READY)
+	end)
+	self:on("ad.ready", function ()
+		V.showToast(SID.AD_READY)
+	end)
+	self:on("ad.fail", function ()
+		V.showToast(SID.AD_FAIL)
+	end)
+	self:on("finished.ad", function ()
+		if Client._config.skipAdVideo then
+			V.showToast(SID.AD_TEST_JUMP)
+
+			return
+		end
+
+		if P._playerRight:isSVIP() then
+			V.showToast(SID.AD_JUMP)
+		elseif P._playerRight:isAdRemoved() then
+			V.showToast(SID.AD_REMOVED_JUMP)
+		else
+			V.showToast(SID.AD_FINISHED)
+		end
+	end)
+	self:on("battle.boss.coming", function (id)
+		self:setBossCommingText(SID.MISSION_BOSS_COMMING)
+		self:dealBossComing(id)
+
+		local entryAudio = D._battleEnemyConfig[id]._entryAudio
+
+		if entryAudio then
+			C._lastBattleMusic = C._musicId
+
+			lc.delayFunc(1, function ()
+				C.playMusic(entryAudio)
+			end)
+		end
+	end)
+	self:on("elite.wave.coming", function (level)
+		if level == 1 then
+			self:setBossCommingText(SID.ELITE_BATTLE_TIP_LEVEL_1)
+			self:dealBossComing()
+			self._sessionView:zoomField()
+		elseif level == 10 then
+			self:setBossCommingText(SID.ELITE_BATTLE_TIP_LEVEL_10)
+			self:dealBossComing()
+			self._sessionView:zoomField()
+		elseif level == 20 then
+			self:setBossCommingText(SID.ELITE_BATTLE_TIP_LEVEL_20)
+			self:dealBossComing()
+			self._sessionView:zoomField()
+		end
+	end)
+	self:on("globalDefense.wave.coming", function (level)
+		self._tmpInviteMsg:SetLocalize(SID["TIP_RANDOM_ELITE_APPEAR_MSG_" .. math.random(1, 5)])
+		self._goInviteArea:GetChild(0):GetComponent("Animator"):ResetTrigger("show")
+		self._goInviteArea:GetChild(0):GetComponent("Animator"):ResetTrigger("hide")
+		self._goInviteArea:GetChild(0):GetComponent("Animator"):SetTrigger("show")
+
+		self._autoCloseInviteTimer = lc.setTimer(function ()
+			self._autoCloseInviteTimer = nil
+
+			self._goInviteArea:GetChild(0):GetComponent("Animator"):SetTrigger("hide")
+		end, 10)
+
+		self:setBossCommingText(SID["GLOBAL_BATTLE_TIP_LEVEL_" .. level])
+		self:dealBossComing()
+		self._sessionView:zoomField()
+	end)
+	self:on("battle.enemy.new", function (enemyId)
+		self:showNewEnemy(enemyId)
+	end)
+	self:on("rightcard.update", function (enemyId)
+		self:updateFaster()
+	end)
+	self:on("guide.step", function (id)
+		if id == 1030 then
+			self:tryShowNextEnemy(true)
+		end
+	end)
+	self:on("battle.ranger.upgrade", function (i, cid, x)
+		local quality = D._rangerEquipConfig[cid]._quality
+		local goRangerUpgradeVfx = LuaUnity.createGameObject(string.format("Assets/FW/Prefabs/UI/element/VfxActivated_%d.prefab", quality - D.Quality.Green), self.transform)
+
+		lc.prefabVarPeer(goRangerUpgradeVfx)
+
+		local pos = self._sessionView._camera:WorldToScreenPoint(Vector3.static(x, 0, 0))
+		pos.y = pos.y + 220
+
+		lc.setPosition(goRangerUpgradeVfx, pos)
+		goRangerUpgradeVfx:SetActive(false)
+
+		goRangerUpgradeVfx._txtNum.text = cid % 100
+		self._autoCloseRangerTimer = lc.setTimer(function ()
+			goRangerUpgradeVfx:SetActive(true)
+
+			local vfx = self._sessionView:createAndPlayVFX("General_weapon_upgrade", 2)
+
+			if vfx then
+				vfx:SetPosition(x, 0, 0)
+			end
+		end, 1)
+	end)
+	self:on("mission.crisis.reward", function (reward, x, y)
+		local cid = reward[1]()
+		local pos = self._sessionView._camera:WorldToScreenPoint(Vector3.static(x, y, 0))
+		local x, y, z = pos:Get()
+
+		if #self._rewardVfxPool == 0 then
+			self._rewardVfxPool[#self._rewardVfxPool + 1] = LuaUnity.createGameObject("Assets/FW/Prefabs/UI/element/VfxCrisisReward.prefab", self.transform).transform
+
+			self._rewardVfxPool[#self._rewardVfxPool]:SetActive(false)
+		end
+
+		local vfxTransform = self._rewardVfxPool[#self._rewardVfxPool]
+
+		table.remove(self._rewardVfxPool, #self._rewardVfxPool)
+
+		local quality = D.toQuality(cid)
+
+		for i = 1, vfxTransform.childCount do
+			local tf = vfxTransform:GetChild(i - 1)
+
+			if tf.gameObject.activeSelf then
+				tf:SetActive(false)
+			end
+		end
+
+		local tfSubVfx = vfxTransform:GetChild(quality - D.Quality.Green)
+
+		tfSubVfx:SetActive(true)
+
+		local leftOrRight = math.random(0, 1) == 0 and 0 or 1
+		local xOffset = leftOrRight == 0 and 225 or -225
+
+		if x + xOffset < 0 then
+			leftOrRight = 0
+			xOffset = 225
+		elseif Screen.width < x + xOffset then
+			leftOrRight = 1
+			xOffset = -225
+		end
+
+		if quality <= D.Quality.Blue then
+			xOffset = 0
+		end
+
+		lc.setPosition(vfxTransform, x + xOffset, y, z)
+		vfxTransform:SetActive(true)
+		vfxTransform:SetLocalScale(1, 1, 1)
+
+		if D.Quality.Blue < quality then
+			tfSubVfx:Find("vfx_Right"):SetActive(false)
+			tfSubVfx:Find("vfx_Left"):SetActive(false)
+			tfSubVfx:Find(leftOrRight == 0 and "vfx_Right" or "vfx_Left"):SetActive(true)
+		end
+
+		tfSubVfx:Find("Group"):SetActive(false)
+
+		local x1, y1, z1 = lc.getPosition(self._btnOpenBag.gameObject)
+		local distance = math.sqrt((x1 - (x + xOffset)) * (x1 - (x + xOffset)) + (y1 - y) * (y1 - y))
+		local seq = DOTween.Sequence():SetLink(self.gameObject)
+
+		if D.Quality.Blue < quality then
+			seq:AppendInterval(1.2)
+			seq:AppendCallback(function ()
+				tfSubVfx:Find("Group"):SetActive(true)
+
+				for i = 1, tfSubVfx:Find("Group").childCount do
+					tfSubVfx:Find("Group"):GetChild(i - 1):SetActive(false)
+				end
+
+				if D.Quality.Purple <= quality then
+					tfSubVfx:Find("Group"):Find("vfx_05"):SetActive(true)
+				end
+			end)
+			seq:AppendInterval(0.15)
+		else
+			seq:AppendCallback(function ()
+				tfSubVfx:Find("Group"):SetActive(true)
+			end)
+		end
+
+		seq:AppendCallback(function ()
+			for i = 1, tfSubVfx:Find("Group").childCount do
+				tfSubVfx:Find("Group"):GetChild(i - 1):SetActive(true)
+			end
+		end)
+		seq:AppendInterval(1.5)
+		seq:Append(vfxTransform:DOMove(Vector3.static(x1, y1, z1), distance / Screen.width / 1.5):SetEase(V.EASE_LINEAR))
+		seq:AppendCallback(function ()
+			vfxTransform:SetActive(false)
+
+			self._rewardVfxPool[#self._rewardVfxPool + 1] = vfxTransform
+			self._curBagRewardNum = self._curBagRewardNum + 1
+			self._txtBagRewardNum.text = self._curBagRewardNum
+		end)
+		seq:Append(self._txtBagRewardNum.transform:DOScale(Vector3.static(1.5, 1.5, 1.5), 0.15))
+		seq:Append(self._txtBagRewardNum.transform:DOScale(Vector3.static(1, 1, 1), 0.15))
+	end)
+	self:on("spark.rouge", function (cardId, x, y)
+		local pos = self._sessionView._camera:WorldToScreenPoint(Vector3.static(x, y, 0))
+		self._sparkRogueSeq = DOTween.Sequence()
+
+		self._sparkRogueSeq:AppendInterval(2.1)
+
+		pos.y = pos.y + 120
+
+		if cardId > 0 then
+			self._goPopCard:updateUI(cardId)
+			self._goPopArea:SetActive(false)
+			self._goPopArea:SetActive(true)
+			lc.setLocalPosition(self._goPopCard, 0, 0, 0)
+			self._sparkRogueSeq:Append(self._goPopCard.transform:DOMove(Vector3.static(pos.x, pos.y, 0), 0.8):SetEase(V.EASE_OUT_BACK))
+			self._sparkRogueSeq:Join(self._goPopCard.transform:DOScale(0, 0.8):SetEase(V.EASE_OUT_BACK))
+		else
+			cardId = -cardId
+
+			self._goPopCardOpp:updateUI(cardId)
+
+			pos.x = Screen.width - pos.x
+			pos.y = Screen.height - pos.y
+
+			self._goPopAreaOpp:SetActive(false)
+			self._goPopAreaOpp:SetActive(true)
+			lc.setLocalPosition(self._goPopCardOpp, 0, 0, 0)
+			self._sparkRogueSeq:Append(self._goPopCardOpp.transform:DOMove(Vector3.static(pos.x, pos.y, 0), 0.8):SetEase(V.EASE_OUT_BACK))
+			self._sparkRogueSeq:Join(self._goPopCardOpp.transform:DOScale(0, 0.8):SetEase(V.EASE_OUT_BACK))
+		end
+	end)
+	self:on("pvp.crush.win", function (winCount)
+		local obj = LuaUnity.createGameObjectWithPeerVar("Assets/FW/Prefabs/UI/widget/SparkscoutReport.prefab", self.transform)
+
+		obj._ani:Play("anim_sparkscout_battle_report_1")
+		obj._desc:SetLocalize(SID.STR_CRUSH_WIN)
+		GameObject.Destroy(obj, 3)
+	end)
+	self:on("pvp.danger.win", function (winCount)
+		local obj = LuaUnity.createGameObjectWithPeerVar("Assets/FW/Prefabs/UI/widget/SparkscoutReport.prefab", self.transform)
+
+		obj._ani:Play("anim_sparkscout_battle_report_1")
+		obj._desc:SetLocalize(SID.STR_COMEBACK)
+		GameObject.Destroy(obj, 3)
+	end)
+	self:on("pvp.round.end", function ()
+		if self._goSparkBattle then
+			self._goSparkBattle:resetBattle()
+			self._goSparkBattle:showScoreChange()
+		end
+	end)
+	self:on("enter.rage.time", function ()
+		if self._goSparkBattle then
+			self._goSparkBattle:enterCrazyTime()
+			self._goSparkBattle:updateStatus(1)
+			Client.playSound("ui_Boss_1")
+		end
+	end)
+	self:on("enter.kill.time", function ()
+		if self._goSparkBattle then
+			self._goSparkBattle:enterDeathTime()
+			self._goSparkBattle:updateStatus(2)
+			Client.playSound("ui_Boss_1")
+		end
+	end)
+end
+
+function M:onBattleReady()
+	if self._msType == D.MissionType.CrisisZone and not P._playerGuide:isGroupFinished(D.GuideGroupId.CrisisZone) then
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.CrisisZone)
+	end
+end
+
+function M:init()
+	self._battleSession = BattleManager:getSession()
+	self._sessionView = self._battleSession._sessionView
+	self._msType = self._battleSession._msType
+	self._msId = self._battleSession._msId
+
+	if self._msType == D.MissionType.CrisisZone then
+		self._curBagRewardNum = 0
+		self._enableAuto = D.CRISIS_ZONE_MAX_ENEMY_COUNT <= P._playerCrisisZone:getMissionKillRecord(self._msId)
+		self._rewardVfxPool = {}
+	end
+
+	if self._msType == D.MissionType.GlobalDefense and P._playerGlobalDefense:isInvite() then
+		self._goInviteArea:SetActive(true)
+
+		local avatar, avatarFrame, name, msg = P._playerGlobalDefense:getInviteData()
+
+		V.loadAvatar(self._tfInviteAvatar, avatar, tonumber(avatarFrame))
+
+		self._tmpInviteName.text = name
+
+		if msg and #msg > 0 then
+			self._tmpInviteMsg.text = msg
+		else
+			self._tmpInviteMsg:SetLocalize(SID["TIP_RANDOM_ENTER_BATTLE_MSG_" .. math.random(1, 3)])
+		end
+
+		self._autoOpenInviteTimer = lc.setTimer(function ()
+			self._goInviteArea:GetChild(0):GetComponent("Animator"):ResetTrigger("show")
+			self._goInviteArea:GetChild(0):GetComponent("Animator"):ResetTrigger("hide")
+			self._goInviteArea:GetChild(0):GetComponent("Animator"):SetTrigger("show")
+
+			self._autoOpenInviteTimer = nil
+			self._autoCloseInviteTimer = lc.setTimer(function ()
+				self._autoCloseInviteTimer = nil
+
+				self._goInviteArea:GetChild(0):GetComponent("Animator"):SetTrigger("hide")
+			end, 10)
+		end, 2)
+	else
+		self._goInviteArea:SetActive(false)
+	end
+
+	if self._msType == D.MissionType.SparkScout then
+		lc.placeUIAtScreenYPoint(self._tfAbsolutelyCenter, 0.5)
+
+		self._goSparkBattle = requireLua("SparkScoutBattleWidget").create(self._tfAbsolutelyCenter)
+
+		self._goSparkBattle:init()
+		self:setClick(self._goSparkBattle._btnPause, function ()
+			self:handleBackBtn()
+		end)
+		self:setClick(self._goSparkBattle._btnFaster, function ()
+			self:handleFasterBtn()
+		end)
+		self:setClick(self._goSparkBattle._btnCards, function ()
+			self:handlePvpCardsBtn()
+		end)
+		self._goTop:SetActive(false)
+		self._goFull:SetActive(false)
+
+		local selfMatchData = BattleManager:getSession(1):getMatchData()
+		local opponentMatchData = BattleManager:getSession(2):getMatchData()
+
+		self._goSparkBattle:updatePlayerInfo(selfMatchData, opponentMatchData)
+		self._goSparkBattle:resetBattle()
+		self._goSparkBattle:updateScoreNum(BattleManager:getPvpScore())
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if self._msType ~= D.MissionType.Dome then
+		V.loadMissionTitleText(self._tmpTitle, self._msId, self._msType)
+	else
+		self._tmpTitle:SetLocalize(SID.STR_DIFFICULTY_X, D._missionDomeConfig[self._msId]._difficulty)
+	end
+
+	self:updateSeed()
+	self:updateLevel(self._battleSession:getLv(), 0, 1)
+	self:updateStop()
+	self:updateFaster()
+	self:updateBuff(self._msId, self._msType)
+
+	if GuideManager:isInGuide() then
+		self._btnBack:SetActive(false)
+	end
+
+	if lc._isCN and P:getLevel() == 1 then
+		self._btnBack:SetActive(false)
+	end
+end
+
+function M:handleBackBtn()
+	BattleManager:stopTime()
+	self:updateStop()
+	UIManager.openPanel(PrefabDefine.BattleSettingPanel, self)
+end
+
+function M:updateStop()
+	if self._goSparkBattle then
+		self._goSparkBattle:updateStop()
+
+		return
+	end
+
+	local stop = Time.timeScale == 0
+
+	self._btnBack.transform:GetChild(0):SetActive(not stop)
+	self._btnBack.transform:GetChild(1):SetActive(stop)
+end
+
+function M:handleFasterBtn()
+	local canSpeedUp = P._playerRight:isForever(D.RightCardType.SVIP)
+
+	if C.isInReview() then
+		canSpeedUp = true
+	end
+
+	if not canSpeedUp then
+		local unlock = D.isSystemUnlocked(D.SystemType.MonthCard)
+
+		if unlock then
+			self:openRightsCardPanel(D.PurchaseChannel.Battle)
+		else
+			V.showToast({
+				SID.TIP_SYSTEM_UNLOCK_TIP_2,
+				D._systemUnlockConfig[D.SystemType.MonthCard]._unlockVal
+			})
+		end
+
+		return
+	end
+
+	if BattleManager:isSpeedUp() then
+		BattleManager:revertSpeedUp()
+	else
+		BattleManager:dealspeedUp()
+	end
+
+	self:updateFaster()
+end
+
+function M:updateFaster()
+	if self._goSparkBattle then
+		self._goSparkBattle:updateUI()
+
+		return
+	end
+
+	self._goSpeedUpVfx:SetActive(BattleManager:isSpeedUp())
+
+	if BattleManager._targetTimeScale == D._battleGlobalConfig._battle_time_scale[3] then
+		self._tmpTimeScale.text = "x2"
+	elseif BattleManager._targetTimeScale == D._battleGlobalConfig._battle_time_scale[2] then
+		self._tmpTimeScale.text = "x1.5"
+	else
+		self._tmpTimeScale.text = "x1"
+	end
+end
+
+function M:handlePvpCardsBtn()
+	BattleManager:stopTime()
+	UIManager.openPanel(PrefabDefine.SparkScoutTemporaryCardsPanel)
+end
+
+function M:updateLevel(lv, exp, toExp)
+	self._tmpLevel:SetLocalize(SID.BATTLE_LV, lv)
+
+	self._pgsExp.fillAmount = exp / toExp
+end
+
+function M:updateSeed()
+end
+
+function M:updateBuff(msId, msType)
+	if msType == D.MissionType.Dome then
+		local buffs = P._playerDome:getCurBuffs()
+
+		for i = 1, #buffs do
+			LuaUnity.setTPSprite(self._goDomeBuffArea["_imgBuff" .. i], "general/domeBuff-buff-" .. buffs[i][1], true)
+			self._goDomeBuffArea:SetActive(true)
+			self:setClick(self._goDomeBuffArea["_btnBuff" .. i], function ()
+				self._goDomeBuffArea._txtBuffTitle:SetLocalize(SID.WEAPON_NAME_LEVEL, -D._battleEnemyBuffConfig[buffs[i][1]]._nameSid, buffs[i][2])
+				self._goDomeBuffArea._txtBuffDesc:SetLocalize(D._battleEnemyBuffConfig[buffs[i][1]]._descSid, unpack(P._playerDome:genCurBuffValue(i)))
+				self._goDomeBuffArea._aniBubble:Play("anim_Battlebuff")
+				self._goDomeBuffArea._btnCover:SetActive(true)
+				self._goDomeBuffArea._tfBubble:SetLocalPosition(self._goDomeBuffArea["_btnBuff" .. i].transform:GetLocalPosition())
+			end)
+			self:setClickWithoutAction(self._goDomeBuffArea._btnCover, function ()
+				self._goDomeBuffArea._aniBubble:Play("anim_Battlebuff02")
+				self._goDomeBuffArea._btnCover:SetActive(false)
+			end)
+		end
+
+		V.setBuffLinkClick(self._goDomeBuffArea._txtBuffDesc)
+
+		return
+	end
+
+	if msType == D.MissionType.GlobalDefense then
+		local areaId = msId % 10000
+		local buff = P._playerGlobalDefense:getMissionBuff(areaId)
+
+		LuaUnity.setTPSprite(self._goGlobalDefenseBuffArea._imgBuff1, "general/GlobalBuff-Globalbuff_" .. buff)
+		self._goGlobalDefenseBuffArea:SetActive(true)
+		self:setClick(self._goGlobalDefenseBuffArea._btnBuff1, function ()
+			self._goGlobalDefenseBuffArea._txtBuffTitle:SetLocalize(D._battleGlobalBuffConfig[buff]._nameSid)
+			self._goGlobalDefenseBuffArea._txtBuffDesc:SetLocalize(D._battleGlobalBuffConfig[buff]._descSid1)
+			self._goGlobalDefenseBuffArea._txtBuffDesc2:SetLocalize(D._battleGlobalBuffConfig[buff]._descSid2)
+			self._goGlobalDefenseBuffArea._aniBubble:Play("anim_Battlebuff")
+			self._goGlobalDefenseBuffArea._btnCover:SetActive(true)
+			self._goGlobalDefenseBuffArea._tfBubble:SetLocalPosition(self._goGlobalDefenseBuffArea._btnBuff1.transform:GetLocalPosition())
+		end)
+		self:setClickWithoutAction(self._goGlobalDefenseBuffArea._btnCover, function ()
+			self._goGlobalDefenseBuffArea._aniBubble:Play("anim_Battlebuff02")
+			self._goGlobalDefenseBuffArea._btnCover:SetActive(false)
+		end)
+		V.setBuffLinkClick(self._goGlobalDefenseBuffArea._txtBuffDesc)
+		V.setBuffLinkClick(self._goGlobalDefenseBuffArea._txtBuffDesc2)
+	end
+end
+
+function M:initJoystick()
+	local joystick = self._goJoyStick:GetComponent("JoyStick")
+
+	function joystick.OnPointerDownAction(pointerEventData)
+		BattleView:onPointerDown(pointerEventData)
+	end
+
+	function joystick.OnPointerUpAction(pointerEventData)
+		BattleView:onPointerUp(pointerEventData)
+	end
+
+	function joystick.OnStartDragCb(pointerEventData)
+		BattleView:onStartDrag(pointerEventData)
+	end
+
+	function joystick.OnDragCb(pointerEventData)
+		BattleView:onDragging(pointerEventData)
+	end
+
+	function joystick.OnStopDragCb(pointerEventData)
+		BattleView:onStopDrag(pointerEventData)
+	end
+end
+
+function M:Update()
+	if self._battleSession then
+		local elapsedTime = self._battleSession._elapsedTime
+
+		if self._msType == D.MissionType.ArkRebuild then
+			local t = BattleDefine.ArkRebuildDuration
+			t = math.max(t - elapsedTime, 0)
+			self._tmpTime.text = string.format("%02d:%02d", math.floor(t / 60), t % 60)
+		elseif self._msType == D.MissionType.CrisisZone then
+			local t = BattleDefine.CrisisZoneDuration
+			t = math.max(t - elapsedTime, 0)
+			self._tmpTime.text = string.format("%02d:%02d", math.floor(t / 60), t % 60)
+		else
+			self._tmpTime.text = string.format("%02d:%02d", math.floor(elapsedTime / 60), elapsedTime % 60)
+		end
+
+		self:updateHpChange()
+
+		if self._txtEnemyNum then
+			self:updateEnemyNum(#self._battleSession._battleEnemys)
+		end
+
+		if self._msType == D.MissionType.CrisisZone then
+			if not self._remainZero then
+				self._btnSkipWave:SetActive(self._battleSession._battleEnemyGenerator._skipWaveCd <= 0)
+
+				if self._battleSession._battleEnemyGenerator._skipWaveCd <= 0 then
+					self._btnSkipWave:SetActive(true)
+					self._txtSkipCd.transform.parent:SetActive(false)
+				else
+					self._btnSkipWave:SetActive(false)
+					self._txtSkipCd.transform.parent:SetActive(true)
+
+					self._txtSkipCd.text = string.format("%.1f", self._battleSession._battleEnemyGenerator._skipWaveCd)
+				end
+			end
+		elseif self._msType == D.MissionType.SparkScout then
+			local elapsedTime = self._battleSession:elapsedTime()
+
+			self._goSparkBattle:updateCountdown(elapsedTime)
+			self._goSparkBattle:updateEnemyNum(#BattleManager:getSession(1)._battleEnemys, #BattleManager:getSession(2)._battleEnemys)
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._autoCloseTimer)
+	lc.stopTimer(self._bossComingTimer)
+	lc.stopTimer(self._delayShowNewEnemyTimer)
+	lc.stopTimer(self._autoOpenInviteTimer)
+	lc.stopTimer(self._autoCloseInviteTimer)
+	lc.stopTimer(self._autoCloseRangerTimer)
+
+	BattlePanel = nil
+end
+
+function M:setBossCommingText(sid)
+	self._txtBossComming:SetLocalize(sid)
+end
+
+function M:dealBossComing(id)
+	self._animBossComing:Play()
+
+	self._bossComing = true
+	self._bossComingTimer = lc.setTimer(function ()
+		self._bossComing = false
+
+		self:tryShowNextEnemy()
+	end, 3)
+
+	if id then
+		self._txtBossName:SetLocalize(D._battleEnemyConfig[id]._nameSid)
+	end
+
+	Client.playSound("ui_Boss_1")
+end
+
+function M:initNewEnemy()
+	self._lbNewEnemy = LuaHelper.GetLuaBehaviour(self._goNewEnemyPanel)
+	self._showing = false
+	self._newEnemyList = {}
+end
+
+function M:showNewEnemy(enemyId)
+	self._newEnemyList[#self._newEnemyList + 1] = enemyId
+
+	self:tryShowNextEnemy(true)
+end
+
+function M:tryShowNextEnemy(delay)
+	if not self._showing then
+		if not self._bossComing then
+			self:showNextEnemy(delay)
+		end
+	end
+end
+
+function M:showNextEnemy(delay)
+	if GuideManager:isInGuide() then
+		return
+	end
+
+	local nextEnemyId = self._newEnemyList[1]
+
+	if not nextEnemyId then
+		return
+	end
+
+	self._showing = true
+	self._delayShowNewEnemyTimer = lc.setTimer(function ()
+		table.remove(self._newEnemyList, 1)
+
+		self._showing = true
+
+		self._lbNewEnemy:init(nextEnemyId)
+		self._lbNewEnemy:showNewEnemy(true)
+
+		if self._autoCloseTimer then
+			self._autoCloseTimer:ResetTime()
+			self._autoCloseTimer:Start()
+		else
+			self._autoCloseTimer = lc.setTimer(function ()
+				self:hideEnemy()
+			end, D._battleGlobalConfig._new_enemy_delay[2] or 3)
+		end
+	end, delay and D._battleGlobalConfig._new_enemy_delay[1] or 0)
+end
+
+function M:hideEnemy()
+	self._showing = false
+
+	self._lbNewEnemy:showNewEnemy(false)
+	lc.stopTimer(self._autoCloseTimer)
+
+	if #self._newEnemyList > 0 then
+		self:tryShowNextEnemy(true)
+	end
+end
+
+local hpColors = {
+	"9E54C3",
+	"F25656",
+	"FF8B3E"
+}
+local lenColors = #hpColors
+
+function M:showBossHp()
+	self._goBossHp:SetActive(true)
+
+	self._segIndex = 0
+
+	self:updateHpColor()
+
+	self._imgHpBase.fillAmount = 1
+	self._imgHpChange.fillAmount = 1
+	self._imgHpValue.fillAmount = 1
+	self._changeBaseTime = C.getCurTime()
+end
+
+function M:hideBossHp()
+	self._goBossHp:SetActive(false)
+end
+
+function M:updateHpColor()
+	self._imgHpBase.color = Color.str2Static(hpColors[(self._segIndex + 1) % lenColors + 1])
+	self._imgHpValue.color = Color.str2Static(hpColors[self._segIndex % lenColors + 1])
+	self._imgHpChange.color = Color.str2Static("000000_100")
+end
+
+function M:updateHpChange()
+	if self._imgHpChangeTarget then
+		local dt = C.getCurTime() - self._changeBaseTime
+		dt = dt * 5
+
+		if dt >= 1 then
+			self._imgHpChange.fillAmount = self._imgHpChangeTarget
+			self._imgHpChangeTarget = nil
+		else
+			self._imgHpChange.fillAmount = self._imgHpChangeBase + (self._imgHpChangeTarget - self._imgHpChangeBase) * dt
+		end
+	end
+end
+
+function M:updateBossHp(hp, maxHp, totalSeg)
+	if hp <= 0 then
+		self:hideBossHp()
+
+		return
+	end
+
+	local segHp = maxHp / totalSeg
+	local remainSeg = math.floor(hp / segHp)
+	local remainSegHp = hp - segHp * remainSeg
+
+	if remainSegHp == 0 then
+		remainSegHp = segHp
+		remainSeg = remainSeg - 1
+	end
+
+	if self._segIndex ~= totalSeg - remainSeg then
+		self._segIndex = totalSeg - remainSeg
+		self._imgHpChange.fillAmount = 1
+
+		self:updateHpColor()
+
+		if remainSeg == 0 then
+			self._imgHpBase.color = Color.str2Static("200B0B")
+			self._imgHpChange.color = Color.str2Static("933434_100")
+		end
+	end
+
+	self._txtBossHp.text = "x" .. remainSeg + 1
+	self._imgHpBase.fillAmount = 1
+	self._imgHpChangeBase = self._imgHpChange.fillAmount
+	self._imgHpChangeTarget = remainSegHp / segHp
+	self._changeBaseTime = C.getCurTime()
+	self._imgHpValue.fillAmount = remainSegHp / segHp
+end
+
+function M:updateEnemyNum(num)
+	self._txtEnemyNum.text = num
+end
+
+function M:updateCrisisZoneKillNum(killNum, totalNum)
+	self._txtKillTotalNum.text = string.format("%d/%d", killNum, totalNum)
+end
+
+function M:updateCrisisZoneRemainNum(num)
+	self._txtRemainNum:SetLocalize(SID.EXCHANGE_LEFT, num)
+
+	if num == 0 then
+		self._remainZero = true
+
+		self._btnSkipWave:SetActive(false)
+		self._btnSkipWaveDisabled:SetActive(true)
+		self._txtSkipCd.transform.parent:SetActive(false)
+	end
+end
+
+return M

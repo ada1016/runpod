@@ -1,0 +1,14 @@
+local M = class("PlayerBattlePassSkin", requireLua("PlayerBattlePassBase"))
+
+function M:ctor()
+	self._bpType = D.BPType.Skin
+	self._bpLevelCfg = D._battlePassSkinConfig
+	self._bpLogWay = D.LogWay.battle_pass_skin
+	self._key_redDot = "city.home.special.battlepassskin"
+end
+
+function M:openReset()
+	P._playerExchange:resetExchangesByExchangeGroup(D.ExchangeId.BP_Skin_Group)
+end
+
+return M

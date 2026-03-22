@@ -1,0 +1,38 @@
+local M = class("WeaponPassWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/WeaponPassWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:updateUI(weaponId, star)
+	if weaponId <= D.MAX_WEAPON_ID then
+		self._imgUnknown:SetActive(false)
+		self._imgIcon:SetActive(true)
+		V.loadWeaponIcon(self._imgIcon, weaponId)
+	else
+		self._imgUnknown:SetActive(true)
+		self._imgIcon:SetActive(false)
+	end
+
+	local grade = math.floor(star / 4) + 1
+	self._tmpLv.text = grade
+
+	if grade >= 4 then
+		self._tfStars:SetActive(false)
+		self._goMax:SetActive(true)
+		self._goStage:SetActive(false)
+	else
+		star = star % 4
+
+		for i = 1, star do
+			self._tfStars:GetChild(i - 1):GetChild(0):SetActive(true)
+		end
+	end
+end
+
+return M

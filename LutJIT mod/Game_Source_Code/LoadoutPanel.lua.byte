@@ -1,0 +1,571 @@
+local M = class("LoadoutPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtId = Types.TMP_Text,
+	txtName = Types.TMP_Text,
+	btnShowOperation = Types.Button,
+	goRoleSkillArea = Types.GameObject,
+	goWeaponSkillArea = Types.GameObject,
+	goDomeSkillArea = Types.GameObject,
+	goEquipArea = Types.GameObject,
+	goRangerArea = Types.GameObject,
+	btnGoRoleSkill = Types.Button,
+	btnWeaponSkill = Types.Button,
+	btnGoDomeSkill = Types.Button,
+	btnUnembedAll = Types.Button,
+	btnGoEquip = Types.Button,
+	btnGoRanger = Types.Button,
+	tfRoleSkillContainer = Types.Transform,
+	tfWeaponSkillContainer = Types.Transform,
+	tfDomeSkillContainer = Types.Transform,
+	goEquip1 = Types.GameObject,
+	goEquip2 = Types.GameObject,
+	goEquip3 = Types.GameObject,
+	goEquip4 = Types.GameObject,
+	goEquip5 = Types.GameObject,
+	goEquip6 = Types.GameObject,
+	tfRangerContainer = Types.Transform,
+	goOperationArea = Types.GameObject,
+	atorOperation = Types.Animator,
+	btnOperationMask = Types.Button,
+	btnRename = Types.Button,
+	btnClear = Types.Button,
+	btnCopy = Types.Button,
+	btnPaste = Types.Button,
+	goCopyId = Types.GameObject,
+	txtCopyId = Types.TMP_Text,
+	tfGroupTabContainer = Types.Transform
+}
+local RangerItemWidget = requireLua("RangerItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._skillWidgets = {
+		[D.SkinType.Role] = {},
+		[D.SkinType.Weapon] = {},
+		[D.SkinType.Dome] = {}
+	}
+
+	for i = 1, 3 do
+		local go = self._tfRoleSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(go)
+		table.insert(self._skillWidgets[D.SkinType.Role], go)
+
+		go = self._tfWeaponSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(go)
+		table.insert(self._skillWidgets[D.SkinType.Weapon], go)
+
+		go = self._tfDomeSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(go)
+		table.insert(self._skillWidgets[D.SkinType.Dome], go)
+	end
+
+	self._playerEquips = {}
+
+	for i = 1, D.PART_NUM do
+		self._playerEquips[i] = self["_goEquip" .. i]
+
+		lc.prefabVarPeer(self._playerEquips[i])
+		self:setClick(self._playerEquips[i]._btnClick, function ()
+			local equipSlots = P._playerRole:getEquipSlots()
+			local currentEquips = P._playerRole:getCurrentEquips()
+			local level = equipSlots[i].level()
+			local equip = P._playerRole:getEquipById(currentEquips[i])
+
+			UIManager.openPanel(PrefabDefine.ChipViewPanel, equip, P._playerRole:getEquipedGems(i), level)
+		end)
+	end
+
+	self._goGroups = {}
+
+	for i = 1, D.MAX_GEM_GROUP do
+		local goGroup = self._tfGroupTabContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(goGroup)
+
+		self._goGroups[i] = goGroup
+	end
+
+	self._goRangers = {}
+	self._goEmptyRangers = {}
+
+	for i = 1, P._playerRanger:getDockNum() do
+		self._goEmptyRangers[i] = self._tfRangerContainer:GetChild(i - 1).gameObject
+	end
+end
+
+function M:addClicks()
+	self:setClick(self._btnShowOperation, function ()
+		self:switchOperation()
+	end)
+	self:setClickWithoutAction(self._btnOperationMask, function ()
+		self:switchOperation()
+	end)
+	self:setClick(self._btnGoRoleSkill, function ()
+		local lb = UIManager.openPanel(PrefabDefine.WeaponSelectSkillPanelSub, D.SkinType.Role, function ()
+			self:updateSkinSkill(D.SkinType.Role)
+		end)
+	end)
+	self:setClick(self._btnWeaponSkill, function ()
+		local lb = UIManager.openPanel(PrefabDefine.WeaponSelectSkillPanelSub, D.SkinType.Weapon, function ()
+			self:updateSkinSkill(D.SkinType.Weapon)
+		end)
+	end)
+	self:setClick(self._btnGoDomeSkill, function ()
+		local lb = UIManager.openPanel(PrefabDefine.DomeSelectSkillPanelSub, D.SkinType.Dome, function ()
+			self:updateSkinSkill(D.SkinType.Dome)
+		end)
+	end)
+	self:setClick(self._btnUnembedAll, function ()
+		V.showMessageBox({
+			_type = 2,
+			_title = SID.TITLE_TIP,
+			_content = SID.DESC_LOADOUT_REMOVE_CHIP,
+			_txtConfirm = SID.STR_CONFIRM,
+			_confirmCallback = function ()
+				P._playerRole:unequipAllGems()
+				self:updateEquip(self._playerEquips)
+			end,
+			_txtCancel = SID.STR_CANCEL,
+			_cancelCallback = function ()
+			end
+		})
+	end)
+	self:setClick(self._btnGoEquip, function ()
+		UIManager.closeToPanelOrMain()
+		UIManager.getMainPanel():changePage(2)
+	end)
+	self:setClick(self._btnGoRanger, function ()
+		UIManager.closeToPanelOrMain("RangerPanel")
+
+		if not UIManager.getPanel(PrefabDefine.RangerPanel) then
+			UIManager.openPanel(PrefabDefine.RangerPanel, 2)
+		end
+	end)
+
+	for i = 1, #self._goGroups do
+		local goGroup = self._goGroups[i]
+
+		self:setClick(goGroup._btnChoose, function ()
+			self._id = i
+
+			P._playerRole:setGemGroup(i)
+			self:updateUI()
+		end)
+		self:setClick(goGroup._btnAdd, function ()
+			self:tryUnlockGroup(i)
+		end)
+	end
+
+	self:setClick(self._btnRename, function ()
+		local oldName = P._playerRole:getGroupName(self._id)
+
+		UIManager.openPanel(PrefabDefine.CommonEditPanel, SID.TITLE_CHANGE_NAME, SID.TIP_EDIT_LOADOUT_NAME, oldName or "", 22, function (text)
+			P._playerRole:setGroupName(self._id, text)
+
+			self._txtName.text = text
+
+			self:updateGroup()
+			SimpleEvent.emit("groupName.dirty")
+			V.showToast(SID.TIP_EDIT_SUCCESS)
+		end)
+		self:switchOperation()
+	end)
+	self:setClick(self._btnClear, function ()
+		V.showMessageBox({
+			_type = 2,
+			_title = SID.TITLE_TIP,
+			_content = SID.DESC_LOADOUT_REMOVE_ALL,
+			_txtConfirm = SID.STR_CONFIRM,
+			_confirmCallback = function ()
+				P._playerRole:unequipAllGems()
+				P._playerSkin:clearSkinSkill(D.SkinType.Role)
+				P._playerSkin:clearSkinSkill(D.SkinType.Weapon)
+				P._playerSkin:clearSkinSkill(D.SkinType.Dome)
+				P._playerRanger:clearDocks()
+				self:updateUI()
+				self:switchOperation()
+			end,
+			_txtCancel = SID.STR_CANCEL,
+			_cancelCallback = function ()
+			end
+		})
+	end)
+	self:setClick(self._btnCopy, function ()
+		self._copyId = self._id
+
+		V.showToast(SID.TOAST_LOADOUT_COPY)
+		self._goCopyId:SetActive(true)
+
+		self._txtCopyId.text = self._copyId
+
+		V.setBtnStyle(self._btnPaste, V.BTN_STYLE.green)
+
+		self._btnPaste.enabled = true
+
+		self:switchOperation()
+	end)
+	self:setClick(self._btnPaste, function ()
+		P._playerRole:pasteGemGroup(self._copyId, self._id)
+		P._playerSkin:pasteSkinSkill(D.SkinType.Role, self._copyId, self._id)
+		P._playerSkin:pasteSkinSkill(D.SkinType.Weapon, self._copyId, self._id)
+		P._playerSkin:pasteSkinSkill(D.SkinType.Dome, self._copyId, self._id)
+		P._playerRanger:pasteDocks(self._copyId, self._id)
+		V.showToast(SID.TOAST_LOADOUT_PASTE)
+		self:updateUI()
+		self:switchOperation()
+	end)
+end
+
+function M:init(callback)
+	self._id = P._playerRole:getGemGroup()
+
+	self._goOperationArea:SetActive(true)
+	self._goRoleSkillArea:SetActive(#P._playerSkin:getAvailableSkills(D.SkinType.Role) > 0)
+	self._goWeaponSkillArea:SetActive(#P._playerSkin:getAvailableSkills(D.SkinType.Weapon) > 0)
+	self._goDomeSkillArea:SetActive(#P._playerSkin:getAvailableSkills(D.SkinType.Dome) > 0)
+	self._goRangerArea:SetActive(D.isSystemUnlocked(D.SystemType.Ranger) and P._playerRanger:getTotalStar() > 0)
+	self._goCopyId:SetActive(false)
+	V.setBtnStyle(self._btnPaste, V.BTN_STYLE.gray)
+
+	self._btnPaste.enabled = false
+
+	if callback then
+		self._callback = callback
+	end
+
+	self:updateUI()
+	self:scrollToGroup()
+end
+
+function M:updateUI()
+	self._txtId.text = self._id
+	local groupName = P._playerRole:getGroupName(self._id)
+
+	if groupName then
+		self._txtName.text = groupName
+	else
+		self._txtName:SetLocalize(SID.STR_LOADOUT_X, self._id)
+	end
+
+	self:updateGroup()
+	self:updateSkinSkill(D.SkinType.Role)
+	self:updateSkinSkill(D.SkinType.Weapon)
+	self:updateSkinSkill(D.SkinType.Dome)
+	self:updateEquip(self._playerEquips)
+	self:updateRanger()
+end
+
+function M:updateGroup()
+	local num = P._playerRole:getGroupNum()
+
+	for i = 1, D.MAX_GEM_GROUP do
+		local goGroup = self._goGroups[i]
+
+		if i <= num then
+			goGroup._txtId.text = i
+			goGroup._txtChooseId.text = i
+			local groupName = P._playerRole:getGroupName(i)
+
+			if groupName then
+				goGroup._txtChooseName.text = P._playerRole:getGroupName(i)
+				goGroup._txtName.text = P._playerRole:getGroupName(i)
+			else
+				goGroup._txtChooseName:SetLocalize(SID.STR_LOADOUT_X, i)
+				goGroup._txtName:SetLocalize(SID.STR_LOADOUT_X, i)
+			end
+
+			goGroup._goLock:SetActive(false)
+			goGroup._goChoose:SetActive(i == P._playerRole:getGemGroup())
+			goGroup._goNotChoose:SetActive(i ~= P._playerRole:getGemGroup())
+			goGroup:SetActive(true)
+		elseif i == num + 1 then
+			goGroup._goChoose:SetActive(false)
+			goGroup._goNotChoose:SetActive(false)
+			goGroup._goLock:SetActive(true)
+			goGroup:SetActive(true)
+		else
+			goGroup:SetActive(false)
+		end
+	end
+end
+
+function M:updateSkinSkill(skinType)
+	for i = 1, 3 do
+		local equipedSkills = P._playerSkin:getEquipedSkinSkills(skinType)
+		local skillWidget = self._skillWidgets[skinType][i]
+
+		if equipedSkills[i][1] then
+			skillWidget._goContent:SetActive(true)
+			skillWidget._goEmpty:SetActive(false)
+
+			local weapon = P._playerSkin:readWeapon(equipedSkills[i][1], self._skinType)
+
+			if skinType ~= D.SkinType.Dome then
+				LuaUnity.setTPSprite(skillWidget._imgWeapon, "weapon/weapon_" .. weapon, true)
+			else
+				LuaUnity.setTPSprite(skillWidget._imgWeapon, "skill/item_skill_" .. equipedSkills[i][1], true)
+			end
+
+			local totalStar = 0
+
+			for j = 1, skillWidget._tfDots.childCount do
+				skillWidget._tfDots:GetChild(j - 1):Find("Filled"):SetActive(equipedSkills[i][j] ~= nil)
+
+				totalStar = totalStar + P._playerSkin:getSkinLevel(equipedSkills[i][j])
+			end
+
+			skillWidget._goLevel:SetActive(false)
+
+			if skinType ~= D.SkinType.Dome then
+				skillWidget._goNumStar:SetActive(true)
+				skillWidget._goStarContainer:SetActive(false)
+
+				skillWidget._txtStarNum.text = totalStar
+			else
+				skillWidget._goNumStar:SetActive(false)
+				skillWidget._goStarContainer:SetActive(true)
+				V.setSkinQualityStar(skillWidget._goStarContainer, nil, totalStar)
+			end
+
+			skillWidget._btnClick.enabled = true
+
+			self:setClick(skillWidget._btnClick, function ()
+				local cfg = P._playerSkin:getCfg(equipedSkills[i][1])
+				local level = math.max(P._playerSkin:getSkinLevel(equipedSkills[i][1]), 1)
+
+				if #equipedSkills[i] == 1 then
+					V.showSkinSkillDescBubble(cfg, level, skillWidget)
+				else
+					local title = cfg._skillNameSid or cfg._nameSid
+					local desc = cfg._skillDescSid
+					local cfg2 = P._playerSkin:getCfg(equipedSkills[i][2])
+					local level2 = math.max(P._playerSkin:getSkinLevel(equipedSkills[i][2]), 1)
+					local title2 = cfg2._skillNameSid or cfg2._nameSid
+					local desc2 = cfg2._skillDescSid
+					local descParam, descParam2 = nil
+
+					if P._playerSkin:readSkinType(cfg._id) == D.SkinType.Weapon then
+						if cfg._skillLevelParam[level] == 0 then
+							descParam = {
+								desc,
+								-SID.STR_NO_CHANGE
+							}
+						else
+							descParam = {
+								desc,
+								cfg._skillLevelParam[level]
+							}
+						end
+					else
+						descParam = {
+							desc,
+							cfg._skillLevelParam[level]
+						}
+					end
+
+					if P._playerSkin:readSkinType(cfg2._id) == D.SkinType.Weapon then
+						if cfg2._skillLevelParam[level2] == 0 then
+							descParam2 = {
+								desc2,
+								-SID.STR_NO_CHANGE
+							}
+						else
+							descParam2 = {
+								desc2,
+								cfg2._skillLevelParam[level2]
+							}
+						end
+					else
+						descParam2 = {
+							desc2,
+							cfg2._skillLevelParam[level2]
+						}
+					end
+
+					local str = string.format("%s(%d<sprite name=\"star\">)", LcLocalization.getTextStr(title), level)
+					local str2 = string.format("%s(%d<sprite name=\"star\">)", LcLocalization.getTextStr(title2), level2)
+
+					V.showBubbleTips({
+						name = str,
+						desc = descParam,
+						name2 = str2,
+						desc2 = descParam2
+					}, {
+						offset = {
+							0,
+							20,
+							0
+						},
+						target = skillWidget._btnClick
+					})
+				end
+			end)
+		else
+			for j = 1, skillWidget._tfDots.childCount do
+				skillWidget._tfDots:GetChild(j - 1):Find("Filled"):SetActive(false)
+			end
+
+			skillWidget._goContent:SetActive(false)
+			skillWidget._goEmpty:SetActive(true)
+
+			skillWidget._btnClick.enabled = false
+		end
+	end
+end
+
+function M:updateEquip(playerEquips)
+	local isExtraSlotUnlocked = D.isSystemUnlocked(D.SystemType.ExtraChipSlot)
+	local equipSlots = P._playerRole:getEquipSlots()
+	local currentEquips = P._playerRole:getCurrentEquips()
+
+	for i = 1, #equipSlots do
+		local equip = P._playerRole:getEquipById(currentEquips[i])
+
+		LuaUnity.setTPSprite(playerEquips[i]._imgIcon, "general/equip1_" .. equip:part(), true)
+		LuaUnity.setTPSprite(playerEquips[i]._imgQuality, "general/g_frame_small_0" .. equip:quality(), true)
+		playerEquips[i]._txtQuality:SetLocalize(SID.STR_GRADE_X, equip:grade())
+
+		local gemSlots = P._playerRole:getEquipedGems(i)
+
+		for j = 1, 6 do
+			if gemSlots[j] then
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_" .. D._gemConfig[gemSlots[j]]._quality)
+			else
+				LuaUnity.setTPSprite(playerEquips[i]._tfGemView:GetChild(j - 1):Find("ImgChip"):GetComponent("Image"), "general/chip-g_chip_empty")
+			end
+		end
+
+		if not isExtraSlotUnlocked then
+			playerEquips[i]._goExtraSlot:SetActive(false)
+		else
+			playerEquips[i]._goExtraSlot:SetActive(true)
+
+			if not P._playerRole:isGemSlotLocked(i) then
+				playerEquips[i]._goExtraSlot:Find("ImgLock"):SetActive(false)
+
+				playerEquips[i]._goExtraSlot:Find("ImgChip"):GetComponent("Image").color = Color.White
+			else
+				local image = playerEquips[i]._goExtraSlot:Find("ImgChip"):GetComponent("Image")
+
+				LuaUnity.setTPSprite(image, "general/chip-g_chip_lock")
+
+				image.color = Color.str2Static("000000_180")
+
+				playerEquips[i]._goExtraSlot:Find("ImgLock"):SetActive(true)
+			end
+		end
+
+		playerEquips[i]._txtLevel:SetLocalize(SID.STR_LEVEL_X, equipSlots[i].level())
+	end
+end
+
+function M:updateRanger()
+	for _, widget in pairs(self._goRangers) do
+		widget:SetActive(false)
+	end
+
+	local docks = P._playerRanger:getDocks()
+
+	for i = 1, P._playerRanger:getDockNum() do
+		if docks[i] then
+			local rangerWidget = nil
+
+			if self._goRangers[docks[i]] then
+				rangerWidget = self._goRangers[docks[i]]
+			else
+				rangerWidget = RangerItemWidget.create(self._tfRangerContainer)
+				self._goRangers[docks[i]] = rangerWidget
+
+				rangerWidget:init(docks[i], P._playerRanger:getRangerLevel(docks[i]))
+				self:setClick(rangerWidget._btnClick, function ()
+					UIManager.openPanel(PrefabDefine.RangerInfoPanel, P._playerRanger:getRangerInfo(docks[i]))
+				end)
+			end
+
+			rangerWidget:SetActive(true)
+			self._goEmptyRangers[i]:SetActive(false)
+			rangerWidget.transform:SetAsLastSibling()
+		else
+			self._goEmptyRangers[i]:SetActive(true)
+			self._goEmptyRangers[i].transform:SetAsLastSibling()
+		end
+	end
+end
+
+function M:switchOperation()
+	self._atorOperation:ResetTrigger("Hide")
+
+	self._operationOpened = not self._operationOpened
+
+	self._atorOperation:SetInteger("Status", self._operationOpened and 1 or 0)
+
+	if self._operationOpened then
+		self._btnOperationMask:SetActive(true)
+	else
+		self._btnOperationMask:SetActive(false)
+		self._atorOperation:SetTrigger("Hide")
+	end
+end
+
+function M:tryUnlockGroup()
+	local cost = D._globalConfig._unlock_chip_group_diamond
+
+	UIManager.openPanel(PrefabDefine.PromptsPanel, {
+		_title = SID.TITLE_TIP,
+		_content = SID.DESC_LOADOUT_BUY_NEW,
+		_cParams = string.format(" <sprite name=\"item_small_10002\">%s ", cost),
+		_txtConfirm = SID.STR_CONFIRM,
+		_fcCancel = SID.STR_CANCEL,
+		_showResCid = D.ResType.diamond,
+		_confirmCallback = function ()
+			self:dealUnlockGroup()
+		end
+	})
+end
+
+function M:dealUnlockGroup()
+	local result, param = P._playerRole:tryUnlockGemGroup()
+
+	if result ~= ResultCode.OK then
+		if result == ResultCode.RESOURCE_NOT_ENOUGH and param == D.ResType.diamond then
+			UIManager.openPanel(PrefabDefine.DiamondPanel, nil, D.PurchaseChannel.Shop)
+		else
+			V.showResultCode(result)
+		end
+
+		return
+	end
+
+	self:scrollToGroup(true)
+end
+
+function M:scrollToGroup(anim)
+	self._id = P._playerRole:getGemGroup()
+
+	self:updateUI()
+
+	local x = math.min(225 * D.MAX_GEM_GROUP - 785, math.max(0, (self._id - 3) * 225))
+
+	if anim then
+		self._tfGroupTabContainer:DOLocalMove(Vector3.static(-x, -55, 0), 0.3)
+	else
+		lc.setLocalPosition(self._tfGroupTabContainer, Vector3.static(-x, -55, 0), 0.3)
+	end
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+
+	if self._callback then
+		self._callback()
+	end
+end
+
+return M

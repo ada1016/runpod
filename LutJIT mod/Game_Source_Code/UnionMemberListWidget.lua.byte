@@ -1,0 +1,114 @@
+local M = class("UnionMemberListWidget")
+local UnionOperationWidget = requireLua("UnionOperationWidget")
+
+function M.create(parent, index)
+	local go = nil
+
+	if index == 2 then
+		go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionMemberListWidget_2.prefab", parent)
+	else
+		go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionMemberListWidget.prefab", parent)
+	end
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel, view)
+	self._panel = panel
+	self._isView = view
+
+	panel:setClick(self._btnAvatar, function ()
+		if self._id == C._userId then
+			V.showToast(SID.UNION_OPERATION_TIPS2)
+
+			return
+		end
+
+		if panel._operationObj == nil then
+			local obj = UnionOperationWidget.create(self._panel.transform)
+
+			obj:init(panel, self)
+
+			panel._operationObj = obj
+		else
+			panel._operationObj:SetActive(true)
+			panel._operationObj:SetLocalPosition(0, 0, 0)
+		end
+
+		local obj = panel._operationObj
+		local p = lc.covert2NodePos(self._btnAvatar, obj)
+
+		obj:SetLocalPosition(p.x + 50, p.y + 15, 0)
+		panel._operationObj:update(self._data, self._isView)
+	end)
+end
+
+function M:update(data)
+	self._data = data
+	self._id = data.id
+
+	V.setPlayerName(self._tmpName, data.name, data.name_color, "6BD4B4", data.medal)
+	V.loadAvatar(self._goAvatarWidget, data.avatar, data.avatar_frame)
+
+	self._tmpAtk.text = data.atk
+
+	if data.role == D.UnionRole.PRESIDENT then
+		self._goRoleContent:SetActive(true)
+		self._tmpRole:SetLocalize(SID.UNION_ROLE_1)
+		self._imgRoleFlag:SetActive(true)
+
+		local gradient = self._imgRoleFlag:GetComponent("UIGradient")
+		gradient.m_color1 = Color.str2Static("FFC634")
+		gradient.m_color2 = Color.str2Static("FFEE8F")
+		gradient.enabled = false
+		gradient.enabled = true
+		self._tmpRole.color = Color.str2Static("FFD15A")
+	elseif data.role == D.UnionRole.VICE_PRESIDENT then
+		self._goRoleContent:SetActive(true)
+		self._tmpRole:SetLocalize(SID.UNION_ROLE_2)
+		self._imgRoleFlag:SetActive(true)
+
+		local gradient = self._imgRoleFlag:GetComponent("UIGradient")
+		gradient.m_color1 = Color.str2Static("39D4FF")
+		gradient.m_color2 = Color.str2Static("8AF7FF")
+		gradient.enabled = false
+		gradient.enabled = true
+		self._tmpRole.color = Color.str2Static("54E0FF")
+	elseif data.role == D.UnionRole.COORDINATOR then
+		self._goRoleContent:SetActive(true)
+		self._tmpRole:SetLocalize(SID.UNION_ROLE_3)
+		self._imgRoleFlag:SetActive(true)
+
+		local gradient = self._imgRoleFlag:GetComponent("UIGradient")
+		gradient.m_color1 = Color.str2Static("65fdd4")
+		gradient.m_color2 = Color.str2Static("4ad7b1")
+		gradient.enabled = false
+		gradient.enabled = true
+		self._tmpRole.color = Color.str2Static("67FFD6")
+	else
+		self._imgRoleFlag:SetActive(false)
+
+		self._tmpRole.color = Color.str2Static("529594")
+
+		self._tmpRole:SetLocalize(SID.UNION_ROLE_0)
+	end
+end
+
+return M

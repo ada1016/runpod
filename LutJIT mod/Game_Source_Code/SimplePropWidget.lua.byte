@@ -1,0 +1,45 @@
+local M = class("SimplePropWidget", BLB)
+M.args = {
+	btnClick = Types.Button,
+	textCId = Types.Text,
+	textNum = Types.Text
+}
+
+function M.create(cid_or_tbl)
+	local go = LuaUnity.createGameObjectWithPeer(PrefabDefine.SimplePropWidget)
+	local lb = LuaHelper.GetLuaBehaviour(go)
+
+	lb:init(cid_or_tbl)
+
+	go._lb = lb
+	lb.gameObject = go
+	lb.transform = go.transform
+
+	return lb
+end
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(cid_or_tbl)
+	self:updateUI(cid_or_tbl)
+end
+
+function M:updateUI(cid_or_tbl)
+	self._cid = nil
+	self._num = nil
+
+	if type(cid_or_tbl) == "table" then
+		self._cid = cid_or_tbl[1]
+		self._num = cid_or_tbl[2]
+	end
+
+	self._textCId.text = self._cid
+	self._textNum.text = self._num
+end
+
+function M:addClick(callback)
+end
+
+return M

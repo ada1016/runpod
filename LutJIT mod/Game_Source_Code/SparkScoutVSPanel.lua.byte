@@ -1,0 +1,43 @@
+local M = class("SparkScoutVSPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	goSelf = Types.GameObject,
+	goOther = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goSelf)
+	lc.prefabVarPeer(self._goOther)
+end
+
+function M:init()
+	self:updateUI()
+
+	self._timer = lc.setTimer(function ()
+		self:closePanel()
+		BattleManager:startFirstPVPRound()
+	end, 2.3333333333333335)
+end
+
+function M:updateUI()
+	local selfData = P._playerActivitySparkScout:genMatchData()
+	local oppData = P._playerActivitySparkScout._matchData
+	local showGroup = P._playerActivitySparkScout:canShowSparkScoutRankGroup(oppData, selfData.gradeId)
+
+	V.loadSparkScoutGrades(self._goSelf, selfData)
+	V.loadSparkScoutGrades(self._goOther, oppData, showGroup)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+	lc.stopTimer(self._timer)
+end
+
+return M

@@ -1,0 +1,366 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		0,
+		150001,
+		nil,
+		1,
+		{
+			250,
+			5
+		}
+	},
+	{
+		2,
+		0,
+		150002,
+		nil,
+		2,
+		{
+			6,
+			200,
+			8
+		}
+	},
+	{
+		3,
+		0,
+		150003,
+		nil,
+		3,
+		{
+			20,
+			250,
+			6
+		}
+	},
+	{
+		4,
+		0,
+		150004,
+		nil,
+		4,
+		{
+			7,
+			0.2,
+			100,
+			7
+		}
+	},
+	{
+		5,
+		0,
+		150005,
+		nil,
+		5,
+		{
+			6,
+			60,
+			9
+		}
+	},
+	{
+		6,
+		0,
+		150006,
+		nil,
+		6,
+		{
+			2000,
+			12
+		}
+	},
+	{
+		7,
+		0,
+		150007,
+		nil,
+		7,
+		{
+			3,
+			3,
+			1000,
+			10
+		}
+	},
+	{
+		8,
+		0,
+		150008,
+		nil,
+		8,
+		{
+			8,
+			1,
+			500,
+			15
+		}
+	},
+	{
+		9,
+		0,
+		150009,
+		nil,
+		9,
+		{
+			5,
+			250,
+			20
+		}
+	},
+	{
+		10,
+		0,
+		150010,
+		nil,
+		10,
+		{
+			2,
+			300,
+			12
+		}
+	},
+	{
+		11,
+		0,
+		150011,
+		nil,
+		11,
+		{
+			2,
+			5,
+			1000,
+			10
+		}
+	},
+	{
+		12,
+		0,
+		150012,
+		nil,
+		12,
+		{
+			10,
+			300,
+			10
+		}
+	},
+	{
+		13,
+		0,
+		150013,
+		nil,
+		13,
+		{
+			4,
+			0.5,
+			800,
+			12
+		}
+	},
+	{
+		14,
+		0,
+		150014,
+		nil,
+		14,
+		{
+			10,
+			1,
+			4000,
+			8
+		}
+	},
+	[106] = {
+		106,
+		1,
+		150006,
+		nil,
+		106
+	},
+	[107] = {
+		107,
+		1,
+		150007,
+		nil,
+		107
+	},
+	[108] = {
+		108,
+		1,
+		150008,
+		nil,
+		108,
+		dup._189
+	},
+	[208] = {
+		208,
+		2,
+		150008,
+		4,
+		208,
+		dup._20
+	},
+	[109] = {
+		109,
+		1,
+		150009,
+		nil,
+		109,
+		dup._32
+	},
+	[209] = {
+		209,
+		2,
+		150009,
+		2,
+		209
+	},
+	[110] = {
+		110,
+		1,
+		150010,
+		nil,
+		110,
+		dup._403
+	},
+	[111] = {
+		111,
+		1,
+		150011,
+		nil,
+		111,
+		{
+			50,
+			2,
+			50
+		}
+	},
+	[112] = {
+		112,
+		1,
+		150012,
+		nil,
+		112
+	},
+	[113] = {
+		113,
+		1,
+		150013,
+		nil,
+		113
+	},
+	[213] = {
+		213,
+		2,
+		150013,
+		6,
+		213,
+		dup._93
+	},
+	[114] = {
+		114,
+		1,
+		150014,
+		nil,
+		114,
+		dup._189
+	},
+	[214] = {
+		214,
+		2,
+		150014,
+		12,
+		214,
+		dup._116
+	}
+}
+local mapKeyIndex = {
+	k1644150 = 1,
+	k15080995 = 3,
+	k9440572 = 6,
+	k9702232 = 5,
+	k16213948 = 4,
+	k9063391 = 2
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -8820
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_skillDescSid" then
+			if table[5] == nil then
+				return nil
+			end
+
+			return SID["SID_RANGER_SKILL_SKILLDESCSID_" .. table[5]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -8820
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

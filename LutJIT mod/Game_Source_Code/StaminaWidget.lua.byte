@@ -1,0 +1,89 @@
+local M = class("StaminaWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StaminaWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	self._module = P._playerStaminaProducer
+end
+
+local titleSids = {
+	SID.STR_BREAKFAST,
+	SID.STR_LUNCH,
+	SID.STR_DINNER,
+	SID.STR_SNACK
+}
+
+function M:updateUI(idx)
+	self._idx = idx
+	self._showGenType = 1
+
+	if self._idx == 1 then
+		self._showGenType = self._module:getNextSendIdx()
+	else
+		local data = self._module:getCachedData(self._idx - 1)
+		self._expireTime = data.time + self._module:readExpireTime()
+		self._showGenType = data.type
+	end
+
+	self._txtTitle:SetLocalize(titleSids[self._showGenType])
+	self._goMask:SetActive(self._idx == 1)
+
+	self._txtNum.text = "x" .. self._module:readSendNum(self._showGenType)
+
+	self:updateCountDown()
+end
+
+function M:updateCountDown()
+	local ct = C.getCurTime()
+
+	if self._idx == 1 then
+		local leftTime = self._module:getGenTime(self._module:getLastSendTime(), self._showGenType) - ct
+		local day, hour, minute, second = C.getTimeEndArgs(leftTime)
+
+		self._txtTimeTitle:SetLocalize(SID.STAMINA_COMPLETE_IN)
+		self._txtTime:SetLocalize(SID.TIMER_H_M_S, hour, minute, second)
+	else
+		local leftTime = self._expireTime - ct
+		local day, hour, minute, second = C.getTimeEndArgs(leftTime)
+
+		self._txtTimeTitle:SetLocalize(SID.STAMINA_EXPIRE_IN)
+		self._txtTime:SetLocalize(SID.TIMER_D_H_M, day, hour, minute)
+	end
+end
+
+function M:setRewardsClick(panel, callback)
+	panel:setClick(self._btnClick, function ()
+		if self._idx == 1 then
+			return
+		end
+
+		local rewards = self._module:claim(self._idx - 1)
+
+		if rewards then
+			V.showRewardClaimPanel(rewards)
+		end
+
+		if callback then
+			callback()
+		end
+	end)
+end
+
+return M

@@ -1,0 +1,225 @@
+local M = class("BattleBullet_Railgun", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattleMathLib = BattleMathLib
+local TablePool = TablePool
+local opt = opt
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._motionless = true
+	self._scale = 0
+	self._bulletAddScale = 0
+	self._isChargeing = false
+	self._hitIndex = 0
+	local params1004 = D.getBattleEffectParams(1004)
+	self._params1004 = params1004
+	self._effectOn1004 = self._battleWeapon:getEffect(1004)
+	self._effectCount1004 = params1004[1]
+	self._effectDuration1004 = params1004[2]
+	self._effectOn1005 = self._battleWeapon:getEffect(1005)
+end
+
+function M:initExtends(chargeAddDuration, chargeDuration)
+	self._isChargeing = true
+	self._chargeDuration = chargeDuration
+	local durationScale = D.getBattleEffectParams(1001)[1] * 10
+	local durationDmg = D.getBattleEffectParams(1002)[1] * 10
+	local targetScale = 1
+
+	if self._battleWeapon:getEffect(1001) then
+		targetScale = targetScale + targetScale * chargeAddDuration * 0.5
+		self._bulletAddScale = chargeAddDuration * durationScale / 100
+	end
+
+	self._stepScaleAdd = targetScale / chargeDuration / lc._preFrame
+	self._tmpDamageAddPer = nil
+
+	if self._battleWeapon:getEffect(1002) then
+		self._tmpDamageAddPer = chargeAddDuration * durationDmg
+	end
+
+	if self._effectOn1005 then
+		local params = D.getBattleEffectParams(1005)
+		local triggerSkill = self._battleWeapon:getSkill(params[2])
+
+		if self._1006Bullets == nil then
+			self._1006Bullets = table.new(2, 0)
+		end
+
+		for i = 1, params[1] do
+			local bullet = self:castSkill1006(triggerSkill)
+			self._1006Bullets[i] = bullet
+		end
+	end
+
+	if self._view then
+		self._view._obj:GetChild(1):SetLocalScale(0.1)
+	end
+end
+
+function M:markToBeDestroyed()
+	SUPER.markToBeDestroyed(self)
+	self:remove1006Bullets()
+end
+
+function M:hitEnemy(enemy)
+	self._hitIndex = self._hitIndex + 1
+	local effPar = self._battleWeapon:getEffect(1052)
+
+	if effPar and self._battleRandomLib:randomTrue(effPar) then
+		self._damageAddNum = self._damageAddNum + 1
+	end
+
+	SUPER.hitEnemy(self, enemy)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self:clearEnemyHitted()
+
+	local enemy = self._battleSession._battleEnemyFinder:randomOneEnemyWithExcludeOne(enemy, self._battleWeapon)
+
+	if enemy == nil then
+		self:markToBeDestroyed()
+
+		return
+	end
+
+	if enemy then
+		self:setDir(enemy._position)
+		self:lockEnemy(enemy)
+	end
+
+	if self._view then
+		self._view:scaleEvent(0)
+	end
+
+	self._waitDelay = 0.1
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._waitDelay then
+		self._waitDelay = self._waitDelay - dt
+
+		if self._waitDelay > 0 then
+			return
+		end
+
+		self._waitDelay = nil
+
+		if self._view then
+			self._view:scaleEvent()
+		end
+	end
+
+	if self._lockEnemy and self._lockEnemy._isToBeDestroyed then
+		self._lockEnemy = nil
+	end
+
+	if self._lockEnemy then
+		opt.vec2_1:Set(-self._dir[1], -self._dir[2])
+		opt.vec2_2:Set(self._lockEnemy._position.x - self._position.x, self._lockEnemy._position.y - self._position.y)
+
+		if Vector2.Dot(opt.vec2_1, opt.vec2_2) > 0 then
+			self._lockEnemy = nil
+		end
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._isChargeing then
+		self._scale = math.min(self._scale + self._stepScaleAdd, 1)
+
+		if self._view then
+			self._view:scaleEvent(math.max(self._scale, 0.3))
+		end
+
+		self._chargeDuration = self._chargeDuration - dt
+
+		if self._chargeDuration <= 0 then
+			self._isChargeing = nil
+			self._motionless = nil
+
+			if self._view then
+				self._view._obj:GetChild(1):SetLocalScale(1)
+			end
+		end
+
+		if self._effectOn1004 then
+			self._effectDuration1004 = self._effectDuration1004 - dt
+
+			if self._effectDuration1004 <= 0 then
+				self._effectDuration1004 = self._params1004[2]
+
+				self:castSkill1004(self._effectCount1004)
+			end
+		end
+	end
+end
+
+function M:castSkill1004(num)
+	opt.dict_arg8:clear()
+
+	for i = 1, num do
+		local enemy = self._battleSession:randomOneEnemyInRange(self._position, self._params1004[3], opt.dict_arg8)
+
+		if enemy == nil then
+			break
+		end
+
+		opt.dict_arg8[enemy._id] = true
+		local triggerSkill = self._battleWeapon:getSkill(1004)
+		local bullet = triggerSkill:createBullet()
+
+		bullet:setTargetPosition(self._position, enemy._position)
+	end
+end
+
+function M:castSkill1006(castSkill)
+	local targetEnemy = self._battleSession:randomOneEnemy()
+
+	if targetEnemy == nil then
+		return
+	end
+
+	local bullet = castSkill:createBullet()
+
+	bullet:setPos(self._position.x, self._position.y)
+	bullet:setLineBeganTarget(self)
+	bullet:setTargetEnemy(targetEnemy)
+
+	bullet._isMain = false
+	bullet._plasmaType = 6
+
+	if bullet._view then
+		bullet._view:posEvent()
+	end
+
+	return bullet
+end
+
+function M:remove1006Bullets()
+	if self._1006Bullets == nil then
+		return
+	end
+
+	for i = 1, #self._1006Bullets do
+		if self._1006Bullets[i] then
+			self._1006Bullets[i]:markToBeDestroyed()
+		end
+	end
+
+	table.clear(self._1006Bullets)
+end
+
+return M

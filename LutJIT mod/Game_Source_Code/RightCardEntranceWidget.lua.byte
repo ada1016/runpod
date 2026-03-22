@@ -1,0 +1,104 @@
+local M = class("RightCardEntranceWidget", BLB)
+M.args = {
+	autoHide = true,
+	btnClick = Types.Button,
+	txtTitle = Types.TMP_Text,
+	goPriceOffTime = Types.GameObject,
+	txtPriceOffCountDown = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	goJoin = Types.GameObject,
+	txtJoinBtn = Types.TMP_Text,
+	goLeftCountDown = Types.GameObject,
+	txtLeftCountDown = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._rightCardType = D.RightCardType.SVIP
+end
+
+function M:Start()
+	self:addClicks()
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnClick, function ()
+		UIManager.openPanel(PrefabDefine.RightCardPanel, BattleManager ~= nil and D.PurchaseChannel.Banner or D.PurchaseChannel.Shop)
+	end)
+end
+
+function M:OnEnable()
+	self:addEvents()
+	self:refreshUpdate()
+end
+
+function M:OnDisable()
+	self:removeEvents()
+	lc.stopTimer(self._interval)
+end
+
+function M:addEvents()
+	self:on("rightcard.update", function ()
+		self:refreshUpdate()
+	end)
+end
+
+function M:refreshUpdate()
+	self._txtTitle:SetLocalize(SID.RIGHTCARD_SVIP_TITLE1)
+	lc.stopTimer(self._interval)
+
+	local isInDuration = P._playerRight:isInDuration(self._rightCardType)
+	local isForever = P._playerRight:isForever(self._rightCardType)
+
+	if C.isInReview() then
+		isForever = true
+	end
+
+	if self.args.autoHide then
+		self.gameObject:SetActive(not isForever)
+
+		if isForever then
+			return
+		end
+	end
+
+	if isInDuration then
+		local isMonthCard = isInDuration and not isForever
+
+		if isMonthCard then
+			local appendStr = LcLocalization.getTextStr(SID.RIGHTCARD_TIME_MONTH)
+			self._txtTitle.text = string.format("%s-%s", self._txtTitle.text, appendStr)
+		end
+	else
+		self._txtJoinBtn:SetLocalize(SID.BTN_JOIN)
+	end
+
+	self._txtJoinBtn.gameObject:SetActive(not isInDuration)
+
+	local isInCountDown = isInDuration and not isForever
+
+	self._goLeftCountDown:SetActive(isInCountDown)
+
+	local isInPriceoffCountDown = isInDuration and P._playerRight:isInPriceOffCountDown(self._rightCardType) and not isForever
+
+	self._goPriceOffTime:SetActive(isInPriceoffCountDown)
+
+	if not isInCountDown and not isInPriceoffCountDown then
+		return
+	end
+
+	self._interval = lc.setInterval(function ()
+		self:updatePriceOffCountDown()
+	end, 0.5, true)
+
+	self._interval.func()
+end
+
+function M:updatePriceOffCountDown()
+	V.formatLeftTime(self._txtLeftCountDown, P._playerRight:getLeftSeconds(self._rightCardType))
+
+	self._txtPriceOffCountDown.text = V.formatTimeS2HMS(P._playerRight:getLeftPriceOffSeconds(self._rightCardType))
+end
+
+return M

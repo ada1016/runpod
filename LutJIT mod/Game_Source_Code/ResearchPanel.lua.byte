@@ -1,0 +1,175 @@
+local M = class("ResearchPanel", requireLua("BasePanel"))
+local ResearchUnitWidget = requireLua("ResearchUnitWidget")
+M.args = {
+	scroll = Types.ScrollRect,
+	tfScrollContainer = Types.Transform,
+	btnOverview = Types.Button,
+	btnHandBook = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goCells = {}
+	self._cellHeight = 656
+	local mod = #D._gatlinUpgradeConfig % 4
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 229,
+		cellMargin = -50,
+		cellInitCount = 4,
+		cellHeight = self._cellHeight,
+		topPadding = 50 - self._cellHeight / 4 * (4 - (mod == 0 and 4 or mod))
+	})
+end
+
+function M:Start()
+	self._timer = lc.setTimer(function ()
+		self._timer = nil
+		self._scroll.movementType = 1
+	end, 0.5)
+end
+
+function M:addClicks()
+	self:setClick(self._btnOverview, function ()
+		UIManager.openPanel(PrefabDefine.ResearchOverviewPanel)
+	end)
+	self:setClick(self._btnHandBook, function ()
+		UIManager.openPanel(PrefabDefine.WeaponHandbookPanel, D.WEAPON_GATLIN)
+	end)
+end
+
+function M:addEvents()
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.coin and P._playerArmory:canUpgradeGatlin() then
+			local index = math.ceil((self._curLevel + 1) / 4)
+
+			self._goCells[index]:updateDot(index * 4 - 3, self._curLevel)
+		end
+	end)
+end
+
+function M:init()
+	self._maxLevel = math.ceil(#D._gatlinUpgradeConfig / 4) * 4
+	self._curLevel = P._playerArmory:getWeaponLevel(1) - 1
+
+	self._scrollViewEx:reloadData(true)
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:moveToLevel(self._curLevel)
+end
+
+function M:moveToLevel(level, dt)
+	local y = self._scrollViewEx._yRangIndex[math.max(1, math.ceil((self._maxLevel - level) / 4))]
+	local height = self._scroll.transform.rect.height
+
+	if level >= 4 then
+		y = y - height + self._cellHeight + height * 0.4
+		y = y - level % 4 * self._cellHeight / 4
+	else
+		y = y - height + self._cellHeight + 160
+	end
+
+	if dt then
+		local _, y0 = lc.getLocalPosition(self._tfScrollContainer)
+
+		if y < y0 then
+			self._tfScrollContainer:DOLocalMoveY(y, dt):SetLink(self.gameObject)
+		end
+	else
+		lc.setLocalPosition(self._tfScrollContainer, 0, y, 0)
+	end
+
+	self._scrollViewEx:onScroll(false)
+end
+
+function M:onCellNum()
+	return math.floor(self._maxLevel / 4)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+
+		goCell.transform:SetSiblingIndex(0)
+	else
+		goCell.transform:SetSiblingIndex(self._lastIndex < index and 0 or 3)
+	end
+
+	self._lastIndex = index
+	local level = self._maxLevel - 4 * index + 1
+	index = math.ceil(level / 4)
+	self._goCells[index] = goCell
+
+	goCell:init(level, self._curLevel)
+
+	for i = 1, 4 do
+		local function func()
+			UIManager.openPanel(PrefabDefine.ResearchTipsPanel, level + i - 1, function ()
+				self._curLevel = P._playerArmory:getWeaponLevel(1) - 1
+				local anim = goCell._goResearchs[i]._showAnim
+				local animKey = nil
+
+				if D._gatlinUpgradeConfig[level + i - 1]._rouge then
+					goCell._goResearchs[i]._goItem:SetActive(true)
+					goCell._goResearchs[i]._goLock:SetActive(false)
+
+					animKey = "anim_ResearchUnlock_01"
+
+					anim:Play(animKey)
+				else
+					goCell._goResearchs[i]._goItemSmall:SetActive(true)
+					goCell._goResearchs[i]._goLockSmall:SetActive(false)
+
+					animKey = "anim_ResearchUnlock_02"
+
+					anim:Play(animKey)
+				end
+
+				if self._tween then
+					self._tween:Complete()
+				end
+
+				self._scroll.enabled = false
+				self._tween = goCell._goResearchs[i]._imgNext:DOFillAmount(1, 1):OnComplete(function ()
+					goCell:updateDot(level, self._curLevel)
+
+					if self._goCells[index + 1] then
+						self._goCells[index + 1]:updateDot(level + 4, self._curLevel)
+					end
+
+					self._tween = nil
+					self._scroll.enabled = true
+
+					self:moveToLevel(self._curLevel, 0.5)
+				end)
+			end)
+		end
+
+		self:setClickWithoutAction(goCell._goResearchs[i]._btnItem, func)
+		self:setClickWithoutAction(goCell._goResearchs[i]._btnItemSmall, func)
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = ResearchUnitWidget.create(self._tfScrollContainer)
+
+	return go
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._tween then
+		self._tween:Kill()
+
+		self._tween = nil
+	end
+
+	lc.stopTimer(self._timer)
+end
+
+return M

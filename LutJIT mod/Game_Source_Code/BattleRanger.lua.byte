@@ -1,0 +1,536 @@
+local M = class("BattleRanger", requireLua("BattleWeapon"))
+local SUPER = M.super
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._position = Vector3.retain(0, 0, 0)
+	self._position.y = 0
+	self._facingRight = true
+	self._cachedDeltaMoveX = 0
+	self._shootPos = Vector3.retain(0, 0, 0)
+	self._ikPosition = Vector3.retain(0, 3, 0)
+	self._angle = 0
+	self._rotatePos = Vector3.retain(0, 0, 0)
+	self._rotation = Quaternion.retain(0, 0, 0, 0)
+	self._towardDir = Vector3.retain(0, 0, 0)
+	self._rotateSpeed = 80
+	self._acceleration = 2
+	self._deceleration = 2.5
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleRangerView").new(battleSession)
+	end
+end
+
+function M:init(cid, index)
+	self._cid = cid
+	local offsetX = 1
+	self._offsetX = index == 1 and -offsetX or offsetX
+	self._angle = 90
+	self._targetAngle = 90
+	self._fixAngle = 90
+	self._currentMoveSpeed = 0
+	self._actorX = 0
+	local cfg = D._rangerConfig[cid]
+	self._cfg = cfg
+
+	self:initSkills(cfg._battleMainSkills)
+
+	self._id = cfg._battleId
+	self._atkRange = cfg._atkRange
+	self._isChannelSkill = cfg._isChannelSkill
+	self._fireTime = cfg._fireTime
+	self._defyInvisibility = cfg._defyInvisibility
+	self._frontTime = cfg._frontTime
+	self._isRotate = cfg._isRotate
+	self._moveSpeed = cfg._moveSpeed / 100
+	self._stopOnFire = cfg._stopOnFire
+	self._initialCD = cfg._cd
+	self._activeRouge = cfg._activeRouge
+	self._followRange = cfg._followRange
+	self._cd = self._initialCD
+	local shootCfg = BattleDefine.RANGER_SHOOT_POSITION[self._id]
+	self._rotateBaseY = shootCfg and shootCfg[1] or 0.5
+	self._shootDistance = shootCfg and shootCfg[2] or 0.1
+	self._fireCountInRound = 0
+	self._upgradeDt = 0
+
+	self:updateAngle(0)
+
+	if self._view then
+		self._view:init(self)
+	end
+
+	if self._id == 210 and not self._battleSession:isSkipView() then
+		self._view2 = requireLua("BattleRangerView").new(self._battleSession)
+
+		self._view2:init(self)
+		self._view2._obj:SetActive(false)
+		self._view2._obj:GetChild(0):GetComponent("SpineChangeSkin"):SetMaterial("_HologramBlend", 0.838)
+	end
+end
+
+function M:step(dt)
+	if self._isFireing then
+		self._fireTimeCD = self._fireTimeCD - dt
+
+		if self._fireTimeCD <= 0 then
+			self._isFireing = false
+
+			self:syncAtorPosition()
+		end
+	end
+
+	if self._upgradeDt > 0 then
+		self._upgradeDt = self._upgradeDt - dt
+	end
+
+	self:stepMove(dt)
+	self:stepFrontTimeCD(dt)
+	self:stepSeekingEnemy(dt)
+	self:stepSkillCountDown(dt)
+end
+
+function M:stepMove(dt)
+	if self._stopOnFire and (self._isInChanneling or self._isFireing) or self._upgradeDt > 0 then
+		self._targetX = self._position.x
+		self._cachedDeltaMoveX = 0
+		self._currentMoveSpeed = 0
+	else
+		local stopDist = 0.01
+		local stopVel = 0.01
+		local displacement = self._targetX - self._position.x
+		local distance = math.abs(displacement)
+		local distance2Actor = math.abs(self._actorX - self._position.x)
+		local dir = 0
+
+		if stopDist < displacement then
+			dir = 1
+		elseif displacement < -stopDist then
+			dir = -1
+		end
+
+		local isMoving = stopVel < math.abs(self._currentMoveSpeed)
+		local shouldMove = nil
+		shouldMove = isMoving and true or self._followRange < distance2Actor
+		local brakeDist = self._currentMoveSpeed * self._currentMoveSpeed / (2 * self._deceleration)
+		local isPress = self._battleSession:isPress()
+		local speedUp = false
+
+		if shouldMove then
+			if distance <= brakeDist then
+				speedUp = false
+			elseif dir ~= 0 and math.sign(self._currentMoveSpeed) ~= dir and self._currentMoveSpeed ~= 0 then
+				speedUp = false
+			else
+				speedUp = true
+			end
+		else
+			speedUp = false
+		end
+
+		if speedUp then
+			self._currentMoveSpeed = self._currentMoveSpeed + dir * self._acceleration * dt
+			self._currentMoveSpeed = math.max(-self._moveSpeed, math.min(self._currentMoveSpeed, self._moveSpeed))
+		elseif self._currentMoveSpeed > 0 then
+			self._currentMoveSpeed = math.max(0, self._currentMoveSpeed - self._deceleration * dt)
+		elseif self._currentMoveSpeed < 0 then
+			self._currentMoveSpeed = math.min(0, self._currentMoveSpeed + self._deceleration * dt)
+		end
+
+		local currentPosX = self._position.x
+		local nextPosX = self._position.x + self._currentMoveSpeed * dt
+
+		if distance < stopDist and math.abs(self._currentMoveSpeed) < stopVel then
+			nextPosX = self._targetX
+			self._position.x = nextPosX
+			self._currentMoveSpeed = 0
+		else
+			if self._position.x <= self._targetX then
+				nextPosX = math.min(nextPosX, self._targetX)
+			else
+				nextPosX = math.max(nextPosX, self._targetX)
+			end
+
+			self._position.x = nextPosX
+		end
+
+		self._cachedDeltaMoveX = math.abs(nextPosX - currentPosX)
+	end
+
+	local isPress = self._battleSession:isPress()
+	local isMoving = self._cachedDeltaMoveX > 0
+
+	if isMoving then
+		local isMovingRight = self._targetX - self._position.x > 0
+		local isMovingLeft = self._targetX - self._position.x < 0
+
+		if isMovingRight then
+			self._facingRight = true
+		elseif isMovingLeft then
+			self._facingRight = false
+		end
+	end
+
+	if self._view then
+		self._view:stepEvent()
+	end
+end
+
+function M:stepSkillCountDown(dt)
+	if self._isInChanneling then
+		return
+	end
+
+	local stepCd = dt
+	stepCd = dt + dt * self._mainSkill:getProp(BattlePropEnum.RangerSkillCdSpeedAddPer, 0) / 100
+	self._cd = self._cd - stepCd
+
+	if self._cd <= 0 and (self._id == 214 or self._id == 209 or self._runingFire or self._runingFire == nil and self._targetEnemy ~= nil) then
+		local passStartEvent = false
+
+		if self._frontTime then
+			self._cd = 99999
+			self._frontTimeCD = self._frontTime
+
+			if self._id == 210 and self:getEffect(21003) then
+				self._frontTimeCD = self._frontTimeCD + 0.3
+
+				if self._view2 then
+					passStartEvent = true
+
+					if self._position.x < 0 then
+						self._view2._obj:SetPosition(self._position.x + 1.5, self._position.y, 0)
+					else
+						self._view2._obj:SetPosition(self._position.x - 1.5, self._position.y, 0)
+					end
+
+					self._view2._obj:SetActive(true)
+					self._view2._obj:SetLocalScale(0)
+					self._view2._obj.transform:DOScale(1, 0.3):OnComplete(function ()
+						self._view2:skillStartEvent()
+						self._view:skillStartEvent()
+					end)
+				end
+			end
+		else
+			self:castMainSkill()
+		end
+
+		if not passStartEvent and self._view then
+			self._view:skillStartEvent()
+		end
+	end
+end
+
+function M:stepFrontTimeCD(dt)
+	if self._frontTimeCD then
+		self._frontTimeCD = self._frontTimeCD - dt
+
+		if self._frontTimeCD <= 0 then
+			self._frontTimeCD = nil
+
+			self:castMainSkill()
+		end
+	end
+end
+
+function M:castMainSkill()
+	if self._fireTime then
+		self._isFireing = true
+		self._fireTimeCD = self._fireTime
+	end
+
+	self:createMainBullet()
+
+	if self._id == 210 and self:getEffect(21003) then
+		self:createDouble21000()
+	end
+
+	self._fireCountInRound = self._fireCountInRound + 1
+
+	if self._isChannelSkill then
+		self._isInChanneling = true
+	else
+		self._cd = self._initialCD
+
+		self:trySetRunningFire()
+	end
+
+	if self._view then
+		self._view:shootEvent()
+	end
+
+	if self._view2 then
+		self._view2:shootEvent()
+	end
+end
+
+function M:trySetRunningFire()
+	local rate = self._mainSkill:getProp(BattlePropEnum.RunningFireProbabilityPer)
+
+	if self._id == 202 then
+		if self._fireCountInRound == 1 or self._fireCountInRound == 3 then
+			rate = 100
+		elseif self._fireCountInRound == 4 then
+			rate = 0
+		end
+	end
+
+	if rate and not self._battleRandomLib:randomTrue(rate) then
+		self:runningFireFinished()
+
+		return
+	end
+
+	if self._runingFire == nil then
+		if self._runingFireCount == nil then
+			self._runingFireCount = self._mainSkill:getProp(BattlePropEnum.RunningFire)
+
+			if self._runingFireCount and self._runingFireCount > 0 then
+				self._runingFire = true
+				self._cd = math.max(self._mainSkill:getProp(BattlePropEnum.RunningFireInterval, 1), 0.0167)
+			else
+				self:runningFireFinished()
+			end
+		end
+	elseif self._runingFireCount > 0 then
+		self._runingFireCount = self._runingFireCount - 1
+
+		if self._runingFireCount == 0 then
+			self._runingFire = nil
+			self._runingFireCount = nil
+			self._cd = self._initialCD
+
+			self:runningFireFinished()
+		else
+			self._cd = math.max(self._mainSkill:getProp(BattlePropEnum.RunningFireInterval, 1), 0.0167)
+		end
+	end
+end
+
+function M:runningFireFinished()
+	self._lockTargetEnemy = nil
+	self._fireCountInRound = 0
+	self._runingFire = nil
+	self._runingFireCount = nil
+end
+
+function M:stepSeekingEnemy(dt)
+	self:seekingEnemy()
+	self:towardTargetEnemy(self._targetEnemy)
+	self:updateAngle(dt)
+end
+
+function M:updateAngle(dt)
+	if self._isRotate then
+		self._angle = Mathf.MoveTowardsAngle(self._angle, self._targetAngle, self._rotateSpeed * dt)
+
+		Vector3.angle2dir(self._angle, self._towardDir)
+		self._shootPos:Set(self._towardDir):Mul(self._shootDistance):AddXYZ(self._position.x, self._position.y + self._rotateBaseY, 0)
+		self._ikPosition:Set(self._towardDir):Mul(3):AddXYZ(self._position.x, self._position.y + self._rotateBaseY, 0)
+	else
+		self._shootPos:Set(self._towardDir):Mul(self._shootDistance):AddXYZ(self._position.x, self._position.y + self._rotateBaseY, 0)
+	end
+end
+
+function M:seekingEnemy()
+	if self._lockTargetEnemy then
+		if self._lockTargetEnemy._position.y > self._atkRange + 0.2 then
+			self._lockTargetEnemy = nil
+		elseif self._lockTargetEnemy._isToBeDestroyed then
+			self._lockTargetEnemy = nil
+		end
+	end
+
+	if self._lockTargetEnemy == nil or not self._battleSession:enemyCanBeChoseAsTarget(self._lockTargetEnemy, self) then
+		self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange + 0.2)
+		self._lockTargetEnemy = self._targetEnemy
+	else
+		self._targetEnemy = self._lockTargetEnemy
+	end
+end
+
+function M:towardTargetEnemy(enemy)
+	if enemy then
+		self._targetAngle = self:calShotAngle(enemy._position)
+	else
+		self._targetAngle = self._fixAngle
+	end
+end
+
+function M:calShotAngle(targetPosition)
+	local targetPos = targetPosition
+	local position = self._position
+	local y = targetPos.y
+
+	if self._targetTowardOffset then
+		y = targetPos.y - math.min(enemy._radius, 1)
+	end
+
+	opt.vec3_1:SetXYZ(targetPos.x, y):SubXYZ(position.x, position.y, 0):SetNormalize()
+
+	return math.deg(math.atan2(opt.vec3_1.y, opt.vec3_1.x))
+end
+
+function M:setTargetX(x)
+	self._actorX = x
+	self._targetX = math.limit(x + self._offsetX, self._battleSession._screenEdgeX1 + 1, self._battleSession._screenEdgeX2 - 1)
+end
+
+function M:initPosition(x)
+	self._targetX = x + self._offsetX
+	self._position.x = self._targetX
+end
+
+function M:getPositionX()
+	return self._position.x
+end
+
+function M:createDouble21000()
+	local bullet = self._mainSkill:createBullet()
+
+	if self._position.x < 0 then
+		bullet:setPos(self._shootPos.x + 1.5, self._shootPos.y)
+	else
+		bullet:setPos(self._shootPos.x - 1.5, self._shootPos.y)
+	end
+
+	local targetEnemy = self._battleSession._battleEnemyFinder:randomOneEnemyWithExcludeOne(self._targetEnemy)
+	targetEnemy = targetEnemy or self._targetEnemy
+	local angle = 90
+
+	if targetEnemy then
+		angle = self:calShotAngle(targetEnemy._position)
+	else
+		angle = BattleRandomLib:randomMN(45, 135)
+	end
+
+	bullet:setDirByAngle(angle)
+	bullet:init_end()
+
+	if bullet._view then
+		bullet._view:posEvent()
+		bullet._view:rotationEvent()
+	end
+
+	if self._view2 then
+		self._view2._obj.transform:DOScale(0, 0.3):OnComplete(function ()
+			self._view2._obj:SetActive(false)
+		end)
+	end
+end
+
+function M:createMainBullet()
+	local bullet = self._mainSkill:createBullet()
+
+	bullet:setPos(self._shootPos.x, self._shootPos.y)
+
+	if bullet._cid == 20900 then
+		bullet:updateView()
+	else
+		if bullet._cid == 20300 then
+			bullet:setDirByAngle(self._angle + self._battleRandomLib:randomMN(-100, 100) / 10)
+		elseif bullet._cid == 20400 then
+			self._angle = 90
+
+			bullet:setDirByAngle(self._angle)
+		elseif bullet._cid == 20200 then
+			local angle = 90
+
+			if self._targetEnemy then
+				angle = self:calShotAngle(self._targetEnemy._position)
+			end
+
+			bullet:setDirByAngle(angle)
+		elseif bullet._cid == 21000 then
+			local angle = 90
+
+			if self._targetEnemy then
+				angle = self:calShotAngle(self._targetEnemy._position)
+			else
+				angle = BattleRandomLib:randomMN(45, 135)
+			end
+
+			bullet:setDirByAngle(angle)
+			bullet:init_end()
+		else
+			bullet:setDirByAngle(self._angle)
+		end
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+
+	if bullet._cid == 20200 then
+		if self._targetEnemy then
+			bullet:calMoveDuration(self._targetEnemy._position)
+		else
+			local x = self._battleRandomLib:randomMN(self._battleSession._screenEdgeX1 * 10, self._battleSession._screenEdgeX2 * 10) / 10
+			local y = self._battleRandomLib:randomMN(40, self._battleSession._screenEdgeY2 * 10) / 10
+
+			bullet:calMoveDuration(opt.vec2_1:Set(x, y))
+		end
+
+		self:addBullet(bullet)
+
+		self._targetEnemy = nil
+	elseif bullet._cid == 20400 then
+		self._mainBullet = bullet
+		self._hitEnemyCount = 0
+
+		bullet:lockEnemy(self._targetEnemy)
+	elseif bullet._cid == 21100 then
+		bullet:lockEnemy(self._targetEnemy)
+	elseif bullet._cid == 21400 then
+		bullet:setEndPosition(true)
+	end
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+	if bullet._cid == 20400 then
+		self._mainBullet = nil
+	end
+
+	if bullet._battleSkill == self._mainSkill then
+		self:onChannelEnd()
+	end
+end
+
+function M:onChannelEnd()
+	if self._isChannelSkill and self._isInChanneling then
+		self._lockTargetEnemy = nil
+		self._isInChanneling = false
+		self._cd = self._initialCD
+
+		if self._view then
+			self._view:skillEndEvent()
+		end
+
+		self:syncAtorPosition()
+	end
+end
+
+function M:setUpgrade()
+	self._upgradeDt = 2
+end
+
+function M:syncAtorPosition()
+	self:setTargetX(self._battleSession._battleActor._position.x)
+end
+
+function M:bulletHitEnemy(bullet, enemy)
+	if bullet._battleWeapon._id == 204 and self._mainBullet and self._mainBullet._effect20403 then
+		self._hitEnemyCount = self._hitEnemyCount + 1
+
+		if self._hitEnemyCount % self._mainBullet._effect20403Param3 == 0 and self._mainBullet._effect20403Param2 > 0 then
+			self._mainBullet._effect20403Param2 = self._mainBullet._effect20403Param2 - 1
+			self._mainBullet._duration = self._mainBullet._duration + self._mainBullet._effect20403Param1
+		end
+	end
+end
+
+return M

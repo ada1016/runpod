@@ -1,0 +1,253 @@
+local M = class("AccountTipPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnForceSave = Types.Button,
+	textSaveTime = Types.TMP_Text,
+	btnResetAccount = Types.Button,
+	btnGoogle = Types.Button,
+	btnApple = Types.Button,
+	textGoogleStatus = Types.TMP_Text,
+	textAppleStatus = Types.TMP_Text,
+	textGoogleRewardNum = Types.TMP_Text,
+	textAppleRewardNum = Types.TMP_Text,
+	textGoogleEmail = Types.TMP_Text,
+	textAppleEmail = Types.TMP_Text,
+	goGoogleReward = Types.GameObject,
+	goAppleReward = Types.GameObject,
+	btnTips = Types.Button,
+	btnApiToken = Types.Button,
+	textApiToken = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._delayHideTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnForceSave, function ()
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		local cd = 300
+
+		if cd > C.getCurTime() - C.launchTimestamp then
+			V.showToast({
+				SID.CLOULD_FORCE_SAVE_CD,
+				cd - (C.getCurTime() - C.launchTimestamp)
+			})
+
+			return
+		end
+
+		UIManager.showWaiting()
+		self:delayHideWait()
+		C.trySaveGameDataToLocal()
+
+		if C._firebaseId and C._useFirebaseAccount then
+			C.trySaveGameDataToRemote()
+		end
+	end)
+	self:setClick(self._btnResetAccount, function ()
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		local isGuest = C.getIsGuest()
+
+		if isGuest then
+			UIManager.openPanel(PrefabDefine.AccountInitializationLinkTipPanel)
+
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.AccountInitializationConfirmPanel)
+	end)
+	self:setClick(self._btnGoogle, function ()
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		UIManager.showWaiting()
+		self:delayHideWait()
+		Client.linkAccount("google")
+	end)
+	self:setClick(self._btnApple, function ()
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		UIManager.showWaiting()
+		self:delayHideWait()
+		Client.linkAccount("apple")
+	end)
+	self:setClick(self._btnTips, function ()
+		V.showBubbleTips({
+			desc = SID.ACCOUNT_RESET_TIPS4
+		}, {
+			alignment = 1,
+			target = self._btnTips.gameObject,
+			offset = {
+				0,
+				20,
+				0
+			}
+		})
+	end)
+	self:setClick(self._btnApiToken, function ()
+		self:updateApiToken()
+	end)
+end
+
+function M:delayHideWait()
+	lc.stopTimer(self._delayHideTimer)
+
+	self._delayHideTimer = lc.setTimer(function ()
+		UIManager.hideWaiting()
+	end, 60)
+end
+
+function M:addEvents()
+	self:on("link.succeed", function ()
+		UIManager.hideWaiting()
+
+		if V._savediOSAuthType == FirebaseManager.FIREBASE_AUTH_TYPE_GOOGLE then
+			self:updateGoogle()
+			V.showRewardClaimPanel({
+				{
+					D._globalConfig._bind_reward[1],
+					D._globalConfig._bind_reward[2]
+				}
+			})
+		elseif V._savediOSAuthType == FirebaseManager.FIREBASE_AUTH_TYPE_APPLE then
+			self:updateApple()
+			V.showRewardClaimPanel({
+				{
+					D._globalConfig._bind_reward[1],
+					D._globalConfig._bind_reward[2]
+				}
+			})
+		end
+	end)
+	self:on("link.fail", function ()
+		UIManager.hideWaiting()
+		V.showToast(SID.LINK_FAIL)
+	end)
+	self:on("firebase.auth.fail", function ()
+		UIManager.hideWaiting()
+		V.showToast(SID.LOGOUT_TIPS_3)
+	end)
+	self:on("firebase.auth.successful", function ()
+		UIManager.hideWaiting()
+	end)
+	self:on("firebase.store.saved", function ()
+		UIManager.hideWaiting()
+
+		if C._resetingAccount then
+			lc.setTimer(function ()
+				if lc._isiOS then
+					Application.Quit()
+				else
+					LuaHelper.RestartApp()
+				end
+			end, 0.2)
+		else
+			self:updateSaveTime()
+		end
+	end)
+end
+
+function M:init()
+	self._textGoogleRewardNum.text = D._globalConfig._bind_reward[2]
+	self._textAppleRewardNum.text = D._globalConfig._bind_reward[2]
+
+	self:updateUI()
+
+	if lc._isAndroid then
+		self._btnApple:SetActive(false)
+	end
+end
+
+function M:updateUI()
+	self:updateGoogle()
+	self:updateApple()
+	self:updateSaveTime()
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:updateGoogle()
+	local googleEmail = C.getGoogleEmail()
+
+	if googleEmail == nil then
+		self._textGoogleStatus:SetLocalize(SID.STR_LINK)
+		self._goGoogleReward:SetActive(true)
+
+		self._textGoogleEmail.text = ""
+	else
+		self._textGoogleEmail.text = googleEmail
+
+		self._textGoogleStatus:SetLocalize(SID.ACCOUNT_SWITCH)
+		self._goGoogleReward:SetActive(false)
+	end
+end
+
+function M:updateApple()
+	local appleEmail = C.getAppleEmail()
+
+	if appleEmail == nil then
+		self._textAppleStatus:SetLocalize(SID.STR_LINK)
+		self._goAppleReward:SetActive(true)
+
+		self._textAppleEmail.text = ""
+	else
+		self._textAppleEmail.text = appleEmail
+
+		self._textAppleStatus:SetLocalize(SID.ACCOUNT_SWITCH)
+		self._goAppleReward:SetActive(false)
+	end
+end
+
+function M:updateSaveTime()
+	if C._lastRemoteSaveTime then
+		local ct = math.floor(C._lastRemoteSaveTime * 10) / 10
+
+		self._textSaveTime:SetLocalizeS(SID.CLOULD_FORCE_SAVE_TIME, os.date("!UTC %Y/%m/%d %H:%M:%S", ct))
+	else
+		self._textSaveTime.text = "------"
+	end
+end
+
+function M:updateApiToken()
+	if self._showCode then
+		UniClipboard.SetText(self._showCode)
+		V.showToast(SID.CONT_COPY_SUCCEED)
+
+		return
+	end
+
+	local code = P:showApiCode()
+	self._showCode = code
+	self._textApiToken.text = code
+
+	UniClipboard.SetText(code)
+	V.showToast(SID.CONT_COPY_SUCCEED)
+end
+
+return M

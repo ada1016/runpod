@@ -1,0 +1,487 @@
+local math = math
+local Mathf = Mathf
+local BattleSkill = requireLua("BattleSkill")
+local RADUIS = 0.35
+local CENTER_OFFSETY = 0.5
+local FixedBee = class("FixedBee")
+
+function FixedBee:ctor()
+	self._localPosition = Vector2.retain(0, 0)
+	self._angle = 0
+end
+
+function FixedBee:setAngle(angle)
+	self._angle = angle
+	local rad = math.rad(self._angle)
+	local x = RADUIS * math.cos(rad)
+	local y = RADUIS * math.sin(rad)
+	self._localPosition.x = x
+	self._localPosition.y = y
+end
+
+local M = class("BattleBattery_BeeColony", requireLua("BattleBattery"))
+local SUPER = M.super
+local BEE_NUM = 16
+local FlyBee = requireLua("BattleBattery_FlyBee")
+local CAPACITY = 9
+local IDLE_PER_FRAME_ROTATE = -1
+local READY_PER_FRAME_ROTATE = -10
+local NEXT_PER_FRAME_ROTATE = -10
+local TRANS_TIME = 0.7181
+local BEE_FLY_INTERVAL = 0.8851
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._stage = 1
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._wheelAngle = 90
+	self._perAngle = IDLE_PER_FRAME_ROTATE
+	self._targetEnemys = table.new(0, 16)
+	self._flyBees = table.new(16, 0)
+	self._fixedBees = table.new(CAPACITY, 0)
+
+	for i = 1, CAPACITY do
+		self._fixedBees[i] = FixedBee.create()
+	end
+
+	for i = 1, BEE_NUM do
+		self._flyBees[i] = FlyBee.create(self)
+	end
+
+	self._backBees = table.new(8, 0)
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleWeaponView").new(battleSession)
+	end
+end
+
+function M:init(id, index)
+	SUPER.init(self, id, index)
+
+	self._beeCount = self._mainSkill:getProp(BattlePropEnum.BeeColonyNum)
+	self._grapAngle = 360 / self._beeCount
+	self._beeIndex = 1
+	self._flyBeeCD = 0
+
+	self:addSkill(1201)
+	self:addSkill(1202)
+	self:addSkill(1203)
+
+	if self._view then
+		self._view:beesCountEvent()
+	end
+
+	self:initBeesRotateion()
+end
+
+function M:initSubMainSkill(index, skillId)
+	local skill = BattleSkill.create(self._battleSession)
+
+	skill:init(skillId, self)
+
+	self._mainSkills[index] = skill
+end
+
+function M:stepSeekingEnemy()
+	self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange)
+end
+
+function M:step(dt, elapsedTime)
+	SUPER.step(self, dt, elapsedTime)
+
+	if self._stage == 1 then
+		self:stepBeesRotateions(dt)
+	elseif self._stage == 2 then
+		self:stepBeesRotateionsStage2(dt)
+
+		self._needAngle = self._needAngle - math.abs(self._perAngle)
+
+		if self._needAngle <= 0 then
+			self._stage = 3
+		end
+	elseif self._stage == 3 then
+		if self._targetEnemy and self._targetEnemy._isToBeDestroyed then
+			self._targetEnemy = nil
+		end
+
+		if self._targetEnemy == nil then
+			self._targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange)
+		end
+
+		if self._targetEnemy and not self._targetEnemy._isToBeDestroyed then
+			self:startFlyBee()
+
+			self._stage = 4
+
+			if self._beeUpLevelDitry then
+				self._beeUpLevelDitry = nil
+				self._stageCD = BEE_FLY_INTERVAL + TRANS_TIME
+			else
+				self._stageCD = BEE_FLY_INTERVAL
+			end
+		end
+	elseif self._stage == 4 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 5
+			self._perAngle = NEXT_PER_FRAME_ROTATE
+			self._needAngle = self._grapAngle
+		end
+	elseif self._stage == 5 then
+		self:stepBeesRotateions(dt)
+
+		self._needAngle = self._needAngle - math.abs(self._perAngle)
+
+		if self._needAngle <= 0 then
+			self:startFlyBee()
+
+			if self._beeIndex <= self._beeCount then
+				self._stage = 4
+
+				if self._beeUpLevelDitry then
+					self._beeUpLevelDitry = nil
+					self._stageCD = BEE_FLY_INTERVAL + TRANS_TIME
+				else
+					self._stageCD = BEE_FLY_INTERVAL
+				end
+			elseif #self._backBees > 0 then
+				self._stageCD = BEE_FLY_INTERVAL
+				self._stage = 6
+			else
+				self._stage = 10
+			end
+		end
+	elseif self._stage == 6 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self:startFlyFromBack()
+
+			if #self._backBees == 0 then
+				self._stage = 10
+			else
+				self._stageCD = BEE_FLY_INTERVAL
+			end
+		end
+	elseif self._stage == 10 then
+		self._stage = 11
+		self._stageCD = self._cd / 2
+	elseif self._stage == 11 then
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 1
+
+			self:reStart()
+		end
+	end
+
+	self:stepBee(dt)
+end
+
+function M:stepBee(dt)
+	local cnt = #self._flyBees
+
+	for i = 1, cnt do
+		local bee = self._flyBees[i]
+
+		if bee._busy then
+			bee:step(dt)
+		end
+	end
+end
+
+function M:getBee()
+	local cnt = #self._flyBees
+	local flyBee = nil
+
+	for i = 1, cnt do
+		local bee = self._flyBees[i]
+
+		if not bee._busy then
+			flyBee = bee
+
+			break
+		end
+	end
+
+	if flyBee == nil then
+		flyBee = FlyBee.create(self)
+		self._flyBees[#self._flyBees + 1] = flyBee
+	end
+
+	if self._view then
+		flyBee._view._obj:SetActive(true)
+	end
+
+	return flyBee
+end
+
+function M:putBee(bee, back)
+	if bee._view then
+		bee._view._obj:SetActive(false)
+	end
+
+	if back then
+		if #self._backBees < 5 then
+			self._backBees[#self._backBees + 1] = bee
+		else
+			bee._busy = false
+		end
+	else
+		bee._busy = false
+	end
+end
+
+function M:getBackBeeNum()
+	return #self._backBees
+end
+
+function M:createAdvancedCloneFlyBee(fixBee)
+	local flyBee = self:getBee()
+
+	flyBee:init(1)
+	flyBee:sync(fixBee)
+
+	return flyBee
+end
+
+function M:startFlyBee()
+	local beeIndex = self._beeIndex
+	local fixBee = self._fixedBees[beeIndex]
+	local flyBee = self:getBee()
+
+	flyBee:init(1)
+	flyBee:sync(fixBee)
+
+	self._beeIndex = self._beeIndex + 1
+
+	if self._view then
+		self._view._beeTfs[beeIndex]:SetActive(false)
+	end
+
+	self:flyBeeUpLevelIf(flyBee)
+	flyBee:startTransStage()
+
+	if self._skinEffect61Actived and self._skillCastedCount > 1 and (self._skinEffect61Param == self._skillCastedCount or self._skillCastedCount > self._skinEffect61Param + 1 and self._skillCastedCount % self._skinEffect61Param == 0) then
+		local count = self._skinSkillParam1
+
+		for i = 1, count do
+			local fb = self:createAdvancedCloneFlyBee(fixBee)
+
+			self:flyBeeUpLevelIf(fb)
+			fb:startTransStage()
+		end
+	end
+end
+
+function M:flyBeeUpLevelIf(flyBee)
+	self._beeUpLevelDitry = nil
+
+	if not self._beeUpLevelDitry and self:getEffect(1206) then
+		local idx = self._mainSkill:getProp(BattlePropEnum.BattlePropParam4, 0)
+
+		if idx < self._beeIndex then
+			local rate = self._mainSkill:getProp(BattlePropEnum.BattlePropParam8, 0)
+
+			if self._battleRandomLib:randomTrue(rate) then
+				flyBee._directUpLevelDitry = true
+				flyBee._directNextLevel = 3
+				self._beeUpLevelDitry = true
+			end
+		end
+	end
+
+	if not self._beeUpLevelDitry and self:getEffect(1204) then
+		local idx = self._mainSkill:getProp(BattlePropEnum.BattlePropParam2, 0)
+
+		if idx < self._beeIndex then
+			flyBee._directUpLevelDitry = true
+			flyBee._directNextLevel = 2
+			self._beeUpLevelDitry = true
+		end
+	end
+end
+
+function M:startFlyFromBack()
+	local flyBee = self._backBees[#self._backBees]
+	self._backBees[#self._backBees] = nil
+
+	flyBee:init(flyBee._level)
+	flyBee:sync0()
+	flyBee:startTransStage()
+end
+
+function M:stepBeesRotateionsStage2(dt)
+	if self._needAngle < math.abs(self._perAngle) then
+		self._wheelAngle = self._wheelAngle + self._perAngle
+
+		if self._wheelAngle <= 90 then
+			self._wheelAngle = 90
+		end
+	else
+		self._wheelAngle = self._wheelAngle + self._perAngle
+	end
+
+	self:updateBeesPositionAndRotation()
+end
+
+function M:stepBeesRotateions(dt)
+	self._wheelAngle = self._wheelAngle + self._perAngle
+
+	if self._wheelAngle == -360 then
+		self._wheelAngle = 0
+	end
+
+	self:updateBeesPositionAndRotation()
+end
+
+function M:initBeesRotateion()
+	self._wheelAngle = 90
+
+	self:updateBeesPositionAndRotation()
+end
+
+function M:updateBeesPositionAndRotation()
+	local count = self._beeCount
+
+	for i = 1, count do
+		local bee = self._fixedBees[i]
+
+		bee:setAngle(self._wheelAngle + self._grapAngle * (i - 1))
+	end
+
+	if self._view then
+		self._view:beesPositionAndRotationsEvent()
+	end
+end
+
+function M:updateBeePositionByAngle(i, angle)
+	local rad = math.rad(angle)
+	local x = RADUIS * math.cos(rad)
+	local y = RADUIS * math.sin(rad) + CENTER_OFFSETY
+	self._beePositions[i].x = x
+	self._beePositions[i].y = y
+end
+
+function M:onEffectDitry(id)
+end
+
+function M:onPropDitry(k)
+	if k == BattlePropEnum.BeeColonyNum then
+		if self._stage == 1 then
+			self._beeCount = self._mainSkill:getProp(BattlePropEnum.BeeColonyNum)
+			self._grapAngle = 360 / self._beeCount
+
+			self:reWheel()
+		else
+			self._beeNumDitry = true
+		end
+	end
+end
+
+function M:createBullet()
+end
+
+function M:castSkill()
+	table.clear(self._targetEnemys)
+	self:updateBeeNumIfDitry()
+
+	self._isChanneling = true
+	self._stage = 2
+	self._beeIndex = 1
+	self._perAngle = READY_PER_FRAME_ROTATE
+	self._needAngle = math.abs(-270 - self._wheelAngle)
+end
+
+function M:reStart()
+	self._isChanneling = false
+
+	self:onChannelingEnd()
+	self:updateBeeNumIfDitry()
+	self:reWheel()
+end
+
+function M:reWheel()
+	self._wheelAngle = 90
+	self._perAngle = IDLE_PER_FRAME_ROTATE
+
+	if self._view then
+		self._view:beesPositionAndRotationsEvent()
+
+		for i = 1, self._beeCount do
+			self._view._beeTfs[i]:SetActive(true)
+		end
+	end
+end
+
+function M:updateBeeNumIfDitry()
+	if self._beeNumDitry then
+		self._beeNumDitry = false
+		self._beeCount = self._mainSkill:getProp(BattlePropEnum.BeeColonyNum)
+		self._grapAngle = 360 / self._beeCount
+	end
+end
+
+function M:onEnemyKilled(battleBullet, enemy)
+	SUPER.onEnemyKilled(self)
+
+	local flyBee = battleBullet._belongBee
+
+	if flyBee then
+		flyBee:onKillEnemy(enemy)
+	end
+end
+
+function M:createCloneBeeByBee(level, bee)
+	return self:createCloneBeeByParam(level, bee._position, bee._angle)
+end
+
+function M:createCloneBeeByParam(level, position, angle, castWeapon)
+	local newBee = self:getBee()
+
+	newBee:init(level, true, castWeapon)
+
+	newBee._angle = 90
+	newBee._position.x = position.x
+	newBee._position.y = position.y
+
+	if newBee._view then
+		newBee._view._obj:SetActive(true)
+		newBee._view._obj:SetLocalPosition(position.x, position.y, 0)
+		newBee._view._obj:SetLocalRotation(0, 0, angle - 90)
+		newBee._view._tf:DOScale(1.5, TRANS_TIME)
+	end
+
+	newBee:startUpLevelStage2(level)
+
+	if self._view then
+		Client.playBattleSound("se_Bullet_12_division")
+	end
+end
+
+function M:getCloneLevel()
+	if self:getEffect(1213) then
+		return 3
+	elseif self:getEffect(1212) then
+		return 2
+	elseif self:getEffect(1211) then
+		return 1
+	end
+
+	return 1
+end
+
+function M:castSkin62Effect(position)
+	local count = self._skinEffect62Params.out_param
+	local castSkill = self:getSkill(self._skinEffect62Params.skill_id)
+
+	for i = 1, count do
+		self:createCloneBeeByParam(4, position, 90)
+	end
+end
+
+return M

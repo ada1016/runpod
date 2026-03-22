@@ -1,0 +1,253 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		2,
+		0,
+		1,
+		1010,
+		0,
+		"MainPanel"
+	},
+	{
+		2,
+		2,
+		10001,
+		2,
+		2010,
+		0,
+		"MainPanel|HomePage"
+	},
+	{
+		3,
+		99,
+		3,
+		3,
+		3010,
+		0,
+		"MainPanel"
+	},
+	{
+		4,
+		99,
+		4,
+		4,
+		4010,
+		0,
+		"MainPanel"
+	},
+	{
+		5,
+		4,
+		5,
+		5,
+		5010,
+		0,
+		"MainPanel"
+	},
+	{
+		6,
+		4,
+		30,
+		6,
+		6010,
+		0,
+		"MainPanel"
+	},
+	{
+		7,
+		3,
+		6,
+		7,
+		7010,
+		0,
+		"MainPanel"
+	},
+	{
+		8,
+		4,
+		15,
+		8,
+		8010,
+		0,
+		"MainPanel"
+	},
+	{
+		9,
+		99,
+		9,
+		9,
+		9010,
+		0,
+		"MainPanel"
+	},
+	{
+		10,
+		99,
+		10,
+		10,
+		10010,
+		0,
+		"MainPanel|RolePage"
+	},
+	{
+		11,
+		99,
+		11,
+		11,
+		11010,
+		0,
+		"RoleSystemPanel|RoleSkinPanel"
+	},
+	{
+		12,
+		99,
+		12,
+		12,
+		12010,
+		0,
+		"WeaponSystemPanel|RoleSkinPanel"
+	},
+	{
+		13,
+		99,
+		13,
+		13,
+		13010,
+		0,
+		"DomeSystemPanel|DomeSkinPanel"
+	},
+	{
+		14,
+		4,
+		45,
+		14,
+		14010,
+		0,
+		"MainPanel",
+		{
+			10044,
+			3,
+			40306,
+			1
+		}
+	},
+	{
+		15,
+		99,
+		15,
+		15,
+		15010,
+		0,
+		"RangerDetailPanel"
+	},
+	{
+		16,
+		99,
+		16,
+		16,
+		16010,
+		0,
+		"BattlePanel"
+	},
+	{
+		17,
+		99,
+		17,
+		17,
+		17010,
+		0,
+		"SparkScoutMainPanel"
+	},
+	{
+		18,
+		4,
+		20,
+		18,
+		18010,
+		0,
+		"MainPanel"
+	}
+}
+local mapKeyIndex = {
+	k4312826 = 2,
+	k16160410 = 6,
+	k1644150 = 1,
+	k11107730 = 5,
+	k4080644 = 7,
+	k14279902 = 3,
+	k9063391 = 4,
+	k10346009 = 8
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -9417
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -9417
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

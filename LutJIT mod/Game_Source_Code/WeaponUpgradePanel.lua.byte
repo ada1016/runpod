@@ -1,0 +1,233 @@
+local M = class("WeaponUpgradePanel", requireLua("BasePanel"))
+local Types = Types
+local WeaponEntryWidget = requireLua("WeaponEntryWidget")
+M.args = {
+	btnClose = Types.Button,
+	txtName = Types.TMP_Text,
+	imgIcon = Types.Image,
+	txtDesc = Types.TMP_Text,
+	txtType = Types.TMP_Text,
+	goProp1 = Types.GameObject,
+	goProp2 = Types.GameObject,
+	goProp3 = Types.GameObject,
+	goProp4 = Types.GameObject,
+	goProp5 = Types.GameObject,
+	tfLevelEffectContent = Types.Transform,
+	txtCritValue = Types.TMP_Text,
+	imgCostCoin = Types.Image,
+	imgCostShard = Types.Image,
+	txtUpgradeCostCoin = Types.TMP_Text,
+	txtUpgradeCostShard = Types.TMP_Text,
+	btnUpgrade = Types.Button,
+	btnHandBook = Types.Button,
+	goUpgradeSuccess = Types.GameObject,
+	txtUnlockNewEffect = Types.TMP_Text,
+	goUpgradeSuccessCanvasGroup = Types.CanvasGroup,
+	tfCommingSoon = Types.Transform,
+	goMaxArea = Types.GameObject,
+	goUpgradeArea = Types.GameObject,
+	goPop = Types.GameObject
+}
+local WeaponDamageBubbleWidget = requireLua("WeaponDamageBubbleWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goProps = {
+		self._goProp1,
+		self._goProp2,
+		self._goProp3,
+		self._goProp4,
+		self._goProp5
+	}
+
+	for i = 1, #self._goProps do
+		lc.prefabVarPeer(self._goProps[i])
+	end
+
+	self._goLevelEffects = {}
+
+	lc.prefabVarPeer(self._goPop)
+end
+
+function M:addClicks()
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerArmory:tryUpgradeWeapon(self._id)
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			V.showEnhanceToast(SID.TIP_UPGRADE_SUCCESS)
+
+			for _, prop in pairs(self._changedProps) do
+				self._goProps[prop]:GetComponent("Animation"):Play("anim_WeaponPropElement_levelup")
+			end
+
+			self._upgraded = true
+
+			self:updateUI(self._id)
+
+			local conf = D._weaponGrowConfig[self._id * 100 + P._playerArmory:getWeaponLevel(self._id)]
+
+			if conf then
+				local rouge = conf._activeRouge or conf._addRouge
+
+				if rouge then
+					UIManager.openPanel(PrefabDefine.RogueUnlockPanel, rouge)
+				end
+			end
+		end
+	end)
+	self:setClick(self._btnHandBook, function ()
+		UIManager.openPanel(PrefabDefine.WeaponHandbookPanel, self._id)
+	end)
+end
+
+function M:init(parent)
+	self._parent = parent
+	self._id = parent._id
+	self._upgraded = false
+	self._changedProps = {}
+
+	self:updateUI(self._id)
+end
+
+function M:updateUI(id)
+	self._txtDesc:SetLocalize(D._weaponConfig[id]._skillDescSid)
+	self:updateLevelData(id)
+end
+
+local RANGE_PROP = 11
+local NATURE_COLORS = {
+	"83F7FF",
+	"31B8FF",
+	"BA6DFF",
+	"C4FAA9",
+	"49D961"
+}
+
+function M:updateLevelData(id)
+	local level = P._playerArmory:getWeaponLevel(id)
+	local conf = D._weaponConfig[id]
+
+	self._txtName:SetLocalize(SID.WEAPON_NAME_LEVEL, -conf._skillNameSid, level)
+
+	self._txtCritValue.text = "+" .. math.ceil((level + 1) / 5) .. "%"
+
+	self._txtType:SetLocalize(SID["STR_NATURE_" .. conf._dmgType])
+
+	if P._playerSkin:getEquipedSkin(id) == nil then
+		LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/weapon_%d", id), true, true)
+	else
+		LuaUnity.setTPSprite(self._imgIcon, string.format("weapon/skin_%d", P._playerSkin:getEquipedSkin(id)), true, true)
+	end
+
+	local props = P._playerArmory:getWeaponDisplayPropertyies(id)
+
+	table.clear(self._changedProps)
+	self._goMaxArea:SetActive(P._playerArmory:isMaxLevel(id))
+	self._goUpgradeArea:SetActive(not P._playerArmory:isMaxLevel(id))
+
+	for i = 1, #self._goProps do
+		local go = self._goProps[i]
+
+		if props[i] and props[i] ~= 0 then
+			if props[i] == D.WeaponProperty.Damage and conf._rangeDamageSkillId ~= 0 then
+				go._txtPropName:SetLocalize(D._weaponPropConfig[101]._nameSid)
+			else
+				go._txtPropName:SetLocalize(D._weaponPropConfig[props[i]]._nameSid)
+			end
+
+			local value = P._playerArmory:getWeaponPropValue(id, props[i])
+
+			if props[i] == D.WeaponProperty.LastTime then
+				local _, baseInterval = P._playerArmory:getWeaponPropValue(id, D.WeaponProperty.DamageInterval)
+				go._txtPropValue.text = string.formatNumber(value * baseInterval)
+
+				if id == D.WEAPON_HIVE then
+					go._txtPropName:SetLocalize(SID.SID_WEAPON_PROP_NAMESID_12)
+
+					go._txtPropValue.text = string.formatNumber(math.floor(value))
+				end
+			else
+				go._txtPropValue.text = string.formatNumber(value)
+			end
+
+			if props[i] == RANGE_PROP then
+				go._txtPropValue:SetLocalize(SID["STR_RANGE_" .. value])
+			end
+
+			if not P._playerArmory:isMaxLevel(id) then
+				local nextLevelValue = P._playerArmory:getWeaponPropValue(id, props[i], level + 1)
+
+				if value ~= nextLevelValue then
+					go._txtPropValueChange.gameObject:SetActive(true)
+
+					local change = nextLevelValue - value
+
+					if props[i] == D.WeaponProperty.LastTime then
+						local _, baseInterval = P._playerArmory:getWeaponPropValue(id, D.WeaponProperty.DamageInterval)
+						go._txtPropValueChange.text = (change > 0 and "+" or "-") .. string.formatNumber(change * baseInterval)
+
+						if id == D.WEAPON_HIVE then
+							go._txtPropName:SetLocalize(SID.SID_WEAPON_PROP_NAMESID_12)
+
+							go._txtPropValueChange.text = (change > 0 and "+" or "-") .. string.formatNumber(math.floor(change * baseInterval))
+						end
+					else
+						go._txtPropValueChange.text = (change > 0 and "+" or "-") .. string.formatNumber(math.abs(change))
+					end
+
+					table.insert(self._changedProps, i)
+				else
+					go._txtPropValueChange.gameObject:SetActive(false)
+				end
+			else
+				go._txtPropValueChange.gameObject:SetActive(false)
+			end
+		else
+			go:SetActive(false)
+		end
+	end
+
+	local shardId = conf._shardId
+	local weaponGrowConfig = D._weaponGrowConfig
+	local index = 0
+
+	for i = 2, D.MAX_WEAPON_LEVEL do
+		local conf = weaponGrowConfig[id * 100 + i]
+
+		if conf then
+			index = index + 1
+
+			if not self._goLevelEffects[index] then
+				self._goLevelEffects[index] = WeaponEntryWidget.create(self._tfLevelEffectContent)
+			end
+
+			self._goLevelEffects[index]:setLevel(i)
+			self._goLevelEffects[index]:setLock(level < i)
+
+			local rouge = conf._activeRouge or conf._addRouge
+
+			if rouge then
+				self._goLevelEffects[index]:setDesc(conf._levelDescSid, conf._addRouge)
+				self._goLevelEffects[index]:setLinkClick()
+			else
+				self._goLevelEffects[index]:setDesc(conf._levelDescSid)
+			end
+		end
+	end
+
+	for i = index + 1, #self._goLevelEffects do
+		self._goLevelEffects[i]:SetActive(false)
+	end
+
+	V.loadItemCost(self._imgCostCoin, self._txtUpgradeCostCoin, D.ResType.coin, P._playerArmory:getUpgradeCoinCost(id, level), self)
+	V.loadItemCost(self._imgCostShard, self._txtUpgradeCostShard, shardId, P._playerArmory:getUpgradeShardCost(id, level), self)
+	self._tfCommingSoon:SetActive(true)
+	self._tfCommingSoon:SetAsLastSibling()
+end
+
+return M

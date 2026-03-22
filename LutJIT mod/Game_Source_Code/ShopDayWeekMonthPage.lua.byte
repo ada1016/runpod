@@ -1,0 +1,203 @@
+local M = class("ShopDayWeekMonthPage", requireLua("BasePanel"))
+M.args = {
+	textExpireTime = Types.TMP_Text,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	btnDay = Types.Button,
+	btnWeek = Types.Button,
+	btnMonth = Types.Button
+}
+local PageCfg = {
+	{
+		TitleSid = SID.STR_DAY_GIFT,
+		FreeId = D.ExchangeId.SpecialOfferGift_DayFree1,
+		canShow = function ()
+			return P._playerExchange:isDayGiftUnlock()
+		end
+	},
+	{
+		TitleSid = SID.STR_WEEK_GIFT,
+		FreeId = D.ExchangeId.SpecialOfferGift_WeekFree1,
+		canShow = function ()
+			return P._playerExchange:isWeekGiftUnlock()
+		end
+	},
+	{
+		TitleSid = SID.STR_MONTH_GIFT,
+		FreeId = D.ExchangeId.SpecialOfferGift_MonthFree1,
+		canShow = function ()
+			return P._playerExchange:isMonthGiftUnlock()
+		end
+	}
+}
+local SpecialOfferGiftWidget = requireLua("SpecialOfferGiftWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._exchangeIds = {}
+	self._module = P._playerExchange
+	local cellHeight = 200
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		cellHeight = cellHeight,
+		cellInitCount = showCount + 1
+	})
+	self._btnPages = {
+		self._btnDay,
+		self._btnWeek,
+		self._btnMonth
+	}
+
+	self:init()
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		self:updateTimes()
+		self:updateUI()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnDay, function ()
+		self:changePage(1)
+	end)
+	self:setClick(self._btnWeek, function ()
+		self:changePage(2)
+	end)
+	self:setClick(self._btnMonth, function ()
+		self:changePage(3)
+	end)
+end
+
+function M:init()
+	self._pageIdx = 1
+
+	self:updateUI()
+end
+
+function M:OnPageCreated()
+end
+
+function M:changePage(pageIdx)
+	if self._pageIdx == pageIdx then
+		self:updateUI()
+
+		return
+	end
+
+	self._pageIdx = pageIdx
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local ids = self._module:getUnlockedExchangeIdsByType(3000 + self._pageIdx * 100)
+	self._exchangeIds[self._pageIdx] = clone(ids)
+
+	for i = 1, #PageCfg do
+		self:updatePageBtn(i)
+	end
+
+	self._scrollViewEx:reloadData(0)
+	self:updateTimes()
+	self:updateExpireTime()
+end
+
+function M:updateTimes()
+	local ct = C.getCurTime()
+	local zeroTime = C.getZeroTimestamp(ct)
+	self._refreshTimes = {
+		zeroTime + D.DAY_SECONDS,
+		P._playerRecord:getWeekResetTime(),
+		P._playerRecord:getMonthResetTime()
+	}
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:changePage(1)
+	self:addEvents()
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:handleExpire()
+	self:updateUI()
+end
+
+function M:updatePageBtn(pageIdx)
+	local btn = self._btnPages[pageIdx]
+
+	btn:SetActive(PageCfg[pageIdx].canShow())
+
+	local isActivePage = pageIdx == self._pageIdx
+	local freeId = PageCfg[pageIdx].FreeId
+	local adId = PageCfg[pageIdx].AdId
+
+	btn.dot:SetVisible(freeId and P._playerExchange:getLeftExchangeCount(freeId) > 0 or adId and P._playerExchange:getLeftExchangeCount(adId) > 0)
+	btn.transform:GetChild(0):SetActive(isActivePage)
+
+	btn.transform:GetChild(1):GetComponent("TMP_Text").color = Color.str2Static(isActivePage and "6DFFDD" or "4A8E7E")
+	btn.transform:GetComponent("Image").color = Color.str2Static(isActivePage and "1C3E40" or "142C2E")
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local seconds = self._refreshTimes[self._pageIdx] - C.getCurTime()
+	local d, h, m, s = C.getTimeEndArgs(seconds)
+
+	if d >= 2 then
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:onCellNum()
+	return #self._exchangeIds[self._pageIdx]
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = SpecialOfferGiftWidget.create(self._tfContainer)
+	end
+
+	local list = self._exchangeIds[self._pageIdx]
+	local exchangeId = list[index]
+
+	goCell:updateUI(exchangeId, self._pageIdx)
+	goCell:setExchangeClick(self)
+
+	return goCell
+end
+
+return M

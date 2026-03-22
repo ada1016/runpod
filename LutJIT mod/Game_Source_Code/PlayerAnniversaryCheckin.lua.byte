@@ -1,0 +1,415 @@
+local M = class("PlayerAnniversaryCheckin")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.startTimestamp = self._meta.startTimestamp or C.getCurTime()
+	self._meta.checkinDays = self._meta.checkinDays or {}
+	self._meta.checkinTimestamp = self._meta.checkinTimestamp or 0
+	self._meta.starTreasureClaimed = self._meta.starTreasureClaimed or {}
+	self._meta.recentCostStarValue = self._meta.recentCostStarValue or 0
+	self._meta.recentCostStarTs = self._meta.recentCostStarTs or 0
+	self._meta.totalStarValue = ConfusedNumber.create(self._meta.totalStarValue or 0, "anniversary_totalStarValue")
+	local cfgs = self:readCfgs()
+	self._maxRewardDay = #cfgs
+	self._checkinDaysMapCache = {}
+
+	for i, v in ipairs(self._meta.checkinDays) do
+		self._checkinDaysMapCache[v] = true
+	end
+
+	self._bigRewardIdxes = {}
+
+	for i = 1, self._maxRewardDay do
+		if cfgs[i]._isBig == 1 then
+			self._bigRewardIdxes[#self._bigRewardIdxes + 1] = i
+		end
+	end
+end
+
+function M:initModule(aid)
+	local cfg = P._playerActivity:readCfg(aid)
+	self._meta.startTimestamp = cfg._startTime
+end
+
+function M:findBigRewardIdx(idx)
+	for i = 1, #self._bigRewardIdxes do
+		local bigIdx = self._bigRewardIdxes[i]
+
+		if idx < bigIdx then
+			return bigIdx
+		end
+	end
+end
+
+function M:getAllUnClaimedRewards()
+	local rewards = {}
+	local cfgs = self:readStarCfgs()
+
+	for i = 1, #cfgs do
+		local ret = self:checkClaimStarRewards(i)
+
+		if ret == ResultCode.OK then
+			local cid, num = self:readStarReward(i)
+
+			D.foldRewards(rewards, D.formatRewards(cid, num))
+		end
+	end
+
+	return rewards
+end
+
+function M:dailyReset()
+	self:tryNextCycle()
+end
+
+function M:haveDot()
+	return self:canCheckIn() and not self:isTodayCheckedIn() or self:haveTreasureDot() or P._playerActivityAnniversary:haveUnclaimedFeedbackRewards()
+end
+
+function M:haveTreasureDot()
+	for i = 1, self:readMaxStarReward() do
+		local satisfy = self:isStarRewardRequireSatisfied(i)
+
+		if satisfy then
+			if not self:isStarRewardClaimed(i) then
+				return true
+			end
+		else
+			return false
+		end
+	end
+
+	return false
+end
+
+function M:getFirstTreasureIdx()
+	local findIdx = 1
+
+	for i = 1, self:readMaxStarReward() do
+		local satisfy = self:isStarRewardRequireSatisfied(i)
+
+		if satisfy then
+			findIdx = i
+
+			if not self:isStarRewardClaimed(i) then
+				return findIdx
+			end
+		else
+			return findIdx
+		end
+	end
+
+	return findIdx
+end
+
+function M:getCheckinDayCount()
+	return #self._meta.checkinDays
+end
+
+function M:haveBeenCheckedIn(day)
+	return self._checkinDaysMapCache[day]
+end
+
+function M:isTodayCheckedIn()
+	local dayIdx = self:getTodayIdx()
+
+	return self:haveBeenCheckedIn(dayIdx)
+end
+
+function M:canCheckIn()
+	local dayIdx = self:getTodayIdx()
+
+	return dayIdx <= self._maxRewardDay
+end
+
+function M:getTodayIdx()
+	local diff = math.floor((C.getCurTime() - self._meta.startTimestamp) / 86400) + 1
+
+	return diff
+end
+
+function M:tryClaimDailyRewards(day)
+	local result, param = self:checkClaimDailyRewards(day)
+
+	if result ~= ResultCode.OK then
+		return result, param
+	end
+
+	local rewards = {}
+	local cid1, num1 = self:readDailyReward(day)
+	local cid2, num2 = self:readDailyStarReward(day)
+	local r1 = P._playerAsset:increaseAssetNum(cid1, num1, D.LogWay.anniversary_checkin_daily)
+	local r2 = P._playerAsset:increaseAssetNum(cid2, num2, D.LogWay.anniversary_checkin_daily)
+
+	D.foldRewards(rewards, r1)
+	D.foldRewards(rewards, r2)
+
+	self._checkinDaysMapCache[day] = true
+	self._meta.checkinDays[#self._meta.checkinDays + 1] = day
+
+	SimpleEvent.emit("anniversary.checkin.claim", day)
+	P:saveGameData()
+
+	return ResultCode.OK, rewards
+end
+
+function M:tryRepairDailyRewards(day)
+	local cfg = self:readCfgByIdx(day)
+
+	if not cfg then
+		return nil
+	end
+
+	local result, param = self:checkClaimDailyRewards(day)
+
+	if result ~= ResultCode.REWARD_MISS then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local cid1, num1 = self:readDailyReward(day)
+	local cid2, num2 = self:readDailyStarReward(day)
+	local rewards = P._playerAsset:increaseAssetNum(cid1, num1, D.LogWay.anniversary_checkin_daily_repair)
+	local rewards2 = P._playerAsset:increaseAssetNum(cid2, num2, D.LogWay.anniversary_checkin_daily_repair)
+
+	D.foldRewards(rewards, rewards2)
+
+	self._checkinDaysMapCache[day] = true
+	self._meta.checkinDays[#self._meta.checkinDays + 1] = day
+
+	P:saveGameData()
+	SimpleEvent.emit("anniversary.checkin.claim", day)
+
+	return ResultCode.OK, rewards
+end
+
+function M:checkClaimDailyRewards(day)
+	local today = self:getTodayIdx()
+
+	if today < day then
+		return ResultCode.LOCKED
+	end
+
+	if self:haveBeenCheckedIn(day) then
+		return ResultCode.REWARD_CLAIMED
+	elseif day < today then
+		return ResultCode.REWARD_MISS
+	end
+
+	return ResultCode.OK
+end
+
+function M:getStarValue()
+	return self._meta.totalStarValue()
+end
+
+function M:isGlobalStarSatisfy(index)
+	local currentGlobalStarValue = self:getTotalGlobalStars()
+	local require1, require2 = self:readStarRequire(index)
+
+	if currentGlobalStarValue < require2 then
+		return false
+	end
+
+	return true
+end
+
+function M:isStarRewardRequireSatisfied(index)
+	local currentStarValue = self:getStarValue()
+	local currentGlobalStarValue = self:getTotalGlobalStars()
+	local require1, require2 = self:readStarRequire(index)
+
+	if currentStarValue < require1 or currentGlobalStarValue < require2 then
+		return false
+	end
+
+	return true
+end
+
+function M:isStarRewardClaimed(index)
+	return self._meta.starTreasureClaimed[index]
+end
+
+function M:checkClaimStarRewards(index)
+	if not self:readStarCfgs(index) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isStarRewardClaimed(index) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	if not self:isStarRewardRequireSatisfied(index) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryClaimStarRewards(index)
+	local resultCode = self:checkClaimStarRewards(index)
+
+	if resultCode ~= ResultCode.OK then
+		return resultCode
+	end
+
+	local cid, num = self:readStarReward(index)
+	self._meta.starTreasureClaimed[index] = true
+	local rewards = P._playerAsset:increaseAssetNum(cid, num, D.LogWay.anniversary_star_treasure)
+
+	P:saveGameData()
+
+	return ResultCode.OK, rewards
+end
+
+function M:getEarthStarLevel()
+	local cfgs = self:readStarCfgs()
+	local star = 1
+
+	for i = 1, #cfgs do
+		if self:isGlobalStarSatisfy(i) then
+			star = i
+		else
+			return star
+		end
+	end
+
+	return star
+end
+
+function M:costAllStars()
+	local num = P._playerAsset:getAssetNum(D.ResType.anniversary_star)
+	local starTime = P._playerActivityAnniversary:readActivityStartTime()
+
+	if starTime and starTime > 0 then
+		P._playerAsset:decreaseAssetNum(D.ResType.anniversary_star, num, D.LogWay.anniversary_cost_star)
+
+		local ts = self:getRecentCostStarTime()
+		local ct = C.getCurTime()
+		local startHour = math.floor((ts - starTime) / 3600)
+		local totalHour = math.floor((ct - starTime) / 3600)
+
+		if startHour < totalHour then
+			self._meta.recentCostStarTs = ct
+			self._meta.recentCostStarValue = num
+		else
+			self._meta.recentCostStarValue = self._meta.recentCostStarValue + num
+		end
+
+		self._meta.totalStarValue = self._meta.totalStarValue + num
+
+		return ResultCode.OK, self._meta.recentCostStarValue
+	else
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	P:saveGameData()
+end
+
+function M:getRecentCostStars()
+	return self._meta.recentCostStarValue or 0
+end
+
+function M:getTotalCostStars()
+	return self._meta.totalStarValue()
+end
+
+function M:getRecentCostStarTime()
+	return self._meta.recentCostStarTs or 0
+end
+
+function M:getTotalGlobalStars()
+	local ts = self:getRecentCostStarTime()
+	local ct = C.getCurTime()
+	local totalValue = 0
+	local starTime = P._playerActivityAnniversary:readActivityStartTime()
+
+	if not starTime or starTime == 0 then
+		return 0
+	end
+
+	local startHour = math.floor((ts - starTime) / 3600)
+	local totalHour = math.floor((ct - starTime) / 3600)
+
+	if startHour > 0 and startHour == totalHour then
+		totalValue = totalValue + self:getRecentCostStars()
+	end
+
+	local cfg = self:readGlobalStarReward()
+	local claimed = lc.numberClamp(totalHour, 1, #cfg)
+	totalValue = totalValue + cfg[claimed]._starValue
+
+	return totalValue
+end
+
+function M:readDailyReward(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids1
+	local nums = cfg._nums1
+
+	return cids[1], nums[1]
+end
+
+function M:readDailyStarReward(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids2
+	local nums = cfg._nums2
+
+	return cids[1], nums[1]
+end
+
+function M:readRepairCostNum(day)
+	local cfg = self:readCfgByIdx(day)
+
+	return cfg._repairCostNum
+end
+
+function M:readStarRequire(index)
+	local cfg = self:readStarCfgs()[index]
+
+	return cfg._requireNum1, cfg._requireNum2
+end
+
+function M:readStarReward(index)
+	local cfg = self:readStarCfgs()[index]
+	local cids = cfg._cids1
+	local nums = cfg._nums1
+
+	return cids[1], nums[1]
+end
+
+function M:readCheckinStarReward(day)
+	local cfg = self:readCfgByIdx(day)
+	local cids = cfg._cids2
+	local nums = cfg._nums2
+
+	return cids[1], nums[1]
+end
+
+function M:readTotalDay()
+	return self._maxRewardDay or 0
+end
+
+function M:readCfgByIdx(day)
+	return D._anniversaryCheckinConfig[day]
+end
+
+function M:readCfgs()
+	return D._anniversaryCheckinConfig
+end
+
+function M:readStarCfgs()
+	return D._anniversaryCheckinStarTreasureConfig
+end
+
+function M:readMaxStarReward()
+	return #D._anniversaryCheckinStarTreasureConfig
+end
+
+function M:readGlobalStarReward()
+	return D._anniversaryCheckinGlobalStarConfig
+end
+
+return M

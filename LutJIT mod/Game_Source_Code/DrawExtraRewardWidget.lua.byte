@@ -1,0 +1,92 @@
+local M = class("DrawExtraRewardWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DrawExtraRewardWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	ItemWidget.noCreate(self._goItem)
+
+	self._module = P._playerShop
+	self._boxType = D.BoxType.Gold
+end
+
+function M:updateUI(idx)
+	local curDrawNum = self._module:getDrawBoxNum(self._boxType)
+	local start = math.floor(curDrawNum / 500) * 500
+	self._idx = idx
+	self._thisClaimIdx = idx % 25
+	self._startNum = start + (idx - 1) * D.DRAW_EXTRA_DELTA
+	self._endNum = self._startNum + D.DRAW_EXTRA_DELTA
+
+	self:updateRewards()
+end
+
+function M:updateRewards()
+	local curDrawNum = self._module:getDrawBoxNum(self._boxType)
+	local goItem = self._goItem
+	local canClaim = self._endNum <= curDrawNum
+
+	if self._idx < 25 then
+		local cid, num = self._module:readExtraRewards(self._thisClaimIdx)
+
+		goItem:init(cid, num)
+
+		local claimed = self._module:isExtraDrawClaimed(self._thisClaimIdx)
+
+		goItem:setLock(not canClaim)
+		goItem:setClaimed(claimed)
+		goItem:setCanClaim(canClaim and not claimed)
+		goItem:SetActive(true)
+
+		self._tmpDrawNum.text = self._endNum
+	else
+		goItem:SetActive(false)
+
+		self._tmpDrawNum.text = ""
+	end
+
+	local fill = Mathf.Clamp(curDrawNum - self._startNum, 0, 500) % D.DRAW_EXTRA_DELTA / D.DRAW_EXTRA_DELTA
+	self._imgFill.fillAmount = canClaim and 1 or Mathf.Clamp(fill, 0, 1)
+end
+
+function M:setRewardsClick(panel)
+	local goItem = self._goItem
+
+	panel:setClick(goItem._btnClick, function ()
+		local curDrawNum = self._module:getDrawBoxNum(self._boxType)
+		local canClaim = self._endNum <= curDrawNum
+		local claimed = self._module:isExtraDrawClaimed(self._thisClaimIdx)
+
+		if canClaim and not claimed then
+			local rewards = self._module:claimExtraDrawRewards(self._thisClaimIdx)
+
+			if rewards then
+				V.showRewardClaimPanel(rewards)
+				self:updateRewards()
+			end
+
+			return
+		end
+
+		goItem:rewardclickCallback()
+	end)
+end
+
+return M

@@ -1,0 +1,394 @@
+local M = class("RewardPanel", requireLua("BasePanel"))
+M.args = {
+	delayTime = 0.4,
+	btnBg = Types.Button,
+	btnSkip = Types.Button,
+	textTitle = Types.TMP_Text,
+	tfRewardArea = Types.Transform,
+	lgRewards = Types.LayoutGroup,
+	goTransformArea = Types.GameObject,
+	txtCloseTip = Types.TMP_Text,
+	goTipArea = Types.GameObject,
+	goIapRecoverTip = Types.GameObject,
+	goTransformTip = Types.GameObject,
+	txtTransformRangerTip = Types.TMP_Text,
+	txttransformRangerPieceTip = Types.TMP_Text
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		if not self._skipAll then
+			self._skipAll = true
+
+			self:dealSkip()
+
+			return
+		end
+
+		self:closePanel()
+	end)
+	self:setClickWithoutAction(self._btnSkip, function ()
+		if not self._skipAll then
+			self:dealSkip()
+
+			return
+		end
+	end)
+end
+
+function M:init(rewards, titleSid, closeCallback, autoCloseTime)
+	self._showRewardIdx = 0
+
+	self._btnSkip.transform:SetVisible(false)
+	self:clearTimers()
+
+	self._skipAll = false
+	self._closeCallback = closeCallback
+	self._autoCloseTime = autoCloseTime
+	self._txtCloseTip.enabled = false
+
+	if not autoCloseTime then
+		self._txtCloseTip:SetLocalize(SID.CLICK_CLOSE_TIPS1)
+	end
+
+	if titleSid then
+		self._textTitle:SetLocalize(titleSid)
+	end
+
+	rewards = rewards or {
+		{
+			10001,
+			10
+		},
+		{
+			10002,
+			20
+		},
+		{
+			10003,
+			30
+		},
+		{
+			10004,
+			20
+		},
+		{
+			10005,
+			10
+		}
+	}
+	self._rewardsData = rewards
+	local hasTransformToken = false
+	local hasRangerToken = false
+	local hasRangerPieceToken = false
+	local transformSkins = {}
+	local transformRangerPieces = {}
+	local transformRangerPieceToken = 0
+	local transformedAssets = P._playerAsset._transformedAssets
+
+	for i = 1, #transformedAssets do
+		local cid = transformedAssets[i].target
+		local num = transformedAssets[i].num
+
+		if D.isRangerPieceItem(cid) then
+			hasRangerToken = true
+			transformRangerPieces[#transformRangerPieces + 1] = {
+				cid,
+				num
+			}
+		elseif cid == D.ResType.ranger_exchange_token then
+			hasRangerPieceToken = true
+			transformRangerPieceToken = transformRangerPieceToken + num
+		end
+	end
+
+	table.clear(transformedAssets)
+
+	for i = 1, #rewards do
+		local cid = rewards[i].cid or rewards[i][1]
+		local num = rewards[i].num or rewards[i][2]
+
+		if num < 0 and D.isSkin(cid) then
+			transformSkins[#transformSkins + 1] = rewards[i]
+			hasTransformToken = true
+		end
+	end
+
+	for i = 1, #transformSkins do
+		table.erase(rewards, transformSkins[i])
+	end
+
+	if self._goTipArea then
+		self._goTipArea:SetActive(false)
+		self._goTransformTip:SetActive(false)
+
+		local x, y = lc.getSizeDelta(self._tfRewardArea.parent.parent.parent)
+		self._showFullRow = math.floor(y / 140)
+
+		if hasTransformToken or hasRangerToken or hasRangerPieceToken then
+			self._showFullRow = self._showFullRow - 1
+
+			if #self._rewardsData <= 5 then
+				self._tfRewardArea:GetComponent("LayoutElement").minHeight = 320
+			end
+		end
+
+		if hasTransformToken or hasRangerToken or hasRangerPieceToken then
+			self._delayShowTimer = lc.setTimer(function ()
+				self._goTipArea:SetActive(true)
+
+				if hasTransformToken then
+					self._goTransformTip:SetActive(true)
+				end
+
+				if hasRangerToken then
+					self._txtTransformRangerTip.gameObject:SetActive(true)
+
+					local str = ""
+
+					for i = 1, #transformRangerPieces do
+						local cid = transformRangerPieces[i][1]
+						local num = transformRangerPieces[i][2]
+						str = string.format("%s<link=%d><sprite name=\"item_small_%d\">%d</link>", str, cid, cid, num)
+					end
+
+					self._txtTransformRangerTip:SetLocalizeS(SID.TIP_RANGER_TRANSFORM_FRAGMENT, str)
+					V.setTMPClick(self._txtTransformRangerTip, function (linkId)
+						local cid = tonumber(linkId)
+
+						V.showItemInfoPanel(cid)
+					end)
+				end
+
+				if hasRangerPieceToken then
+					local str = string.format("<sprite name=\"item_small_%d\">%d", D.ResType.ranger_exchange_token, transformRangerPieceToken)
+
+					self._txtTransformRangerPieceTip.gameObject:SetActive(true)
+					self._txtTransformRangerPieceTip:SetLocalizeS(SID.TIP_RANGER_TRANSFORM_KEY, str)
+				end
+			end, 0.618)
+		end
+	else
+		local x, y = lc.getSizeDelta(self._tfRewardArea.parent.parent)
+		self._showFullRow = math.floor(y / 140)
+	end
+
+	self._rewardsData = D.foldRewards({}, self._rewardsData)
+
+	D.sortRewards(self._rewardsData, true)
+	self:updateUI()
+	Client.playSound("ui_Rewards_1")
+end
+
+function M:updateUI()
+	if #self._rewardsData > 0 then
+		self._btnBg.enabled = false
+	end
+
+	if #self._rewardsData <= 0 then
+		self._tfRewardArea.parent.parent:SetActive(false)
+
+		return
+	end
+
+	if self._delayTime <= 0 then
+		self:updateRewards()
+	else
+		self._delayTimer = lc.setTimer(function ()
+			self:updateRewards()
+		end, self._delayTime, true)
+	end
+end
+
+function M:updateRewards()
+	self._btnSkip.transform:SetVisible(true)
+
+	local len = #self._rewardsData
+	local beginAlign = len <= 5 and 4 or 1
+	self._lgRewards.childAlignment = beginAlign
+
+	for i = 1, math.max(#self._goRewards, len) do
+		if i <= len then
+			if self._goRewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._goRewards[i] = goItemWidget
+
+				self._goRewards[i]:SetActive(false)
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			local data = self._rewardsData[i]
+			local cid = data.cid or data[1]
+			local num = data.num or data[2]
+
+			self._goRewards[i]:init(cid, num, data[3])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+
+	local len = #self._rewardsData
+	local beginAlign = len <= 4 and 4 or 1
+	local i = 0
+
+	lc.setAnchoredPosition(self._tfRewardArea, 0, 0)
+
+	local y = 0
+	self._timer = lc.setInterval(function ()
+		i = i + 1
+		self._showRewardIdx = self._showRewardIdx + 1
+
+		if not self._goRewards[i] then
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+
+			self:dealShowAnimEnd()
+
+			return
+		end
+
+		self._lgRewards.childAlignment = i <= 5 and beginAlign or 0
+
+		self._goRewards[i]:SetActive(true)
+
+		local data = self._rewardsData[i]
+		local cid = data.cid or data[1]
+
+		if D.Quality.Blue <= D.toQuality(cid) then
+			self._goRewards[i]._goAnimGet:SetActive(true)
+		end
+
+		if i == len or i >= 15 then
+			self._txtCloseTip.enabled = true
+			self._btnBg.enabled = true
+		end
+
+		if i % 5 == 1 and i < len and i > 5 * self._showFullRow then
+			self._tfRewardArea:DOKill()
+			self._tfRewardArea:DOLocalMoveY(y + 140 * math.ceil((i - 5 * self._showFullRow) / 5), 0.5):SetLink(self.gameObject)
+		end
+
+		if i == len and self._autoCloseTime then
+			self._txtCloseTip.enabled = true
+
+			self._txtCloseTip:SetLocalize(SID.AUTO_CLOSE_TIPS1, self._autoCloseTime)
+
+			self._autoCloseTimer = lc.setInterval(function ()
+				self._autoCloseTime = self._autoCloseTime - 1
+
+				if self._autoCloseTime <= 0 then
+					self:closePanel()
+				else
+					self._txtCloseTip:SetLocalize(SID.AUTO_CLOSE_TIPS1, self._autoCloseTime)
+				end
+			end, 1)
+		end
+	end, 0.1, true)
+end
+
+function M:dealSkip()
+	self:dealShowAnimEnd()
+	self._tfRewardArea:DOKill()
+
+	local height = math.ceil(#self._rewardsData / 5)
+
+	lc.setAnchoredPosition(self._tfRewardArea, 0, 0)
+end
+
+function M:dealShowAnimEnd()
+	self._btnBg.enabled = true
+
+	self._btnSkip.transform:SetVisible(false)
+
+	self._txtCloseTip.enabled = true
+	self._skipAll = true
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	local len = #self._rewardsData
+
+	for i = self._showRewardIdx, len do
+		if self._goRewards[i] then
+			self._goRewards[i]:SetActive(true)
+
+			local data = self._rewardsData[i]
+			local cid = data.cid or data[1]
+
+			if D.Quality.Blue <= D.toQuality(cid) then
+				self._goRewards[i]._goAnimGet:SetActive(true)
+			end
+		end
+	end
+end
+
+function M:showIapRecoverTip()
+	self._delayShowIapRecoverTimer = lc.setTimer(function ()
+		self._goTipArea:SetActive(true)
+		self._goIapRecoverTip:SetActive(true)
+	end, 0.618)
+end
+
+function M:clearTimers()
+	lc.stopTimer(self._timer)
+
+	self._timer = nil
+
+	lc.stopTimer(self._delayTimer)
+
+	self._delayTimer = nil
+
+	lc.stopTimer(self._delayShowTimer)
+
+	self._delayShowTimer = nil
+
+	lc.stopTimer(self._delayShowIapRecoverTimer)
+
+	self._delayShowIapRecoverTimer = nil
+
+	lc.stopTimer(self._autoCloseTimer)
+
+	self._autoCloseTimer = nil
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+
+		self._closeCallback = nil
+	end
+
+	self:clearTimers()
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	if self._delayShowTimer then
+		lc.stopTimer(self._delayShowTimer)
+
+		self._delayShowTimer = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+return M

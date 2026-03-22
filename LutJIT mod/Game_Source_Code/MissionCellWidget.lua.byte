@@ -1,0 +1,65 @@
+local M = class("MissionCellWidget")
+local MissionPerfectRewardWidget = requireLua("MissionPerfectRewardWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MissionCellWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(missionId, missionType)
+	self._perfectRewardWidget = MissionPerfectRewardWidget.noCreate(self._goPerfectRewards)
+	self._rawImgIcon = self._goIcon:GetComponent("RawImage")
+
+	self._goChooseLight:SetActive(false)
+end
+
+function M:updateUI(msId, msType)
+	self._missionId = msId
+	self._missionType = msType or D.MissionType.Common
+
+	V.loadMissionTitleText(self._tmpMissionName, self._missionId, self._missionType)
+	self._perfectRewardWidget:updateUI(msId, msType)
+
+	local pt = P._playerMission:getMissionPerfectType(self._missionId, self._missionType)
+
+	LuaUnity.setTexture(self._rawImgIcon, self._missionType == D.MissionType.Common and "img_Mainland_01" or "img_Mainland_03", true)
+	self._goPerfect:SetActive(pt == D.PerfectType.Perfect)
+	self._goLefHp:SetActive(pt > 0 and pt ~= D.PerfectType.Perfect)
+
+	if pt > 0 then
+		V.loadPerfectText(self._tmpLeftHp, self._missionId, self._missionType)
+	end
+
+	self:setChoosed(false)
+end
+
+function M:getClickBtn(idx)
+	return self._perfectRewardWidget["_goBox" .. idx]._btnClick
+end
+
+function M:getIssueButton()
+	return self._btnIssue
+end
+
+function M:updateReward(idx)
+	self._perfectRewardWidget:updateReward(idx)
+end
+
+function M:setRewardClick()
+end
+
+function M:setChoosed(choose)
+	self._goChoose:SetActive(choose)
+	self._goChooseLight:SetActive(choose)
+end
+
+function M:getMissionIdType()
+	return self._missionId, self._missionType
+end
+
+return M

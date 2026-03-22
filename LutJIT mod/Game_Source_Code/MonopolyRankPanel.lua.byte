@@ -1,0 +1,301 @@
+local M = class("MonopolyRankPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("MonopolyRankWidget")
+local RankRewardWidget = requireLua("RankRewardWidget")
+local MAX_RANKDATA_NUM = 400
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	btnTabRank = Types.Button,
+	btnTabReward = Types.Button,
+	txtTabRank = Types.TMP_Text,
+	txtTabReward = Types.TMP_Text,
+	goContent1 = Types.GameObject,
+	goContent2 = Types.GameObject,
+	goEmptyRank = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	scroll2 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	tfScrollContainer2 = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	goLoading = Types.GameObject,
+	txtSubTitle = Types.TMP_Text,
+	textExpireTime = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._tab = 1
+	self._btnTabs = {
+		self._btnTabRank,
+		self._btnTabReward
+	}
+	self._imgTabs = {
+		self._btnTabRank:GetComponent("Image"),
+		self._btnTabReward:GetComponent("Image")
+	}
+	self._txtTabs = {
+		self._txtTabRank,
+		self._txtTabReward
+	}
+	self._goTabContents = {
+		self._goContent1,
+		self._goContent2
+	}
+	self._tfRankLists = {}
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		cellMargin = 5,
+		topPadding = 20,
+		cellInitCount = 12
+	})
+
+	RankWidget.noCreate(self._goSelfRankWidget)
+
+	local delegate = {}
+
+	function delegate.onAddCell(delegate, goCell, index)
+		if goCell == nil then
+			goCell = RankRewardWidget.create(self._tfScrollContainer2)
+		end
+
+		goCell:init(D._rankMonopolyConfig[index])
+		goCell:initClicks(self)
+
+		return goCell
+	end
+
+	function delegate.onCellNum(delegate)
+		return #D._rankMonopolyConfig
+	end
+
+	self._scrollViewEx2 = ScrollViewEx.create(self._scroll2, delegate, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 20,
+		cellHeight = 116,
+		cellInitCount = 20
+	})
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTabs do
+		self:setClick(self._btnTabs[i], function ()
+			self:changeTab(i)
+		end, "ui_Tap_page_1")
+	end
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(auid, subType)
+	self._rankList = {}
+
+	self._goEmptyRank:SetActive(false)
+
+	self._rankData = P:genRankData()
+	self._rankData.rankValue = P._playerActivityMonopoly:getRankValue()
+	self._rankData.rank = 9999
+
+	self._goSelfRankWidget:init(self._rankData)
+
+	self._scroll1.enabled = false
+
+	self._goLoading:SetActive(true)
+	self._goTabContents[1]:SetActive(true)
+	self._goTabContents[2]:SetActive(false)
+
+	self._conf = P._playerActivityMonopoly:readCfg(subType)
+
+	self:changeTab(1)
+
+	local function callback(data, selfRank, selfIndex)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._btnTabReward.enabled = true
+		self._scroll1.enabled = true
+
+		self._goLoading:SetActive(false)
+
+		self._rankList = data
+
+		if selfRank and data[selfIndex] then
+			self._rankData = data[selfIndex]
+
+			self._goSelfRankWidget:init(self._rankData)
+
+			if self._rankData.rankValue ~= P._playerActivityMonopoly:getRankValue() then
+				P._playerRanker:uploadActivityRankData(D.RankType.MonopolyRank, auid, P._playerActivityMonopoly:getRankValue())
+			end
+		end
+
+		self._txtSubTitle:SetLocalize(SID.TITLE_RANK_ID, P._playerRanker:getGroup(D.RankType.MonopolyRank) or 1)
+		self:loadRankData()
+		self:updateMyRankRewardArea(selfRank)
+	end
+
+	self:updateExpireTime()
+	self._scrollViewEx2:reloadData()
+
+	if P._playerActivityMonopoly._tmpSettleRankData then
+		callback(unpack(P._playerActivityMonopoly._tmpSettleRankData))
+	else
+		self._btnTabReward.enabled = false
+
+		P._playerRanker:getCachedActivityRankData(D.RankType.MonopolyRank, auid, callback)
+	end
+end
+
+function M:changeTab(tab)
+	if self._tab ~= tab then
+		LuaUnity.setTPSprite(self._imgTabs[1], tab == 1 and "general/g_bg_10_2" or "general/g_bg_10")
+		LuaUnity.setTPSprite(self._imgTabs[2], tab == 1 and "general/g_bg_11_2" or "general/g_bg_11")
+
+		self._imgTabs[tab].color = Color.str2Static(V.tabSelectedColor)
+		self._imgTabs[self._tab].color = Color.str2Static(V.tabUnSelectedColor)
+		self._txtTabs[tab].color = Color.str2Static(V.tabSelectTextColor)
+		self._txtTabs[self._tab].color = Color.str2Static(V.tabUnSelectTextColor)
+
+		self._goTabContents[self._tab]:SetActive(false)
+		self._goTabContents[tab]:SetActive(true)
+
+		self._tab = tab
+	end
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRankCell()
+	end
+
+	self:loadRankCell(goCell, self._rankList[index], index)
+
+	return goCell
+end
+
+function M:createRankCell()
+	local itemCell = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/MonopolyRankListWidget.prefab", self._tfScrollContainer1)
+
+	lc.prefabVarPeer(itemCell)
+	RankWidget.noCreate(itemCell._goRankWidget)
+
+	return itemCell
+end
+
+function M:onCellHeight(index)
+	if type(self._rankList[index]) == "number" then
+		return 84
+	else
+		return 125
+	end
+end
+
+function M:onCellNum()
+	return #self._rankList
+end
+
+function M:loadRankData()
+	local target = {}
+
+	for i = 1, math.min(MAX_RANKDATA_NUM, #self._rankList) do
+		target[i] = self._rankList[i]
+	end
+
+	self._rankList = target
+
+	table.insert(self._rankList, 1, 1)
+
+	local nextTitleIndex = 2
+	local len = #self._rankList
+
+	for i = 1, len + #self._conf._limitRank do
+		if self._rankList[i] and type(self._rankList[i]) ~= "number" then
+			while self._conf._limitRank[nextTitleIndex - 1] and self._conf._limitRank[nextTitleIndex - 1] < self._rankList[i].rank do
+				table.insert(self._rankList, i, nextTitleIndex)
+
+				i = i + 1
+				nextTitleIndex = nextTitleIndex + 1
+			end
+		end
+	end
+
+	for i = nextTitleIndex, #self._conf._limitRank + 1 do
+		table.insert(self._rankList, i)
+	end
+
+	self._scrollViewEx1:reloadData()
+end
+
+function M:loadRankCell(itemCell, rankData, index)
+	if type(rankData) == "number" then
+		itemCell._goRankTitle:SetActive(true)
+		itemCell._goRankWidget:SetActive(false)
+
+		local val = rankData
+
+		if val <= #self._conf._limitRank then
+			itemCell._txtRankName:SetLocalize(SID.STR_RANK_RANGE, (self._conf._limitRank[val - 1] or 0) + 1, self._conf._limitRank[val])
+		else
+			itemCell._txtRankName:SetLocalize(SID.STR_RANK_RANGE_EX, self._conf._limitRank[val - 1] + 1)
+		end
+
+		itemCell._txtRankRequirement:SetLocalize(SID.ACTIVITY_POINT_REQUIRE, self._conf._limitScore[val])
+	else
+		itemCell._goRankTitle:SetActive(false)
+		itemCell._goRankWidget:SetActive(true)
+		itemCell._goRankWidget:init(rankData)
+		self:setClick(itemCell._goRankWidget._btnViewInfo, function ()
+			V.viewOtherInfo(rankData)
+		end)
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local data = P._playerActivity:getMonopolyData()
+
+	if not data then
+		return
+	end
+
+	local targetTime = data.endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds)
+end
+
+function M:updateMyRankRewardArea(rank)
+	if rank then
+		for i = 1, #D._rankMonopolyConfig do
+			local conf = D._rankMonopolyConfig[i]
+
+			if rank <= conf._max then
+				local go = self._tfScrollContainer2:GetChild(i - 1).gameObject
+
+				go:showHighlight()
+
+				break
+			end
+		end
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._secondTimer)
+end
+
+return M

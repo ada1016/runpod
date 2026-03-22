@@ -1,0 +1,787 @@
+local D = D
+local M = class("PlayerAsset")
+local setmetatable = setmetatable
+local math = math
+local bxor = bit.bxor
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._props = {}
+	self._propsDt = lc.assignTable(meta, "propsDt")
+	self._metaProps = lc.assignTable(meta, "props")
+	self._version = meta.version
+	self._comparedProps = lc.assignTable(meta, "comparedProps")
+	self._itemCustomSelectIdx = lc.assignTable(meta, "itemCustomSelectIdx")
+	self._bxorKey = meta.bxorKey or math.random(2, 200)
+	meta.bxorKey = self._bxorKey
+
+	for k, v in pairs(self._propsDt) do
+		self._metaProps[k] = math.floor(self._metaProps[k] + v)
+		self._propsDt[k] = 0
+	end
+
+	if self._version == nil then
+		meta.version = 3
+
+		for k, v in pairs(self._metaProps) do
+			local cfg = D._itemConfig[k]
+
+			if cfg and cfg._isCheck then
+				self._comparedProps[k] = bxor(self._metaProps[k], self._bxorKey)
+			end
+		end
+	end
+
+	self._propsBackup = lc.assignTable(meta, "propsBackup")
+	self._propsChecker = {}
+	self._propsCheckerDt = {}
+
+	for k, v in pairs(D._itemConfig) do
+		if v._isCheck then
+			local cid = k
+			self._propsCheckerDt[cid] = math.random(-10000, 10000)
+			self._propsChecker[cid] = (self._metaProps[cid] or 0) + self._propsCheckerDt[cid]
+
+			if self._metaProps[k] then
+				self:consusedAsset(k)
+			end
+		end
+	end
+
+	setmetatable(self._props, {
+		__index = function (tb, k)
+			if self._metaProps[k] == nil then
+				return nil
+			end
+
+			return self._metaProps[k] + (self._propsDt[k] or 0)
+		end,
+		__newindex = function (tb, k, v)
+			self._metaProps[k] = v - (self._propsDt[k] or 0)
+
+			self:consusedAsset(k)
+		end
+	})
+
+	self._transformedAssets = {}
+end
+
+function M:consusedAsset(k)
+	self._metaProps[k] = self._metaProps[k] + (self._propsDt[k] or 0)
+	local dt = math.random(1, 99999)
+	self._metaProps[k] = self._metaProps[k] - dt
+	self._propsDt[k] = dt
+end
+
+function M:start()
+	self:recoverEnergyAllTime()
+end
+
+function M:popStashedAsset()
+	local stashedAsset = C._remoteFixOnce and C._remoteFixOnce.stashedAsset
+
+	if stashedAsset == nil then
+		return
+	end
+
+	for rid, num in pairs(stashedAsset) do
+		self:increaseAssetNum(rid, num, D.LogWay.stashed)
+	end
+end
+
+function M:update(dt, currentTimestamp)
+	local t = P._playerRecord:getNextRecoverTime()
+
+	if t ~= 0 and t < currentTimestamp then
+		self:recoverEnergyAllTime()
+	end
+end
+
+function M:getAssetNum(rid)
+	return self._props[rid] or 0
+end
+
+function M:resetAssetNum(rid)
+	self._metaProps[rid] = 0
+	self._propsDt[rid] = 0
+
+	if self._propsChecker[rid] then
+		self._propsChecker[rid] = 0
+		self._propsCheckerDt[rid] = 0
+		self._comparedProps[rid] = nil
+	end
+end
+
+function M.isResUnlocked(drop)
+	local cid = drop._itemId or drop._id
+
+	if D.isItem(cid) then
+		local conf = D._itemConfig[cid]
+
+		if conf._type == D.ItemType.WeaponShard then
+			return P._playerArmory:isWeaponUnlocked(cid % 100)
+		else
+			return true
+		end
+	else
+		return true
+	end
+end
+
+function M:checkItemCustomSelectIdValid(itemId)
+	return true
+end
+
+function M:getCustomItemCidNumByIdx(itemId, selectIdx)
+	local cids, nums = P._playerAsset:getInsideAssets(itemId)
+	local lenOfCids = lc.lenTable(cids)
+	selectIdx = selectIdx or 1
+	selectIdx = Mathf.Clamp(selectIdx, 1, lenOfCids)
+
+	return selectIdx, cids[selectIdx], nums[selectIdx]
+end
+
+function M:getItemCustomSelectIdx(itemId)
+	if not self._itemCustomSelectIdx[itemId] then
+		return nil
+	end
+
+	local value = self._itemCustomSelectIdx[itemId]
+
+	if value == 0 then
+		return nil
+	else
+		local cids, nums = P._playerAsset:getInsideAssets(itemId)
+		local lenOfCids = lc.lenTable(cids)
+		value = Mathf.Clamp(value, 1, lenOfCids)
+
+		return value, cids[value], nums[value] or 1
+	end
+end
+
+function M:tryClearItemCustomSelectIdx(rid, force)
+	if not force and (rid == D.ResType.MonthlyCustom1 or rid == D.ResType.MonthlyCustom2) then
+		return
+	end
+
+	self:setItemCustomSelectByIdx(rid, 0)
+end
+
+function M:setItemCustomSelectByIdx(itemId, selectIdx)
+	if selectIdx == 0 then
+		self._itemCustomSelectIdx[itemId] = nil
+	else
+		self._itemCustomSelectIdx[itemId] = selectIdx
+	end
+end
+
+function M:getInsideAssets(rid)
+	local cfg = D._itemConfig[rid]
+	local group = cfg._group
+
+	if group == D.ItemGroup.Box then
+		if D.isCustomSelectItem(rid) then
+			local rewardId = cfg._val
+			local cids = D._rewardsConfig[rewardId]._cid
+			local nums = D._rewardsConfig[rewardId]._num
+
+			return cids, nums
+		else
+			local drops = DropHelper.readDropsById(cfg._val)
+			local showDrops = {}
+			local totalWeights = 0
+
+			for i = 1, #drops do
+				local weight = drops[i]._weight
+
+				if weight > 0 then
+					showDrops[#showDrops + 1] = drops[i]
+					totalWeights = totalWeights + weight
+				end
+			end
+
+			local cids = {}
+			local nums = {}
+
+			for i = 1, #showDrops do
+				cids[#cids + 1] = showDrops[i]._itemId
+				nums[#nums + 1] = showDrops[i]._minNum
+			end
+
+			return cids, nums
+		end
+	end
+
+	return {}, {}
+end
+
+function M:decreaseAssetNum(rid, num, logway)
+	self:increaseAssetNum(rid, -math.abs(num), logway)
+end
+
+function M:increaseAssetNum(rid, num, logway, isDrop)
+	if D.isItem(rid) then
+		local itemType = D._itemConfig[rid]._type
+
+		if itemType == D.ItemType.Drop then
+			local itemGroup = D._itemConfig[rid]._group
+
+			if itemGroup == D.ItemGroup.Box and num > 1 then
+				local items = {}
+
+				for i = 1, num do
+					table.append(items, self:increaseAssetNum(rid, 1, logway, true))
+				end
+
+				return items
+			else
+				local item, n = DropHelper.getByDropId(D._itemConfig[rid]._val, M.isResUnlocked, num)
+
+				if n then
+					local result = self:increaseAssetNum(item, n, logway, true)
+
+					return result
+				else
+					local items = {}
+
+					for i = 1, #item do
+						table.append(items, self:increaseAssetNum(item[i][1], item[i][2], logway, true))
+					end
+
+					return items
+				end
+			end
+		elseif itemType == D.ItemType.CustomSelect then
+			local items = {}
+			local selectedIdx, selectedId, selectedNum = self:getItemCustomSelectIdx(rid)
+
+			if not selectedIdx then
+				self:setItemCustomSelectByIdx(rid, 1)
+			end
+
+			table.append(items, self:increaseAssetNum(selectedId, selectedNum, logway))
+			self:tryClearItemCustomSelectIdx(rid)
+
+			return items
+		elseif itemType == D.ItemType.Skin then
+			local transformNum = P._playerSkin:calcTransformCommonTokenNum(rid, num)
+
+			if transformNum > 0 then
+				num = num - transformNum
+				local items = {}
+
+				if num > 0 then
+					table.append(items, self:increaseAssetNum(rid, num, logway))
+				end
+
+				table.append(items, self:increaseAssetNum(P._playerSkin:getCommonSkinToken(rid), transformNum, logway))
+				table.insert(items, {
+					rid,
+					-transformNum
+				})
+
+				return items
+			end
+		elseif itemType == D.ItemType.Ranger then
+			local transformNum = P._playerRanger:calcTransformTokenNum(rid, num)
+
+			if transformNum > 0 then
+				local originNum = num
+				num = num - transformNum
+				local rate = D._rangerConfig[rid]._toPieceNum
+				local pieceId = P._playerRanger:getRangerPieceId(rid)
+				local transformTokenNum = math.floor(transformNum * rate)
+
+				self:increaseAssetNum(rid, num, logway)
+				self:increaseAssetNum(pieceId, transformTokenNum, logway)
+
+				for _, v in pairs(self._transformedAssets) do
+					if v.src == pieceId then
+						transformTokenNum = transformTokenNum - v.srcNum
+					end
+				end
+
+				if transformTokenNum > 0 then
+					table.insert(self._transformedAssets, {
+						src = rid,
+						srcNum = transformNum,
+						target = pieceId,
+						num = transformTokenNum
+					})
+				end
+
+				return {
+					{
+						rid,
+						originNum
+					}
+				}
+			end
+		elseif itemType == D.ItemType.RangerPiece then
+			local rangerId = rid - 1000
+			local transformNum = P._playerRanger:calcTransformCommonTokenNum(rangerId, rid, num)
+
+			if transformNum > 0 then
+				local originNum = num
+				num = num - transformNum
+				local rate = D._rangerConfig[rangerId]._toCommonPieceNum
+				local transformTokenNum = math.floor(transformNum * rate)
+
+				self:increaseAssetNum(rid, num, logway)
+				self:increaseAssetNum(D.ResType.ranger_exchange_token, transformTokenNum, logway)
+				table.insert(self._transformedAssets, {
+					src = rid,
+					srcNum = transformNum,
+					target = D.ResType.ranger_exchange_token,
+					num = transformTokenNum
+				})
+
+				return {
+					{
+						rid,
+						originNum
+					}
+				}
+			end
+		end
+	elseif D.isRangerEquip(rid) then
+		local items = {}
+
+		if type(num) == "number" then
+			for i = 1, num do
+				local data = P._playerRanger:addRangerEquip(rid)
+
+				table.insert(items, {
+					rid,
+					1,
+					data
+				})
+			end
+		else
+			local data = num
+
+			P._playerRanger:insertRangerEquip(data)
+
+			num = 1
+
+			table.insert(items, {
+				rid,
+				1,
+				data
+			})
+		end
+
+		Trace.traceResChanged(rid, num < 0, math.abs(num), self:getAssetNum(rid), logway)
+
+		return items
+	end
+
+	local item = self:increaseAssetNumInner(rid, num, logway, isDrop)
+
+	self:increaseAssetNumAfter(rid, num)
+	Trace.traceResChanged(rid, num < 0, math.abs(num), self:getAssetNum(rid), logway)
+
+	return {
+		item
+	}
+end
+
+function M:increaseAssetNumInner(rid, num, logway, isDrop)
+	if rid == D.ResType.exp then
+		P._playerProfile:increaseExp(num)
+	elseif D.PropGemBegin <= rid and rid <= D.PropGemEnd then
+		P._playerRole:changeGemNum(rid, num)
+	elseif D.PropEquipBegin <= rid and rid <= D.PropEquipEnd then
+		if num <= 0 then
+			return
+		end
+
+		if num > 100 then
+			return
+		end
+
+		for i = 1, num do
+			P._playerRole:addEquipNum(rid)
+		end
+	elseif D.RangerEquipBegin <= rid and rid <= D.RangerEquipEnd then
+		if num <= 0 then
+			return
+		end
+
+		if num > 100 then
+			return
+		end
+
+		for i = 1, num do
+			P._playerRanger:addRangerEquip(rid)
+		end
+	elseif D.isSpecialItem(rid) then
+		local type = math.floor(rid / 1000) + 1
+
+		if type == D.SPItemType.ArkRebulidModule then
+			P._playerActivityArkRebuild:addModule(rid % 1000)
+		end
+	else
+		local oldNum = self._props[rid] or 0
+		self._props[rid] = (self._props[rid] or 0) + num
+
+		self:checkAssetNumVaild(rid, num, logway, isDrop, oldNum)
+
+		local newNum = self._props[rid]
+
+		if rid == D.ResType.energy then
+			local limit = D._globalConfig._fast_sweep_energy_num_limit
+
+			if oldNum < limit and limit <= newNum then
+				P._playerRecord:changeFastSweep2Max()
+			end
+
+			self:updateRecoverEnergyTime()
+		end
+
+		SimpleEvent.emit("prop.dirty", rid, num)
+	end
+
+	return {
+		rid,
+		num
+	}
+end
+
+function M:increaseAssetNumAfter(rid, num)
+	if D.isItem(rid) then
+		local itemType = D._itemConfig[rid]._type
+
+		if rid == D.ResType.coin then
+			RedDotManager.update("city.role")
+			RedDotManager.update("city.weapon")
+		elseif rid == D.ResType.diamond then
+			if num < 0 then
+				TaskHelper:increaseTaskValue(D.TaskType.DIAMOND_COST, -num)
+			end
+		elseif rid == D.ResType.energy then
+			if num < 0 then
+				TaskHelper:increaseTaskValue(D.TaskType.ENERGY_COST, -num)
+				P._playerBPSkin:addExp(-num)
+			end
+		elseif itemType == D.ItemType.ChipSystemShard then
+			RedDotManager.update("city.role")
+		elseif rid == D.ResType.dome_upgrade_mat or rid == D.ResType.dome_break_mat or rid == D.ResType.dome_tech_upgrade_mat or rid == D.ResType.ranger_base_upgrade_mat then
+			if num > 0 then
+				RedDotManager.update("city.role")
+			end
+		elseif rid == D.ResType.ark_rebuild_key then
+			-- Nothing
+		elseif itemType == D.ItemType.WeaponShard then
+			RedDotManager.update("city.weapon")
+			P._playerArmory:dirtyWeaponShard()
+		elseif itemType == D.ItemType.Skin then
+			if P._playerSkin:readSkinType(rid) == D.SkinType.Weapon then
+				RedDotManager.update("city.weapon")
+			else
+				RedDotManager.update("city.role")
+			end
+		elseif itemType == D.ItemType.Ranger or itemType == D.ItemType.RangerPiece then
+			RedDotManager.update("city.role")
+			SimpleEvent.emit("rangerPiece.dirty")
+		elseif D.AVATAR_FRAME_BEGIN <= rid and rid <= D.AVATAR_FRAME_END then
+			if D._itemAvatarConfig[rid]._expireDay then
+				P._playerRecord:setAvatarFrameExpired(rid, C.getCurTime() + D._itemAvatarConfig[rid]._expireDay * 86400)
+			end
+		elseif D.AVATAR_MEDAL_BEGIN <= rid and rid <= D.AVATAR_MEDAL_END then
+			if D._itemAvatarConfig[rid]._expireDay then
+				P._playerRecord:setAvatarMedalExpired(rid, C.getCurTime() + D._itemAvatarConfig[rid]._expireDay * 86400)
+			end
+		elseif rid == D.DOME_GRADE_AVATAR_END then
+			P._playerRecord:setAvatarExpired(rid, C.getCurTime() + D._itemAvatarConfig[rid]._expireDay * 86400)
+		end
+
+		if not P._playerGuide:isGroupFinished(D.GuideGroupId.EnhanceWeapon) and P._playerArmory:canUpgradeWeapon() then
+			SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.EnhanceWeapon)
+		end
+
+		if not P._playerGuide:isGroupFinished(D.GuideGroupId.EnhanceEquip) and P._playerRole:canUpgradeEquip() then
+			SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.EnhanceEquip)
+		end
+	end
+end
+
+function M:isAssetEnough(rid, num)
+	return math.abs(num) <= self:getAssetNum(rid)
+end
+
+function M:increaseAssetNums(rids, counts, logway)
+	local items = {}
+	local len = rids.c or #rids
+
+	for i = 1, len do
+		if counts[i] ~= 0 then
+			table.append(items, self:increaseAssetNum(rids[i], counts[i], logway))
+		end
+	end
+
+	return items
+end
+
+function M:increaseAssetNumsByList(rewardList, logway)
+	local items = {}
+
+	for i = 1, #rewardList do
+		local reward = rewardList[i]
+		local num = reward[2] or reward.num
+
+		if num ~= 0 then
+			table.append(items, self:increaseAssetNum(reward[1] or reward.cid, num, logway))
+		end
+	end
+
+	return items
+end
+
+function M:isEnergyFull()
+	local full = self:getEnergyRecoverMaxNum()
+
+	return self:isAssetEnough(D.ResType.energy, full)
+end
+
+function M:recoverEnergyAllTime()
+	if self:isEnergyFull() then
+		P._playerRecord:recordRecoverTime(0)
+
+		return
+	else
+		local t = P._playerRecord:getRecordRecoverTime()
+
+		if t == 0 then
+			P._playerRecord:recordRecoverTime()
+
+			return
+		end
+	end
+
+	local ct = C.getCurTime()
+	local t = P._playerRecord:getRecordRecoverTime()
+
+	if t < ct then
+		self:recoverEnergy(ct - t)
+	else
+		return
+	end
+end
+
+function M:recoverEnergyOnce()
+	local onceNum = P._playerRecord:readEnergyRecoverNum()
+
+	self:recoverEnergy(onceNum)
+end
+
+function M:recoverEnergy(dt)
+	local recoverNum, recoverTotalNum = self:getRecoverNumByDt(dt)
+
+	if self:isEnergyFull() then
+		P._playerRecord:recordRecoverTime(0)
+
+		return
+	end
+
+	local recordTime = P._playerRecord:getRecordRecoverTime()
+
+	if recordTime == 0 then
+		return
+	end
+
+	local num = self:getAssetNum(D.ResType.energy)
+	local max = self:getEnergyRecoverMaxNum()
+
+	if max < num + recoverTotalNum then
+		P._playerRecord:recordRecoverTime(0)
+
+		recoverTotalNum = max - num
+
+		self:increaseAssetNum(D.ResType.energy, recoverTotalNum, D.LogWay.auto_recover)
+	else
+		P._playerRecord:recordRecoverTime(recordTime + recoverNum * P._playerRecord:readEnergyRecoverTime())
+		self:increaseAssetNum(D.ResType.energy, recoverTotalNum, D.LogWay.auto_recover)
+	end
+end
+
+function M:getEnergyFullTime()
+	local max = self:getEnergyRecoverMaxNum()
+	local current = self:getAssetNum(D.ResType.energy)
+	local delta = max - current
+	local recoverTimeOnce = P._playerRecord:readEnergyRecoverTime()
+	local recoverNumOnce = P._playerRecord:readEnergyRecoverNum()
+	local num = math.ceil(delta / recoverNumOnce)
+
+	return P._playerRecord:getRecordRecoverTime() + recoverTimeOnce * num
+end
+
+function M:getRecoverNumByDt(dt)
+	local recoverTimeOnce = P._playerRecord:readEnergyRecoverTime()
+	local recoverNumOnce = P._playerRecord:readEnergyRecoverNum()
+	local num = math.floor(dt / recoverTimeOnce)
+
+	return num, num * recoverNumOnce
+end
+
+function M:getEnergyRecoverMaxNum()
+	local addSvip = P._playerRight:isSVIP() and D._globalConfig._rightcard_svip_params[1] or 0
+	local addVip = P._playerRight:isVIP() and D._globalConfig._rightcard_vip_params[1] or 0
+
+	return P._playerRecord:readEnergyRecoverMaxNum() + addSvip + addVip
+end
+
+function M:updateRecoverEnergyTime()
+	local t = P._playerRecord:getRecordRecoverTime()
+
+	if t == 0 then
+		if not self:isEnergyFull() then
+			P._playerRecord:recordRecoverTime()
+
+			return
+		end
+	elseif self:isEnergyFull() then
+		P._playerRecord:recordRecoverTime(0)
+
+		return
+	end
+end
+
+function M:checkAssetNumVaild(rid, num, logway, isDrop, oldNum)
+	local cheatWay = nil
+
+	if num < 0 and oldNum == self._props[rid] then
+		cheatWay = "LockAsset"
+	end
+
+	if cheatWay == nil and num < 0 then
+		local legalLogWayForCosts = C._appConfig.legalLogWayForCosts or C._config.legalLogWayForCosts
+
+		if legalLogWayForCosts and logway then
+			local legalLogWayForCost = legalLogWayForCosts[logway]
+
+			if legalLogWayForCost and not table.contains(legalLogWayForCost, rid - 10000) then
+				cheatWay = "LegalLogWayForCost"
+			end
+		end
+	end
+
+	if cheatWay == nil and num > 0 and C._appConfig.illegalityLogWayForGetAsset then
+		local illegalityLogWays = C._appConfig.illegalityLogWayForGetAsset[tostring(rid)]
+
+		if illegalityLogWays and table.contains(illegalityLogWays, logway) then
+			cheatWay = "GetIllegalityLogWay"
+		end
+	end
+
+	if cheatWay == nil and num > 0 and not isDrop and C._appConfig.legalLogWayForGetAsset then
+		local legalLogWays = C._appConfig.legalLogWayForGetAsset[logway]
+
+		if legalLogWays and not table.contains(legalLogWays, rid) then
+			cheatWay = "GetIllegalityLogWay2"
+		end
+	end
+
+	if cheatWay == nil and num > 0 and C._appConfig.onceGetLimitForGetAsset then
+		local onceGetLimit = C._appConfig.onceGetLimitForGetAsset[tostring(rid)]
+
+		if onceGetLimit and onceGetLimit < num then
+			cheatWay = "GetLimitNum"
+		end
+	end
+
+	local assetNum = (self._metaProps[rid] or 0) + (self._propsDt[rid] or 0)
+
+	if cheatWay == nil and self._propsChecker[rid] then
+		self._propsChecker[rid] = (self._propsChecker[rid] or 0) + num
+		self._propsChecker[rid] = self._propsChecker[rid] - self._propsCheckerDt[rid]
+
+		if self._propsChecker[rid] ~= assetNum then
+			cheatWay = "ModifyMemory"
+		end
+
+		self._propsCheckerDt[rid] = math.random(-10000, 10000)
+		self._propsChecker[rid] = self._propsChecker[rid] + self._propsCheckerDt[rid]
+	end
+
+	local comparedNumAfter = -1
+	local comparedNumBefore = -1
+
+	if cheatWay == nil and self._comparedProps[rid] then
+		comparedNumBefore = self._comparedProps[rid]
+		comparedNumAfter = bxor(self._comparedProps[rid], self._bxorKey)
+
+		if assetNum ~= comparedNumAfter + num then
+			cheatWay = "ModifyMemoryCompare"
+		end
+	end
+
+	if cheatWay then
+		Trace.AF_traceEvent("e_cheat", {
+			{
+				_key = "resourceId",
+				_value = rid
+			},
+			{
+				_key = "num",
+				_value = num
+			},
+			{
+				_key = "totalNum",
+				_value = assetNum
+			},
+			{
+				_key = "logway",
+				_value = logway
+			},
+			{
+				_key = "cheatWay",
+				_value = cheatWay
+			},
+			{
+				_key = "bxorKey",
+				_value = self._bxorKey
+			},
+			{
+				_key = "comparedNumAfter",
+				_value = comparedNumAfter
+			},
+			{
+				_key = "comparedNumBefore",
+				_value = comparedNumBefore
+			}
+		})
+	end
+
+	if self._propsChecker[rid] then
+		self._comparedProps[rid] = bxor(assetNum, self._bxorKey)
+	end
+
+	if cheatWay then
+		if cheatWay == "ModifyMemoryCompare" then
+			if C._appConfig.forbidForModifyMemoryCompare or C._isForbidForModifyMemoryCompare then
+				self._propsBackup[rid] = assetNum
+
+				self:resetAssetNum(rid)
+				Client.forbidLogin(cheatWay)
+			end
+		elseif cheatWay == "GetIllegalityLogWay2" then
+			if C._appConfig.forbidForGetIllegalityLogWay2 or C._isForbidForGetIllegalityLogWay2 then
+				self._propsBackup[rid] = assetNum
+
+				self:resetAssetNum(rid)
+				Client.forbidLogin(cheatWay)
+			end
+		else
+			self._propsBackup[rid] = assetNum
+
+			self:resetAssetNum(rid)
+			Client.forbidLogin(cheatWay)
+		end
+	end
+end
+
+return M

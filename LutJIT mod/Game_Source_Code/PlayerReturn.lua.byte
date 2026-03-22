@@ -1,0 +1,423 @@
+local M = class("PlayerReturn")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+
+	if self:isOpenedBefore() then
+		self:initModule()
+	end
+
+	self._maxCheckinRewardIdx = #self:readAllCheckinCfgs()
+	self._taskClass = D.TaskClass.PlayerReturn
+	self._allowOpen = true
+end
+
+function M:start()
+	self:tryExpired()
+	self:tryCreateActivity(P:getLogoutTimeWhenLaunch())
+end
+
+function M:dailyReset()
+	if not self:isOpenedBefore() then
+		return
+	end
+
+	self:tryExpired()
+end
+
+function M:isOpenedBefore()
+	return self:getPeriod() > 0
+end
+
+function M:allowUnlock()
+	if lc._isCN then
+		return false
+	end
+
+	return true
+end
+
+function M:tryCreateActivity(lastLaunchTimestamp)
+	if not self._allowOpen then
+		return
+	end
+
+	if not self:allowUnlock() then
+		return
+	end
+
+	local ct = C.getCurTime()
+	local calStartTime = C.getCurTime()
+
+	if self:isOpenedBefore() then
+		if self:readLimitPeriod() <= self:getPeriod() then
+			return
+		end
+
+		if self:isExpired() then
+			calStartTime = C.getZeroTimestamp(self:getStartTime()) + self:readDurationDay() * D.DAY_SECONDS + self:readTriggerIntervalSeconds()
+
+			if ct <= calStartTime then
+				return
+			end
+		else
+			return
+		end
+	end
+
+	local minTriggerTimestamp = lastLaunchTimestamp + self:readTriggerIntervalSeconds()
+
+	if ct < minTriggerTimestamp then
+		return
+	end
+
+	self:resetModule()
+	self:initModule(true)
+
+	self._allowOpen = false
+end
+
+function M:resetModule()
+	self._meta.startTimestamp = C.getCurTime()
+	self._meta.checkinDay = 0
+	self._meta.checkinTimestamp = 0
+	self._meta.claimData = {}
+	self._meta.expired = nil
+	self._meta.taskDayIdx = 0
+	self._meta.eventRecordIdx = 0
+
+	P._playerAsset:resetAssetNum(D.ResType.player_return_exp, 0)
+	P._playerTask:clearTaskData(self._taskClass)
+end
+
+function M:initModule(openInit)
+	self._meta.period = self._meta.period or 0
+	self._meta.startTimestamp = self._meta.startTimestamp or C.getCurTime()
+	self._meta.checkinDay = self._meta.checkinDay or 0
+	self._meta.taskDayIdx = self._meta.taskDayIdx or 0
+	self._meta.checkinTimestamp = self._meta.checkinTimestamp or 0
+	self._meta.claimData = self._meta.claimData or {}
+	self._meta.expired = false
+	self._meta.eventRecordIdx = self._meta.eventRecordIdx or 0
+
+	if openInit then
+		self._meta.period = self._meta.period + 1
+	end
+
+	P._playerTask:initPlayerReturnTask()
+end
+
+function M:getSystemCreateDay()
+	if not self:isOpenedBefore() then
+		return 0
+	end
+
+	return self:getDayFromStartTime(C.getCurTime())
+end
+
+function M:isOpening()
+	return self:isOpenedBefore() and not self:isExpired()
+end
+
+function M:isExpired()
+	return self._meta.expired
+end
+
+function M:getTaskDayIdx()
+	return self._meta.taskDayIdx
+end
+
+function M:setTaskDayIdx(idx)
+	self._meta.taskDayIdx = idx
+end
+
+function M:getStartTime()
+	return self._meta.startTimestamp
+end
+
+function M:getPeriod()
+	return self._meta.period or 0
+end
+
+function M:getDayFromStartTime(ct)
+	return math.ceil(((ct or C.getCurTime()) - C.getZeroTimestamp(self:getStartTime())) / D.DAY_SECONDS)
+end
+
+function M:tryExpired()
+	if not self:isOpenedBefore() then
+		return
+	end
+
+	if self._meta.expired then
+		return
+	end
+
+	if self:getDayFromStartTime() <= self:readDurationDay() then
+		return
+	end
+
+	self._meta.expired = true
+
+	P._playerTask:clearDisplayTask(self._taskClass)
+end
+
+function M:haveDot()
+	if not self:isOpenedBefore() then
+		return false
+	end
+
+	if not self:isExpired() then
+		return self:haveCheckinDot() or self:haveTaskDot()
+	end
+
+	return self:haveCachedRewards()
+end
+
+function M:haveTaskDot()
+	return P._playerTask:haveRewards(self._taskClass) or self:haveMilestoneRewards()
+end
+
+function M:haveCheckinDot()
+	local checkinDay = self:getCheckinDay()
+	local maxDay = #self:readAllCheckinCfgs()
+
+	if checkinDay >= maxDay then
+		return false
+	end
+
+	return not self:isTodayCheckedIn()
+end
+
+function M:showSystem()
+	return self:isOpenedBefore() and (not self:isExpired() or self:haveCachedRewards())
+end
+
+function M:claimMilestoneStepRewards(step)
+	local cids, nums = self:readRewards(step)
+	self._meta.claimData[step] = true
+	local ret = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.player_return_milestone)
+
+	return ret
+end
+
+function M:cacheAllRewards()
+	local rewards = P._playerTask:getAllUnClaimedPlayerReturnReward()
+	local cfgs = self:readMilestoneCfg()
+	local total = nil
+
+	for step, cfg in ipairs(cfgs) do
+		if not self:isClaimedMileStone(step) and self:canClaimMilestone(step) then
+			local cids, nums = self:readRewards(step)
+			total = total or {}
+
+			D.foldCidsAndNums2Rewards(total, cids, nums)
+
+			self._meta.claimData[step] = true
+
+			Trace.traceDesign("Oldplayerback_Task:%d", step)
+		end
+	end
+
+	return total
+end
+
+function M:haveCachedRewards()
+	return self._meta.cachedRewards ~= nil
+end
+
+function M:claimCachedRewards()
+	local ret = P._playerAsset:increaseAssetNumsByList(self._meta.cachedRewards, D.LogWay.player_return_milestone)
+	self._meta.cachedRewards = nil
+
+	SimpleEvent.emit("playerreturn.claim")
+
+	return ret
+end
+
+function M:canClaimMilestone(step)
+	return self:readExp(step) <= P._playerAsset:getAssetNum(D.ResType.player_return_exp)
+end
+
+function M:isClaimedMileStone(step)
+	return self._meta.claimData[step] == true
+end
+
+function M:haveMilestoneRewards()
+	for i = 1, #self:readMilestoneCfg() do
+		if self:canClaimMilestone(i) and not self:isClaimedMileStone(i) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:getDayReddot(day)
+	if self:getDayFromStartTime() < day then
+		return false
+	end
+
+	local ids = TaskHelper:getTasksChapterOrderByClass(self._taskClass, day)
+
+	for i = 1, #ids do
+		if TaskHelper:canClaim(ids[i][1]) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:tryCheckin()
+	local ct = C.getCurTime()
+
+	if self:isExpired() then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local ts = self:getCheckinTimestamp()
+
+	if ts > 0 then
+		local checkDayZero = C.getZeroTimestamp(ts, 1)
+
+		if ct < checkDayZero then
+			return ResultCode.REWARD_CLAIMED
+		end
+	end
+
+	if self:isTodayCheckedIn() then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local checkinDay = self:getCheckinDay()
+	local maxDay = #self:readAllCheckinCfgs()
+
+	if checkinDay >= maxDay then
+		return ResultCode.LOCKED
+	end
+
+	local rewards = self:claimDailyRewards(checkinDay + 1)
+	self._meta.checkinTimestamp = ct
+	self._meta.checkinDay = self._meta.checkinDay + 1
+
+	Trace.traceDesign("Oldplayerback_Checkin:%d", self._meta.checkinDay)
+
+	return ResultCode.OK, rewards
+end
+
+function M:claimDailyRewards(day)
+	local cfg = self:readCheckinCfgByIdx(day)
+	local cids = cfg._cids1
+	local nums = cfg._nums1
+	local rewards = P._playerAsset:increaseAssetNums(cids, nums, D.LogWay.player_return_checkin)
+
+	return rewards
+end
+
+function M:getCheckinDay()
+	return self._meta.checkinDay
+end
+
+function M:isTodayCheckedIn()
+	return self._meta.checkinTimestamp > 0 and C.getTodayZeroTimestamp(1) <= C.getZeroTimestamp(self:getCheckinTimestamp(), 1)
+end
+
+function M:canCheckin()
+	return self:getCheckinDay() < 7
+end
+
+function M:getDayIdx()
+	return C.getZeroTimestamp(self:getCheckinTimestamp(), 1)
+end
+
+function M:haveBeenCheckedIn(day)
+	return day <= self._meta.checkinDay
+end
+
+function M:getTodayCheckinIdx()
+	if self:isTodayCheckedIn() then
+		return self._meta.checkinDay
+	end
+
+	return self._meta.checkinDay + 1
+end
+
+function M:getCheckinTimestamp()
+	return self._meta.checkinTimestamp
+end
+
+function M:isCheckinClaimed(claimIdx)
+	return claimIdx <= self._meta.claimIdx
+end
+
+function M:recordDesignEvent(newIdx)
+	self._meta.eventRecordIdx = newIdx
+end
+
+function M:getRecordedDesignEventIdx()
+	return self._meta.eventRecordIdx
+end
+
+function M:tryRecordDesignEvent()
+	local idx = self:getRecordedDesignEventIdx()
+
+	for i = idx + 1, #self:readMilestoneCfg() do
+		if self:canClaimMilestone(i) then
+			self:recordDesignEvent(i)
+			Trace.traceDesign("Oldplayerback_Task:%d", i)
+		else
+			break
+		end
+	end
+end
+
+function M:readRewards(step)
+	local cfg = self:readMilestoneCfg()
+
+	return cfg[step]._cids, cfg[step]._nums
+end
+
+function M:readExp(step)
+	local cfg = self:readMilestoneCfg()
+
+	return cfg[step] and cfg[step]._exp
+end
+
+function M:readDurationDay()
+	return D._globalConfig._player_return_duration_day
+end
+
+function M:readTriggerIntervalDay()
+	return D._globalConfig._player_return_trigger_day
+end
+
+function M:readLimitPeriod()
+	return D._globalConfig._player_return_limit
+end
+
+function M:readTriggerIntervalSeconds()
+	return self:readTriggerIntervalDay() * D.DAY_SECONDS
+end
+
+function M:readMilestoneCfg()
+	return D._playerReturnMilestoneConfig
+end
+
+function M:readAllCheckinCfgs()
+	return D._playerReturnCheckinConfig
+end
+
+function M:readCheckinCfgByIdx(day)
+	return D._playerReturnCheckinConfig[day]
+end
+
+function M:readCheckinRewards(day)
+	local cfg = self:readCheckinCfgByIdx(day)
+
+	return cfg._cids1, cfg._nums1
+end
+
+return M

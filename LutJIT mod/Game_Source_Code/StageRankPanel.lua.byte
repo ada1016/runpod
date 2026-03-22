@@ -1,0 +1,272 @@
+local M = class("StageRankPanel", requireLua("BasePanel"))
+local Types = Types
+local RankWidget = requireLua("StageRankWidget")
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	goEmptyRank = Types.GameObject,
+	scroll1 = Types.ScrollRect,
+	scroll2 = Types.ScrollRect,
+	tfScrollContainer1 = Types.Transform,
+	tfScrollContainer2 = Types.Transform,
+	goSelfRankWidget = Types.GameObject,
+	goGloryWidget = Types.GameObject,
+	btnTip = Types.Button,
+	goLoading = Types.GameObject,
+	txtSubTitle = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goGloryWidget)
+	lc.prefabVarPeer(self._goGloryWidget._goVote1st)
+	lc.prefabVarPeer(self._goGloryWidget._goVote2nd)
+	lc.prefabVarPeer(self._goGloryWidget._goVote3rd)
+
+	self._txtTopNames = {
+		self._goGloryWidget._txtName1st,
+		self._goGloryWidget._txtName2nd,
+		self._goGloryWidget._txtName3rd
+	}
+	self._goTopSpines = {
+		self._goGloryWidget._goSpine1st,
+		self._goGloryWidget._goSpine2nd,
+		self._goGloryWidget._goSpine3rd
+	}
+	self._rawImgTopSpineBGs = {
+		self._goGloryWidget._btn1st.transform:GetChild(1):GetComponent("RawImage"),
+		self._goGloryWidget._btn2nd.transform:GetChild(1):GetComponent("RawImage"),
+		self._goGloryWidget._btn3rd.transform:GetChild(1):GetComponent("RawImage")
+	}
+	self._tfTopSpineBGLights = {
+		self._goGloryWidget._btn1st.transform:GetChild(1):GetChild(2),
+		self._goGloryWidget._btn2nd.transform:GetChild(1):GetChild(2),
+		self._goGloryWidget._btn3rd.transform:GetChild(1):GetChild(2)
+	}
+	self._btnTops = {
+		self._goGloryWidget._btn1st,
+		self._goGloryWidget._btn2nd,
+		self._goGloryWidget._btn3rd
+	}
+	self._btnVotes = {
+		self._goGloryWidget._goVote1st._btnClick,
+		self._goGloryWidget._goVote2nd._btnClick,
+		self._goGloryWidget._goVote3rd._btnClick
+	}
+	self._goVoteImgs = {
+		self._goGloryWidget._goVote1st._goVoteImg,
+		self._goGloryWidget._goVote2nd._goVoteImg,
+		self._goGloryWidget._goVote3rd._goVoteImg
+	}
+	self._goVoteDots = {
+		self._goGloryWidget._goVote1st._goRedDot,
+		self._goGloryWidget._goVote2nd._goRedDot,
+		self._goGloryWidget._goVote3rd._goRedDot
+	}
+
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine1st)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine2nd)
+	SpineGraphicWidget.noCreate(self._goGloryWidget._goSpine3rd)
+
+	self._scrollViewEx1 = ScrollViewEx.create(self._scroll1, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 20,
+		cellHeight = 116,
+		cellInitCount = 10
+	})
+
+	RankWidget.noCreate(self._goSelfRankWidget)
+end
+
+function M:addClicks()
+	for i = 1, #self._btnTops do
+		self:setClickWithoutAction(self._btnTops[i], function ()
+			if self._rankList[i] then
+				V.viewOtherInfo(self._rankList[i])
+			end
+		end)
+	end
+
+	for i = 1, #self._btnVotes do
+		self:setClick(self._btnVotes[i], function ()
+			if #P._playerRanker:getMainMissionDailyVoteList() == 0 then
+				V.showRewardClaimPanel({
+					D._globalConfig._rank_like_reward
+				})
+			end
+
+			P._playerRanker:setMainMissionDailyVote(i)
+			self:updateVotes()
+			RedDotManager.update("city.home.mainrank")
+		end)
+	end
+
+	self:setClick(self._btnTip, function ()
+		V.showBubbleTips({
+			desc = SID.TIP_STAGE_RANK
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnTip.gameObject
+		})
+	end)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:closePanel()
+	end)
+end
+
+function M:init()
+	self._rankList = {}
+
+	self._goEmptyRank:SetActive(false)
+
+	self._rankData = P:genRankData()
+	self._rankData.rankValue = P._playerMission:getMainMissionRankValue()
+	self._rankData.rank = 9999
+
+	self:initTopPlayers()
+	self._goSelfRankWidget:init(self._rankData)
+
+	self._scroll1.enabled = false
+
+	self._goLoading:SetActive(true)
+	P._playerRanker:getCachedMainMissionRankData(function (data, selfRank)
+		if CNull(self.gameObject) then
+			return
+		end
+
+		self._scroll1.enabled = true
+
+		self._goLoading:SetActive(false)
+
+		self._rankList = data
+
+		self:initTopPlayers()
+
+		if selfRank and data[selfRank] then
+			self._rankData = data[selfRank]
+
+			self._goSelfRankWidget:init(self._rankData)
+
+			if self._rankData.rankValue ~= P._playerMission:getMainMissionRankValue() then
+				P._playerRanker:uploadMainMissionRankData(P._playerMission:getMainMissionRankValue())
+			end
+		end
+
+		self._goEmptyRank:SetActive(#self._rankList == 0)
+		self._scrollViewEx1:reloadData(true)
+
+		self._votes = P._playerRanker:calcMainMissionTop3Votes(#self._rankList)
+
+		self._goGloryWidget._goVote1st:SetActive(#self._rankList >= 1)
+		self._goGloryWidget._goVote2nd:SetActive(#self._rankList >= 2)
+		self._goGloryWidget._goVote3rd:SetActive(#self._rankList >= 3)
+		self._txtSubTitle:SetLocalize(SID.TITLE_RANK_ID, P._playerRanker:getGroup(D.RankType.MainMissionRank))
+		self:updateVotes()
+	end)
+end
+
+function M:updateUI()
+	self._scrollViewEx1:reloadData()
+end
+
+function M:updateVotes()
+	local voteList = P._playerRanker:getMainMissionDailyVoteList()
+
+	for i = 1, 3 do
+		self._goVoteImgs[i]:GetComponent("UIGradient").m_color1 = Color.str2Static("9C7475")
+		self._goVoteImgs[i]:GetComponent("UIGradient").m_color2 = Color.str2Static("9F7777")
+
+		self._goVoteImgs[i]:SetActive(false)
+		self._goVoteImgs[i]:SetActive(true)
+		self._goVoteDots[i]:SetActive(#voteList == 0)
+	end
+
+	local selfVotes = {
+		0,
+		0,
+		0
+	}
+
+	for i = 1, #voteList do
+		local vote = voteList[i]
+		selfVotes[vote] = selfVotes[vote] + 1
+		self._goVoteImgs[vote]:GetComponent("UIGradient").m_color1 = Color.str2Static("D9443A")
+		self._goVoteImgs[vote]:GetComponent("UIGradient").m_color2 = Color.str2Static("FF6F66")
+
+		self._goVoteImgs[vote]:SetActive(false)
+		self._goVoteImgs[vote]:SetActive(true)
+
+		self._btnVotes[vote].enabled = false
+	end
+
+	self._goGloryWidget._goVote1st._txtVoteNum.text = self._votes[1] + selfVotes[1]
+	self._goGloryWidget._goVote2nd._txtVoteNum.text = self._votes[2] + selfVotes[2]
+	self._goGloryWidget._goVote3rd._txtVoteNum.text = self._votes[3] + selfVotes[3]
+end
+
+function M:initTopPlayers()
+	for i = 1, 3 do
+		if self._rankList[i] then
+			self._txtTopNames[i].text = self._rankList[i].name
+			local bodySkin = self._rankList[i].roleSkin or D.DEFAULT_ROLE_SKIN
+			local weaponSkin = self._rankList[i].weaponSkin or D.DEFAULT_GATLIN_SKIN
+
+			self._goTopSpines[i]:updateUI(bodySkin, weaponSkin, true)
+
+			local skinStage = P._playerSkin:readSkinStageBg(bodySkin)
+
+			if skinStage > 1 then
+				LuaUnity.setTexture(self._rawImgTopSpineBGs[i], string.format("img_bg_skin_rankbg_%d", skinStage))
+
+				local clor = Color.str2Static("B6E8FF")
+				self._tfTopSpineBGLights[i]:GetChild(0):GetComponent("Image").color = clor
+				self._tfTopSpineBGLights[i]:GetChild(1):GetComponent("Image").color = clor
+			end
+		end
+	end
+end
+
+function M:onCellNum()
+	for i = 1, #self._rankList do
+		if self._rankList[i].avatar == nil then
+			return math.min(50, i - 1)
+		end
+	end
+
+	return math.min(50, #self._rankList)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	local rankData = self._rankList[index]
+
+	goCell:init(rankData)
+	self:setClick(goCell._btnViewInfo, function ()
+		V.viewOtherInfo(rankData)
+	end)
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = RankWidget.create(self._tfScrollContainer1)
+
+	return go
+end
+
+return M

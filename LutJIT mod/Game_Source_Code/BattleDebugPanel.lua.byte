@@ -1,0 +1,105 @@
+local M = class("BattleDebugPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnReset = Types.Button,
+	toggleDmgTextCount1 = Types.Button,
+	toggleDmgTextCount2 = Types.Button,
+	toggleDmgTextCount3 = Types.Button,
+	toggleAllEffect = Types.Button,
+	toggleHitEffect = Types.Button,
+	toggleDestroyEffect = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._toggleDmgTextCounts = {
+		self._toggleDmgTextCount1,
+		self._toggleDmgTextCount2,
+		self._toggleDmgTextCount3
+	}
+end
+
+function M:Start()
+	local index = lc.getIntKeyValue("dmg_text_count", 3)
+
+	self:onToggleDmgTextCount(index)
+	self:onToggleEffect(0, lc.getIntKeyValue(BattleDefine.EffectParam[0].key, 1) == 1 and true or false)
+	self:onToggleEffect(1, lc.getIntKeyValue(BattleDefine.EffectParam[1].key, 1) == 1 and true or false)
+	self:onToggleEffect(2, lc.getIntKeyValue(BattleDefine.EffectParam[2].key, 1) == 1 and true or false)
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnReset, function ()
+		lc.setIntKeyValue("dmg_text_count", 3)
+		self:onToggleDmgTextCount(3)
+		self:onToggleEffect(0, true)
+		self:onToggleEffect(1, true)
+		self:onToggleEffect(2, true)
+		self:onToggleEffect(2, lc.getIntKeyValue(BattleDefine.EffectParam[2].key, 1) == 1 and true or false)
+	end)
+	self:setClickWithoutAction(self._toggleDmgTextCount1, function ()
+		self:onToggleDmgTextCount(1)
+	end)
+	self:setClickWithoutAction(self._toggleDmgTextCount2, function ()
+		self:onToggleDmgTextCount(2)
+	end)
+	self:setClickWithoutAction(self._toggleDmgTextCount3, function ()
+		self:onToggleDmgTextCount(3)
+	end)
+	self:setClickWithoutAction(self._toggleAllEffect, function ()
+		self:onToggleEffect(0, not BattleDefine.EffectParam[0].on)
+	end)
+	self:setClickWithoutAction(self._toggleHitEffect, function ()
+		self:onToggleEffect(1, not BattleDefine.EffectParam[1].on)
+	end)
+	self:setClickWithoutAction(self._toggleDestroyEffect, function ()
+		self:onToggleEffect(2, not BattleDefine.EffectParam[2].on)
+	end)
+end
+
+local DMG_TEXT_COUNT_PERCENT = {
+	0.1,
+	0.5,
+	1
+}
+
+function M:onToggleDmgTextCount(index)
+	self._toggleDmgTextCountIndex = index
+
+	lc.setIntKeyValue("dmg_text_count", 3)
+
+	for i = 1, 3 do
+		local toggle = self._toggleDmgTextCounts[i]
+
+		toggle.transform:GetChild(0):SetActive(false)
+	end
+
+	local toggle = self._toggleDmgTextCounts[index]
+
+	toggle.transform:GetChild(0):SetActive(true)
+	BattleView:setDmgTextCountPercent(DMG_TEXT_COUNT_PERCENT[index])
+end
+
+function M:onToggleEffect(index, on)
+	local effectParam = BattleDefine.EffectParam[index]
+	effectParam.on = on
+
+	lc.setIntKeyValue(effectParam.key, on and 1 or 0)
+	self[effectParam.val].transform:GetChild(0):SetActive(on)
+end
+
+function M:addEvents()
+end
+
+function M:init()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+	BattleManager:revertStopTime()
+end
+
+return M

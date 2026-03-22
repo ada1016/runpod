@@ -1,0 +1,192 @@
+local M = class("BPRewardWidget")
+local ItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent, widgetName, module, showCellProgress)
+	local go = LuaUnity.createGameObjectWithPeer(string.format("Assets/FW/Prefabs/UI/widget/%s.prefab", widgetName), parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._showCellProgress = showCellProgress
+
+	go:init(module)
+
+	return go
+end
+
+function M.noCreate(go, module, showCellProgress)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	go._showCellProgress = showCellProgress
+
+	go:init(module)
+
+	return go
+end
+
+function M:init(module)
+	local step = module:readBpStepNum()
+	self._checkNet = module._checkNet
+	self._steps = step or 3
+
+	for i = 1, self._steps do
+		ItemWidget.noCreate(self["_goItem" .. i])
+	end
+
+	self._module = module
+end
+
+function M:updateUI(level)
+	self._level = level
+
+	self:updateRewards()
+	self:updateLevelExp()
+end
+
+function M:updateLevelExp()
+	self._tmpLv.text = self._level
+	local maxLv = self._module:readMaxLevel()
+	local exp = self._module:getCurExp()
+	local needExp = self._module:readUpLevelExp(self._level + 1)
+	local lastExp = self._module:readUpLevelExp(self._level)
+	local lastLvExp = self._module:readUpLevelExp(self._level - 1)
+
+	if self._level == 1 then
+		self._goProgress1:SetVisible(false)
+		self._goProgress2:SetVisible(true)
+	elseif self._level == maxLv then
+		self._goProgress1:SetVisible(true)
+		self._goProgress2:SetVisible(false)
+	else
+		self._goProgress1:SetVisible(true)
+		self._goProgress2:SetVisible(true)
+	end
+
+	local curLv = self._module:getCurRewardLevel()
+
+	if curLv < self._level then
+		if self._showCellProgress and self._level == curLv + 1 then
+			self._imgFill1.fillAmount = (exp - lastLvExp) / (lastExp - lastLvExp) / 0.5 - 1
+		else
+			self._imgFill1.fillAmount = 0
+		end
+
+		self._imgFill2.fillAmount = 0
+	elseif self._level == curLv then
+		self._imgFill1.fillAmount = 1
+
+		if self._showCellProgress then
+			self._imgFill2.fillAmount = (exp - lastExp) / (needExp - lastExp) / 0.5
+		else
+			self._imgFill2.fillAmount = 0
+		end
+	else
+		self._imgFill1.fillAmount = 1
+		self._imgFill2.fillAmount = 1
+	end
+
+	self._goLock:SetActive(curLv < self._level)
+end
+
+function M:updateRewards()
+	for step = 1, self._steps do
+		self:updateStepRewards(step)
+	end
+end
+
+function M:updateStepRewards(step)
+	local cid, num = self._module:readReward(self._level, step)
+	local goItem = self["_goItem" .. step]
+
+	goItem:init(cid, num)
+
+	local canClaim = self._module:canClaim(self._level, step)
+	local claimed = self._module:isClaimed(self._level, step)
+
+	goItem:setLock(not canClaim)
+	goItem:setClaimed(claimed)
+	goItem:setCanClaim(canClaim and not claimed)
+	goItem:setBgLight(canClaim and not claimed)
+end
+
+function M:setRewardsClick(panel, successCallback)
+	for step = 1, self._steps do
+		local goItem = self["_goItem" .. step]
+
+		panel:setClick(goItem._btnClick, function ()
+			local function dealFunc()
+				local retCode, params = self._module:checkClaimReward(self._level, step)
+
+				if retCode ~= ResultCode.OK then
+					goItem:rewardclickCallback()
+
+					return
+				end
+
+				local cid, num = self._module:readReward(self._level, step)
+
+				if not D.isSpecialItem(cid) and D.isCustomSelectItem(cid) then
+					local selectedIdx, selectedId, selectedNum = P._playerAsset:getItemCustomSelectIdx(cid)
+
+					if selectedIdx then
+						UIManager.openPanel(PrefabDefine.ItemSelectConfirmPanel, cid, goItem, function ()
+							local retCode, params = self._module:tryClaimReward(self._level, step)
+
+							if retCode == ResultCode.OK then
+								V.showRewardClaimPanel(params)
+								self:updateStepRewards(step)
+
+								if successCallback then
+									successCallback()
+								end
+
+								return
+							end
+						end, function ()
+							self:updateStepRewards(step)
+						end)
+					else
+						UIManager.openPanel(PrefabDefine.ItemSelectPanel, cid, function ()
+							self:updateStepRewards(step)
+						end)
+					end
+
+					return
+				end
+
+				local retCode, params = self._module:tryClaimReward(self._level, step)
+
+				if retCode == ResultCode.OK then
+					V.showRewardClaimPanel(params)
+					self:updateStepRewards(step)
+
+					if successCallback then
+						successCallback()
+					end
+
+					return
+				end
+
+				goItem:rewardclickCallback()
+			end
+
+			if self._checkNet then
+				if lc.isNetworkNotReachable() then
+					V.showToast(SID.NETWORK_NOTREACHABLE)
+
+					return
+				end
+
+				Client.checkNetworkAsync(function ()
+					dealFunc()
+				end)
+			else
+				dealFunc()
+			end
+		end)
+	end
+end
+
+return M

@@ -1,0 +1,630 @@
+local M = class("BattleSessionView", BLB)
+local TablePool = TablePool
+local DOTween = DOTween
+local CAMERA_ZOOM_TIME = 3
+M.args = {
+	tfCameraContainer = Types.Transform,
+	tfCamera = Types.Transform,
+	camera = Types.Camera,
+	tfBgVfxContainer = Types.Transform,
+	tfAtorContainer = Types.Transform,
+	tfWeaponContainer = Types.Transform,
+	goDomeSkinDefault = Types.GameObject,
+	tfWeaponContainer1 = Types.Transform,
+	tfWeaponContainer2 = Types.Transform,
+	tfWeaponContainer3 = Types.Transform,
+	tfWeaponContainer4 = Types.Transform,
+	tfBarArea = Types.Transform,
+	tfBloodBar = Types.Transform,
+	tmpBlood = Types.TMP_Text,
+	goEnergyBar = Types.GameObject,
+	tfEnergyBarLight = Types.Transform,
+	goEnergyBarFill = Types.GameObject,
+	goHPBarGoldFill = Types.GameObject,
+	goHPBarGoldVfx = Types.GameObject,
+	goHPBarFill = Types.GameObject,
+	goExtraHPBarFill = Types.GameObject,
+	goShieldArea = Types.GameObject,
+	tmpShieldCount = Types.TMP_Text,
+	spRendererDome = Types.SpriteRenderer,
+	spRendererDomeBig = Types.SpriteRenderer,
+	spCityBg = Types.SpriteRenderer,
+	tmpDebugInfo = Types.TMP_Text
+}
+local BATTLE_BGS = {
+	[D.MissionType.Common] = "img_city_all",
+	[D.MissionType.Elite] = "img_city_all_elite",
+	[D.MissionType.Dome] = "img_city_all_dome",
+	[D.MissionType.GlobalDefense] = "img_city_all_earth",
+	[D.MissionType.ArkRebuild] = "img_city_all_Ark",
+	[D.MissionType.CrisisZone] = "img_city_all_ranger",
+	[D.MissionType.SparkScout] = "img_city_all_weekend_1"
+}
+local FIELD_SCALES = {
+	1,
+	1.1,
+	1.2,
+	1.3,
+	1.4,
+	1.5
+}
+local DMG_CAPACITY = 64
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._scaleIndex = 1
+	self._updateIndex = 0
+	local x, y = self._tmpBlood.transform:GetPosition()
+	self._tmpBloodPovitX = x
+	self._tmpBloodPovitY = y
+
+	self._tfCameraContainer:SetPosition(0, 0, 0)
+
+	self._cameraShaker = self._tfCameraContainer:GetComponent("CameraShaker")
+	self._tfWeaponContainers = {
+		[2] = self._tfWeaponContainer1,
+		[3] = self._tfWeaponContainer2,
+		[4] = self._tfWeaponContainer3,
+		[5] = self._tfWeaponContainer4
+	}
+
+	for i = 2, 5 do
+		local povit = BattleManager:weaponPovit(i)
+
+		self._tfWeaponContainers[i]:SetLocalPosition(povit[1], povit[2], 0)
+	end
+
+	self._energyFill = self._goEnergyBarFill:GetComponent("SpriteRenderer")
+	self._matEnergyFill = self._energyFill.material
+	self._matHPBarFill = self._goHPBarFill:GetComponent("SpriteRenderer").material
+
+	self._matHPBarFill:SetFloat("_FillLeft", 0)
+	self._matEnergyFill:SetFloat("_Fill", 1)
+
+	self._matHPExtraBarFill = self._goExtraHPBarFill:GetComponent("SpriteRenderer").material
+
+	self._goEnergyBar:SetActive(false)
+
+	self._matHPBarGoldFill = self._goHPBarGoldFill:GetComponent("SpriteRenderer").material
+	self._dmgShowWaitList = table.new(DMG_CAPACITY, 0)
+	self._dmgArgsPool = table.new(DMG_CAPACITY, 0)
+	self._extraZoom = 1
+
+	self:checkCameraSortingLayerTextureEnable()
+
+	self._effectFlag = lc.getIntKeyValue(BattleDefine.EffectParam[3].key, 1) == 1 and true or false
+end
+
+function M:init(battleView, index)
+	self._battleView = battleView
+	self._index = index or 1
+	self._battleSession = BattleManager:getSession(index)
+
+	if index == 1 then
+		self._worldLayer = BattleDefine.LayerWorldA
+	elseif index == 2 then
+		self._worldLayer = BattleDefine.LayerWorldB
+	end
+
+	self:setWorldLayer(self.gameObject)
+end
+
+function M:initSessionView()
+	if self._battleSession._domeImmuneDmgNum and self._battleSession._domeImmuneDmgNum > 0 then
+		self._tmpShieldCount.text = self._battleSession._domeImmuneDmgNum
+
+		self._goShieldArea:SetActive(true)
+	end
+
+	self._goHPBarGoldFill:SetActive(false)
+	self._goHPBarGoldVfx:SetActive(false)
+
+	local msType = BattleManager:getMissionType()
+	local msId = BattleManager:getMissionId()
+	local bgName = BATTLE_BGS[msType]
+
+	if msType == D.MissionType.GlobalDefense then
+		local zone = D._missionGlobalDefenseConfig[msId]
+
+		if zone == 3 or zone == 6 or zone == 8 or zone == 10 then
+			bgName = bgName .. "_ocean"
+		else
+			bgName = bgName .. "_land"
+		end
+	end
+
+	if BattleManager:isPVPDuel() then
+		LuaUnity.setBattleSprite(self._spCityBg, "img_city_all_weekend_2")
+	else
+		LuaUnity.setBattleSprite(self._spCityBg, bgName)
+	end
+
+	if not BattleManager:isMissionArkRebuild() then
+		local skinId = self._battleSession:getEquipedSkin(BattleSkillGroupEnum.Dome)
+
+		if skinId and skinId > 140000 then
+			self._goDomeSkinDefault:SetActive(false)
+
+			local prefab = D._skinDomeConfig[skinId]._skinPrefab
+			local go = self._battleView:createWeapon(prefab, self._tfWeaponContainer)
+			self._battleDomeAdapter = LuaHelper.GetLuaBehaviour(go)
+			self._battleView._domeSkinId = skinId
+		end
+	else
+		self._goDomeSkinDefault:SetActive(false)
+	end
+
+	if BattleManager:isMissionPVP() then
+		local go = LuaUnity.createGameObject("Assets/Battle/Prefabs/PvPBloodSeg.prefab", self._tfBarArea)
+
+		go:SetLocalPosition(0, 0, 0)
+		lc.prefabVarPeer(go)
+
+		self._pvpBloodSeg = go
+
+		self:setWorldLayer(go)
+
+		local tf = self._tfBloodBar.transform
+		local x, y, z = lc.getPosition(tf)
+
+		lc.setLocalPosition(tf, x, y + 0.5, z)
+
+		self._spRendererDomeBig.material = GameObject.Instantiate(self._battleView._sharedDissolveMat)
+
+		for i = 2, 5 do
+			self._tfWeaponContainers[i]:SetActive(false)
+		end
+
+		local go = nil
+
+		if BattleManager:isPVPDuel() then
+			go = LuaUnity.createGameObject("Assets/Battle/Prefabs/Weekend_BG_Front_Duel.prefab", self.transform)
+		else
+			go = LuaUnity.createGameObject("Assets/Battle/Prefabs/Weekend_BG_Front.prefab", self.transform)
+		end
+
+		go:SetLocalPosition(0, 0, 0)
+		self:setWorldLayer(go)
+
+		if BattleManager:isPVPDuel() then
+			go:GetChild(3):SetActive(true)
+			go:GetChild(4):SetActive(false)
+		else
+			go:GetChild(3):SetActive(false)
+			go:GetChild(4):SetActive(true)
+		end
+
+		self._pvpWeaponBaseContainer = go:GetChild(1).transform
+
+		self._pvpWeaponBaseContainer:SetPosition(0, -1.5, 0)
+
+		local go = LuaUnity.createGameObject("Assets/Battle/Prefabs/SparkScout_BGVfx.prefab", self._tfBgVfxContainer)
+
+		go:SetLocalPosition(0, 5.65, 0)
+		self:setWorldLayer(go)
+
+		if self._index == 2 and lc._graphicsQuality == 1 then
+			self._effectFlag = false
+		end
+	end
+end
+
+function M:disableCamera()
+	self._camera.enabled = false
+end
+
+function M:enableCamera()
+	self._camera.enabled = true
+end
+
+function M:getDomeAdapter()
+	return self._battleDomeAdapter
+end
+
+function M:updateDomeAdapter(scaleIndex)
+	if self._battleDomeAdapter then
+		self._battleDomeAdapter:updateStatus(scaleIndex)
+	end
+end
+
+function M:Update()
+	self._updateIndex = self._updateIndex + 1
+
+	self:syncCameraTextureEndFrame()
+
+	if not self._battleSession._stop and self._updateIndex % 2 == 0 then
+		self:clipShowWaitList()
+
+		local rawCnt = #self._dmgShowWaitList
+
+		if rawCnt > 0 then
+			local step = self._dmgTextShowPercnet
+
+			for i = 1, rawCnt, step do
+				local arg = self._dmgShowWaitList[i]
+				local obj = self._battleView:createDamageText(arg)
+				self._dmgArgsPool[#self._dmgArgsPool + 1] = arg
+			end
+
+			table.clear(self._dmgShowWaitList)
+		end
+	end
+end
+
+local LEVEL_PERCENT = {
+	0.7,
+	0.8,
+	0.9,
+	1
+}
+local LEVEL_COUNT_1 = DMG_CAPACITY * LEVEL_PERCENT[4]
+local LEVEL_COUNT_2 = DMG_CAPACITY * LEVEL_PERCENT[3]
+local LEVEL_COUNT_3 = DMG_CAPACITY * LEVEL_PERCENT[2]
+local LEVEL_COUNT_4 = DMG_CAPACITY * LEVEL_PERCENT[1]
+
+function M:clipShowWaitList()
+	local rawCnt = #self._dmgShowWaitList
+	local showCnt = rawCnt
+
+	if LEVEL_COUNT_1 <= rawCnt then
+		showCnt = math.floor(rawCnt * LEVEL_PERCENT[1])
+	elseif LEVEL_COUNT_2 <= rawCnt then
+		showCnt = math.floor(rawCnt * LEVEL_PERCENT[2])
+	elseif LEVEL_COUNT_3 <= rawCnt then
+		showCnt = math.floor(rawCnt * LEVEL_PERCENT[3])
+	elseif LEVEL_COUNT_4 <= rawCnt then
+		showCnt = math.floor(rawCnt * LEVEL_PERCENT[4])
+	end
+
+	if showCnt < rawCnt then
+		for i = showCnt + 1, rawCnt do
+			self._dmgShowWaitList[i] = nil
+		end
+	end
+end
+
+function M:zoomField(index)
+	index = index or 1
+	self._scaleIndex = self._scaleIndex + index
+
+	if FIELD_SCALES[self._scaleIndex] == nil then
+		return
+	end
+
+	local scale = FIELD_SCALES[self._scaleIndex]
+
+	if index > 0 then
+		self:updateDomeAdapter(self._scaleIndex)
+		self._battleSession:zoomField(scale)
+		self._battleView:updateEdge(scale)
+	else
+		self._battleSession:updateScreenEdge(scale, self._initialOrthographicSize * scale * 2 - self._cameraOffsetY)
+	end
+
+	self._cameraTweening = true
+
+	self._camera:DOOrthoSize(self._initialOrthographicSize * scale * self._extraZoom, CAMERA_ZOOM_TIME):SetEase(V.EASE_OUT_SINE):SetLink(self.gameObject):OnComplete(function ()
+		self._cameraTweening = false
+	end)
+	self._tfCamera:DOLocalMoveY(self._initialOrthographicSize * scale * self._extraZoom - self._cameraOffsetY, CAMERA_ZOOM_TIME):SetEase(V.EASE_OUT_SINE):SetLink(self.gameObject)
+
+	if BattleManager:isMissionPVP() then
+		self._spRendererDome:DOFade(0, 0.3)
+		self._spRendererDomeBig:DOFade(1, 0.3)
+	elseif self._scaleIndex == 2 then
+		self._spRendererDome:DOFade(0, 0.3)
+		self._spRendererDomeBig:DOFade(1, 0.3)
+	elseif scale == 1 then
+		self._spRendererDome:DOFade(1, 0.3)
+		self._spRendererDomeBig:DOFade(0, 0.3)
+	end
+end
+
+function M:zoomFieldExtra(percent)
+	if self._cameraTweening then
+		return
+	end
+
+	self._extraZoom = percent
+	local scale = FIELD_SCALES[self._scaleIndex]
+	self._camera.orthographicSize = self._initialOrthographicSize * scale * self._extraZoom
+
+	self._tfCamera:SetPosition(0, self._initialOrthographicSize * scale * self._extraZoom - BattleDefine.FIELD_OFFSET_Y, -4)
+end
+
+function M:energyEvent(energy)
+	self._matEnergyFill:SetFloat("_Fill", energy)
+	lc.setLocalPosition(self._tfEnergyBarLight, Mathf.Lerp(-0.54, 0.54, energy), 0.014, 0)
+end
+
+function M:splitScreen(index)
+	if index == 1 then
+		self._camera.rect = UnityEngine.Rect.New(0, 0, 1, 0.5)
+		self._camera.cullingMask = bit.lshift(1, BattleDefine.LayerWorldA)
+	elseif index == 2 then
+		self._camera.rect = UnityEngine.Rect.New(0, 0.5, 1, 0.5)
+		self._camera.cullingMask = bit.lshift(1, BattleDefine.LayerWorldB)
+	end
+end
+
+function M:initOrthographicSize(aspectRatio, splitIndex)
+	local orthographicSize = BattleDefine.SCREEN_ADAPTE_WIDTH / (aspectRatio * 2)
+	self._initialOrthographicSize = orthographicSize
+	self._camera.orthographicSize = orthographicSize
+
+	self:splitScreen(splitIndex)
+
+	if splitIndex == nil then
+		self._cameraOffsetY = BattleDefine.FIELD_OFFSET_Y
+	else
+		self._cameraOffsetY = BattleDefine.FIELD_OFFSET_Y - 1.5
+	end
+
+	self._tfCamera:SetPosition(0, orthographicSize - self._cameraOffsetY, -4)
+
+	self._battleSession._cameraOffsetY = self._cameraOffsetY
+	self._battleSession._initialOrthographicSize = orthographicSize
+end
+
+function M:bloodEvent()
+	local extraBlood = self._battleSession:getExtraBlood()
+	local totalBlood = self._battleSession._blood + extraBlood
+
+	if self._battleSession._maxBlood <= totalBlood then
+		self._matHPBarFill:SetFloat("_Fill", self._battleSession._blood / totalBlood)
+		self._matHPExtraBarFill:SetFloat("_FillLeft", self._battleSession._blood / totalBlood)
+		self._matHPExtraBarFill:SetFloat("_Fill", 1)
+	else
+		self._matHPBarFill:SetFloat("_Fill", self._battleSession._blood / self._battleSession._maxBlood)
+		self._matHPExtraBarFill:SetFloat("_FillLeft", self._battleSession._blood / self._battleSession._maxBlood)
+		self._matHPExtraBarFill:SetFloat("_Fill", totalBlood / self._battleSession._maxBlood)
+	end
+
+	if extraBlood > 0 then
+		self._tmpBlood.text = string.format("%d<color=#d0ffed>(%d)</color>", self._battleSession._blood, extraBlood)
+	else
+		self._tmpBlood.text = math.floor(self._battleSession._blood)
+	end
+end
+
+function M:goldBloodEvent(fullTime)
+	self._goHPBarGoldFill:SetActive(true)
+	self._goHPBarGoldVfx:SetActive(true)
+	self._matHPBarGoldFill:DOKill()
+	self._matHPBarGoldFill:SetFloat("_Fill", 1)
+	self._matHPBarGoldFill:DOFloat(0, "_Fill", fullTime):SetLink(self.gameObject)
+end
+
+function M:domeImmuneNumEvent(add, battleSession)
+	if not add then
+		self._battleView:showDamageTextOnPlayer(SID.STR_IMMUNE, true, battleSession)
+	end
+
+	local num = (self._battleSession._domeImmuneDmgNum or 0) + (self._battleSession._domeImmuneDmgNumWithModule or 0)
+	self._tmpShieldCount.text = num
+
+	if num == 0 then
+		self._goShieldArea:SetActive(false)
+	elseif num > 0 then
+		self._goShieldArea:SetActive(true)
+	end
+end
+
+function M:pvpBeganRound()
+	self:bloodEvent()
+	self._spRendererDomeBig.material:SetFloat("_DissolveProgress", 0)
+	self._tfWeaponContainer:SetPosition(0, -1.5, 0)
+	self._tfWeaponContainer:DOMoveY(0, 1):SetEase(V.EASE_OUT_SINE):OnComplete(function ()
+		for i = 1, 3 do
+			local battleWeapon = self._battleSession._slotWeapons[i]
+
+			if battleWeapon and battleWeapon.pvpBeganRoundReady then
+				battleWeapon:pvpBeganRoundReady()
+			end
+		end
+
+		BattleManager:pvpWeaponReadyed(self._battleSession)
+	end)
+	self._pvpWeaponBaseContainer:SetPosition(0, -1.5, 0)
+	self._pvpWeaponBaseContainer:DOMoveY(0, 1):SetEase(V.EASE_OUT_SINE)
+end
+
+function M:pvpBeganRoundBefore()
+end
+
+function M:settlePvpEndRound(lose)
+	self._lastLose = lose
+
+	if lose then
+		if self._battleSession._pvpLoseCount == 1 then
+			self._pvpBloodSeg._aniBloodSeg1:Play()
+		elseif self._battleSession._pvpLoseCount == 2 then
+			self._pvpBloodSeg._aniBloodSeg2:Play()
+		elseif self._battleSession._pvpLoseCount == 3 then
+			self._pvpBloodSeg._aniBloodSeg3:Play()
+		end
+	end
+
+	self._goEnergyBar:SetActive(false)
+	self._tfWeaponContainer:DOMoveY(-1.5, 1):SetEase(V.EASE_OUT_SINE):OnComplete(function ()
+		LuaUnity.removeAllChildren(self._tfWeaponContainer)
+		self._tfWeaponContainer:SetPosition(0, 0, 0)
+	end)
+	self._pvpWeaponBaseContainer:DOMoveY(-1.5, 1):SetEase(V.EASE_OUT_SINE)
+	LuaUnity.removeAllChildren(self._tfAtorContainer)
+end
+
+function M:cleanOnPvpEndRound()
+	table.clear(self._dmgShowWaitList)
+	table.clear(self._dmgArgsPool)
+end
+
+function M:setWorldLayer(go)
+	if not BattleManager:isMissionPVP() then
+		return
+	end
+
+	if go == nil then
+		return
+	end
+
+	if self._worldLayer then
+		LuaHelper.SetLayerRecursively(go, self._worldLayer)
+	end
+end
+
+function M:createActor(prefabName)
+	local obj = self._battleView:createActor(prefabName, self._tfWeaponContainer)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:createWeapon(prefabName, index)
+	local obj = self._battleView:createWeapon(prefabName, self._tfWeaponContainer)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:createRanger(prefabName)
+	local obj = self._battleView:createRanger(prefabName, self._tfAtorContainer)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:createEnemy(prefabName)
+	local obj = self._battleView:createEnemy(prefabName)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:createBullet(prefabName)
+	local obj = self._battleView:createBullet(prefabName)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:createAndPlayVFX(prefabName, duration)
+	local obj = self._battleView:createAndPlayVFX(prefabName, duration)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:addVFX(prefabName, parent, duration)
+	local obj = self._battleView:addVFX(prefabName, parent, duration)
+
+	self:setWorldLayer(obj)
+
+	return obj
+end
+
+function M:removeVFX(obj)
+	self._battleView:removeVFX(obj)
+end
+
+function M:doDomeDissolve(callback)
+	if BattleManager:isMissionPVP() then
+		self._spRendererDomeBig.material:SetFloat("_DissolveProgress", 0.2)
+		self._spRendererDomeBig.material:DOFloat(1.8, "_DissolveProgress", 1.5):OnComplete(callback)
+		self:addVFX("Dome_boom", self._tfAtorContainer)
+
+		return
+	end
+
+	local domeAdapter = self:getDomeAdapter()
+
+	if domeAdapter then
+		domeAdapter:playDissolve(callback)
+	elseif self._goArkRebuildBattleShip then
+		local sp = self._goArkRebuildBattleShip:GetChild(0):Find("A1_dome_all"):GetComponent("SpriteRenderer")
+		sp.material = self._battleView._sharedDissolveMatArk
+
+		self._battleView._sharedDissolveMatArk:SetFloat("_DissolveProgress", 0.2)
+		self._battleView._sharedDissolveMatArk:DOFloat(1.8, "_DissolveProgress", 1.5):OnComplete(callback)
+		self:addVFX("Dome_boom", self._tfAtorContainer)
+	else
+		self._spRendererDome.material = self._battleView._sharedDissolveMat
+		self._spRendererDomeBig.material = self._battleView._sharedDissolveMat2
+
+		self._battleView._sharedDissolveMat:SetFloat("_DissolveProgress", 0.2)
+		self._battleView._sharedDissolveMat:DOFloat(1.8, "_DissolveProgress", 1.5):OnComplete(callback)
+		self._battleView._sharedDissolveMat2:SetFloat("_DissolveProgress", 0.4)
+		self._battleView._sharedDissolveMat2:DOFloat(1.2, "_DissolveProgress", 1.5)
+		self:addVFX("Dome_boom", self._tfAtorContainer)
+	end
+end
+
+function M:getGunMuzzlePositionXY(style, left)
+	if left then
+		return -BattleDefine.POSITION_ENUM[style][self._scaleIndex] + BattleDefine.GUN_MUZZLE_OFFSETX[style][self._scaleIndex], BattleDefine.GUN_MUZZLE_POSITIONY[style][self._scaleIndex]
+	else
+		return BattleDefine.POSITION_ENUM[style][self._scaleIndex] - BattleDefine.GUN_MUZZLE_OFFSETX[style][self._scaleIndex], BattleDefine.GUN_MUZZLE_POSITIONY[style][self._scaleIndex]
+	end
+end
+
+function M:checkCameraSortingLayerTextureEnable()
+	self._cameraTextureUseCount = 0
+	self._cameraTextureUseCountLastFrame = 0
+	self._openCameraTexture = lc._graphicsQuality == 2
+	self._cameraTextureEnabled = nil
+
+	self:enableCameraTexture(false)
+end
+
+function M:enableCameraTexture(enable)
+	self._cameraTextureEnabled = enable
+
+	CameraSettingHelper.SetRendererIndex(self._camera, enable and 1 or 0)
+end
+
+function M:canUseCameraTexture()
+	return self._openCameraTexture
+end
+
+function M:tryEnableCameraTexture(enable)
+	if not self._openCameraTexture then
+		return
+	end
+
+	if self._cameraTextureEnabled == enable then
+		return
+	end
+
+	self:enableCameraTexture(enable)
+end
+
+function M:addUseCameraTexture()
+	self:changeCameraTextureUseCount(1)
+end
+
+function M:removeUseCameraTexture()
+	self:changeCameraTextureUseCount(-1)
+end
+
+function M:changeCameraTextureUseCount(count)
+	self._cameraTextureUseCount = math.max(0, self._cameraTextureUseCount + count)
+end
+
+function M:syncCameraTextureEndFrame()
+	self._cameraTextureUseCountLastFrame = self._cameraTextureUseCount
+
+	if self._cameraTextureUseCount == 0 then
+		self:tryEnableCameraTexture(false)
+	elseif self._cameraTextureUseCount > 0 then
+		self:tryEnableCameraTexture(true)
+	end
+end
+
+return M

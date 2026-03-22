@@ -1,0 +1,283 @@
+local M = class("MonthlyCheckinPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	imgBar = Types.SlicedFilledImage,
+	txtDay = Types.TMP_Text,
+	tfCumulativeRewards = Types.Transform,
+	tfMonthlyLists = Types.Transform
+}
+SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goDayWidgets = {}
+	self._goDayItems = {}
+	self._goCumulativeWidgets = {}
+	self._goCumulativeItemWidgets = {}
+end
+
+function M:Start()
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+end
+
+function M:init()
+	self._module = P._playerMonthlyCheckin
+	local currentDay = self._module:getCheckinDay()
+	currentDay = currentDay - 1
+	local row = math.floor(currentDay / 5) - 1
+
+	lc.setLocalPosition(self._tfMonthlyLists, 0, Mathf.Clamp(row * 215, 0, 572))
+	self:updateUI()
+end
+
+function M:showInternal(uid)
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:updateUI()
+	self:updateCurrent()
+	self:updateCumulativeRewardsArea()
+	self:updateDailyClaimArea()
+end
+
+function M:updateCurrent()
+	local currentDay = self._module:getCheckinDay()
+	self._currentDay = currentDay
+	self._todayIdx = self._module:getTodayCheckinIdx()
+	self._showDayIdxs = self._module:getCumulativeList()
+	self._txtDay.text = currentDay
+end
+
+function M:updateCumulativeRewardsArea()
+	local showDayIdxs = self._showDayIdxs
+	local currentGoRewardsNum = self._tfCumulativeRewards.childCount - 1
+
+	self:updateCumulativeRewardsBar()
+
+	for i = 1, math.max(#showDayIdxs, currentGoRewardsNum) do
+		if i <= #showDayIdxs then
+			local go = nil
+
+			if currentGoRewardsNum < i then
+				go = GameObject.Instantiate(self._tfCumulativeRewards:GetChild(1).gameObject, self._tfCumulativeRewards)
+			else
+				go = self._tfCumulativeRewards:GetChild(i).gameObject
+			end
+
+			if not self._goCumulativeWidgets[i] then
+				self._goCumulativeWidgets[i] = go
+
+				lc.prefabVarPeer(go)
+
+				self._goCumulativeItemWidgets[i] = go._goItem
+
+				SimpleItemWidget.noCreate(go._goItem)
+			end
+
+			self:updateCumulativeWidget(i)
+		end
+	end
+
+	local showRewards = {}
+end
+
+local firstPartWeight = 14.6
+local nextPartWeight = 44.3 - firstPartWeight
+
+function M:updateCumulativeRewardsBar()
+	local showDayIdxs = self._showDayIdxs
+	local currentDay = self._currentDay
+	local currentIdx = 0
+
+	for i = 1, #showDayIdxs do
+		if showDayIdxs[i] <= currentDay then
+			currentIdx = i
+		else
+			break
+		end
+	end
+
+	local weight = 0
+	local totalWeight = firstPartWeight + (#showDayIdxs - 1) * nextPartWeight
+
+	if currentIdx == 0 then
+		weight = currentDay / showDayIdxs[1] * firstPartWeight
+	elseif currentIdx == #showDayIdxs then
+		weight = totalWeight
+	else
+		weight = firstPartWeight + (currentIdx - 1) * nextPartWeight + nextPartWeight * (currentDay - showDayIdxs[currentIdx]) / (showDayIdxs[currentIdx + 1] - showDayIdxs[currentIdx])
+	end
+
+	self._imgBar.fillAmount = weight / totalWeight
+end
+
+function M:updateCumulativeWidget(idx)
+	local showDayIdxs = self._showDayIdxs
+	local showDay = showDayIdxs[idx]
+	local go = self._goCumulativeWidgets[idx]
+	local goItem = self._goCumulativeItemWidgets[idx]
+	local isUnlock = showDay <= self._todayIdx
+	local isClaimed = self._module:isCumulativeClaimed(showDay)
+	local canClaim = self._module:canClaimCumulativeRewards(showDay)
+	local cid, num = self._module:readCumulativeReward(showDay)
+
+	goItem:init(cid, num)
+	goItem:setClaimed(isClaimed)
+	LuaHelper.ParticleSystemSetStartColor(go._goVfxClaim:GetComponent("ParticleSystem"), Color.str2Static(V.QUALITY_BG_VFX[D.toQuality(cid)]))
+	go._goVfxClaim:SetActive(isUnlock and canClaim and not isClaimed)
+
+	go._txtDay.text = showDayIdxs[idx]
+
+	self:setClick(go._goItem._btnClick, function ()
+		local isCumuClaimed = self._module:isCumulativeClaimed(showDay)
+		local canClaimCumu = self._module:canClaimCumulativeRewards(showDay)
+
+		if D.isCustomSelectItem(cid) then
+			local selectedIdx = P._playerAsset:getItemCustomSelectIdx(cid)
+			local selected = selectedIdx ~= nil
+
+			if not selected and not isCumuClaimed then
+				goItem:itemSelectCallback()
+
+				return
+			end
+
+			if selected and canClaimCumu and not isCumuClaimed then
+				UIManager.openPanel(PrefabDefine.ItemSelectConfirmPanel, cid, goItem, function ()
+					local ret, rewards = self._module:tryClaimCumulativeRewards(showDay)
+
+					if not ret then
+						return
+					end
+
+					V.showRewardClaimPanel(rewards)
+					self:updateCumulativeWidget(idx)
+					self:updateCumulativeRewardsBar()
+				end)
+
+				return
+			end
+		end
+
+		if canClaimCumu and not isCumuClaimed then
+			local ret, rewards = self._module:tryClaimCumulativeRewards(showDay)
+
+			if not ret then
+				return
+			end
+
+			V.showRewardClaimPanel(rewards)
+			self:updateCumulativeWidget(idx)
+			self:updateCumulativeRewardsBar()
+		else
+			goItem:rewardclickCallback()
+		end
+	end)
+
+	if showDay <= self._todayIdx then
+		go._imgDayBg.color = Color.str2Static("FFFFFF")
+		go._txtDay.color = Color.str2Static("6DFFE0")
+	else
+		go._imgDayBg.color = Color.str2Static("9A9A9A")
+		go._txtDay.color = Color.str2Static("4DAB97")
+	end
+end
+
+function M:updateDailyClaimArea()
+	local cfgs = self._module:readCfgs()
+	local totalDay = #cfgs
+	local listNum = math.ceil(totalDay / 5)
+
+	if self._tfMonthlyLists.childCount < listNum then
+		local deltaCount = listNum - self._tfMonthlyLists.childCount
+
+		for i = 1, deltaCount do
+			GameObject.Instantiate(self._tfMonthlyLists:GetChild(0).gameObject, self._tfMonthlyLists)
+		end
+	else
+		for i = listNum + 1, self._tfMonthlyLists.childCount do
+			self._tfMonthlyLists:GetChild(i - 1):SetActive(false)
+		end
+	end
+
+	for i = 1, listNum do
+		self:updateDayList(self._tfMonthlyLists:GetChild(i - 1), (i - 1) * 5 + 1)
+	end
+end
+
+function M:updateDayList(list, startDayIdx)
+	local tfWidgets = list:GetChild(0):Find("Layout")
+
+	for i = 1, 5 do
+		local dayIdx = startDayIdx + i - 1
+
+		if not self._goDayWidgets[dayIdx] then
+			self._goDayWidgets[dayIdx] = tfWidgets:GetChild(i - 1).gameObject
+
+			lc.prefabVarPeer(self._goDayWidgets[dayIdx])
+
+			local goItem = self._goDayWidgets[dayIdx]._goItem
+			self._goDayItems[dayIdx] = goItem
+
+			SimpleItemWidget.noCreate(goItem)
+		end
+
+		self:updateWidgetInList(dayIdx)
+	end
+end
+
+function M:updateWidgetInList(dayIdx)
+	local goWidget = self._goDayWidgets[dayIdx]
+	local checkedIn = self._module:haveBeenCheckedIn(dayIdx)
+	local isUnlock = dayIdx <= self._todayIdx
+
+	goWidget._goVfxClaim:SetActive(dayIdx == self._todayIdx and not checkedIn)
+	goWidget._tmpDay:SetLocalize(SID.STR_NUM_DAY, dayIdx)
+	goWidget._goVfxToday:SetActive(dayIdx == self._todayIdx)
+
+	local goItem = self._goDayItems[dayIdx]
+	local cid, num = self._module:readDailyReward(dayIdx)
+
+	goItem:init(cid, num)
+	goItem:setClaimed(checkedIn)
+	LuaHelper.ParticleSystemSetStartColor(goWidget._goVfxClaim:GetComponent("ParticleSystem"), Color.str2Static(V.QUALITY_BG_VFX[D.toQuality(cid)]))
+	goItem:setCanClaim(isUnlock and not checkedIn)
+	self:setClick(goItem._btnClick, function ()
+		if isUnlock and not checkedIn then
+			local ret, rewards = self._module:tryCheckin()
+
+			if not ret then
+				return
+			end
+
+			V.showRewardClaimPanel(rewards)
+			self:updateCurrent()
+			self:updateWidgetInList(dayIdx)
+			self:updateCumulativeRewardsArea()
+		else
+			goItem:rewardclickCallback()
+		end
+	end)
+end
+
+return M

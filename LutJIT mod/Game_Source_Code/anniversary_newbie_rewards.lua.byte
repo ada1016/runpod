@@ -1,0 +1,407 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		6409 - lc._encryptOffset,
+		20199 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		2,
+		6419 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6404 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		3,
+		6439 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6449 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		4,
+		6479 - lc._encryptOffset,
+		20011 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		5,
+		6519 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		7399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		6,
+		6559 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6409 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		7,
+		6599 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6499 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		8,
+		6639 - lc._encryptOffset,
+		20107 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		9,
+		6699 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		7899 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		10,
+		6759 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6414 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		11,
+		6819 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6549 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		12,
+		6879 - lc._encryptOffset,
+		20012 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		13,
+		6959 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		14,
+		7039 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		15,
+		7119 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		16,
+		7199 - lc._encryptOffset,
+		20112 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		17,
+		7299 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		18,
+		7399 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		19,
+		7499 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		20,
+		7599 - lc._encryptOffset,
+		20015 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		21,
+		7719 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		22,
+		7839 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		23,
+		7959 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		24,
+		8079 - lc._encryptOffset,
+		20116 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		1
+	},
+	{
+		25,
+		8219 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		26,
+		8359 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		27,
+		8499 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		28,
+		8639 - lc._encryptOffset,
+		20015 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		29,
+		8799 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		30,
+		8959 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		31,
+		9119 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		32,
+		9279 - lc._encryptOffset,
+		20116 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		1
+	},
+	{
+		33,
+		9459 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		34,
+		9639 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		35,
+		9819 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		36,
+		9999 - lc._encryptOffset,
+		20015 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		0
+	},
+	{
+		37,
+		10199 - lc._encryptOffset,
+		16401 - lc._encryptOffset,
+		8399 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		38,
+		10399 - lc._encryptOffset,
+		16405 - lc._encryptOffset,
+		6419 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		39,
+		10599 - lc._encryptOffset,
+		16407 - lc._encryptOffset,
+		6599 - lc._encryptOffset,
+		0,
+		0
+	},
+	{
+		40,
+		10799 - lc._encryptOffset,
+		20116 - lc._encryptOffset,
+		6400 - lc._encryptOffset,
+		1,
+		1
+	}
+}
+local mapKeyIndex = {
+	k1644150 = 1,
+	k7990444 = 6,
+	k13954883 = 3,
+	k14145235 = 4,
+	k13991182 = 2,
+	k15580738 = 5
+}
+local mapKeyDimension = {
+	k14145235 = 0,
+	k13991182 = 0,
+	k13954883 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -6399
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -6399
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

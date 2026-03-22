@@ -1,0 +1,230 @@
+local M = class("BattleBullet_Dome_10_Main", requireLua("BattleBullet_AtkInterval"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+local OFFSET_Y = 2.076
+local TOTAL_TIME = 5
+local TWO_PI = 2 * math.pi
+
+local function get_boomerang_pos_timed_cw(current_time, total_duration, p, a, b, c)
+	local normalized_time = current_time % total_duration
+	local t = normalized_time / total_duration * TWO_PI
+	local p_rad = math.rad(p)
+	local cos_p = math.cos(p_rad)
+	local sin_p = math.sin(p_rad)
+	local semi_a = a / 2
+	local u = semi_a - semi_a * math.cos(t)
+	local v = b / 2 * math.sin(t)
+	v = v * c
+	local x = u * cos_p - v * sin_p
+	local y = u * sin_p + v * cos_p
+
+	return x, y
+end
+
+local MOVE_PARMAS_BY_COUNT = {
+	{
+		{
+			90,
+			8,
+			5,
+			-1
+		}
+	},
+	{
+		{
+			60,
+			7,
+			4,
+			1
+		},
+		{
+			120,
+			7,
+			4,
+			-1
+		}
+	},
+	{
+		{
+			45,
+			7,
+			4,
+			1
+		},
+		{
+			90,
+			8,
+			0,
+			-1
+		},
+		{
+			135,
+			7,
+			4,
+			-1
+		}
+	},
+	{
+		{
+			36,
+			6,
+			3,
+			1
+		},
+		{
+			72,
+			7,
+			4,
+			1
+		},
+		{
+			108,
+			7,
+			4,
+			-1
+		},
+		{
+			144,
+			6,
+			3,
+			-1
+		}
+	},
+	{
+		{
+			30,
+			6,
+			3,
+			1
+		},
+		{
+			60,
+			7,
+			4,
+			1
+		},
+		{
+			90,
+			8,
+			0,
+			-1
+		},
+		{
+			120,
+			7,
+			4,
+			-1
+		},
+		{
+			150,
+			6,
+			3,
+			-1
+		}
+	}
+}
+
+function M:ctor(battleSession)
+	SUPER.ctor(self, battleSession)
+
+	self._stage = 1
+	self._stageCD = 2
+	self._centerX = 0
+	self._centerY = 0
+end
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._detectType = 0
+	self._angle = 270
+	self._walkRadius = self._battleSession._screenEdgeX2 - 1
+	self._speed = battleSkill:getProp(BattlePropEnum.BallisticSpeed)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._stage == 1 then
+		self._position.y = self._position.y + dt * 0
+
+		if self._view then
+			self._view:posEvent()
+		end
+
+		self._stageCD = self._stageCD - dt
+
+		if self._stageCD <= 0 then
+			self._stage = 2
+			self._centerY = self._position.y + self._walkRadius
+			self._detectType = 1
+			self._elapsedTime = 0
+
+			if self._view then
+				if self._moveParam[4] > 0 then
+					self._view._obj:GetChild(0):GetComponent("Animation"):Play("Dome_140010_skill")
+				else
+					self._view._obj:GetChild(0):GetComponent("Animation"):Play("Dome_140010_skill_2")
+				end
+
+				Client.playBattleSound("se_Dome_skin10_skill_1")
+
+				local battleDomeAdapter = self._sessionView:getDomeAdapter()
+
+				if battleDomeAdapter and battleDomeAdapter._goReadyAtk then
+					battleDomeAdapter._goReadyAtk:SetActive(false)
+				end
+			end
+		end
+	elseif self._stage == 2 then
+		self._elapsedTime = self._elapsedTime + dt
+		local a = self._moveParam[2]
+		local b = self._moveParam[3]
+		local x, y = get_boomerang_pos_timed_cw(self._elapsedTime, TOTAL_TIME, self._moveParam[1], a, b, self._moveParam[4])
+		self._position.x = x
+		self._position.y = y + OFFSET_Y
+
+		if self._view then
+			self._view:posEvent()
+		end
+
+		if TOTAL_TIME <= self._elapsedTime then
+			self._stage = 3
+		end
+	elseif self._stage == 3 then
+		if self._view then
+			self._view._obj:GetChild(0):GetComponent("Animation"):Stop()
+			Client.stopFadeOut("se_Dome_skin10_skill_1")
+		end
+
+		self:markToBeDestroyed()
+	end
+end
+
+function M:setStart(index, count)
+	self._stage = 1
+	self._moveParam = MOVE_PARMAS_BY_COUNT[count][index]
+
+	self:setPos(0, OFFSET_Y)
+
+	if self._view then
+		self._view:posEvent()
+	end
+end
+
+function M:markToBeDestroyed()
+	self._moveParam = nil
+
+	SUPER.markToBeDestroyed(self)
+end
+
+return M

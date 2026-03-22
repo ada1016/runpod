@@ -1,0 +1,80 @@
+local M = class("UnionManagePanel", requireLua("BasePanel"))
+local Types = Types
+local UnionManageRequestCtrl = requireLua("UnionManageRequestCtrl")
+local UnionManageSetupCtrl = requireLua("UnionManageSetupCtrl")
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goRequsetContent = Types.GameObject,
+	goSetupContent = Types.GameObject,
+	btnTabRequest = Types.Button,
+	btnTabSetup = Types.Button,
+	goSyncWaiting = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goTabContents = {
+		self._goRequsetContent,
+		self._goSetupContent
+	}
+	self._btnTabs = {
+		self._btnTabRequest,
+		self._btnTabSetup
+	}
+
+	self._goRequsetContent:SetActive(true)
+	self._goSetupContent:SetActive(false)
+
+	self._tabIndex = 1
+
+	self:changeTab(1)
+end
+
+function M:Start()
+	self._goRequsetContent:init(self)
+	self._goSetupContent:init(self)
+end
+
+function M:initPrefabVar()
+	UnionManageRequestCtrl.noCreate(self._goRequsetContent)
+	UnionManageSetupCtrl.noCreate(self._goSetupContent)
+end
+
+function M:addClicks()
+	self:setClick(self._btnTabRequest, function ()
+		self:changeTab(1)
+	end)
+	self:setClick(self._btnTabSetup, function ()
+		self:changeTab(2)
+	end)
+	self:on("union.edit.resp", function ()
+		V.showToast(SID.UNION_SETUP_SUCCESS)
+		self:closePanel()
+	end)
+	self:on("network.error", function ()
+		self:closePanel()
+	end)
+end
+
+function M:changeTab(index)
+	if self._tabIndex == index then
+		return
+	end
+
+	if self._tabIndex ~= 0 then
+		self._btnTabs[self._tabIndex]:GetComponent("TabSelector"):SetSelected(false)
+		self._goTabContents[self._tabIndex]:SetActive(false)
+	end
+
+	self._tabIndex = index
+
+	self._btnTabs[self._tabIndex]:GetComponent("TabSelector"):SetSelected(true)
+	self._goTabContents[index]:SetActive(true)
+end
+
+function M:init()
+end
+
+return M

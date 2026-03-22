@@ -1,0 +1,70 @@
+local M = class("SparkScoutWinPanel", requireLua("BasePanel"))
+local Types = Types
+M.args = {
+	goSelf = Types.GameObject,
+	goOther = Types.GameObject,
+	txtScoreWin = Types.TMP_Text,
+	txtScoreLose = Types.TMP_Text,
+	txtTitleWin = Types.TMP_Text,
+	txtTitleLose = Types.TMP_Text,
+	ani = Types.Animation
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+end
+
+function M:initPrefabVar()
+	lc.prefabVarPeer(self._goSelf)
+	lc.prefabVarPeer(self._goOther)
+end
+
+function M:init(closeCallback)
+	self._closeCallback = closeCallback
+
+	self:updateUI()
+
+	self._timer = lc.setTimer(function ()
+		self:closePanel()
+	end, 2.3333333333333335)
+
+	if BattleManager:pvpBattleWin() then
+		self._ani:Play("anim_BattleWin")
+
+		local score1, score2 = BattleManager:getPvpFinalScore()
+		local scoreStr = string.format("%d:%d", score1 or 0, score2 or 0)
+
+		self._txtTitleWin:SetLocalize(score1 == 3 and SID.STR_COMPLETE_WIN or SID.STR_SUCCESSFUL)
+
+		self._txtScoreWin.text = scoreStr
+	else
+		self._ani:Play("anim_BattleLose")
+
+		local score1, score2 = BattleManager:getPvpFinalScore()
+		local scoreStr = string.format("%d:%d", score1 or 0, score2 or 0)
+
+		self._txtTitleLose:SetLocalize(score1 == 1 and SID.STR_LITTLE_LOSE or SID.STR_FAIL)
+
+		self._txtScoreLose.text = scoreStr
+	end
+end
+
+function M:updateUI()
+	local selfMatchData = BattleManager:getSession(1):getMatchData()
+	local opponentMatchData = BattleManager:getSession(2):getMatchData()
+	local showOppGroup = P._playerActivitySparkScout:canShowSparkScoutRankGroup(opponentMatchData)
+
+	V.loadSparkScoutGrades(self._goSelf, selfMatchData)
+	V.loadSparkScoutGrades(self._goOther, opponentMatchData, showOppGroup)
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+	lc.stopTimer(self._timer)
+	self._closeCallback()
+end
+
+return M

@@ -1,0 +1,51 @@
+local M = class("BattleEnemyBulletView")
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleView = battleSession._battleView
+end
+
+function M:init(bullet, enemy)
+	self._bullet = bullet
+	self._enemy = enemy
+	local obj = self._sessionView:createBullet(enemy._bulletPrefab)
+	self._obj = obj
+	self._root = obj
+
+	lc.prefabVar(obj, self)
+end
+
+function M:destroyedEvent()
+	if self._obj then
+		GameObject.Destroy(self._obj)
+
+		self._obj = nil
+	end
+end
+
+function M:posEvent()
+	if self._obj then
+		local p1 = self._bullet._position
+		local p2 = self._bullet._targetPosition
+		local angle = math.deg(math.atan2(p2.y - p1.y, p2.x - p1.x))
+
+		self._obj:SetPosition(p1.x, p1.y, 0)
+		self._goLine:SetLocalScale(2, Vector2.Distance(p1, p2), 0)
+		self._root:SetLocalRotation(0, 0, angle)
+		self._goHit:SetPosition(p2.x, p2.y, 0)
+	end
+end
+
+function M:scaleXEvent(x)
+	self._root:SetLocalScale(1, x, 0)
+end
+
+function M:stepMoveEvent()
+end
+
+function M:hitEvent()
+	self._battleView:showDomeHit(self._enemy, self._bullet._targetPosition.x, self._bullet._targetPosition.y)
+end
+
+return M

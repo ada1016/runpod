@@ -1,0 +1,173 @@
+local M = Client
+local AudioService = AudioService
+
+function M.playSound(soundId)
+	if M._soundFlag == 0 then
+		return
+	end
+
+	AudioService:PlaySound(soundId)
+end
+
+function M.playBattleSound(soundId)
+	M.playSound(soundId)
+end
+
+function M.stopFadeOut(soundId)
+	if M._soundFlag == 0 then
+		return
+	end
+
+	AudioService:StopFadeOut(soundId)
+end
+
+function M.stopSound(soundId)
+	if M._soundFlag == 0 then
+		return
+	end
+
+	AudioService:StopPlay(soundId)
+end
+
+function M.playMusic(musicId)
+	if M._musicFlag == 0 then
+		return
+	end
+
+	M._musicId = musicId
+
+	AudioService:PlayBGM(musicId)
+end
+
+function M.stopMusic()
+	if M._musicFlag == 0 then
+		return
+	end
+
+	M._musicId = nil
+
+	AudioService:StopBGM()
+end
+
+M.Env2Music = {
+	Main_Dome = "music_dome",
+	Battle_Ark = "music_ark_battle",
+	Battle = "music_battle",
+	Main = "music_city",
+	Main_GDF = "music_earth",
+	Monopoly = "music_monopoly",
+	Main_Crisis = "music_critical_main",
+	Main_Ark = "music_ark_main"
+}
+
+setmetatable(M.Env2Music, {
+	__index = function (tbl, key)
+		return M.Env2Music.Main
+	end
+})
+
+function M.enterMusicEnv(env)
+	M.playMusic(env)
+end
+
+function M.exitMusicEnv()
+	M.stopMusic()
+end
+
+function M.updateMusicVolumeStepless(value)
+	value = math.min(math.max(0, value), 1) * 100
+
+	if value < 5 then
+		value = 0
+
+		M.setMusicFlag(0)
+	else
+		M.setMusicFlag(1)
+	end
+
+	Client._musicVolumeFactor = value
+
+	lc.setIntKeyValue(M.PrefKey.music_volume_factor, value)
+	AudioService:SetMusVolume(value * Client._musicVolume / 10000)
+end
+
+function M.updateSoundVolumeStepless(value)
+	value = math.min(math.max(0, value), 1) * 100
+
+	if value < 5 then
+		value = 0
+
+		M.setSoundFlag(0)
+	else
+		M.setSoundFlag(1)
+	end
+
+	Client._soundVolumeFactor = value
+
+	lc.setIntKeyValue(M.PrefKey.sound_volume_factor, value)
+	AudioService:SetSndVolume(value * Client._soundVolume / 10000)
+end
+
+function M.updateMusicVolume(value)
+	Client._musicVolume = math.floor(value * 100)
+
+	lc.setIntKeyValue(M.PrefKey.music_volume, Client._musicVolume)
+
+	local realValue = Client._musicVolumeFactor * Client._musicVolume / 10000
+
+	AudioService:SetMusVolume(realValue)
+end
+
+function M.updateSoundVolume(value)
+	Client._soundVolume = math.floor(value * 100)
+
+	lc.setIntKeyValue(M.PrefKey.sound_volume, Client._soundVolume)
+
+	local realValue = Client._soundVolumeFactor * Client._soundVolume / 10000
+
+	AudioService:SetSndVolume(realValue)
+end
+
+function M.setMusicFlag(flag)
+	if M._musicFlag == flag then
+		return
+	end
+
+	M._musicFlag = flag
+
+	lc.setIntKeyValue(M.PrefKey.music_switch, flag)
+	AudioService:SetMusicMute(C._musicFlag == 0)
+
+	if flag == 0 then
+		AudioService:StopBGM()
+	elseif M._musicId then
+		AudioService:PlayBGM(M._musicId)
+	end
+end
+
+function M.setSoundFlag(flag)
+	if M._soundFlag == flag then
+		return
+	end
+
+	M._soundFlag = flag
+
+	lc.setIntKeyValue(M.PrefKey.sound_switch, flag)
+	AudioService:SetSoundMute(C._soundFlag == 0)
+end
+
+function M.switchSound()
+	M.setSoundFlag(1 - M._soundFlag)
+
+	return M._soundFlag
+end
+
+function M.stopAllSounds()
+	AudioService:StopAllSound()
+end
+
+function M.switchMusic()
+	M.setMusicFlag(1 - M._musicFlag)
+
+	return M._musicFlag
+end

@@ -1,0 +1,131 @@
+local M = class("SpineUIObj")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SpineUIObj.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+local weaponSlotNames = {
+	"Weapon_L",
+	"Weapon_R"
+}
+local weaponAtlasNames = {
+	"Weapon_%d_L",
+	"Weapon_%d_R"
+}
+
+function M:init()
+	self._goBigVfx = {}
+
+	for i = 1, 5 do
+		local go = self["_goBigVfx" .. i]
+
+		if go then
+			self._goBigVfx[i] = go
+
+			go:SetActive(true)
+		else
+			break
+		end
+	end
+
+	self._hideFlag = false
+
+	if not self._initSpineChanger then
+		self._skinChanger = self._goSpineUI:GetComponent("SpineChangeSkin")
+
+		self._skinChanger:Init()
+
+		self._initSpineChanger = true
+		self._skinChanger.optimize = true
+		local spritePath = "spineGatlin/Weapon_0"
+
+		for i, slotName in ipairs(weaponSlotNames) do
+			local gunSprite = LuaUnity.getTPSprite(spritePath)
+
+			self._skinChanger:ChangeSkinPart(slotName, slotName, gunSprite)
+		end
+
+		self._skinChanger:RefreshEquipSkin()
+
+		if V._quickApply then
+			self._skinChanger:Apply()
+		else
+			self._skinChanger:SafeApply()
+		end
+	end
+end
+
+function M:recycleWeapon()
+	local oldWeaponId = self._weaponSkinId
+
+	if oldWeaponId then
+		if self._weaponLeft then
+			V.recycleRoleUISpine(self._weaponLeft)
+
+			self._weaponLeft = nil
+		end
+
+		if self._weaponRight then
+			V.recycleRoleUISpine(self._weaponRight)
+
+			self._weaponRight = nil
+		end
+
+		self._weaponSkinId = nil
+	end
+end
+
+function M:changeGunSkin(bodySkinId, weaponSkinId, ignoreCfg, forceSex)
+	weaponSkinId = weaponSkinId or bodySkinId - 10000
+
+	if not ignoreCfg and (not D._skinGatlinConfig[weaponSkinId] or D._skinGatlinConfig[weaponSkinId]._hidden) then
+		weaponSkinId = D.DEFAULT_GATLIN_SKIN
+	end
+
+	local oldWeaponSkinId = self._weaponSkinId
+
+	if oldWeaponSkinId ~= weaponSkinId or forceSex then
+		self:recycleWeapon()
+
+		self._weaponSkinId = weaponSkinId
+		local sex = P._playerSkin:readRoleSkinSex(bodySkinId)
+
+		if forceSex then
+			sex = forceSex
+		end
+
+		self._weaponLeft = V.getRoleUIWeaponSpine(self._tfWeaponLeft, sex, weaponSkinId, "L")
+		self._weaponRight = V.getRoleUIWeaponSpine(self._tfWeaponRight, sex, weaponSkinId, "R")
+	end
+end
+
+function M:dealHideBigVfx(hideBigVfx)
+	hideBigVfx = hideBigVfx or false
+
+	if hideBigVfx == self._hideFlag then
+		return
+	end
+
+	self._hideFlag = hideBigVfx
+
+	for i, v in ipairs(self._goBigVfx) do
+		v:SetActive(not hideBigVfx)
+	end
+end
+
+return M

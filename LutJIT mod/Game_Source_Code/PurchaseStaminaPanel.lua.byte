@@ -1,0 +1,260 @@
+local M = class("PurchaseStaminaPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	goItem1 = Types.GameObject,
+	goItem2 = Types.GameObject,
+	txtItem1Name = Types.TMP_Text,
+	txtItem2Name = Types.TMP_Text,
+	txtItem1Remain = Types.TMP_Text,
+	txtItem2Remain = Types.TMP_Text,
+	goSoldout1 = Types.GameObject,
+	goSoldout2 = Types.GameObject,
+	btnAd = Types.Button,
+	btnDiamond = Types.Button,
+	txtDiamondCost = Types.TMP_Text,
+	goAdCountDown = Types.GameObject,
+	txtAdCountDown = Types.TMP_Text,
+	btnCachedTips = Types.Button,
+	txtCachedLimit = Types.TMP_Text,
+	btnClaimAll = Types.Button,
+	scroll = Types.ScrollRect,
+	tfContent = Types.Transform
+}
+local ItemWidget = requireLua("ItemWidget")
+local StaminaWidget = requireLua("StaminaWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	local showCount = 5
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 10,
+		bottomPadding = 10,
+		cellMargin = 15,
+		cellHeight = 182,
+		cellInitCount = showCount + 1
+	})
+	self._scrollViewEx._direction = 2
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goItem1)
+	ItemWidget.noCreate(self._goItem2)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnAd, function ()
+		P._playerAd:tryStartRewardAd(D.AdType.Shop_Ad_Energy)
+	end)
+	self:setClick(self._btnDiamond, function ()
+		self:dealExchange(D.ExchangeId.Energy3)
+	end)
+	self:setClick(self._btnClaimAll, function ()
+		self:claimAll()
+	end)
+	self:setClick(self._btnCachedTips, function ()
+		V.showBubbleTips({
+			desc = {
+				SID.STAMINA_TIPS_STORED,
+				D._exchangeConfig[D.ExchangeId.Energy2]._buyLimit,
+				D._exchangeConfig[D.ExchangeId.Energy3]._buyLimit + D._exchangeConfig[D.ExchangeId.Energy2]._buyLimit
+			}
+		}, {
+			offset = {
+				0,
+				20,
+				0
+			},
+			target = self._btnCachedTips.transform
+		})
+	end)
+end
+
+function M:addEvents()
+	self:on("finished.ad", function (adType)
+		if adType == D.AdType.Shop_Ad_Energy then
+			P._playerExchange:tryExchange(D.ExchangeId.Energy1, 1, function (rewards)
+				V.showRewardClaimPanel(rewards)
+				P._playerExchange:recordAdTime(D.ExchangeId.Energy1)
+				self:updateUI()
+			end)
+		end
+	end)
+	self:on("exchange.success", function (id)
+		self:updateUI()
+	end)
+	self:on("day.cross", function (id)
+		self:updateUI()
+	end)
+	self:on("stamina.produce.change", function (id)
+		self:updateStaminaProduceArea()
+	end)
+end
+
+function M:init()
+	self:updateUI()
+end
+
+function M:updateUI()
+	V.loadAdButton1(self._btnAd.transform, false)
+	lc.stopTimer(self._timer)
+
+	local playerExchange = P._playerExchange
+	local cid, num = playerExchange:readExchangeGain(D.ExchangeId.Energy1)
+	local leftCount = playerExchange:getLeftExchangeCount(D.ExchangeId.Energy1)
+
+	self._goItem1:init(cid, num)
+	self._txtItem1Name:SetLocalize(SID.RESOURCE_NUM, -D._itemConfig[cid]._nameSid, num)
+	self._txtItem1Remain:SetLocalize(SID.STR_REMAIN_TIMES, leftCount)
+
+	if leftCount > 0 then
+		if C.getCurTime() < playerExchange:getLastAdTime(D.ExchangeId.Energy1) + D._globalConfig._player_energy_ad_cd_time then
+			self._btnAd:SetActive(false)
+			self._goAdCountDown:SetActive(true)
+			self:initCountDownTimer(playerExchange:getLastAdTime(D.ExchangeId.Energy1) + D._globalConfig._player_energy_ad_cd_time)
+		else
+			self._btnAd:SetActive(true)
+			self._goAdCountDown:SetActive(false)
+		end
+
+		self._goSoldout1:SetActive(false)
+	else
+		self._btnAd:SetActive(false)
+		self._goSoldout1:SetActive(true)
+	end
+
+	cid, num = playerExchange:readExchangeGain(D.ExchangeId.Energy3)
+	leftCount = playerExchange:getLeftExchangeCount(D.ExchangeId.Energy3)
+
+	self._goItem2:init(cid, num)
+	self._txtItem2Name:SetLocalize(SID.RESOURCE_NUM, -D._itemConfig[cid]._nameSid, num)
+	self._txtItem2Remain:SetLocalize(SID.STR_REMAIN_TIMES, playerExchange:getLeftExchangeCount(D.ExchangeId.Energy3))
+	self._btnDiamond:SetActive(leftCount > 0)
+	self._goSoldout2:SetActive(leftCount <= 0)
+
+	local cost, costNum = playerExchange:getExchangeCost(D.ExchangeId.Energy3)
+	local tmpDiamondStr = D.getTMPSpriteRichText("item_small_10002")
+	self._txtDiamondCost.text = tmpDiamondStr .. costNum
+
+	self:updateStaminaProduceArea()
+end
+
+function M:initCountDownTimer(targetTime)
+	lc.stopTimer(self._timer)
+
+	local function func()
+		local t = targetTime - C.getCurTime()
+
+		if t <= 0 then
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+
+			self._goAdCountDown:SetActive(false)
+			self._btnAd:SetActive(true)
+		end
+
+		self._txtAdCountDown.text = V.formatTimeS2MS(t)
+	end
+
+	func()
+
+	self._timer = lc.setInterval(func, 0.5)
+end
+
+function M:updateStaminaProduceArea()
+	self._btnClaimAll.transform:Find("dot"):SetActive(P._playerStaminaProducer:showRedDot())
+	self._txtCachedLimit:SetLocalizeS(SID.STAMINA_STORAGE_LIMIT, string.format("%d/%d", P._playerStaminaProducer:getCacheNum(), P._playerStaminaProducer:readMax()))
+	self._scrollViewEx:reloadData()
+	self:initSecondTimer()
+end
+
+function M:initSecondTimer()
+	lc.stopTimer(self._secondTimer)
+
+	local function func()
+		self._scrollViewEx:doSth2All(function (obj)
+			obj:updateCountDown()
+		end)
+	end
+
+	self._secondTimer = lc.setInterval(func, 0.5)
+end
+
+function M:dealExchange(exchangeId)
+	local leftNum = P._playerExchange:getLeftExchangeCount(exchangeId)
+
+	if leftNum > 0 then
+		UIManager.openPanel(PrefabDefine.ExchangeResourcePanel, exchangeId)
+
+		return
+	end
+
+	self._costCid = D.ResType.diamond
+	local retCode, param = P._playerExchange:checkExchange(exchangeId, 1)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode, param)
+
+		return
+	end
+
+	P._playerExchange:tryExchange(exchangeId, 1, function (rewards)
+		V.showRewardClaimPanel(rewards)
+		self:updateUI()
+	end)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+	lc.stopTimer(self._timer)
+
+	self._timer = nil
+
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+end
+
+function M:claimAll()
+	local haveCache = P._playerStaminaProducer:getCacheNum() > 0
+
+	if not haveCache then
+		V.showToast(SID.TIP_NO_STAMINA_CLAIM)
+
+		return
+	end
+
+	local rewards = P._playerStaminaProducer:claimAll()
+
+	V.showRewardClaimPanel(rewards)
+	self._scrollViewEx:reloadData(true)
+end
+
+function M:onCellNum()
+	return P._playerStaminaProducer:getCacheNum() + 1
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = StaminaWidget.create(self._tfContent)
+
+		goCell:SetActive(true)
+		goCell:setRewardsClick(self, function ()
+			self._scrollViewEx:reloadData()
+		end)
+	end
+
+	if index == 1 then
+		-- Nothing
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+return M

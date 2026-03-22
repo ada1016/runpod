@@ -1,0 +1,295 @@
+local M = class("ArkRebuildPreviewPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	txtTitle = Types.TMP_Text,
+	tfMilestoneRewards = Types.Transform,
+	btnMore = Types.Button,
+	btnIssue = Types.Button,
+	tfBanWeapons = Types.Transform,
+	tfBanModules = Types.Transform,
+	txtDesc = Types.TMP_Text,
+	txtCountdownTitle = Types.TMP_Text,
+	txtCountdown = Types.TMP_Text,
+	btnEnter = Types.Button,
+	tfArkShipContainer = Types.Transform,
+	btnSkip = Types.Button,
+	goMusic = Types.GameObject
+}
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnEnter, function ()
+		V.checkActivityVersion(function ()
+			self:handleStartBtn()
+		end, D.ActivityType.ArkRebuild)
+	end)
+	self:setClick(self._btnMore, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildMilestonePanel, self._cfg._subType)
+	end)
+	self:setClick(self._btnIssue, function ()
+		UIManager.openPanel(PrefabDefine.ArkRebuildDescPanel, self._id)
+	end)
+	self:setClick(self._btnSkip, function ()
+		self:handleSkipBtn()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init()
+	self._module = P._playerActivityArkRebuild
+	self._CgSkip = self._btnSkip.transform:GetComponent("CanvasGroup")
+
+	MainGameRoot:setBlackBG(false)
+
+	local mainLB = UIManager.getPanel(PrefabDefine.MainPanel.id)
+
+	if mainLB then
+		UIManager.getPanel(PrefabDefine.MainPanel.id):hideInternal()
+	end
+
+	self._goArk = V.createArkShip(MainGameRoot._tfScene)
+
+	ArkShipManager:enterPreview()
+	self:updateTimer()
+	self:updateUI()
+	Client.playMusic("music_ark_main")
+end
+
+function M:updateUI()
+	local isOpening = P._playerActivity:getArkProjActivityNum() > 0
+	local targetTime = 0
+	local subType = 1
+
+	if isOpening then
+		local data = P._playerActivity:getArkRebuildData()
+		targetTime = data.endTime
+		subType = data.subType
+		self._cfg = P._playerActivity:readCfg(data.id)
+	else
+		local showPreview = false
+		showPreview, self._cfg = P._playerActivity:canPreview(D.ActivityType.ArkRebuild)
+		subType = self._cfg._subType
+	end
+
+	if not self._cfg then
+		return
+	end
+
+	self._id = self._cfg._id
+	local showRewardsMap = {}
+	local milestoneRewardCids = self._module:readPreviewMilestoneRewards(subType)
+	local star, allRewards = P._playerActivityArkRebuild:getMilestoneRewards(subType, true)
+
+	for i = 1, #milestoneRewardCids do
+		local cid = milestoneRewardCids[i]
+
+		for j = 1, #allRewards do
+			if allRewards[j][1] == cid then
+				showRewardsMap[cid] = (showRewardsMap[cid] or 0) + allRewards[j][2]
+			end
+		end
+	end
+
+	local showRewardsList = {}
+
+	for k, v in pairs(showRewardsMap) do
+		table.insert(showRewardsList, {
+			k,
+			v
+		})
+	end
+
+	D.sortRewards(showRewardsList, true)
+	V.loadRewardsWidget(self, self._tfMilestoneRewards, showRewardsList, false, false)
+
+	local weaponBan, moduleBan = P._playerActivityArkRebuild:getBanData(self._cfg._startTime, subType)
+	local childCount = self._tfBanWeapons.childCount
+
+	for i = 1, #weaponBan do
+		if childCount < i then
+			GameObject.Instantiate(self._tfBanWeapons:GetChild(0).gameObject, self._tfBanWeapons)
+		end
+
+		local tf = self._tfBanWeapons:GetChild(i - 1)
+
+		V.loadWeaponIcon(tf:GetChild(0):GetComponent("Image"), weaponBan[i])
+	end
+
+	local childCount = self._tfBanModules.childCount
+
+	for i = 1, #moduleBan do
+		if childCount < i then
+			GameObject.Instantiate(self._tfBanModules:GetChild(0).gameObject, self._tfBanModules)
+		end
+
+		self:setClick(self._tfBanModules:GetChild(i - 1):GetChild(0):GetComponent("Button"), function ()
+			UIManager.openPanel(PrefabDefine.ModuleDetailPanel, moduleBan[i])
+		end)
+
+		local tf = self._tfBanModules:GetChild(i - 1):GetChild(0):GetChild(0)
+
+		LuaUnity.setTPSprite(tf:GetComponent("Image"), string.format("weekend/Module-%d", moduleBan[i]))
+	end
+
+	Trace.traceDesign_Activity("RebuildPreview_Enter:%s", nil, D.ActivityType.ArkRebuild, self._cfg._subType)
+end
+
+function M:handleSkipBtn()
+	if self._skiped then
+		return
+	end
+
+	self._goMusic:SetActive(false)
+	self._btnSkip:SetActive(false)
+
+	self._CgSkip.ignoreParentGroups = false
+	self._CgSkip.blocksRaycasts = false
+	self._skiped = true
+
+	ArkShipManager:skipEnterArkRebuildAnim()
+end
+
+function M:handleStartBtn()
+	local unlock = D.isSystemUnlocked(D.SystemType.ArkRebuild)
+
+	if not unlock then
+		V.showSystemUnlockTips(D.SystemType.ArkRebuild)
+
+		return
+	end
+
+	if P._playerActivity:isLaterTimeRange(self._id, C.getCurTime()) then
+		V.showToast(SID.TIP_EVENT_END)
+		self:closePanel()
+
+		return
+	end
+
+	local isOpening = P._playerActivity:getArkProjActivityNum() > 0
+
+	if not isOpening then
+		V.showToast(SID.STR_ACTIVITY_NOT_OPEN)
+
+		return
+	end
+
+	local data = P._playerActivity:getArkRebuildData()
+
+	if not data then
+		V.showToast(SID.STR_ACTIVITY_NOT_OPEN)
+
+		return
+	end
+
+	self:hideInternal()
+	self._btnSkip:SetActive(false)
+
+	local openNum = P._playerActivity:getOpenedNum(D.ActivityType.ArkRebuild)
+
+	if openNum > 1 or C._config.showDebug then
+		self._btnSkip:SetActive(true)
+
+		self._CgSkip.ignoreParentGroups = true
+		self._CgSkip.blocksRaycasts = true
+	end
+
+	self._goMusic:SetActive(true)
+	ArkShipManager:playEnterArkRebuildAnim(function ()
+		self._skiped = true
+
+		self._btnSkip:SetActive(false)
+
+		local lb = UIManager.openPanel(PrefabDefine.ArkRebuildMainPanel, "preview", self._goArk)
+
+		Trace.traceDesign_Activity("RebuildMainPanel_Enter:%s", nil, D.ActivityType.ArkRebuild, self._cfg._subType)
+		P._playerActivityArkRebuild:dealEnter()
+		self:closePanel(true)
+	end)
+end
+
+function M:updateTimer(selfRefresh)
+	lc.stopTimer(self._secondTimer)
+
+	local isOpening = P._playerActivity:getArkProjActivityNum() > 0
+	local showPreview = false
+
+	if isOpening then
+		local data = P._playerActivity:getArkRebuildData()
+		local targetTime = data.endTime
+
+		self._txtCountdownTitle:SetLocalize(SID.STR_END_IN)
+
+		self._secondTimer = lc.setInterval(function ()
+			local ct = C.getCurTime()
+			local dt = targetTime - ct
+
+			self._txtCountdown:SetLocalize(V.formatTimeSAuto(dt))
+		end, 1)
+
+		self._secondTimer.func()
+
+		return
+	end
+
+	local activityCfg = nil
+	showPreview, activityCfg = P._playerActivity:canPreview(D.ActivityType.ArkRebuild)
+	local startTime = activityCfg._startTime
+	local endTime = activityCfg._endTime
+
+	if startTime < C.getCurTime() then
+		self._txtCountdownTitle:SetLocalize(SID.STR_END_IN)
+	else
+		self._txtCountdownTitle:SetLocalize(SID.STR_BEGIN_IN)
+	end
+
+	if showPreview then
+		self._secondTimer = lc.setInterval(function ()
+			local ct = C.getCurTime()
+			local dt = 0
+
+			if startTime < ct then
+				dt = endTime - ct
+			else
+				dt = startTime - ct
+			end
+
+			self._txtCountdown:SetLocalize(V.formatTimeSAuto(dt))
+
+			if not selfRefresh and startTime <= ct then
+				self:updateTimer(true)
+
+				return
+			end
+		end, 1)
+
+		self._secondTimer.func()
+	end
+end
+
+function M:closePanel(enter)
+	if not enter then
+		ArkShipManager:exitMain()
+		Client.playMusic("music_city")
+	end
+
+	self:clear()
+	M.super.closePanel(self)
+end
+
+function M:clear()
+	lc.stopTimer(self._secondTimer)
+end
+
+function M:OnDestroy()
+	self:clear()
+end
+
+return M

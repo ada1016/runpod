@@ -1,0 +1,146 @@
+local M = class("ActivityItemWidget")
+local item_element_path = "Assets/FW/Prefabs/UI/element/item_element/%s.prefab"
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ActivityItemWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+local txtColor = V.QUALITY_TRIANGLE
+
+function M:init(cid, num)
+	self._cid = cid
+	self._num = num or 0
+
+	LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+	LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", D.toQuality(cid)))
+	LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", D.toQuality(cid)))
+
+	if D.isGem(self._cid) then
+		self:setPart(D._gemConfig[cid]._part)
+	else
+		self:setPart(false)
+	end
+
+	if num and num > 0 then
+		self:setNumText(num)
+	end
+end
+
+function M:rewardclickCallback()
+	if D.isGem(self._cid) then
+		UIManager.openPanel(PrefabDefine.ChipInfoPanel, self._cid)
+	elseif D.isEquip(self._cid) then
+		local id = P._playerRole:searchNearestId(self._cid)
+		local lb = UIManager.openPanel(PrefabDefine.EquipInfoPanel, id)
+
+		lb:hideAction()
+	else
+		UIManager.openPanel(PrefabDefine.ItemInfoPanel, self._cid, self._num)
+	end
+end
+
+function M:setLock(lock)
+	self._imgLock:SetActive(lock)
+end
+
+function M:setPart(part)
+	if not part and not self._imgPart then
+		return
+	end
+
+	if not self._imgPart then
+		self._imgPart = LuaUnity.createGameObject(string.format(item_element_path, "item_imgPart"), self.transform):GetComponent("Image")
+	end
+
+	if part then
+		LuaUnity.setTPSprite(self._imgPart, "general/g_icon_center_small_" .. part, true, true)
+	end
+
+	self._imgPart:SetActive(part and true or false)
+
+	self._imgPart.color = Color.White
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+function M:setNum(show)
+	self._goNum:SetActive(show)
+end
+
+function M:setClaimed(show)
+	self._goClaimed:SetActive(show)
+end
+
+function M:setGetAnim(show, loop)
+	if not show and not self._goAnimGet then
+		return
+	end
+
+	if not self._goAnimGet then
+		if self._tfGetLight.childCount == 0 then
+			self._goAnimGet = LuaUnity.createGameObject(string.format(item_element_path, "item_goAnimGet"), self._tfGetLight)
+		else
+			self._goAnimGet = self._tfGetLight:GetChild(0).gameObject
+		end
+	end
+
+	self._goAnimGet:SetActive(show)
+
+	if loop then
+		self._goAnimGet:GetComponent("Animator"):SetBool("loop", true)
+	end
+end
+
+function M:setCanClaim(show)
+	if not show and not self._goSweep then
+		return
+	end
+
+	if not self._goSweep then
+		if self._tfClaimLight.childCount == 0 then
+			self._goSweep = LuaUnity.createGameObject(string.format(item_element_path, "item_goSweep"), self._tfClaimLight)
+		else
+			self._goSweep = self._tfClaimLight:GetChild(0).gameObject
+		end
+	end
+
+	self._goSweep:SetActive(show)
+
+	if show then
+		self:setGetAnim(true, true)
+	else
+		self:setGetAnim(false)
+	end
+end
+
+function M:setBgLight(show, colorStr)
+	self._tfLight:SetVisible(show)
+
+	if colorStr then
+		self._imgLight.color = Color.str2Static(colorStr)
+	end
+end
+
+function M:setNumText(num)
+	local quality = D.toQuality(self._cid)
+	self._txtNum.enableVertexGradient = quality == D.Quality.COLORFUL
+	self._txtNum.color = Color.str2Static(txtColor[quality])
+	self._txtNum.text = num
+end
+
+return M

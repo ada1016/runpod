@@ -1,0 +1,88 @@
+local M = class("ResearchTipPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	imgItemBg = Types.Image,
+	imgItemIcon = Types.Image,
+	btnUpgrade = Types.Button,
+	txtTitle = Types.TMP_Text,
+	txtDesc = Types.TMP_Text,
+	imgCost1 = Types.Image,
+	imgCost2 = Types.Image,
+	txtCost1 = Types.TMP_Text,
+	txtCost2 = Types.TMP_Text,
+	goBottom = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnUpgrade, function ()
+		local ret, param = P._playerArmory:tryUpgradeGatlin()
+
+		if ret ~= ResultCode.OK then
+			V.showResultCode(ret, param)
+		else
+			if self._rouge then
+				UIManager.openPanel(PrefabDefine.RogueUnlockPanel, self._rouge)
+			else
+				V.showToast(string.gsub(self._txtDesc.text, "<[^>]+>", ""))
+			end
+
+			self:closePanel()
+
+			if self._callback then
+				self._callback()
+			end
+		end
+	end)
+	self._txtDesc:GetComponent("TMP_Text_LinkHandler"):SetLinkClick(function (linkId)
+		UIManager.openPanel(PrefabDefine.WeaponTreePanel, tonumber(linkId))
+	end)
+end
+
+function M:init(level, callback)
+	self._curLevel = P._playerArmory:getWeaponLevel(1) - 1
+	self._callback = callback
+
+	self:updateUI(level)
+end
+
+function M:updateUI(level)
+	local conf = D._gatlinUpgradeConfig[level]
+	local value = conf._bulletDmgAdd or conf._critAdd or conf._critDmgAdd or conf._chargeBulletDmgAdd or conf._chargeBulletCritAdd or conf._smallBulletDmgAdd
+
+	if value then
+		self._txtTitle:SetLocalize(conf._nameSid)
+		self._txtDesc:SetLocalizeS(conf._descSid, tostring(value))
+	elseif D._battleRougeCardConfig[conf._rouge] then
+		self._txtTitle:SetLocalize(conf._nameSid, conf._rouge, -D._battleRougeCardConfig[conf._rouge]._nameSid)
+		self._txtDesc:SetLocalize(conf._descSid, conf._rouge, -D._battleRougeCardConfig[conf._rouge]._nameSid)
+	else
+		self._txtTitle:SetLocalize(conf._nameSid)
+		self._txtDesc:SetLocalize(conf._descSid)
+	end
+
+	if conf._rouge then
+		self._rouge = conf._rouge
+
+		LuaUnity.setTPSprite(self._imgItemBg, "general/g_bg_52", true)
+		LuaUnity.setTPSprite(self._imgItemIcon, D.toResearchSprite(conf), true)
+	else
+		LuaUnity.setTPSprite(self._imgItemBg, "general/g_bg_53", true)
+		LuaUnity.setTPSprite(self._imgItemIcon, D.toResearchSprite(conf), true)
+	end
+
+	if self._curLevel == level - 1 then
+		self._goBottom:SetActive(true)
+		V.loadItemCost(self._imgCost1, self._txtCost1, D.ResType.coin, D._gatlinUpgradeConfig[level]._coinNum, self)
+		V.loadItemCost(self._imgCost2, self._txtCost2, D._weaponConfig[D.WEAPON_GATLIN]._shardId, D._gatlinUpgradeConfig[level]._shardNum, self)
+	else
+		self._goBottom:SetActive(false)
+	end
+end
+
+return M

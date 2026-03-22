@@ -1,0 +1,166 @@
+local M = class("UnionSearchListWidget")
+local UnionFlagWidget = requireLua("UnionFlagWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/UnionSearchListWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel)
+	self._panel = panel
+
+	UnionFlagWidget.noCreate(self._goFlagWidget)
+	panel:on("union.apply.resp", function ()
+		if self._data._applyed then
+			self._btnJoin:SetActive(false)
+			self._btnApply:SetActive(false)
+			self._goApplyed:SetActive(true)
+		end
+	end)
+	panel:setClick(self._btnJoin, function ()
+		if not P._playerUnion:couldJoinUnion() then
+			local h = math.floor((P._playerUnion._meta.join_union_next_timestamp - C.getCurTime()) / 3600)
+			h = math.max(1, h)
+
+			V.showToast({
+				SID.UNION_JOIN_TIPS1,
+				h
+			})
+
+			return
+		end
+
+		if P._playerProfile:getLevel() < self._data.require_level then
+			V.showToast({
+				SID.UNION_APPLY_TIPS1,
+				self._data.require_level
+			})
+
+			return
+		end
+
+		if P._playerRole:getPlayerAtk() < self._data.require_atk then
+			V.showToast({
+				SID.UNION_APPLY_TIPS2,
+				self._data.require_atk
+			})
+
+			return
+		end
+
+		if self._data.max_member_num <= self._data.member_num then
+			V.showToast(SID.UNION_APPLY_TIPS3)
+
+			return
+		end
+
+		self._data._applyed = true
+
+		UnionWaitingPage:showSyncWaiting()
+		P._playerUnion:tryJoinUnionReq(self._id)
+	end)
+	panel:setClick(self._btnApply, function ()
+		if not P._playerUnion:couldJoinUnion() then
+			local h = math.floor((P._playerUnion._meta.join_union_next_timestamp - C.getCurTime()) / 3600)
+			h = math.max(1, h)
+
+			V.showToast({
+				SID.UNION_JOIN_TIPS1,
+				h
+			})
+
+			return
+		end
+
+		if P._playerProfile:getLevel() < self._data.require_level then
+			V.showToast({
+				SID.UNION_APPLY_TIPS1,
+				self._data.require_level
+			})
+
+			return
+		end
+
+		if P._playerRole:getPlayerAtk() < self._data.require_atk then
+			V.showToast({
+				SID.UNION_APPLY_TIPS2,
+				self._data.require_atk
+			})
+
+			return
+		end
+
+		if self._data.max_member_num <= self._data.member_num then
+			V.showToast(SID.UNION_APPLY_TIPS3)
+
+			return
+		end
+
+		self._data._applyed = true
+
+		UnionWaitingPage:showSyncWaiting()
+		P._playerUnion:tryJoinUnionReq(self._id, true)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(true)
+	end)
+	panel:setClickWithoutAction(self._btnUnionDetail, function ()
+		UIManager.openPanel(PrefabDefine.UnionInfoPanel, self._id)
+	end)
+end
+
+function M:update(data)
+	self._data = data
+	self._id = data.id
+
+	self._goFlagWidget:init(data.avatar_base, data.avatar_badge)
+
+	self._textName.text = data.name
+	local langId = data.language
+
+	if langId == 1 or langId == 0 then
+		self._textLang.text = LcLocalization.getTextStr(SID.ALL_LANGUAGE_STR)
+	else
+		self._textLang.text = D.UnionLanguages[langId]
+	end
+
+	self._tmpCount.text = string.format("%d/%d", data.member_num, data.max_member_num)
+	self._tmpAtk.text = data.require_atk
+
+	if P._playerRole:getPlayerAtk() < data.require_atk or P._playerProfile:getLevel() < data.require_level then
+		self._goNotTips:SetActive(true)
+		self._btnJoin:SetActive(false)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(false)
+	else
+		self._btnJoin:SetActive(not data.need_apply)
+		self._btnApply:SetActive(data.need_apply)
+		self._goApplyed:SetActive(false)
+		self._goNotTips:SetActive(false)
+	end
+
+	if self._data._applyed then
+		self._btnJoin:SetActive(false)
+		self._btnApply:SetActive(false)
+		self._goApplyed:SetActive(true)
+	end
+end
+
+return M

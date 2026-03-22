@@ -1,0 +1,575 @@
+local M = class("PlayerBattlePassActivityBase")
+M.Status = {
+	Expired = 3,
+	Locked = 1,
+	Closed = 4,
+	Open = 2
+}
+
+function M:init(meta)
+	self._meta = meta
+	meta.status = meta.status or self.Status.Locked
+	self._step = self.BPCfg.Step
+
+	self:processConfig()
+
+	self._rewardCfg = self._allCfg[self._meta.readPeriod]
+	self._addExpIgnoreLock = self.BPCfg.AddExpIgnoreLock or false
+	self._claimAllDirty = true
+	self._claimNum = 0
+	self._rewardDirty = true
+	self._firstUnclaimRewardLevel = 0
+	self._firstUnclaimRewardStep = 1
+	self._rewardLevel = 0
+	self._claimData = self._meta.claimData
+end
+
+function M:processConfig()
+	self._allCfg = {}
+
+	for id, data in ipairs(self.BPCfg.DataCfg) do
+		if not self._allCfg[data._period] then
+			self._allCfg[data._period] = {}
+		end
+
+		self._allCfg[data._period][data._level] = data
+	end
+
+	self:updateClaimNum()
+end
+
+function M:updateClaimNum()
+	self._claimNum = 0
+
+	if not self._claimData then
+		return
+	end
+
+	for k, v in pairs(self._claimData) do
+		for k, v in pairs(v) do
+			self._claimNum = self._claimNum + 1
+		end
+	end
+end
+
+function M:start()
+	if self:isStatusOpen() then
+		self:updateClaimNum()
+		self:updateRewardLevel()
+	end
+end
+
+function M:dailyReset()
+end
+
+function M:tryUnlockSystem()
+	if self:isStatusOpen() then
+		return
+	end
+
+	if self.BPCfg.SystemId and not D.isSystemUnlocked(self.BPCfg.SystemId) then
+		return
+	end
+
+	self:tryNextPeriod(true)
+end
+
+function M:dealExpired()
+	self:cacheLastPeriodRewards()
+	SimpleEvent.emit(self.BPCfg.ExpireEvent)
+end
+
+function M:tryNextPeriod(isFirst, beginTime, endTime)
+	self._meta.status = M.Status.Open
+	self._claimAllDirty = true
+	self._rewardDirty = true
+	self._claimNum = 0
+	self._meta.unlockSteps = {
+		true
+	}
+	self._rewardLevel = 0
+	self._meta.beginTime = beginTime or C.getTodayZeroTimestamp()
+	self._meta.endTime = endTime or self._meta.beginTime + D.DAY_SECONDS * self.BPCfg.PeriodTime
+
+	if isFirst then
+		self._meta.period = 1
+		self._meta.readPeriod = 1
+		self._meta.lastPeriodRewardsClaimed = true
+
+		if not self._addExpIgnoreLock then
+			self._meta.exp = 0
+		end
+	else
+		self._meta.period = self._meta.period + 1
+		self._meta.readPeriod = self._meta.readPeriod + 1
+		self._meta.lastPeriodRewardsClaimed = false
+		self._meta.exp = 0
+	end
+
+	self._meta.claimData = {}
+	self._claimData = self._meta.claimData
+	self._claimNum = 0
+
+	if self._allCfg[self._meta.readPeriod] == nil then
+		self._meta.readPeriod = 1
+	end
+
+	self._rewardCfg = self._allCfg[self._meta.readPeriod]
+
+	self:updateRewardLevel()
+end
+
+function M:updateRewardLevel()
+	local curExp = self:getCurExp()
+
+	for i, cfg in ipairs(self._rewardCfg) do
+		if cfg._exp <= curExp then
+			self._rewardLevel = cfg._level
+		else
+			break
+		end
+	end
+end
+
+function M:isExpired()
+	return self:getExpireTime() < C.getCurTime()
+end
+
+function M:getLeftTime()
+	return self:getExpireTime() - C.getCurTime()
+end
+
+function M:isClosed()
+	if self._meta.leftPeriodCircle == -1 then
+		return false
+	end
+
+	return self:isStatusClosed()
+end
+
+function M:isStatusLocked()
+	return self._meta.status == M.Status.Locked
+end
+
+function M:isStatusUnlock()
+	return M.Status.Open <= self._meta.status
+end
+
+function M:isStatusOpen()
+	return self._meta.status == M.Status.Open
+end
+
+function M:isStatusExpired()
+	return self._meta.status == M.Status.Expired
+end
+
+function M:isStatusClosed()
+	return self._meta.status == M.Status.Closed
+end
+
+function M:isStepUnlock(step)
+	return self._meta.unlockSteps[step] == true
+end
+
+function M:isClaimed(level, step)
+	return self._claimData[step] and self._claimData[step][level] == true
+end
+
+function M:canClaim(level, step)
+	return self:readUpLevelExp(level) <= self:getCurExp() and self:isStepUnlock(step)
+end
+
+function M:getExpireTime()
+	return self._meta.endTime
+end
+
+function M:cacheLastPeriodRewards()
+	self._meta.status = M.Status.Expired
+	local rewards = self:claimAll(true)
+
+	if rewards and #rewards > 0 then
+		if not self._meta.lastPeriodRewards then
+			self._meta.lastPeriodRewards = {}
+		end
+
+		D.foldRewards(self._meta.lastPeriodRewards, rewards)
+	end
+
+	if self._meta.lastPeriodRewards == nil or #self._meta.lastPeriodRewards == 0 then
+		self:tryNextPeriod()
+	else
+		self._meta.lastPeriodRewardsClaimed = false
+	end
+end
+
+function M:lastPeriodRewardsClaimed()
+	return self._meta.lastPeriodRewardsClaimed, self._meta.lastPeriodRewards
+end
+
+function M:claimLastPeriodRewards()
+	if self:lastPeriodRewardsClaimed() then
+		return
+	end
+
+	local rewards = self._meta.lastPeriodRewards
+	local result = nil
+
+	if rewards and #rewards > 0 then
+		result = self:batchAddRewards(rewards)
+	end
+
+	self._meta.lastPeriodRewardsClaimed = true
+	self._meta.lastPeriodRewards = nil
+
+	self:tryNextPeriod()
+
+	return result
+end
+
+function M:claimAll(cache)
+	if not self._claimAllDirty then
+		return
+	end
+
+	local clevel = self:getCurRewardLevel()
+	local total = nil
+	local unClaimCount = 0
+
+	for step = 1, self._step do
+		if self:isStepUnlock(step) then
+			for lv = self:getFirstRewardLevel(), clevel do
+				if lv > 0 and not self:isClaimed(lv, step) then
+					local cid, num = self:readReward(lv, step)
+
+					if not D.isCustomSelectItem(cid) or P._playerAsset:getItemCustomSelectIdx(cid) then
+						self:setClaimed(lv, step)
+
+						total = total or {}
+
+						D.foldCidsAndNums2Rewards(total, cid, num)
+					else
+						unClaimCount = unClaimCount + 1
+					end
+				end
+			end
+		end
+	end
+
+	self._firstUnclaimRewardLevel = clevel
+	self._firstUnclaimRewardStep = 1
+	self._claimAllDirty = unClaimCount ~= 0
+	self._rewardDirty = unClaimCount ~= 0
+
+	if not cache and total and #total > 0 then
+		total = self:batchAddRewards(total)
+	end
+
+	if self.BPCfg.Reddot then
+		RedDotManager.update(self.BPCfg.Reddot)
+	end
+
+	return total
+end
+
+function M:checkClaimReward(level, step)
+	if self:isClaimed(level, step) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	if not self:canClaim(level, step) then
+		return ResultCode.LOCKED
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryClaimReward(level, step)
+	local ret = self:checkClaimReward(level, step)
+
+	if ret ~= ResultCode.OK then
+		return ret
+	end
+
+	self:setClaimed(level, step)
+
+	local rewards = self:addRewards(level, step)
+	self._rewardDirty = true
+
+	if self.BPCfg.Reddot then
+		RedDotManager.update(self.BPCfg.Reddot)
+	end
+
+	return ResultCode.OK, rewards
+end
+
+function M:batchAddRewards(rewards)
+	return P._playerAsset:increaseAssetNumsByList(rewards, self.BPCfg.LogWay)
+end
+
+function M:addRewards(level, step)
+	local cid, num = self:readReward(level, step)
+	local rewards = P._playerAsset:increaseAssetNum(cid, num, self.BPCfg.LogWay)
+
+	return rewards
+end
+
+function M:claimReward(level, step)
+	self:setClaimed(level, step)
+
+	local rewards = self:addRewards(level, step)
+	self._rewardDirty = true
+
+	if self.BPCfg.Reddot then
+		RedDotManager.update(self.BPCfg.Reddot)
+	end
+
+	return rewards
+end
+
+function M:readReward(level, step)
+	local cids, nums = nil
+
+	if step == 1 then
+		cids, nums = self:readRewardsStep1(level)
+	elseif step == 2 then
+		cids, nums = self:readRewardsStep2(level)
+	elseif step == 3 then
+		cids, nums = self:readRewardsStep3(level)
+	end
+
+	return cids[1], nums[1]
+end
+
+function M:readRewards(level, step)
+	if step == 1 then
+		return self:readRewardsStep1(level)
+	elseif step == 2 then
+		return self:readRewardsStep2(level)
+	elseif step == 3 then
+		return self:readRewardsStep3(level)
+	end
+end
+
+function M:readRewardsStep1(level)
+	local cfg = self._rewardCfg[level]
+
+	return cfg._cids1, cfg._nums1
+end
+
+function M:readRewardsStep2(level)
+	local cfg = self._rewardCfg[level]
+
+	return cfg._cids2, cfg._nums2
+end
+
+function M:readRewardsStep3(level)
+	local cfg = self._rewardCfg[level]
+
+	return cfg._cids3, cfg._nums3
+end
+
+function M:setClaimed(level, step)
+	if self._claimData[step] == nil then
+		self._claimData[step] = {}
+	end
+
+	self._claimData[step][level] = true
+	self._claimNum = self._claimNum + 1
+end
+
+function M:getFirstRewardLevel()
+	if self._rewardDirty then
+		local clevel = self:getCurRewardLevel()
+		local breakAll = false
+		self._firstUnclaimRewardLevel = clevel
+		self._firstUnclaimRewardStep = 1
+
+		for lv = 1, clevel do
+			for step = 1, self._step do
+				if self:isStepUnlock(step) and not self:isClaimed(lv, step) then
+					self._firstUnclaimRewardLevel = lv
+					self._firstUnclaimRewardStep = step
+					breakAll = true
+
+					break
+				end
+			end
+
+			if breakAll then
+				break
+			end
+		end
+
+		self._rewardDirty = false
+	end
+
+	return self._firstUnclaimRewardLevel, self._firstUnclaimRewardStep
+end
+
+function M:haveUnclaimRewards()
+	local lv, step = self:getFirstRewardLevel()
+
+	if lv < 1 then
+		return false
+	end
+
+	if lv < self:getCurRewardLevel() then
+		return true
+	elseif self:isStepUnlock(step) and not self:isClaimed(lv, step) then
+		return true
+	end
+
+	return false
+end
+
+function M:isAllRewardsClaimed()
+	return self._claimNum >= self._step * self:readMaxLevel()
+end
+
+function M:syncExp(targetExp)
+	if not self:isStatusOpen() and (not self:isStatusLocked() or not self._addExpIgnoreLock) then
+		return
+	end
+
+	self:updateClaimNum()
+	self:updateRewardLevel()
+
+	if targetExp <= self:getCurExp() then
+		return
+	end
+
+	local exp = targetExp
+
+	self:setExp(targetExp)
+
+	if self:readUpLevelExp(self:getCurRewardLevel(1)) <= exp then
+		self:tryUpLevel()
+	end
+end
+
+function M:addExp(delta)
+	if not self:isStatusOpen() and (not self:isStatusLocked() or not self._addExpIgnoreLock) then
+		return
+	end
+
+	local exp = self:getCurExp() + (delta or 0)
+
+	self:setExp(exp)
+
+	if self:readUpLevelExp(self:getCurRewardLevel(1)) <= exp then
+		self:tryUpLevel()
+	end
+end
+
+function M:checkAddLevel(delta)
+	if not self:isStatusOpen() then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local costDiamond = delta * 100
+
+	if not P._playerAsset:isAssetEnough(D.ResType.diamond, costDiamond) then
+		return D.ResType.diamond, costDiamond
+	end
+
+	return ResultCode.OK
+end
+
+function M:getUpCostDiamond(deltaLv)
+	return deltaLv * self:readDiamondLvCost()
+end
+
+function M:tryAddLevel(delta)
+	local resultCode, param = self:checkAddLevel(delta)
+
+	if resultCode ~= ResultCode.OK then
+		return resultCode, param
+	end
+
+	local clv = self:getCurRewardLevel()
+	local tlv = self:getCurRewardLevel(delta)
+	local cExp = self:readUpLevelExp(clv)
+	local tExp = self:readUpLevelExp(tlv)
+	local dExp = tExp - cExp
+
+	self:addExp(dExp)
+
+	return ResultCode.OK
+end
+
+function M:setExp(exp)
+	self._meta.exp = exp
+end
+
+function M:getCurRewardLevel(delta)
+	delta = delta or 0
+
+	return Mathf.Clamp(self._rewardLevel + delta, 0, self:readMaxLevel())
+end
+
+function M:getCurExp()
+	return self._meta.exp
+end
+
+function M:tryUpLevel()
+	local maxLevel = self:readMaxLevel()
+	local level = self:getCurRewardLevel()
+	local oldLv = level
+
+	if level == maxLevel then
+		return
+	end
+
+	local exp = self:getCurExp()
+	local maxExp = self._rewardCfg[level + 1]._exp
+
+	while maxExp <= exp and level < maxLevel do
+		level = level + 1
+
+		if maxLevel > level then
+			maxExp = self._rewardCfg[level + 1]._exp
+		end
+
+		Trace.traceDesign("Bplevel:%s:%d", self.BPCfg.Design_BP_Level, level)
+	end
+
+	if oldLv ~= level then
+		self._rewardLevel = level
+		self._claimAllDirty = true
+		self._rewardDirty = true
+
+		if self.BPCfg.Reddot then
+			RedDotManager.update(self.BPCfg.Reddot)
+		end
+
+		SimpleEvent.emit(self.BPCfg.LevelEvent)
+	end
+end
+
+function M:readMaxLevel()
+	return #self._rewardCfg
+end
+
+function M:readUpLevelExp(level)
+	return self._rewardCfg[level] and self._rewardCfg[level]._exp or 0
+end
+
+function M:unlockStep(step, logEvent)
+	if self._meta == nil then
+		return
+	end
+
+	self._meta.unlockSteps[step] = true
+	self._claimAllDirty = true
+	self._rewardDirty = true
+
+	if self.BPCfg.Reddot then
+		RedDotManager.update(self.BPCfg.Reddot)
+	end
+end
+
+function M:readDiamondLvCost()
+	return D._battlePassAllConfig[self.BPCfg.BPType]._costDiamond
+end
+
+return M

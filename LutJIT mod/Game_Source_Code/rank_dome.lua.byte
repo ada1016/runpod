@@ -1,0 +1,456 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		1,
+		20,
+		dup._467,
+		{
+			1,
+			2000
+		}
+	},
+	[4] = {
+		4,
+		1,
+		81,
+		999,
+		dup._92,
+		dup._466
+	},
+	[3] = {
+		3,
+		1,
+		51,
+		80,
+		dup._467,
+		{
+			1,
+			1000
+		}
+	},
+	[2] = {
+		2,
+		1,
+		21,
+		50,
+		dup._467,
+		{
+			1,
+			1500
+		}
+	},
+	[8] = {
+		8,
+		2,
+		81,
+		999,
+		dup._92,
+		{
+			2500
+		}
+	},
+	[7] = {
+		7,
+		2,
+		51,
+		80,
+		dup._468,
+		{
+			1,
+			3000
+		}
+	},
+	[6] = {
+		6,
+		2,
+		21,
+		50,
+		dup._468,
+		{
+			1,
+			3500
+		}
+	},
+	[5] = {
+		5,
+		2,
+		1,
+		20,
+		dup._468,
+		{
+			1,
+			4000
+		}
+	},
+	[12] = {
+		12,
+		3,
+		81,
+		999,
+		dup._92,
+		{
+			4500
+		}
+	},
+	[11] = {
+		11,
+		3,
+		51,
+		80,
+		dup._469,
+		{
+			1,
+			5000
+		}
+	},
+	[10] = {
+		10,
+		3,
+		21,
+		50,
+		dup._469,
+		{
+			1,
+			5500
+		}
+	},
+	[9] = {
+		9,
+		3,
+		1,
+		20,
+		dup._469,
+		{
+			1,
+			6000
+		}
+	},
+	[16] = {
+		16,
+		4,
+		81,
+		999,
+		dup._470,
+		{
+			2,
+			6500
+		}
+	},
+	[15] = {
+		15,
+		4,
+		51,
+		80,
+		dup._470,
+		{
+			4,
+			7000
+		}
+	},
+	[14] = {
+		14,
+		4,
+		21,
+		50,
+		dup._471,
+		{
+			1,
+			6,
+			7500
+		}
+	},
+	[13] = {
+		13,
+		4,
+		1,
+		20,
+		dup._471,
+		{
+			1,
+			8,
+			8000
+		}
+	},
+	[20] = {
+		20,
+		5,
+		81,
+		999,
+		dup._470,
+		{
+			10,
+			8500
+		}
+	},
+	[19] = {
+		19,
+		5,
+		51,
+		80,
+		dup._470,
+		{
+			12,
+			9000
+		}
+	},
+	[18] = {
+		18,
+		5,
+		21,
+		50,
+		dup._472,
+		{
+			1,
+			14,
+			9500
+		}
+	},
+	[17] = {
+		17,
+		5,
+		1,
+		20,
+		dup._472,
+		{
+			1,
+			16,
+			10000
+		}
+	},
+	[24] = {
+		24,
+		6,
+		81,
+		999,
+		dup._470,
+		{
+			18,
+			10500
+		}
+	},
+	[23] = {
+		23,
+		6,
+		51,
+		80,
+		dup._470,
+		{
+			20,
+			11000
+		}
+	},
+	[22] = {
+		22,
+		6,
+		21,
+		50,
+		dup._473,
+		{
+			1,
+			22,
+			11500
+		}
+	},
+	[21] = {
+		21,
+		6,
+		1,
+		20,
+		dup._473,
+		{
+			1,
+			24,
+			12000
+		}
+	},
+	[28] = {
+		28,
+		7,
+		81,
+		999,
+		dup._474,
+		{
+			60,
+			26,
+			12500
+		}
+	},
+	[27] = {
+		27,
+		7,
+		51,
+		80,
+		dup._474,
+		{
+			80,
+			28,
+			13000
+		}
+	},
+	[26] = {
+		26,
+		7,
+		21,
+		50,
+		dup._474,
+		{
+			100,
+			30,
+			13500
+		}
+	},
+	[25] = {
+		25,
+		7,
+		1,
+		20,
+		{
+			15108,
+			10002,
+			10011,
+			10001
+		},
+		{
+			1,
+			120,
+			32,
+			14000
+		}
+	},
+	[32] = {
+		32,
+		8,
+		81,
+		999,
+		dup._474,
+		{
+			140,
+			34,
+			14500
+		}
+	},
+	[31] = {
+		31,
+		8,
+		51,
+		80,
+		dup._474,
+		{
+			160,
+			36,
+			15000
+		}
+	},
+	[30] = {
+		30,
+		8,
+		21,
+		50,
+		dup._474,
+		{
+			180,
+			38,
+			15500
+		}
+	},
+	[29] = {
+		29,
+		8,
+		1,
+		20,
+		{
+			15109,
+			10002,
+			10011,
+			10001
+		},
+		{
+			1,
+			200,
+			40,
+			16000
+		}
+	}
+}
+local mapKeyIndex = {
+	k14126503 = 3,
+	k4797140 = 5,
+	k8820899 = 2,
+	k14125465 = 4,
+	k12956039 = 6,
+	k1644150 = 1
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + 5038
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + 5038
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

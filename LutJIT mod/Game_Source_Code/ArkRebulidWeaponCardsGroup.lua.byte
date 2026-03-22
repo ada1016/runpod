@@ -1,0 +1,103 @@
+local M = class("ArkRebulidWeaponCardsGroup")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(cfg)
+	self._goWeaponCards = {}
+	self._weaponOrderedIds = {}
+	self._scale = 1
+	self._showCombo = false
+	self._showCardLib = true
+
+	for i = 1, 5 do
+		local card = self._tfWeaponCards:GetChild(i - 1).gameObject
+
+		WeaponCardWidget.noCreate(card)
+
+		self._goWeaponCards[i] = card
+	end
+
+	self._cg = self:GetComponent("CanvasGroup")
+	self._cgWeapons = self._goWeaponArea:GetComponent("CanvasGroup")
+end
+
+function M:getWeaponCardByIdx(idx)
+	return self._goWeaponCards[idx]
+end
+
+function M:initWeaponCardsByData(selectWeapons, weaponStars, poses)
+	self._weaponOrderedIds = selectWeapons
+	self._rogueChooseNumByWeaponId = weaponStars
+
+	for i = 1, 5 do
+		self._goWeaponCards[i]:updateUI(selectWeapons[i], weaponStars[i], true)
+		self._goWeaponCards[i]:showComboBtn(self._showCombo)
+		self._goWeaponCards[i]:updateMax(weaponStars[i] == 12)
+	end
+end
+
+function M:addComboClicks(panel)
+	for i = 1, 5 do
+		local card = self._goWeaponCards[i]
+
+		panel:setClick(card._btnCombo, function ()
+			UIManager.openPanel(PrefabDefine.BattleUpgradeCombinationPanel, self._weaponOrderedIds[i])
+		end)
+	end
+end
+
+function M:addCardBrowserClicks(panel)
+	for i = 1, 5 do
+		local card = self._goWeaponCards[i]
+
+		if self._weaponOrderedIds[i] then
+			panel:setClick(card._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.ActivityArkRebuildCardsEditPanel, self._weaponOrderedIds[i], nil, true)
+			end)
+		end
+	end
+end
+
+function M:resetUI()
+	self._cg.ignoreParentGroups = false
+	self._cg.alpha = 1
+	self._cgWeapons.alpha = 1
+
+	for i = 1, 5 do
+		self._goWeaponCards[i]:SetActive(true)
+	end
+end
+
+function M:initCardLib()
+	self._atorCardLib:SetInteger("step", 0)
+end
+
+function M:openCardLib()
+	if not self._showCardLib then
+		return
+	end
+
+	self._atorCardLib:SetInteger("step", 1)
+end
+
+function M:closeCardLib()
+	if not self._showCardLib then
+		return
+	end
+
+	self._atorCardLib:SetInteger("step", 2)
+end
+
+function M:resumeCardLib()
+	self._atorCardLib:SetInteger("step", 3)
+end
+
+return M

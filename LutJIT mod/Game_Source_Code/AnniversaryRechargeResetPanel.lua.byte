@@ -1,0 +1,38 @@
+local M = class("AnniversaryRechargeResetPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnClose = Types.Button,
+	btnBG = Types.Button,
+	tmpDesc = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnBG, function ()
+		self:closePanel()
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+end
+
+function M:init()
+	self._module = P._playerActivityAnniversary._moduleRecharge
+
+	self._tmpDesc:SetLocalize(SID.STR_DOUBLE_DIAMOND_REFRESHED)
+	self:updateUI()
+end
+
+function M:updateUI()
+end
+
+return M

@@ -1,0 +1,110 @@
+local M = {}
+_G.BattleLogger = M
+
+function M:init()
+end
+
+function M:addLog(tag, str)
+	if lc._isMobile then
+		return
+	end
+
+	if Client._config.ignore_log_export then
+		return
+	end
+
+	str = string.format("[%s] - %s", tag, str)
+
+	if self._logs == nil then
+		self._logs = table.new(4096, 0)
+	end
+
+	self._logs[#self._logs + 1] = str
+end
+
+function M:clearLogs()
+	if self._logs then
+		table.clear(self._logs)
+	end
+end
+
+function M:exportLogs(name)
+	if lc._isMobile then
+		return
+	end
+
+	local path = nil
+
+	if name and name ~= "" then
+		path = string.format(D.BATTLE_UNIT_TEST_DIR .. "/out_battle_log/%s.txt", name)
+	else
+		path = string.format(D.BATTLE_UNIT_TEST_DIR .. "/out_battle_log/battle_log_%s.txt", os.date("%y-%m-%d %H-%M-%S"))
+	end
+
+	local content = table.concat(self._logs, "\n")
+
+	FileUtils.WriteFile(path, content)
+end
+
+local t = {
+	0,
+	0,
+	0
+}
+
+function M:readOperationsFromDisk(name)
+	name = string.format("_battle_logs/%s.txt", name)
+	local f = io.open(name, "r")
+
+	if f == nil then
+		return
+	end
+
+	local opertaions = {}
+
+	while true do
+		local s = f:read("*line")
+
+		if s == nil then
+			break
+		end
+
+		local index = 1
+
+		for word in string.gmatch(s, "%-?%d+") do
+			t[index] = tonumber(word)
+			index = index + 1
+		end
+
+		opertaions[#opertaions + 1] = {
+			_tick = t[1],
+			_opType = t[2],
+			_p1 = t[3]
+		}
+	end
+
+	f:close()
+
+	return opertaions
+end
+
+function M:writeOperationsToDisk(operations)
+	FileUtils.CreateDirectory("_battle_logs")
+
+	local name = string.format("_battle_logs/battle_log_%s.txt", os.date("%y_%m_%d_%H_%M"))
+	local f = io.open(name, "w")
+
+	if f == nil then
+		return
+	end
+
+	for i = 1, #operations do
+		local op = operations[i]
+
+		f:write(string.format("%d: %d %d\n", op._tick, op._opType, op._p1))
+	end
+
+	f:close()
+end
+
+return M

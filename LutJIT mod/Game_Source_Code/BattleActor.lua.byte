@@ -1,0 +1,476 @@
+local math = math
+local Mathf = Mathf
+local M = class("BattleActor", requireLua("BattleBattery"))
+local SUPER = M.super
+local BattleDefine = BattleDefine
+local BattlePropEnum = BattlePropEnum
+local BattleEffectEnum = BattleEffectEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._sessionView = battleSession._sessionView
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._targetX = 0
+	self._targetY = 0
+	self._position = Vector3.retain(0, 0, 0)
+	self._handRadius = 2
+	self._vec2Right = Vector3.retain(0, 0, 0)
+	self._rotateSpeed = 100
+	self._moveSpeed = BattleDefine.ATOR_MOVE_SPEED
+	self._currentMoveSpeed = self._moveSpeed
+	self._angle = 90
+	self._facingRight = true
+	self._cachedDeltaMoveX = 0
+	self._bodyCenterYOffset = 0.47
+	self._heading = Vector3.retain(0, 0, 0)
+	self._bodyCenterPosition = Vector3.retain(0, 0, 0)
+	self._handShootPosition1 = Vector3.retain(0, 0, 0)
+	self._handShootPosition2 = Vector3.retain(0, 0, 0)
+	self._rotation = Quaternion.retain(0, 0, 0, 0)
+	self._shootDistance = 0.4
+	self._handDeltaX = 0.15
+	self._bulletOffset = 0.15
+	self._isFiring = false
+	self._energy = 0
+	self._boostering = false
+	self._boosterSkillId = BattleDefine.BOOSTER_SKILL_ID
+
+	self:updateBodyCenter()
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleActorView").new(battleSession)
+	end
+
+	self._effect102Parmas = D._battleEffectConfig[102]._params
+	local chipEffPar = self._battleSession:getEffect(153)
+
+	if chipEffPar then
+		self._effect153Actived = true
+	end
+end
+
+function M:init(cid, index)
+	SUPER.init(self, cid, index)
+
+	if BattleManager:isMissionPVP() then
+		self._targetX = BattleDefine.WeaponPovit_PVP[index][1]
+	end
+
+	self._position.x = self._targetX
+end
+
+function M:shiftBooster()
+	self._boostering = not self._boostering
+
+	if self._boostering then
+		self._mainSkill = self._skillsMap[self._boosterSkillId]
+		local duration = BattleDefine.BOOSTER_DURATION + self._mainSkill:getProp(BattlePropEnum.BoosterAdd, 0)
+		self._boosterDurationMax = duration + duration * self._mainSkill:getProp(BattlePropEnum.BoosterAddPer, 0) / 100
+		self._boosterDuration = duration + duration * self._mainSkill:getProp(BattlePropEnum.BoosterAddPer, 0) / 100
+		self._moveSpeed = BattleDefine.ATOR_MOVE_SPEED * (1 + D._battleGlobalConfig._booster_move_speed_add_per / 100)
+		self._currentMoveSpeed = self._moveSpeed
+		self._killEnemyCount102 = 0
+		self._effect102_addUpNum = 0
+	else
+		self._moveSpeed = BattleDefine.ATOR_MOVE_SPEED
+		self._currentMoveSpeed = self._moveSpeed
+		self._mainSkill = self._skillsMap[1]
+	end
+
+	if not self._battleSession:isSkipView() then
+		self._view:energyEvent(self._boostering)
+	end
+end
+
+function M:setTargetX(x)
+	self._targetX = x
+end
+
+function M:setTargetY(y)
+	self._targetY = y
+end
+
+function M:createCloneAtor()
+end
+
+function M:onSuperTransFinished()
+	self._cd = 0.1
+	self._position.x = self._targetX
+	self._position.y = self._targetY
+	self._angle = 90
+end
+
+function M:step(dt)
+	if self._stage == 2 then
+		self._transCD = self._transCD - dt
+
+		if self._transCD <= 0 then
+			self._transCD = 1.5
+			self._stage = 3
+			self._cd = 10000
+
+			if self._view then
+				self._view:onAtorReadyTrans()
+			end
+		end
+
+		return
+	end
+
+	if self._stage == 3 then
+		self._transCD = self._transCD - dt
+
+		if self._transCD <= 0 then
+			self._transCD = nil
+			self._stage = 4
+
+			self:onSuperTransFinished()
+
+			if self._view then
+				self._view:onSuperTransFinished()
+			end
+		end
+
+		return
+	end
+
+	if self._boostering then
+		if self._boosterDuration <= 0 then
+			self:shiftBooster()
+		end
+
+		if not self._isClone and not self._battleSession:isSkipView() then
+			self._sessionView:energyEvent(self._boosterDuration / self._boosterDurationMax)
+		end
+	end
+
+	self:stepSkillCountDown(dt)
+
+	if self._isSuper then
+		local targetAngle = nil
+		local isPress = self._battleSession:isPress()
+
+		if isPress then
+			self._targetEnemy = nil
+			targetAngle = 90
+		else
+			local targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery3(self)
+			self._targetEnemy = targetEnemy
+
+			if targetEnemy then
+				targetAngle = BattleMathLib.angle(targetEnemy._position, self._position)
+			else
+				targetAngle = 90
+			end
+		end
+
+		self._position.x = math.lerp(self._position.x, self._targetX, dt * self._currentMoveSpeed)
+		self._position.y = math.lerp(self._position.y, self._targetY, dt * self._currentMoveSpeed)
+		local angle = Mathf.MoveTowardsAngle(self._angle, targetAngle, self._rotateSpeed * dt * 2)
+		self._angle = angle
+
+		self._rotation:SetEuler(0, 0, angle)
+
+		if self._view then
+			self._view:posEvent()
+			self._view:rotationEvent()
+		end
+
+		return
+	end
+
+	local targetEnemy = self._battleSession._battleEnemyFinder:findNearestEnemyWithBattery(self, self._atkRange + 0.2)
+	self._targetEnemy = targetEnemy
+	local inAttackRange = self:isTargetEnemyInAttackRange()
+
+	if targetEnemy and (targetEnemy._type == BattleDefine.EnemyType.Elite or targetEnemy._type == BattleDefine.EnemyType.Boss) then
+		inAttackRange = true
+	end
+
+	self._isFiring = inAttackRange
+	local centerAngle = 90
+	local targetAngle = centerAngle
+	local isPress = self._battleSession:isPress()
+	local autoRotate2Target = not isPress
+
+	if isPress then
+		self._angle = centerAngle
+		targetAngle = centerAngle
+	elseif autoRotate2Target and targetEnemy then
+		self._heading:SetXYZ(targetEnemy._position.x - self._bodyCenterPosition.x, targetEnemy._position.y - self._bodyCenterPosition.y, 0)
+
+		targetAngle = math.deg(math.atan2(self._heading.y, self._heading.x))
+	end
+
+	local nextX = math.lerp(self._position.x, self._targetX, dt * self._currentMoveSpeed)
+	self._cachedDeltaMoveX = math.abs(nextX - self._position.x)
+	local isMovingRight = self._targetX - self._position.x > 0
+	local isMoving = self._cachedDeltaMoveX > 0
+	self._position.x = nextX
+	local angle = Mathf.MoveTowardsAngle(self._angle, targetAngle, self._rotateSpeed * dt)
+	self._angle = angle
+
+	self._rotation:SetEuler(0, 0, angle)
+	self:updateBodyCenter()
+	self:updateShootPositions()
+	self:updateIKHand()
+
+	if isPress then
+		if isMoving then
+			self:updateFacingDir(isMovingRight)
+		end
+	elseif self._angle ~= centerAngle then
+		self:updateFacingDir(self._angle < centerAngle)
+	end
+
+	if self._view then
+		self._view:stepEvent(dt)
+	end
+end
+
+function M:getMoveSpeedPercent()
+	return self._currentMoveSpeed / self._moveSpeed
+end
+
+function M:isTargetEnemyInAttackRange()
+	if self._isSuper then
+		return true
+	end
+
+	return SUPER.isTargetEnemyInAttackRange(self)
+end
+
+function M:onFireBullet(isLeft)
+	if self._view then
+		-- Nothing
+	end
+end
+
+function M:updateIKHand()
+end
+
+function M:updateFacingDir(facingRight)
+	self._facingRight = facingRight
+end
+
+function M:updateBodyCenter()
+	self._bodyCenterPosition:Set(self._position):AddXYZ(0, self._bodyCenterYOffset, 0)
+end
+
+function M:updateShootPositions()
+	local offset = (self._facingRight and -1 or 1) * self._bulletOffset
+
+	self._handShootPosition1:Set(self._bodyCenterPosition):AddXYZ(self._rotation:MulVec3XYZ(self._shootDistance, -self._handDeltaX + offset, 0))
+	self._handShootPosition2:Set(self._bodyCenterPosition):AddXYZ(self._rotation:MulVec3XYZ(self._shootDistance, self._handDeltaX + offset, 0))
+end
+
+function M:getShootPositionLeft()
+	return self._handShootPosition1
+end
+
+function M:getShootPositionRight()
+	return self._handShootPosition2
+end
+
+local SHOOT_SOUND = {
+	"se_Bullet_1_1",
+	"se_Bullet_1_2",
+	"se_Bullet_1_3"
+}
+
+function M:castSkill()
+	if self._delayShiftBooster then
+		self._delayShiftBooster = nil
+
+		self:shiftBooster()
+	end
+
+	if self._boostering then
+		self._boosterDuration = self._boosterDuration - 1
+	end
+
+	local isLeft = self._skillCastedCount % 2 == 0
+	local shootPosition = nil
+
+	if self._isSuper then
+		shootPosition = self._handShootPosition1
+		shootPosition.x = self._position.x - (isLeft and -0.15 or 0.15)
+		shootPosition.y = self._position.y
+	elseif isLeft then
+		shootPosition = self:getShootPositionLeft()
+	else
+		shootPosition = self:getShootPositionRight()
+	end
+
+	local num = self._mainSkill:getProp(BattlePropEnum.Salvo, 0)
+	num = num + 1
+	local bulletDistance = D._battleGlobalConfig._ator_bullet_distance[lc.numberClamp(num, 1, #D._battleGlobalConfig._ator_bullet_distance)]
+
+	self._vec2Right:SetXYZ(self._rotation:MulVec3XYZ(0, 1, 0))
+
+	for i = 1, num do
+		local len = bulletDistance * (i - (1 + num) / 2)
+		local bullet = self._mainSkill:createBullet()
+
+		bullet:setPos(shootPosition.x + self._vec2Right.x * len, shootPosition.y + self._vec2Right.y * len)
+		bullet:setDirByAngle(self._angle)
+
+		bullet._isLeft = isLeft
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+
+		if i == 1 then
+			bullet._isCouldTrigger = true
+
+			bullet:tryTriggerWhenCast()
+		end
+	end
+
+	if self._view then
+		if not self._isSuper then
+			if self._facingRight then
+				self._view:shootEvent(isLeft)
+			else
+				self._view:shootEvent(not isLeft)
+			end
+		end
+
+		if not self._isClone and self._mainSkill._id == 1 then
+			Client.playBattleSound(SHOOT_SOUND[math.random(1, 3)])
+		end
+	end
+
+	self:tryEffect101()
+	self:tryEffect108()
+end
+
+function M:onEffectDitry(id)
+	if id == 101 then
+		self._delayShiftBooster = true
+
+		if self._view then
+			self._sessionView._goEnergyBar:SetActive(true)
+		end
+	elseif id == 106 then
+		self._fireFlag = true
+	elseif id == 10000 then
+		if self._isClone then
+			self._targetX = -1.5
+		elseif self:getEffect(107) then
+			self._targetX = 1.5
+		else
+			self._targetX = 0
+		end
+
+		self._targetY = 4
+		self._transCD = 1.5
+		self._stage = 2
+	end
+end
+
+function M:tryEffect101()
+	if not self:getEffect(101) then
+		return
+	end
+
+	if self._boostering then
+		return
+	end
+
+	local params = D.getBattleEffectParams(101)
+	local energy = params[1]
+	self._energy = self._energy + energy + 1 * self._mainSkill:getProp(BattlePropEnum.BoosterEnergyAddPer, 0) / 100
+
+	if BattleDefine.BOOSTER_ENERGY <= self._energy then
+		self._energy = 0
+
+		self:shiftBooster()
+	end
+
+	if not self._isClone and not self._battleSession:isSkipView() then
+		self._sessionView:energyEvent(self._energy / BattleDefine.BOOSTER_ENERGY)
+	end
+end
+
+function M:tryEffect108()
+	if not self:getEffect(108) then
+		return
+	end
+
+	self._effect108Count = (self._effect108Count or 0) + 1
+	local p = D.getBattleEffectParams(108)
+
+	if self._effect108Count % p[1] == 0 then
+		self:castSkill108()
+
+		self._effect108Count = 0
+	end
+end
+
+function M:onEnemyKilled()
+	if not self._boostering then
+		local param = self:getEffect(152)
+
+		if param then
+			self._energy = self._energy + param
+		end
+
+		return
+	end
+
+	if not self:getEffect(102) then
+		return
+	end
+
+	self._killEnemyCount102 = self._killEnemyCount102 + 1
+
+	if self._effect102Parmas[1] <= self._killEnemyCount102 then
+		self._killEnemyCount102 = 0
+
+		if self._effect102_addUpNum < self._effect102Parmas[3] then
+			self._effect102_addUpNum = self._effect102_addUpNum + self._effect102Parmas[2]
+			self._boosterDuration = self._boosterDuration + self._effect102Parmas[2]
+		end
+	end
+end
+
+function M:castSkill108()
+	local param = D.getBattleEffectParams(108)
+	local castSkill = self:getSkill(108)
+	local shootAngle = 90
+
+	if self._isSuper then
+		shootAngle = self._angle
+	end
+
+	local l_angle = shootAngle + param[3]
+	local r_angle = shootAngle - param[3]
+	local atkRange = castSkill:getProp(BattlePropEnum.AtkRange, 0)
+	atkRange = atkRange + atkRange * castSkill:getProp(BattlePropEnum.AtkRangeAddPer, 0) / 100
+	local liveTime = atkRange / castSkill:getProp(BattlePropEnum.BallisticSpeed)
+	local speedFloat = param[4]
+	local shootPosX = self._position.x
+	local shootPosY = self._position.y
+	local num = param[2]
+
+	for i = 1, num do
+		local bullet = castSkill:createBullet()
+		local angle = self._battleRandomLib:randomMN(r_angle, l_angle)
+
+		bullet:setPos(shootPosX, shootPosY)
+		bullet:setDirByAngle(angle)
+
+		bullet._duration = liveTime
+		bullet._floatSpeedPer = self._battleRandomLib:randomMN(-speedFloat, speedFloat)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+end
+
+return M

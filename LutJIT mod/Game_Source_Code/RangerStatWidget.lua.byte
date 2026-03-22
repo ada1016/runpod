@@ -1,0 +1,27 @@
+local M = class("RanagerStatWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/SkinStatWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	SimpleItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:init(cid, prop)
+	self._goItem:init(cid)
+
+	local cfg = P._playerRanger:getCfg(cid)
+
+	self._txtSkinName:SetLocalize(cfg._nameSid)
+
+	local star = P._playerRanger:getRangerLevel(cid)
+	self._txtSkinValue.text = "+" .. cfg[prop][star] .. "%"
+
+	V.setRangerQualityStar(self._goStarsArea, cfg._quality, star)
+end
+
+return M

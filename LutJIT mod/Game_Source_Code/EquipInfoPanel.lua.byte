@@ -1,0 +1,91 @@
+local M = class("EquipInfoPanel", requireLua("BasePanel"))
+local Types = Types
+local Equip = requireLua("Equip")
+M.args = {
+	btnBg = Types.Button,
+	btnEquip = Types.Button,
+	btnDecompose = Types.Button,
+	goNow = Types.GameObject,
+	goAttribute = Types.GameObject
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addClicks()
+	self:setClick(self._btnBg, function ()
+		self:closePanel()
+	end)
+	self:setClick(self._btnEquip, function ()
+		P._playerRole:repalceSlotEquip(self._id, self._part)
+		self._replaceCallback()
+		self:closePanel()
+	end)
+	self:setClick(self._btnDecompose, function ()
+		self:dealDecompose()
+	end)
+end
+
+function M:init(id, replaceCallback)
+	if type(id) == "number" then
+		self._id = id
+		self._replaceCallback = replaceCallback
+		self._thisEquip = P._playerRole:getEquipById(id)
+		self._part = self._thisEquip:part()
+	else
+		self._thisEquip = Equip.create(id)
+		self._part = self._thisEquip:part()
+	end
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	if self._id then
+		self._btnEquip:SetActive(false)
+		self._btnDecompose:SetActive(true)
+		self._goNow:SetActive(true)
+	else
+		self._btnEquip:SetActive(false)
+		self._btnDecompose:SetActive(false)
+		self._goNow:SetActive(false)
+	end
+
+	V.loadEquipAttribute(self._goAttribute, self._thisEquip)
+end
+
+function M:hideAction()
+	self._btnEquip:SetActive(false)
+	self._btnDecompose:SetActive(false)
+end
+
+function M:dealDecompose()
+	local gold = self._thisEquip:decomposeMat()
+	local params = {
+		_title = SID.TITLE_DECOMPOSE,
+		_content = SID.STR_GET,
+		_items = {
+			{
+				D.ResType.equip_refine_mat,
+				gold
+			}
+		},
+		_fcConfirm = function ()
+			P._playerRole:decomposeEquips({
+				self._id
+			})
+			V.showRewardClaimPanel({
+				{
+					D.ResType.equip_refine_mat,
+					gold
+				}
+			})
+			self:closePanel()
+		end
+	}
+
+	UIManager.openPanel(PrefabDefine.ConfirmPanel, params)
+end
+
+return M

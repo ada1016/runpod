@@ -1,0 +1,160 @@
+local M = class("NofificationPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	tfContainer = Types.Transform
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._cells = {}
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("day.cross", function ()
+	end)
+end
+
+function M:init()
+	local cfgs = D._notificationConfig
+	local showIds = {}
+
+	for id, cfg in ipairs(cfgs) do
+		if P._playerNotification:showInSetting(id) then
+			showIds[#showIds + 1] = id
+		end
+	end
+
+	table.sort(showIds, function (a, b)
+		return P._playerNotification:readSettingOrder(a) < P._playerNotification:readSettingOrder(b)
+	end)
+
+	self._showIds = showIds
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	local count1 = self._tfContainer.childCount
+	local count2 = #self._showIds
+	local tmpGo = self._tfContainer:GetChild(0).gameObject
+
+	for i = 1, math.max(count1, count2) do
+		if i <= count2 then
+			local nType = self._showIds[i]
+
+			if not self._cells[i] then
+				if i <= count1 then
+					self._cells[i] = self._tfContainer:GetChild(i - 1).gameObject
+				else
+					self._cells[i] = GameObject.Instantiate(tmpGo, self._tfContainer)
+				end
+
+				lc.prefabVarPeer(self._cells[i])
+			end
+
+			self._cells[i]:SetActive(true)
+			self:setClick(self._cells[i]._btnSwitch, function ()
+				self:dealToggle(i)
+			end)
+
+			local nameSid, descSid = P._playerNotification:readSettingShowSid(nType)
+
+			self._cells[i]._txtName:SetLocalize(nameSid)
+			self._cells[i]._txtDesc:SetLocalize(descSid)
+			self:updateToggleUI(i)
+		elseif self._cells[i] then
+			self._cells[i]:SetActive(false)
+		end
+	end
+end
+
+function M:updateToggleUI(idx)
+	local cell = self._cells[idx]
+	local isOpen = P._playerNotification:isSettingOpen(idx)
+
+	cell._goSwitchOn:SetActive(isOpen)
+	cell._goSwitchOff:SetActive(not isOpen)
+end
+
+local IDX_2_NTYPE = {
+	D.NotificationType.MainOffline_Full,
+	D.NotificationType.ArkRebuildOffline_Full,
+	D.NotificationType.EnergyRecover_Full,
+	D.NotificationType.RangerEgg_Incubate,
+	D.NotificationType.Player_Return
+}
+
+function M:dealToggle(idx)
+	local nType = IDX_2_NTYPE[idx]
+
+	if not nType then
+		return
+	end
+
+	local notifyConsole = LcNotifycationConsole.Instance
+	local needCheckPermission = not P._playerNotification:isSettingOpen(nType)
+	local isGranted = notifyConsole:IsNotificationGranted()
+
+	if not lc._isMobile then
+		isGranted = true
+	end
+
+	needCheckPermission = needCheckPermission and not isGranted
+
+	if needCheckPermission then
+		local function dealFunc()
+			if notifyConsole:IsUserDetermined() and lc._isMobile then
+				notifyConsole:OpenNotificationSettings()
+			else
+				notifyConsole:TryStartRequestPermission(function (result)
+				end)
+			end
+		end
+
+		local ret = V.tryShowConfirmWithParams("notification_open", dealFunc, {
+			contentSid = SID.TIP_NOTIFICATION_OPEN,
+			confirmSid = SID.STR_OPEN
+		})
+
+		if ret then
+			return
+		end
+
+		dealFunc()
+	end
+
+	P._playerNotification:toggleNotification(nType)
+	self:updateToggleUI(idx)
+end
+
+function M:closePanel()
+	local permissionBitCode = 0
+
+	for idx = 4, 1, -1 do
+		permissionBitCode = permissionBitCode * 10
+		local nType = IDX_2_NTYPE[idx]
+		permissionBitCode = permissionBitCode + (P._playerNotification:isSettingOpen(nType) and 1 or 0)
+	end
+
+	Trace.traceDesign("Notify_Details:%s", string.format("%.4d", permissionBitCode))
+	M.super.closePanel(self)
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:OnFocus()
+	self:updateUI()
+end
+
+return M

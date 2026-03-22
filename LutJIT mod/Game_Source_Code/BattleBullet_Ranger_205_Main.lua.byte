@@ -1,0 +1,178 @@
+local M = class("BattleBullet_Ranger_205_Main", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._atkTotalNum = battleSkill:getProp(BattlePropEnum.DamageNum, 0)
+	self._atkNum = 0
+	self._rightX = self._battleSession._screenEdgeX2
+	self._topY = self._battleSession._screenEdgeY2
+	self._leftX = self._battleSession._screenEdgeX1
+	self._downY = 3
+
+	if self._battleWeapon:getEffect(20502) then
+		if self._delayBullets == nil then
+			self._delayBullets = table.new(16, 0)
+		else
+			table.clear(self._delayBullets)
+		end
+	end
+
+	if self._view then
+		self._view._ani = self._view._obj:GetComponent("Animation")
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+end
+
+function M:enemyBeHitBefore(enemy)
+	if self._battleWeapon:getEffect(20503) then
+		local p = self._battleSkill:getProp(BattlePropEnum.BattlePropParam2, 100)
+
+		if enemy._hp / enemy._maxHp < p / 100 then
+			local triggerSkill = self._battleWeapon:getSkill(20501)
+			local bullet = triggerSkill:createBullet()
+
+			bullet:lockEnemy(enemy)
+		end
+	end
+end
+
+function M:markToBeDestroyed()
+	local triggerSkill = self._battleWeapon:getSkill(20502)
+
+	if triggerSkill then
+		local bullet = triggerSkill:createBullet()
+		bullet._dmgDelay = (self._atkTotalNum - self._atkNum) * self._battleSkill:getProp(BattlePropEnum.LiveDuration, 0)
+
+		bullet:setPos(self._position.x, self._position.y)
+		bullet:setDirByAngle(self._angle)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:rotationEvent()
+		end
+	end
+
+	self._atkNum = self._atkNum + 1
+
+	if self._atkNum == self._atkTotalNum then
+		if self._view then
+			self._view._ani = nil
+		end
+
+		SUPER.markToBeDestroyed(self)
+	else
+		self._duration = self._battleSkill:getProp(BattlePropEnum.LiveDuration, 0)
+
+		self:clearEnemyHitted()
+		self:startClip(not self._left)
+	end
+end
+
+function M:startClip(left)
+	local enemy = self._battleSession:randomOneEnemy(nil, self._battleWeapon, 2)
+
+	if enemy == nil then
+		SUPER.markToBeDestroyed(self)
+
+		return
+	end
+
+	self._left = left
+
+	if left then
+		if self._battleRandomLib:randomTrue() then
+			self:flyTop2DownFromLeft(enemy)
+		else
+			self:flyDown2TopFromLeft(enemy)
+		end
+	elseif self._battleRandomLib:randomTrue() then
+		self:flyDown2TopFromRight(enemy)
+	else
+		self:flyTop2DownFromRight(enemy)
+	end
+
+	if self._view then
+		self._view:posEvent()
+		self._view:rotationEvent()
+		self._view._ani:Stop()
+		self._view._ani:Play()
+		C.playBattleSound("se_Ranger_150005_bullet")
+	end
+end
+
+function M:flyTop2DownFromLeft(enemy)
+	local angle_top1 = BattleMathLib.angle(enemy._position, opt.vec2_1:Set(self._leftX, self._topY))
+	local angle_top2 = BattleMathLib.angle(opt.vec2_1:Set(self._rightX, self._downY), enemy._position)
+	local angle_top = math.max(angle_top1, angle_top2)
+	local angle = self._battleRandomLib:randomMN(angle_top, 0)
+	local rad = math.rad(math.abs(angle))
+	local l = enemy._position.x - self._leftX
+	local dty = math.tan(rad) * l
+	local x = self._leftX
+	local y = enemy._position.y + dty
+
+	self:setPos(x, y)
+	self:setDirByAngle(angle)
+end
+
+function M:flyDown2TopFromLeft(enemy)
+	local angle_down1 = BattleMathLib.angle(opt.vec2_1:Set(self._rightX, self._topY), enemy._position)
+	local angle_down2 = BattleMathLib.angle(enemy._position, opt.vec2_1:Set(self._leftX, self._downY))
+	local angle_down = math.min(angle_down1, angle_down2)
+	local angle = self._battleRandomLib:randomMN(0, angle_down)
+	local rad = math.rad(math.abs(angle))
+	local l = enemy._position.x - self._leftX
+	local dty = math.tan(rad) * l
+	local x = self._leftX
+	local y = enemy._position.y - dty
+
+	self:setPos(x, y)
+	self:setDirByAngle(angle)
+end
+
+function M:flyDown2TopFromRight(enemy)
+	local angle_top2 = BattleMathLib.angle(opt.vec2_1:Set(self._leftX, self._topY), enemy._position)
+	local angle_top1 = BattleMathLib.angle(enemy._position, opt.vec2_1:Set(self._rightX, self._downY))
+	local angle_top = math.max(angle_top1, angle_top2)
+	local angle = self._battleRandomLib:randomMN(angle_top, 180)
+	local rad = math.rad(180 - angle)
+	local l = self._rightX - enemy._position.x
+	local dty = math.tan(rad) * l
+	local x = self._rightX
+	local y = enemy._position.y - dty
+
+	self:setPos(x, y)
+	self:setDirByAngle(angle)
+end
+
+function M:flyTop2DownFromRight(enemy)
+	local angle_top2 = BattleMathLib.angle(opt.vec2_1:Set(self._leftX, self._downY), enemy._position) + 360
+	local angle_top1 = BattleMathLib.angle(enemy._position, opt.vec2_1:Set(self._rightX, self._topY)) + 360
+	local angle_top = math.min(angle_top1, angle_top2)
+	local angle = self._battleRandomLib:randomMN(180, angle_top)
+	local rad = math.rad(angle - 180)
+	local l = self._rightX - enemy._position.x
+	local dty = math.tan(rad) * l
+	local x = self._rightX
+	local y = enemy._position.y + dty
+
+	self:setPos(x, y)
+	self:setDirByAngle(angle)
+end
+
+return M

@@ -1,0 +1,53 @@
+local M = class("RangerEquipWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RangerEquipWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(equip, isOthers)
+	self._id = equip.id
+	local cid = equip.cid
+
+	LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", D.toQuality(cid)))
+	LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", D.toQuality(cid)))
+	LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+
+	if not isOthers then
+		self:setLock(P._playerRanger:isRangerEquipLocked(self._id) ~= nil)
+
+		local rangerId = P._playerRanger:getUsingRangerId(self._id)
+
+		if rangerId then
+			self._goRanger:SetActive(true)
+			LuaUnity.setTPSprite(self._imgRanger, "itemSmall/item_small_" .. rangerId, true)
+		else
+			self._goRanger:SetActive(false)
+		end
+	else
+		self._goRanger:SetActive(false)
+	end
+
+	self._goNum:SetActive(false)
+end
+
+function M:setChoose(choose)
+	self._imgChoose:SetActive(choose)
+end
+
+function M:setNew(new)
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+function M:setLock(lock)
+	self._imgLock:SetActive(lock)
+end
+
+return M

@@ -1,0 +1,67 @@
+local M = class("EquipDecomposeTipPanel", requireLua("BasePanel"))
+local Types = Types
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnMask = Types.Button,
+	btnClose = Types.Button,
+	txtContent = Types.TMP_Text,
+	goItem = Types.GameObject,
+	goRefineRefund = Types.GameObject,
+	txtRefineRefund = Types.TMP_Text,
+	btnConfirm = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goItem)
+end
+
+function M:addClicks()
+	self:setClick(self._btnConfirm, function ()
+		local num = self._equip:decomposeMat()
+
+		P._playerRole:decomposeEquips({
+			self._id
+		})
+		V.showRewardClaimPanel({
+			{
+				D.ResType.equip_refine_mat,
+				num
+			}
+		})
+		self:closePanel()
+
+		if self._callback then
+			self._callback()
+		end
+	end)
+end
+
+function M:init(id, callback)
+	self._id = id
+	self._equip = P._playerRole:getEquipById(id)
+	self._callback = callback
+
+	self._goItem:init(D.ResType.equip_refine_mat, self._equip:decomposeMat())
+	self:setClick(self._goItem._btnClick, function ()
+		self._goItem:rewardclickCallback()
+	end)
+
+	if self._equip:refineCount() > 0 then
+		self._goRefineRefund:SetActive(true)
+
+		self._txtRefineRefund.text = math.floor(self._equip:refineCount() * D._equipRefineConfig[self._equip:grade() * 10 + self._equip:quality()]._cost * 0.7)
+	else
+		self._goRefineRefund:SetActive(false)
+
+		local x, y, z = lc.getLocalPosition(self._goItem)
+		y = y - 46
+
+		lc.setLocalPosition(self._goItem, x, y, z)
+	end
+end
+
+return M

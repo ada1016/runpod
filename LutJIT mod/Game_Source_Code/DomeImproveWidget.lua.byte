@@ -1,0 +1,36 @@
+local M = class("DomeImproveWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/DomeImproveWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVarPeer(go, go.peer)
+
+	return go
+end
+
+function M:setLevel(level)
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+end
+
+function M:setDesc(desc, param)
+	self._txtDesc:SetLocalizeS(desc, param)
+	V.setBuffLinkClick(self._txtDesc)
+end
+
+function M:setLock(lock, isMax)
+	self._btnEnhance:SetActive(not lock and not isMax)
+	self._goMaxArea:SetActive(not lock and isMax)
+	self._btnLock:SetActive(lock)
+	self._imgLock:SetActive(lock)
+end
+
+function M:setDot(dot)
+	self._imgDot:SetActive(dot)
+end
+
+function M:setUpgradeArrow(dot)
+	self._goArrow:SetActive(dot)
+end
+
+return M

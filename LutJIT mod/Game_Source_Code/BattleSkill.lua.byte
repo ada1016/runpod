@@ -1,0 +1,826 @@
+local M = class("BattleSkill", requireLua("BattleAbility"))
+local SUPER = M.super
+local BattleSession = nil
+local BattlePropEnum = BattlePropEnum
+local math_floor = math.floor
+local table = table
+local BattleEntityFactory = BattleEntityFactory
+local BattleDefine = BattleDefine
+local DestroyReason = BattleDefine.DestroyReason
+local type = type
+local band = bit.band
+local SimpleEntityFactory = requireLua("SimpleEntityFactory")
+local BattleSkillTrigger = requireLua("BattleSkillTrigger")
+local BattleSkillConfig = requireLua("BattleSkillConfig")
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+	self._subSkillsMap = table.new(0, 8)
+end
+
+function M:init(cid, battleWeapon)
+	self._id = cid
+	self._cid = cid
+	self._battleWeapon = battleWeapon
+	self._castWeapon = nil
+	self._cfg = D._battleSkillConfig[cid]
+	self._useOptimization = self._cfg._useOptimization
+	self._defyInvisibility = self._cfg._defyInvisibility
+	self._dmgRate = self._cfg._dmgRate / 10000
+
+	if self._dmgRate < 0 then
+		self._dmgRate = (self._battleSession:getEffect(-self._cfg._dmgRate) or 0) / 100
+	end
+
+	self._dmgRate = self._dmgRate * (battleWeapon._dmgRateFactor or 1)
+
+	if cid == 10026 and self._battleSession:getEffect(10001) then
+		self._dmgRate = self._battleSession:getEffect(10001) / 100
+	end
+
+	self._dmgType = self._cfg._dmgType or 0
+	self._cd = self._cfg._cd
+	self._destroyType = self._cfg._destroyType
+	self._bulletScript = self._cfg._bulletScript
+	self._belongId = self._cfg._belongId or self._cid
+	self._audio = self._cfg._audio
+	self._readPropMode = self._cfg._readPropMode
+	self._readProps = self._cfg._readProps
+	self._refSkill = self._cfg._refSkill
+	self._excludeRefProps = self._cfg._excludeRefProps
+	self._inheritAttachBuffs = self._cfg._inheritAttachBuffs
+	self._inheritProps = self._cfg._inheritProps
+	self._dmgSource = self._cfg._dmgSource
+	self._extraRate = nil
+	local cfgEx = BattleSkillConfig[cid]
+
+	if cfgEx then
+		for k, v in pairs(cfgEx) do
+			self[k] = v
+		end
+	end
+
+	if self._id == 1 then
+		local chipEffPar = self._battleSession:getEffect(153)
+
+		if chipEffPar and (self._id == 1 or self._id == 101) then
+			self._dmgType = 8
+		end
+	end
+
+	self._fireBulletCount = 0
+
+	self:initBulletFactory()
+	self:initAttachBuffs()
+	self:initProps()
+	self:initTriggers()
+end
+
+function M:addSubSkill(id)
+	self._subSkillsMap[id] = true
+end
+
+function M:getSubSkill(id)
+	if self._subSkillsMap[id] then
+		return self._battleWeapon:getSkill(id)
+	end
+end
+
+function M:initBulletFactory()
+	if self._bulletScript == 0 then
+		return
+	end
+
+	local script = BattleDefine.BattleBulletScript[self._bulletScript]
+
+	if not BattleDefine.BattleBulletNoView[self._bulletScript] then
+		self._viewScript = "BattleBulletView"
+	end
+
+	self._bulletFactory = SimpleEntityFactory.create(script, BattleDefine.BulletFactoryCapacity[self._id] or 4)
+end
+
+function M:initTriggers()
+	if BattleSkillTrigger[self._id] then
+		self._triggers = BattleSkillTrigger[self._id]
+	end
+end
+
+function M:getProp(k, defaultVal, skipGlobal)
+	local value = nil
+
+	if not skipGlobal then
+		value = self._battleSession:getProp(k)
+	end
+
+	if self._refSkill then
+		local refParams = self._refSkill
+		local battleWeapon = self._battleSession:getWeapon(refParams[1])
+
+		if battleWeapon then
+			local battleSkill = battleWeapon:getSkill(refParams[2])
+
+			if battleSkill then
+				local exclude = false
+				local excludeRefProps = self._excludeRefProps
+
+				if excludeRefProps then
+					for i = 1, #excludeRefProps do
+						if excludeRefProps[i] == k then
+							exclude = true
+						end
+					end
+				end
+
+				if not exclude then
+					local readVal = battleSkill:getProp(k, nil, true)
+
+					if readVal then
+						return readVal + (value or 0)
+					end
+
+					return (value or 0) + (defaultVal or 0)
+				end
+			end
+		end
+	end
+
+	if self._readPropMode then
+		if self._readPropMode[1] == 1 then
+			local readProps = self._readProps
+
+			for i = 1, #readProps do
+				if readProps[i] == k then
+					local readVal = self._battleWeapon._mainSkill:getProp(k, nil, true)
+
+					if readVal then
+						return readVal + (value or 0)
+					end
+				end
+			end
+		elseif self._readPropMode[1] == 13 then
+			local battleSkill = self._battleWeapon:getSkill(self._readPropMode[2])
+
+			if battleSkill then
+				local readVal = battleSkill:getProp(k, nil, true)
+
+				if readVal then
+					return readVal + (value or 0)
+				end
+			end
+
+			local readProps = self._readProps
+
+			for i = 1, #readProps do
+				if readProps[i] == k then
+					local readVal = self._battleWeapon._mainSkill:getProp(k, nil, true)
+
+					if readVal then
+						return readVal + (value or 0)
+					end
+				end
+			end
+		end
+	end
+
+	if self._inheritProps and self._battleWeapon._propsMap then
+		for i = 1, #self._inheritProps do
+			if self._inheritProps[i] == k and self._battleWeapon._propsMap[k] then
+				value = (value or 0) + self._battleWeapon._propsMap[k]
+			end
+		end
+	end
+
+	if self._propsMap and self._propsMap[k] then
+		value = (value or 0) + self._propsMap[k]
+	end
+
+	if not skipGlobal and self._battleWeapon._inheritPropsMap and self._battleWeapon._inheritPropsMap[k] then
+		value = (value or 0) + self._battleWeapon._inheritPropsMap[k]
+	end
+
+	if not skipGlobal and self._battleWeapon._propsOutMap and self._battleWeapon._propsOutMap[k] then
+		value = (value or 0) + self._battleWeapon._propsOutMap[k]
+	end
+
+	if self._propsOutMap and self._propsOutMap[k] then
+		value = (value or 0) + self._propsOutMap[k]
+	end
+
+	return value or defaultVal
+end
+
+function M:hasProp(k)
+	if self._battleSession:getProp(k) then
+		return true
+	end
+
+	return self._propsMap and self._propsMap[k]
+end
+
+function M:addProp(k, v)
+	SUPER.addProp(self, k, v)
+
+	if self._battleWeapon and self._battleWeapon.onPropDitry then
+		self._battleWeapon:onPropDitry(k, v, self)
+	end
+end
+
+function M:calExtraRate(bullet, enemy)
+	local extraRate = 0
+	local effPar = self._battleSession:getEffect(11)
+
+	if effPar then
+		local params = D.getBattleEffectParams(11)
+
+		if enemy._hp / enemy._maxHp >= params[1] / 100 then
+			extraRate = extraRate + effPar / 100
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(13)
+
+	if effPar then
+		local params = D.getBattleEffectParams(13)
+
+		if self._battleSession._elapsedTime <= params[1] then
+			extraRate = extraRate + effPar / 100
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(14)
+
+	if effPar then
+		local params = D.getBattleEffectParams(14)
+
+		if enemy._position.y - BattleDefine.DOME_POSY <= params[1] then
+			extraRate = extraRate + effPar / 100
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(15)
+
+	if effPar and (enemy._type == BattleDefine.EnemyType.Elite or enemy._type == BattleDefine.EnemyType.Boss) then
+		extraRate = extraRate + effPar / 100
+	end
+
+	local effPar = self._battleSession:getEffect(16)
+
+	if effPar then
+		local params = D.getBattleEffectParams(16)
+
+		if self._battleSession._blood / self._battleSession._maxBlood <= params[1] / 100 then
+			extraRate = extraRate + effPar / 100
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(17)
+
+	if effPar then
+		local n = enemy:negativeBuffCount()
+
+		if n > 0 then
+			extraRate = extraRate + effPar / 100
+		end
+	end
+
+	local effPar = self._battleSession:getEffect(23)
+
+	if effPar then
+		local params = D.getBattleEffectParams(23)
+		extraRate = extraRate + self._battleRandomLib:randomMN(params[1], effPar) / 100
+	end
+
+	local effPar = self._battleSession:getEffect(28)
+
+	if effPar then
+		extraRate = extraRate + (self._battleSession._weaponCount - 1) * effPar / 100
+	end
+
+	local effPar = self._battleSession:getEffect(32)
+
+	if effPar then
+		extraRate = extraRate + self._battleSession._battleRouge:getRougeSelectNum() * effPar[2] / 100
+	end
+
+	return extraRate
+end
+
+function M:natureDmgAddPer(nature)
+	local dmgAddPer = 0
+	local natureAtk = 0
+	local level = self:getProp(BattlePropEnum.SkillLevel, 1)
+
+	for i = 1, 6 do
+		if band(2^(i - 1), nature) > 0 then
+			natureAtk = natureAtk + self:getProp(BattlePropEnum.AtkNature1 - 1 + i, 0)
+		end
+
+		if band(2^(i - 1), nature) > 0 then
+			dmgAddPer = dmgAddPer + self:getProp(BattlePropEnum.DamageNature1Per - 1 + i, 0) / 100
+		end
+	end
+
+	return dmgAddPer, natureAtk
+end
+
+local dmg_module_s = {
+	20000,
+	20001,
+	20002,
+	20003,
+	20004
+}
+
+function M:moduleDmgAddPer(bullet, enemy)
+	local dmgAddPer = 0
+
+	for i = 1, #dmg_module_s do
+		local s = dmg_module_s[i]
+		local v1 = self._battleSession:getEffect(s)
+
+		if v1 then
+			local p = D.getBattleEffectParams(s)
+
+			if enemy._race == p[1] then
+				dmgAddPer = dmgAddPer + v1 / 100
+			end
+		end
+	end
+
+	local v1 = self._battleSession:getEffect(20008)
+
+	if v1 then
+		local p = D.getBattleEffectParams(20008)
+
+		if self._battleSession._blood / self._battleSession._maxBlood <= p[1] / 100 then
+			dmgAddPer = dmgAddPer + v1 / 100
+		end
+	end
+
+	return dmgAddPer
+end
+
+function M:damage(bullet, enemy, extraRate, readDmgMode)
+	local damage = nil
+
+	if self._readDmgMode == 2 then
+		local atk = self:getProp(BattlePropEnum.Atk, 0)
+		damage = atk * bullet._atkPercent
+	elseif readDmgMode == 2 then
+		local atk = self:getProp(BattlePropEnum.Atk, 0)
+		damage = atk * self._dmgRate
+	else
+		extraRate = extraRate or 0
+		extraRate = extraRate + self:calExtraRate(bullet, enemy)
+		local dmgAddPer = self:getProp(BattlePropEnum.DmgAddPer, 0) / 100
+		dmgAddPer = dmgAddPer + extraRate
+
+		if bullet then
+			dmgAddPer = dmgAddPer + bullet._damageAddPer / 100
+		end
+
+		dmgAddPer = dmgAddPer + self:getProp(BattlePropEnum.DmgAddPer1, 0) / 100
+		dmgAddPer = dmgAddPer + self:getProp(BattlePropEnum.DmgAddPer2, 0) / 100
+
+		if self._battleWeapon:getEffect(503) then
+			local params = D.getBattleEffectParams(503)
+			dmgAddPer = dmgAddPer + math.min(params[1] / enemy._speed, params[2] / 100)
+		end
+
+		if bullet then
+			local val = bullet._battleSkill:getProp(BattlePropEnum.BulletDmgAddPerFor1)
+
+			if val then
+				val = val / 100
+				dmgAddPer = dmgAddPer + val * enemy._hp / enemy._maxHp
+			end
+		end
+
+		local v1 = self._battleSession:getEffect(20013)
+
+		if v1 then
+			local p = D.getBattleEffectParams(20013)
+
+			if self._battleSession:getBatteryCount() < p[1] then
+				dmgAddPer = dmgAddPer + v1 / 100
+			end
+		end
+
+		if self._battleWeapon:getEffect(203) and self._id == self._battleWeapon._mainSkill._id then
+			local count = enemy:negativeBuffCount()
+
+			if count > 0 then
+				local params = D.getBattleEffectParams(203)
+				local addPer = math.min(params[1] * count, params[2])
+				extraRate = extraRate + addPer / 100
+			end
+		end
+
+		if bullet then
+			local buffId = enemy:hasBuffType(BattleBuffEnum.VulnerableForThunder)
+
+			if buffId then
+				local buff = enemy:getBuff(buffId)
+
+				if bullet._battleSkill._id == buff._params[1] then
+					extraRate = extraRate + buff._val / 100
+				end
+			end
+		end
+
+		local chipEffPar = self._battleSession:getEffect(34)
+
+		if chipEffPar then
+			dmgAddPer = dmgAddPer + self._battleSession._inRangeNearbyDome * chipEffPar / 100
+		end
+
+		if self._battleSession._eliteOrBossNum and self._battleSession._eliteOrBossNum > 0 then
+			local chipEffPar = self._battleSession:getEffect(35)
+
+			if chipEffPar then
+				dmgAddPer = dmgAddPer + chipEffPar / 100
+			end
+		end
+
+		if bullet and bullet._battleSkill._id == 20300 then
+			local buff = enemy:getBuff(20301)
+
+			if buff then
+				dmgAddPer = dmgAddPer + buff._val / 100
+			end
+		end
+
+		if bullet and enemy and (enemy._type == BattleDefine.EnemyType.Boss or enemy._type == BattleDefine.EnemyType.Elite) then
+			dmgAddPer = dmgAddPer + bullet._battleSkill:getProp(BattlePropEnum.DmgAddPerForEliteOrBoss, 0) / 100
+		end
+
+		local playerAtk = self:getProp(BattlePropEnum.Atk, 0)
+
+		if self._dmgSource == 2 or self._dmgSource == 1 then
+			local atk = playerAtk
+
+			if self._castWeapon then
+				local weaponAtk = self:getProp(BattlePropEnum.WeaponAtkBegin + self._castWeapon._id, 0)
+				atk = atk + weaponAtk
+			else
+				local weaponAtk = self:getProp(BattlePropEnum.WeaponAtkBegin + self._battleWeapon._id, 0)
+				atk = atk + weaponAtk
+			end
+
+			local dmgAddPer_temp, natureAtk = self:natureDmgAddPer(self._dmgType)
+			atk = atk + natureAtk
+			dmgAddPer = dmgAddPer + dmgAddPer_temp
+			dmgAddPer = dmgAddPer + self:moduleDmgAddPer(bullet, enemy)
+			local levelDmgAddPer = nil
+
+			if self._battleWeapon._id == D.WEAPON_GATLIN or self._battleWeapon._id == D.WEAPON_GATLIN_CLONE then
+				if self._id == BattleDefine.BOOSTER_SKILL_ID then
+					levelDmgAddPer = self._battleWeapon:getSkill(1):getProp(BattlePropEnum.ChargeBulletDmgAdd, 0) / 100
+				else
+					levelDmgAddPer = self._battleWeapon:getSkill(1):getProp(BattlePropEnum.NormalBulletDmgAdd, 0) / 100
+				end
+
+				if self._id == 104 then
+					dmgAddPer = dmgAddPer + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.SmallBulletDmgAdd, 0) / 100
+				end
+			elseif self._castWeapon then
+				local level = self._castWeapon._mainSkill:getProp(BattlePropEnum.SkillLevel, 1)
+				levelDmgAddPer = (level - 1) * 8 / 100
+			else
+				local level = self._battleWeapon._mainSkill:getProp(BattlePropEnum.SkillLevel, 1)
+				levelDmgAddPer = (level - 1) * 8 / 100
+			end
+
+			local outDmgAddPer = self:getProp(BattlePropEnum.DmgOutAddPer, 0) / 100
+
+			if self._dmgSource == 2 then
+				outDmgAddPer = outDmgAddPer + self:getProp(BattlePropEnum.DmgOutAddPerOnlyBattery, 0) / 100
+			end
+
+			damage = self._dmgRate * atk * (1 + levelDmgAddPer + outDmgAddPer + dmgAddPer)
+
+			if damage < self._dmgRate * atk / 10 then
+				damage = self._dmgRate * atk / 10
+			end
+		elseif self._dmgSource == 3 then
+			local atk = self._battleWeapon.atk
+			local dmgAddPer_temp, natureAtk = self:natureDmgAddPer(self._dmgType)
+			dmgAddPer = dmgAddPer + dmgAddPer_temp
+			dmgAddPer = dmgAddPer + self:moduleDmgAddPer(bullet, enemy)
+			local outDmgAddPer = self:getProp(BattlePropEnum.DmgOutAddPer, 0) / 100
+			damage = self._dmgRate * atk * (1 + outDmgAddPer + dmgAddPer)
+		end
+	end
+
+	if enemy._position.y < BattleDefine.BATTLE_ADD_DMG_RANGE1 then
+		damage = damage * 1.1
+	elseif BattleDefine.BATTLE_ADD_DMG_RANGE2 < enemy._position.y then
+		damage = damage * 0.9
+	end
+
+	local critRate = self:getProp(BattlePropEnum.CritRate, 0) + 5
+
+	if self._id == BattleDefine.BOOSTER_SKILL_ID then
+		critRate = critRate + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.ChargeBulletCritAdd, 0)
+	elseif self._id ~= self._battleWeapon._mainSkill._id then
+		if self._castWeapon then
+			critRate = critRate + self._castWeapon._mainSkill:getProp(BattlePropEnum.CritRate, 0)
+		else
+			critRate = critRate + self._battleWeapon._mainSkill:getProp(BattlePropEnum.CritRate, 0)
+		end
+	end
+
+	local critDmgPower = 1
+
+	if enemy._maxHp == enemy._hp then
+		local effPar = self._battleSession:getEffect(30)
+
+		if effPar then
+			critRate = 100
+		end
+	end
+
+	if self._battleWeapon:getEffect(20501) then
+		local p = self:getProp(BattlePropEnum.BattlePropParam1, 100)
+
+		if enemy._hp / enemy._maxHp > p / 100 then
+			critRate = 100
+		end
+	end
+
+	local critDmgRate = 0
+	local isCrit = false
+
+	if critRate > 0 and self._battleRandomLib:randomTrue(critRate) then
+		isCrit = true
+		damage = damage * self:getCritDmgRate(bullet)
+	end
+
+	local finalDmgPer = 0
+
+	if self._dmgSource == 2 then
+		finalDmgPer = self:getProp(BattlePropEnum.DmgFinalAllAddPerOnlyBattery, 0)
+	end
+
+	if self._battleSession._skillFinalDmgPer then
+		finalDmgPer = finalDmgPer + self._battleSession._skillFinalDmgPer
+	end
+
+	if self._battleWeapon._propsMap and self._battleWeapon._propsMap[BattlePropEnum.DmgFinalAddPer] then
+		finalDmgPer = finalDmgPer + self._battleWeapon._propsMap[BattlePropEnum.DmgFinalAddPer]
+	end
+
+	if self._battleWeapon._propsOutMap and self._battleWeapon._propsOutMap[BattlePropEnum.DmgFinalAddPer] then
+		finalDmgPer = finalDmgPer + self._battleWeapon._propsOutMap[BattlePropEnum.DmgFinalAddPer]
+	end
+
+	if self._battleWeapon._tempFinalDmgPer then
+		finalDmgPer = finalDmgPer + self._battleWeapon._tempFinalDmgPer
+	end
+
+	damage = damage * (1 + finalDmgPer / 100)
+
+	return damage, isCrit
+end
+
+function M:getPlayerAtk()
+	return self:getProp(BattlePropEnum.Atk, 0)
+end
+
+function M:limitSkillDmg(dmg, maxAtkRate)
+	return math.min(dmg, self:getPlayerAtk() * maxAtkRate)
+end
+
+function M:getCritDmgRate(bullet)
+	local critDmg = self:getProp(BattlePropEnum.CritDmg, 0)
+
+	if self._id == BattleDefine.BOOSTER_SKILL_ID then
+		critDmg = critDmg + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.CritDmg, 0, true)
+	elseif self._id ~= self._battleWeapon._mainSkill._id then
+		if self._battleWeapon._id == D.WEAPON_GATLIN or self._battleWeapon._id == D.WEAPON_GATLIN_CLONE then
+			critDmg = critDmg + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.CritDmg, 0, true)
+		elseif self._castWeapon then
+			critDmg = critDmg + self._castWeapon._mainSkill:getProp(BattlePropEnum.CritDmg, 0, true)
+		else
+			critDmg = critDmg + self._battleWeapon._mainSkill:getProp(BattlePropEnum.CritDmg, 0, true)
+		end
+	end
+
+	if self._battleWeapon._id == D.WEAPON_GATLIN or self._battleWeapon._id == D.WEAPON_GATLIN_CLONE then
+		local critDmgGatlin = self:getProp(BattlePropEnum.CritDmgGatlin, 0)
+
+		if self._id == BattleDefine.BOOSTER_SKILL_ID then
+			critDmgGatlin = critDmgGatlin + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.CritDmgGatlin, 0, true)
+		elseif self._id ~= 1 then
+			critDmgGatlin = critDmgGatlin + self._battleWeapon:getSkill(1):getProp(BattlePropEnum.CritDmgGatlin, 0, true)
+		end
+
+		return (125 + critDmg) / 100 * (100 + critDmgGatlin) / 100
+	else
+		return (125 + critDmg) / 100
+	end
+end
+
+function M:getBasicDamageRate()
+	return self._dmgRate + self:getProp(BattlePropEnum.DmgAdd, 0)
+end
+
+function M:appendBuff(k, v, enemy, bullet)
+	local pass = true
+	local t = nil
+
+	if type(v) == "table" then
+		t = v[1]
+
+		if v[2] == 1 then
+			pass = self._battleRandomLib:randomTrue(v[3])
+		elseif v[2] == 2 then
+			if not enemy:hasBuffType(v[3]) then
+				pass = false
+			end
+		elseif v[2] == 3 then
+			local effVal = self._battleSession:getEffect(v[3])
+			pass = self._battleRandomLib:randomTrue(effVal)
+		end
+	else
+		t = v
+
+		if k == 35 then
+			t = self._battleSession:getEffect(10004)
+		end
+	end
+
+	if pass then
+		if k == BattleDefine.BuffId.rbp_burn then
+			t = t + self:getProp(BattlePropEnum.BurnDurationAdd, 0)
+		end
+
+		local addPer = 0
+
+		if D._battleBuffConfig[k]._negative then
+			t = t + self:getProp(BattlePropEnum.NegativeEffectAdd, 0)
+			addPer = self:getProp(BattlePropEnum.NegativeEffectAddPer, 0) / 100
+		end
+
+		if k == BattleDefine.BuffId.thunderbolt_paralysis then
+			addPer = addPer + self:getProp(BattlePropEnum.BuffThunderParalysisTimeAddPer, 0) / 100
+		elseif k == BattleDefine.BuffId.physics_vulnerableFor then
+			addPer = addPer + self:getProp(BattlePropEnum.BuffPenetratorVulnerableForPhysicsTimeAddPer, 0) / 100
+		end
+
+		t = t + t * addPer
+
+		enemy:addBuff(k, t, self, bullet)
+	end
+end
+
+function M:appendBuffsToEnemy(enemy, bullet)
+	if enemy._isToBeDestroyed then
+		return
+	end
+
+	local block = false
+
+	if self._refSkill then
+		local refParams = self._refSkill
+		local battleWeapon = self._battleSession:getWeapon(refParams[1])
+
+		if battleWeapon then
+			local battleSkill = battleWeapon:getSkill(refParams[2])
+
+			if battleSkill then
+				block = true
+				local attachBuffs = battleSkill._attachBuffsMap
+
+				if attachBuffs then
+					for k, v in pairs(attachBuffs) do
+						self:appendBuff(k, v, enemy, bullet)
+					end
+				end
+			end
+		end
+	end
+
+	if not block then
+		local attachBuffs = self._attachBuffsMap
+
+		if attachBuffs then
+			for k, v in pairs(attachBuffs) do
+				self:appendBuff(k, v, enemy, bullet)
+			end
+		end
+	end
+
+	if self._inheritAttachBuffs then
+		local attachBuffs = self._battleWeapon._attachBuffsMap
+
+		if attachBuffs then
+			for i = 1, #self._inheritAttachBuffs do
+				local attachBuff = self._inheritAttachBuffs[i]
+
+				if attachBuffs[attachBuff] then
+					self:appendBuff(attachBuff, attachBuffs[attachBuff], enemy, bullet)
+				end
+			end
+		end
+	end
+
+	if self._battleWeapon._inheritAttachBuffsMap then
+		local attachBuffs = self._battleWeapon._inheritAttachBuffsMap
+
+		if attachBuffs then
+			for k, v in pairs(attachBuffs) do
+				self:appendBuff(k, v, enemy, bullet)
+			end
+		end
+	end
+end
+
+function M:castSkill()
+	return self:createBullet()
+end
+
+function M:createBullet(castWeapon)
+	local bulletId = self._battleSession:assignBulletId()
+	local bullet = self._bulletFactory:getEntity(self._battleSession)
+
+	bullet:init(bulletId, self, castWeapon)
+
+	local rate = self:getProp(BattlePropEnum.BulletDmgNumAddrProbability, 0)
+
+	if rate > 0 and self._battleRandomLib:randomTrue(rate) then
+		bullet._damageAddNum = self:getProp(BattlePropEnum.BulletDmgNumAdd, 0)
+	end
+
+	self._battleSession:pushBullet(bullet)
+
+	self._fireBulletCount = self._fireBulletCount + 1
+
+	return bullet
+end
+
+function M:bulletMarkToBeDestroyed(bullet)
+end
+
+function M:bulletDestroyed(bullet)
+	self._bulletFactory:putEntity(bullet)
+end
+
+function M:getSkillCD()
+	local tmpCdAddPer = 0
+
+	if self._tmpCdAddper then
+		tmpCdAddPer = self._tmpCdAddper
+		self._tmpCdAddper = nil
+	end
+
+	local cdAddPer = self:getProp(BattlePropEnum.CdAddPer, 0) + tmpCdAddPer
+
+	return self._cd / (1 + cdAddPer / 100)
+end
+
+function M:recordDamage(damage, enemy, bullet, killed)
+	local beyondWeapon = nil
+
+	if bullet then
+		beyondWeapon = bullet._castWeapon
+	end
+
+	if beyondWeapon == nil then
+		beyondWeapon = self._castWeapon or self._battleWeapon
+	end
+
+	if beyondWeapon._index == 99 then
+		beyondWeapon = self._battleSession:getWeapon(1)
+	end
+
+	beyondWeapon:recordDamage(damage)
+
+	local weaponRecordDmgs = self._battleSession._weaponRecordDmgs
+
+	if not weaponRecordDmgs[beyondWeapon._id] then
+		weaponRecordDmgs[beyondWeapon._id] = {
+			kill = 0,
+			dmg = 0,
+			dps = 0
+		}
+	end
+
+	weaponRecordDmgs[beyondWeapon._id].dmg = weaponRecordDmgs[beyondWeapon._id].dmg + damage
+	weaponRecordDmgs[beyondWeapon._id].dps = beyondWeapon:getRecordDps()
+
+	if killed then
+		weaponRecordDmgs[beyondWeapon._id].kill = weaponRecordDmgs[beyondWeapon._id].kill + 1
+	end
+
+	if self._battleSession._skillRecordDmgs[beyondWeapon._id] == nil then
+		self._battleSession._skillRecordDmgs[beyondWeapon._id] = table.new(0, 8)
+	end
+
+	local val = self._battleSession._skillRecordDmgs[beyondWeapon._id][self._belongId] or 0
+	self._battleSession._skillRecordDmgs[beyondWeapon._id][self._belongId] = val + damage
+end
+
+return M

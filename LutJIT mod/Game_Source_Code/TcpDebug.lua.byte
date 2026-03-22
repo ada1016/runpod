@@ -1,0 +1,37 @@
+local HOST = "localhost"
+local PORT = 9898
+local FILE = ".vscode/launch.json"
+local file = io.open(FILE, "r")
+
+if file then
+	local content = ""
+	local lines = {}
+
+	for line in io.lines(FILE) do
+		if not string.find(line, "//") then
+			lines[#lines + 1] = line
+		end
+	end
+
+	content = table.concat(lines)
+	local option = require("cjson").decode(content)
+
+	for _, config in ipairs(option.configurations) do
+		if config.type == "emmylua_new" then
+			HOST = config.host or HOST
+			PORT = config.port or PORT
+		end
+	end
+
+	io.close(file)
+end
+
+xpcall(function ()
+	local dbg = require("emmy_core")
+
+	dbg.tcpConnect(HOST, PORT)
+	dbg.tcpConnect(HOST, PORT)
+	UnityEngine.Debug.Log("[LuaDebug] LuaDebug server connect success")
+end, function (msg)
+	UnityEngine.Debug.LogWarning("[LuaDebug] LuaDebug server connect failed: \n" .. msg)
+end)

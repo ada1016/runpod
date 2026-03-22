@@ -1,0 +1,245 @@
+local M = class("WeaponCardsGroup")
+local WeaponCardWidget = requireLua("WeaponCardWidget")
+local POS_MAP = {
+	3,
+	1,
+	5,
+	2,
+	4
+}
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init(cfg)
+	self._goWeaponCards = {}
+	self._weaponOrderedIds = {}
+	self._scale = 1
+	self._showCombo = false
+
+	for i = 1, 5 do
+		local card = self._tfWeaponCards:GetChild(i - 1).gameObject
+
+		WeaponCardWidget.noCreate(card)
+
+		self._goWeaponCards[i] = card
+	end
+
+	self._cg = self:GetComponent("CanvasGroup")
+	self._cgWeapons = self._goWeaponArea:GetComponent("CanvasGroup")
+	self._battleSession = BattleManager:getSession()
+end
+
+function M:getWeaponCardByIdx(idx)
+	local weapon = self._weaponOrderedIds[idx]
+
+	if weapon then
+		for i = 1, 5 do
+			if self._weaponPoses[POS_MAP[i]] and self._weaponPoses[POS_MAP[i]] == weapon then
+				return self._goWeaponCards[POS_MAP[i]]
+			end
+		end
+	end
+
+	for i = 1, 5 do
+		if not self._weaponPoses[POS_MAP[i]] then
+			return self._goWeaponCards[POS_MAP[i]]
+		end
+	end
+
+	return self._goWeaponCards[5]
+end
+
+function M:initConfig(cfgs)
+	cfgs = cfgs or {}
+	self._showCombo = cfgs.showCombo or false
+	self._showCardLib = cfgs.showCardLib or false
+
+	self:initWeaponGroup()
+end
+
+function M:initWeaponGroup()
+end
+
+function M:destroy()
+end
+
+function M:changeCardScale(scale)
+	self._scale = scale or 1
+end
+
+function M:initWeaponCards()
+	self._weaponOrderedIds = {}
+	self._rogueChooseNumByWeaponId = {}
+
+	table.copyArray(self._battleSession._battleRouge:getSelectWeapons(), self._weaponOrderedIds)
+	table.copy(self._battleSession._battleRouge:getWeaponsStar(), self._rogueChooseNumByWeaponId)
+
+	local slotWeapons = self._battleSession._slotWeapons
+	self._weaponPoses = {}
+
+	for i = 1, 5 do
+		if slotWeapons[i] then
+			self._weaponPoses[POS_MAP[i]] = slotWeapons[i]._id
+		end
+	end
+end
+
+function M:getWeaponIdxByCardId(rogueId)
+	local weaponId = self._battleSession._battleRouge:getWeaponIdByRogueId(rogueId)
+	local idx = table.findArray(self._weaponOrderedIds, weaponId)
+	idx = idx or #self._weaponOrderedIds + 1
+
+	return idx
+end
+
+function M:addSelectedRogueCard(rogueId)
+	local weaponId = self._battleSession._battleRouge:getWeaponIdByRogueId(rogueId)
+	local idx = table.findArray(self._weaponOrderedIds, weaponId)
+
+	if not idx then
+		idx = #self._weaponOrderedIds + 1
+
+		for i = 1, 5 do
+			if not self._weaponPoses[POS_MAP[i]] then
+				self._weaponPoses[POS_MAP[i]] = weaponId
+
+				break
+			end
+		end
+
+		self._weaponOrderedIds[idx] = weaponId
+	end
+
+	if self._rogueChooseNumByWeaponId[weaponId] == nil then
+		self._rogueChooseNumByWeaponId[weaponId] = self._battleSession._battleRouge:getWeaponTotalStar(weaponId)
+	else
+		self._rogueChooseNumByWeaponId[weaponId] = self._rogueChooseNumByWeaponId[weaponId] + 1
+	end
+
+	self:getWeaponCardByIdx(idx):setNewStageStarData(self._rogueChooseNumByWeaponId[weaponId])
+
+	return idx
+end
+
+function M:getStarNum(weaponId)
+	return self._rogueChooseNumByWeaponId[weaponId] or 0
+end
+
+function M:getStageAndNum(weaponId)
+	local num = self:getStarNum(weaponId)
+
+	return math.ceil((num + 1) / D._globalConfig._rogue_upgrade_star_num), num % D._globalConfig._rogue_upgrade_star_num
+end
+
+function M:isNewStage(weaponId)
+	local num = self:getStarNum(weaponId)
+
+	return num > 0 and num <= D._globalConfig._rogue_upgrade_star_num * 3 - 1 and num % D._globalConfig._rogue_upgrade_star_num == 0
+end
+
+function M:addComboClicks(panel)
+	for i = 1, 5 do
+		local card = self._goWeaponCards[i]
+
+		panel:setClick(card._btnCombo, function ()
+			UIManager.openPanel(PrefabDefine.BattleUpgradeCombinationPanel, self._weaponPoses[i])
+		end)
+	end
+end
+
+function M:addCardBrowserClicks(panel)
+	for i = 1, 5 do
+		local card = self._goWeaponCards[i]
+
+		panel:setClick(card._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.BattleCardsBrowsePanel, true)
+		end)
+	end
+end
+
+function M:resetUI()
+	self._cg.ignoreParentGroups = false
+	self._cg.alpha = 1
+	self._cgWeapons.alpha = 1
+
+	for i = 1, 5 do
+		self._goWeaponCards[i]:SetActive(true)
+	end
+end
+
+function M:dealRefreshWeapons()
+	for i = 1, 5 do
+		self:dealRefreshWeapon(i)
+	end
+end
+
+function M:dealRefreshWeapon(idx)
+	local weaponId = self._weaponPoses[idx]
+	local weaponCard = self._goWeaponCards[idx]
+
+	if weaponId then
+		weaponCard:updateUI(weaponId, self:getStarNum(weaponId), true)
+
+		local isSuper = self._battleSession._battleRouge._pool:isSuperSelected(weaponId)
+
+		if isSuper then
+			weaponCard:setSuperVfx(true)
+		end
+
+		local stage1, num1 = self:getStageAndNum(weaponId)
+		local combos = D._weaponCardComboConfig[weaponId]
+		local reachCombo = self._showCombo and combos and #combos > 0
+
+		if reachCombo then
+			reachCombo = false
+
+			for i, combo in ipairs(combos) do
+				local comboWeaponId = combo[4]
+				local haveCard = self._battleSession._battleRouge._pool:haveCard(comboWeaponId)
+
+				if haveCard then
+					reachCombo = true
+
+					break
+				end
+			end
+		end
+
+		weaponCard:showComboBtn(reachCombo)
+	else
+		weaponCard:updateUI()
+	end
+end
+
+function M:initCardLib()
+	self._atorCardLib:SetInteger("step", 0)
+end
+
+function M:openCardLib()
+	if not self._showCardLib then
+		return
+	end
+
+	self._atorCardLib:SetInteger("step", 1)
+end
+
+function M:closeCardLib()
+	if not self._showCardLib then
+		return
+	end
+
+	self._atorCardLib:SetInteger("step", 2)
+end
+
+function M:resumeCardLib()
+	self._atorCardLib:SetInteger("step", 3)
+end
+
+return M

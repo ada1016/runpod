@@ -1,0 +1,57 @@
+local M = class("ActivityLotteryHistroyWidget")
+local SimpleItemWidget = requireLua("SimpleItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/ActivityLotteryHistroyWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	SimpleItemWidget.noCreate(go._goItem)
+
+	return go
+end
+
+function M:updateUI(info)
+	V.setPlayerName(self._txtName, info.name, info.nameColor, "59CFBC", info.medal)
+	V.loadAvatar(self._tfAvatar, info.avatar, info.avatarFrame)
+
+	self._txtLevel.text = info.level or 1
+	self._imgExpBar.fillAmount = info.expProgress or 0
+	local splits = string.split(info.batteryInfo, "|")
+	local batterys = {}
+
+	for i = 1, #splits do
+		local subSplits = string.split(splits[i], "-")
+		local id = tonumber(subSplits[1])
+		local star = tonumber(subSplits[2])
+		batterys[#batterys + 1] = {
+			id,
+			star
+		}
+	end
+
+	table.sort(batterys, function (a, b)
+		return b[2] < a[2]
+	end)
+
+	local ct = C.getCurTime()
+	local agoType, value = C.getTimeAgoArgs(ct - info.time)
+	local sid = nil
+
+	if agoType == 1 then
+		sid = SID.TIMER_D_AGO
+	elseif agoType == 2 then
+		sid = SID.TIMER_H_AGO
+	elseif agoType == 3 then
+		sid = SID.TIMER_M_AGO
+	else
+		sid = SID.TIMER_M_AGO
+		value = 1
+	end
+
+	self._goItem:init(info.drawGetReward or 1, info.drawGetRewardNum or 1)
+	self._tmpDrawTime:SetLocalize(sid, value)
+	self._tmpDrawNum:SetLocalize(SID.DRAW_NUM, info.drawNum)
+end
+
+return M

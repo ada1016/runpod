@@ -1,0 +1,213 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	{
+		1,
+		1,
+		7,
+		{
+			5,
+			5,
+			25,
+			5
+		},
+		1,
+		{
+			10000,
+			2500,
+			1500
+		},
+		1104,
+		16000,
+		{
+			19002,
+			19003,
+			19004,
+			19005,
+			19006
+		},
+		16100,
+		16301,
+		3,
+		30,
+		{
+			c = 3,
+			[-1] = 15345 - lc._encryptOffset,
+			[-2] = 15284 - lc._encryptOffset,
+			[-3] = 15283 - lc._encryptOffset
+		},
+		{
+			c = 3,
+			[-1] = 5292 - lc._encryptOffset,
+			[-2] = 5283 - lc._encryptOffset,
+			[-3] = 5382 - lc._encryptOffset
+		},
+		5289 - lc._encryptOffset,
+		5682 - lc._encryptOffset,
+		{
+			c = 6,
+			[-1] = 15284 - lc._encryptOffset,
+			[-2] = 15288 - lc._encryptOffset,
+			[-3] = 115307 - lc._encryptOffset,
+			[-4] = 125307 - lc._encryptOffset,
+			[-5] = 15290 - lc._encryptOffset,
+			[-6] = 18897 - lc._encryptOffset
+		},
+		{
+			c = 6,
+			[-1] = 6282 - lc._encryptOffset,
+			[-2] = 5292 - lc._encryptOffset,
+			[-3] = 5283 - lc._encryptOffset,
+			[-4] = 5283 - lc._encryptOffset,
+			[-5] = 5482 - lc._encryptOffset,
+			[-6] = 5283 - lc._encryptOffset
+		},
+		{
+			c = 6,
+			[-1] = 5532 - lc._encryptOffset,
+			[-2] = 5782 - lc._encryptOffset,
+			[-3] = 6032 - lc._encryptOffset,
+			[-4] = 6282 - lc._encryptOffset,
+			[-5] = 6482 - lc._encryptOffset,
+			[-6] = 6682 - lc._encryptOffset
+		},
+		5292 - lc._encryptOffset,
+		16200,
+		16302,
+		{
+			19011,
+			19012,
+			19013,
+			19014,
+			19015
+		},
+		7,
+		10,
+		dup._63,
+		10020,
+		10020,
+		10005,
+		10001
+	}
+}
+local mapKeyIndex = {
+	k7044484 = 23,
+	k4891617 = 12,
+	k3892614 = 11,
+	k13290262 = 14,
+	k9823633 = 10,
+	k5551667 = 25,
+	k294065 = 17,
+	k271118 = 22,
+	k13935877 = 20,
+	k6003213 = 26,
+	k9495659 = 24,
+	k6323772 = 30,
+	k1533477 = 4,
+	k14606581 = 8,
+	k9169866 = 18,
+	k2867806 = 28,
+	k11607040 = 16,
+	k8806260 = 29,
+	k3960926 = 5,
+	k1854641 = 9,
+	k11260962 = 7,
+	k9821261 = 3,
+	k8358850 = 27,
+	k4671948 = 15,
+	k551552 = 19,
+	k15255765 = 2,
+	k15329937 = 31,
+	k10838322 = 13,
+	k1644150 = 1,
+	k13896652 = 21,
+	k1729079 = 6
+}
+local mapKeyDimension = {
+	k11607040 = 0,
+	k4671948 = 1,
+	k551552 = 1,
+	k13290262 = 1,
+	k13935877 = 1,
+	k294065 = 0,
+	k9169866 = 1,
+	k13896652 = 0
+}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -5282
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_ANNIVERSARY_NAMESID_" .. table[2]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -5282
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

@@ -1,0 +1,450 @@
+local M = class("SevenDayPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	textExpireTime = Types.TMP_Text,
+	btnExp = Types.Button,
+	scroll = Types.ScrollRect,
+	tfContainer = Types.Transform,
+	tfBtnContainer = Types.Transform,
+	tfRewardsContainer = Types.Transform,
+	imgBgBar = Types.SlicedFilledImage,
+	imgIcon = Types.Image,
+	tfFlyTarget = Types.Transform,
+	textCurNum = Types.TMP_Text
+}
+local SevenDayWidget = requireLua("SevenDayWidget")
+local SevenDayRewardWidget = requireLua("SevenDayRewardWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._module = P._playerSevenDay
+	self._taskIds = {}
+	local cellHeight = 130
+	local showHeight = self._scroll.transform.rect.height
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		topPadding = 20,
+		bottomPadding = 0,
+		cellMargin = 20,
+		cellHeight = cellHeight,
+		cellInitCount = showCount + 2
+	})
+	self._goWidget = {}
+
+	for i = 1, 8 do
+		self._goWidget[i] = SevenDayRewardWidget.noCreate(self._tfRewardsContainer:GetChild(i - 1).gameObject)
+
+		self._goWidget[i]:setRewardsClick(self)
+	end
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateAllPageBtns()
+		self:updateUI()
+	end)
+end
+
+function M:Start()
+	self:startUpdater()
+end
+
+function M:Update()
+	if self._progressDitry then
+		self._progressDitryDelay = self._progressDitryDelay - Time.deltaTime
+
+		if self._progressDitryDelay <= 0 then
+			if self._toFillAmount <= self._curFillAmount then
+				self._progressDitry = nil
+			else
+				self._curFillAmount = self._curFillAmount + Time.deltaTime / 10
+				self._imgBgBar.fillAmount = self._curFillAmount
+			end
+		end
+	end
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	self._btnPages = {}
+
+	for i = 1, self._tfBtnContainer.childCount do
+		local tfBtn = self._tfBtnContainer:GetChild(i - 1):GetChild(0)
+		local btn = tfBtn:GetComponent("Button")
+		self._btnPages[i] = btn
+
+		self:setClickWithoutAction(self._btnPages[i], function ()
+			self:changePage(i)
+		end)
+	end
+
+	self:setClickWithoutAction(self._btnExp, function ()
+		V.showItemInfoPanel(D.ResType.seven_day_exp)
+	end)
+end
+
+function M:init()
+	self._pageIdx = math.min(P._playerSevenDay:getSystemCreateDay(), 7)
+
+	LuaUnity.setTPSprite(self._imgIcon, D.toSprite(D.ResType.seven_day_exp), true)
+	self:updateAllPageBtns()
+
+	self._playShowAnim = true
+
+	self:updateUI()
+	self:updateRewardsUI(true)
+end
+
+function M:closePanel()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	lc.stopTimer(self._intervalShow)
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._intervalShow)
+	M.super.OnDestroy(self)
+end
+
+function M:updateRewardsUI(init)
+	for i = 1, 8 do
+		self._goWidget[i]:updateUI(i)
+	end
+
+	local step = 0
+
+	for i = 1, 8 do
+		if not P._playerSevenDay:canClaim(i) then
+			break
+		end
+
+		step = i
+	end
+
+	local curNum = P._playerAsset:getAssetNum(D.ResType.seven_day_exp)
+	local startExp = step > 0 and P._playerSevenDay:readExp(step) or 0
+	local nextExp = P._playerSevenDay:readExp(step + 1) or curNum
+	local fill = step + (curNum - startExp) / (nextExp - startExp)
+
+	if init then
+		self._imgBgBar.fillAmount = fill / 8
+		self._curFillAmount = fill / 8
+	else
+		self._progressDitry = true
+		self._progressDitryDelay = 0.8
+		self._toFillAmount = fill / 8
+	end
+end
+
+function M:changePage(pageIdx)
+	local createDay = P._playerSevenDay:getSystemCreateDay()
+
+	if createDay < pageIdx then
+		local dt = C.getTodayZeroTimestamp(pageIdx - createDay) - C.getCurTime()
+		local d, h, m, s = C.getTimeEndArgs(dt)
+
+		if d > 0 then
+			V.showToast({
+				SID.STR_BEGIN_IN_D_H_M,
+				d,
+				h,
+				m
+			})
+		else
+			V.showToast({
+				SID.STR_BEGIN_IN_H_M_S,
+				h,
+				m,
+				s
+			})
+		end
+
+		return
+	end
+
+	pageIdx = math.min(pageIdx, createDay, 7)
+
+	if self._pageIdx == pageIdx then
+		return
+	end
+
+	local oldPageIdx = self._pageIdx
+	self._pageIdx = pageIdx
+
+	self:updatePageBtn(oldPageIdx)
+	self:updatePageBtn(pageIdx)
+
+	self._playShowAnim = true
+
+	self:updateUI()
+end
+
+function M:updateUI(dontResetTop)
+	if self._pageIdx < 1 then
+		return
+	end
+
+	if not self._taskIds[self._pageIdx] then
+		self._taskIds[self._pageIdx] = {}
+
+		for _, v in pairs(TaskHelper:getTasksChapterOrderByClass(D.TaskClass.SevenDay, self._pageIdx)) do
+			self._taskIds[self._pageIdx][#self._taskIds[self._pageIdx] + 1] = v[1]
+		end
+	end
+
+	self:updateCurrent()
+	self:sortTasks()
+
+	if dontResetTop then
+		self._scrollViewEx:reloadData()
+	else
+		self._scrollViewEx:reloadData(0)
+	end
+
+	self:playCellShowAnim()
+	self:updateExpireTime()
+end
+
+function M:updateAllPageBtns()
+	for pageIdx = 1, 7 do
+		local btn = self._btnPages[pageIdx]
+		local tmpNum = btn.transform:Find("tmpNum"):GetComponent("TMP_Text")
+		tmpNum.text = pageIdx
+
+		self:updatePageBtn(pageIdx)
+	end
+end
+
+function M:updateCurrent()
+	self._textCurNum.text = P._playerAsset:getAssetNum(D.ResType.seven_day_exp)
+end
+
+function M:sortTasks(pageIdx)
+	pageIdx = pageIdx or self._pageIdx
+	local ids = self._taskIds[pageIdx] or {}
+
+	table.sort(ids, function (a, b)
+		local ca = TaskHelper:canClaim(a)
+		local cb = TaskHelper:canClaim(b)
+
+		if ca and not cb then
+			return true
+		elseif not ca and cb then
+			return false
+		end
+
+		local od1 = TaskHelper:isClaimed(a)
+		local od2 = TaskHelper:isClaimed(b)
+
+		if od1 ~= od2 then
+			return not od1
+		end
+
+		return TaskHelper:getTaskOrder(a) < TaskHelper:getTaskOrder(b)
+	end)
+end
+
+function M:updatePageBtn(pageIdx)
+	local btn = self._btnPages[pageIdx]
+
+	if not btn then
+		return
+	end
+
+	btn.dot:SetVisible(self._module:getDayReddot(pageIdx))
+
+	local tfBtn = btn.transform
+	local lock = P._playerSevenDay:getSystemCreateDay() < pageIdx
+
+	tfBtn:Find("lock"):SetVisible(lock)
+
+	local active = pageIdx == self._pageIdx
+
+	tfBtn:Find("active"):SetVisible(active)
+
+	local tfMask = tfBtn:Find("Mask")
+
+	if lock then
+		tfMask:GetComponent("Image").color = Color.str2Static("000000_180")
+	else
+		tfMask:GetComponent("Image").color = Color.str2Static("000000_140")
+	end
+
+	tfMask:SetVisible(not active)
+
+	if active then
+		lc.setSizeDelta(tfBtn, 107, 91)
+	else
+		lc.setSizeDelta(tfBtn, 99, 77)
+	end
+end
+
+function M:updateExpireTime()
+	local seconds = Client.getZeroTimestamp(P._playerSevenDay:getSystemCreateTime()) + 7 * D.DAY_SECONDS - C.getCurTime()
+
+	if self._secondTimer == nil and seconds > 0 then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	if seconds <= 0 then
+		seconds = 0
+
+		lc.stopTimer(self._secondTimer)
+		self:handleExpire()
+	end
+
+	local d, h, m, s = C.getTimeEndArgs(seconds)
+
+	if d >= 2 then
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_D_H_M, d, h, m)
+	else
+		self._textExpireTime:SetLocalize(SID.STR_LIMIT_TIME_H_M_S, d * 24 + h, m, s)
+	end
+end
+
+function M:handleExpire()
+	if not P._playerSevenDay:isExpired() then
+		return
+	end
+
+	if not P._playerSevenDay:haveCachedRewards() then
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.TIP_EVENT_END,
+			_confirmCallback = function ()
+				self:closePanel()
+			end
+		})
+
+		return
+	end
+
+	local rewards = self._module:claimCachedRewards()
+
+	if rewards and #rewards > 0 then
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.TIP_EVENT_END,
+			_confirmCallback = function ()
+				V.showMissRewardClaimPanel(rewards, SID.SEVENDAY_EXPIRED_REWARDS, function ()
+					self:closePanel()
+				end)
+			end
+		})
+	else
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.TIP_EVENT_END,
+			_confirmCallback = function ()
+				self:closePanel()
+			end
+		})
+	end
+end
+
+function M:dealExpired()
+end
+
+function M:onCellNum()
+	return #self._taskIds[self._pageIdx]
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = SevenDayWidget.create(self._tfContainer)
+	end
+
+	if self._playShowAnim then
+		goCell:initAnimStatus()
+	else
+		goCell:setCellShow(true)
+	end
+
+	local list = self._taskIds[self._pageIdx]
+	local taskId = list[index]
+
+	self:setClick(goCell._btnClaim, function ()
+		if not TaskHelper:isFinished(taskId) then
+			self:closePanel()
+
+			local jumpConf = D._jumpConfig[TaskHelper:getTaskGo(taskId)]
+
+			V.jumpTo(jumpConf, TaskHelper:getTaskProgress(taskId))
+
+			return
+		end
+
+		if TaskHelper:isClaimed(taskId) then
+			return
+		end
+
+		local rewards = P._playerTask:claimTaskReward(taskId, D.LogWay.seven_day)
+
+		V.playSevenDayExpFlyVfx(goCell._btnReward.transform, self._tfFlyTarget, 7, Color.str2Static("397DA4"))
+		goCell:setClaimed(true)
+		Client.playSound("ui_Point_claim_1")
+		self._scrollViewEx:reloadData()
+		self:updateRewardsUI()
+		self:updatePageBtn(self._pageIdx)
+		self:updateUI()
+		RedDotManager.update("city.home.sevenday")
+	end)
+	self:setClickWithoutAction(goCell._btnReward, function ()
+		local num = TaskHelper:getTaskRewardNums(taskId)[1]
+
+		V.showItemInfoPanel(D.ResType.seven_day_exp, num)
+	end)
+	goCell:init(taskId)
+
+	return goCell
+end
+
+function M:onRecycleCell(goCell, index)
+	goCell:initAnimStatus()
+end
+
+function M:playCellShowAnim()
+	if self._playShowAnim then
+		if self._intervalShow then
+			lc.stopTimer(self._intervalShow)
+
+			self._intervalShow = nil
+		end
+
+		local idx = 0
+		local objs = self._scrollViewEx:getShowCellObjs()
+
+		local function func()
+			idx = idx + 1
+
+			if objs[idx] then
+				objs[idx]:playShowAnim()
+			else
+				lc.stopTimer(self._intervalShow)
+
+				self._intervalShow = nil
+			end
+		end
+
+		self._intervalShow = lc.setInterval(func, 0.1)
+
+		func()
+
+		self._playShowAnim = false
+
+		return
+	end
+
+	lc.stopTimer(self._intervalShow)
+end
+
+return M

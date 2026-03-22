@@ -1,0 +1,78 @@
+local M = class("MissionBoxWidget")
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+local boxIconPath = {
+	{
+		canClaimBg = "general/g_bg_05",
+		canClaim = "general/g_icon_04",
+		lightColor = "55FFFC",
+		cantClaim = "general/g_icon_05",
+		claimed = "general/g_icon_03"
+	},
+	{
+		canClaimBg = "general/g_bg_100",
+		canClaim = "general/g_icon_04_2",
+		lightColor = "DC40FF",
+		cantClaim = "general/g_icon_05_2",
+		claimed = "general/g_icon_03_2"
+	}
+}
+
+function M:updateUI(msId, msType, perfectType)
+	self._missionId = msId
+	self._missionType = msType
+	self._perfectType = perfectType
+	local boxType = P._playerMission:readBoxType(self._missionId, self._missionType)
+	local currentPerfectType = P._playerMission:getMissionPerfectType(self._missionId, self._missionType)
+	local imgIcon = self._imgIcon
+	local imgDi = self._imgDi
+	local goVfx = self._goVfx
+	local anim = self._anim
+	local icons = boxIconPath[boxType]
+	local canClaim = perfectType <= currentPerfectType
+
+	if canClaim then
+		local claimed = P._playerMission:isPerfectRewardClaimed(self._missionId, self._missionType, perfectType)
+
+		if claimed then
+			LuaUnity.setTPSprite(imgIcon, icons.claimed, true, true)
+
+			imgDi.color = Color.static(255, 255, 255, 50)
+
+			goVfx:SetActive(false)
+
+			anim.enabled = false
+		else
+			LuaUnity.setTPSprite(imgIcon, icons.canClaim, true, true)
+
+			imgDi.color = Color.static(255, 255, 255, 255)
+
+			goVfx:SetActive(true)
+
+			anim.enabled = true
+		end
+
+		LuaUnity.setTPSprite(imgDi, icons.canClaimBg, true, true)
+	else
+		anim.enabled = false
+		imgDi.color = Color.static(255, 255, 255, 255)
+
+		LuaUnity.setTPSprite(imgIcon, icons.cantClaim, true, true)
+		LuaUnity.setTPSprite(imgDi, "general/g_bg_04", true, true)
+		goVfx:SetActive(false)
+	end
+
+	self._goVfx1:SetActive(boxType == 1)
+	self._goVfx2:SetActive(boxType == 2)
+
+	self._imgLight.color = Color.str2Static(icons.lightColor)
+end
+
+return M

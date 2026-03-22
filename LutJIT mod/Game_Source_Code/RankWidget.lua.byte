@@ -1,0 +1,71 @@
+local M = class("RankWidget")
+local RANK_IMG = {
+	"general/g_icon_28",
+	"general/g_icon_29",
+	"general/g_icon_30"
+}
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RankWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(data)
+	V.setPlayerNameByRankData(self._txtName, data)
+
+	local rank = data.rank
+
+	if rank <= 3 then
+		self._txtRank.gameObject:SetActive(false)
+		self._imgBgRank:SetActive(true)
+		LuaUnity.setTPSprite(self._imgBgRank, RANK_IMG[rank])
+	else
+		self._txtRank.gameObject:SetActive(true)
+		self._imgBgRank:SetActive(false)
+
+		if data.rank == 9999 then
+			self._txtRank:SetLocalize(SID.STR_NO_RANK)
+		else
+			self._txtRank.text = data.rank
+		end
+	end
+
+	local rankValue = math.floor(data.rankValue)
+
+	V.loadAvatar(self._tfAvatar, data.avatar, data.avatarFrame)
+
+	local difficulty = math.floor(rankValue / 100000)
+	local level = math.floor((rankValue - difficulty * 100000) / 1000)
+	local time = rankValue - difficulty * 100000 - level * 1000
+
+	if rank == 9999 then
+		self._txtDiffLevel:SetLocalize(SID.STR_NO_RANK)
+
+		self._txtTime.text = string.format("%02d:%02d", 0, 0)
+	else
+		self._txtDiffLevel:SetLocalize(SID.STR_DIFF_LEVEL, difficulty, level)
+
+		self._txtTime.text = string.format("%02d:%02d", math.floor(time / 60), time % 60)
+	end
+
+	if data.championTimes and data.championTimes > 1 then
+		self._txtChampion.gameObject:SetActive(true)
+		self._txtChampion:SetLocalize(SID.STR_CHAMPION_TIMES, data.championTimes)
+	else
+		self._txtChampion.gameObject:SetActive(false)
+	end
+end
+
+return M

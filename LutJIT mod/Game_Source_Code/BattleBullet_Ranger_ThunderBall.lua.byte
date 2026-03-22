@@ -1,0 +1,59 @@
+local M = class("BattleBullet_Ranger_ThunderBall", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._moveSpeed = self._battleSkill:getProp(BattlePropEnum.BallisticSpeed)
+end
+
+function M:markToBeDestroyed()
+	if self._battleWeapon:getEffect(20201) then
+		local newBullet = self._battleWeapon._secondSkill:createBullet()
+
+		newBullet:setTargetPosition(self._position, self._battleWeapon._shootPos)
+	end
+
+	self._readyed = nil
+
+	SUPER.markToBeDestroyed(self)
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	SUPER.step(self, dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self._moveDuration then
+		self._moveDuration = self._moveDuration - dt
+
+		if self._moveDuration <= 0 then
+			self._moveDuration = nil
+			self._motionless = true
+			self._readyed = true
+			self._duration = self._battleSkill:getProp(BattlePropEnum.LiveDuration, 0)
+			self._duration = self._duration + self._duration * self._battleSkill:getProp(BattlePropEnum.LiveDurationAddPer, 0) / 100
+
+			if self._battleWeapon:getEffect(20201) then
+				local newBullet = self._battleWeapon._secondSkill:createBullet()
+
+				newBullet:setTargetPosition(self._position, self._battleWeapon._shootPos)
+			end
+		end
+	end
+end
+
+function M:calMoveDuration(endPosition)
+	local dis = Vector2.Distance(endPosition, self._position)
+	self._moveDuration = dis / self._moveSpeed
+end
+
+return M

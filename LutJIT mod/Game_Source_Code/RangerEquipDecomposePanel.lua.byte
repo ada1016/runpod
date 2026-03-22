@@ -1,0 +1,238 @@
+local M = class("EquipDecomposePanel", requireLua("BasePanel"))
+local Types = Types
+local ROW_CELL = 6
+local ItemWidget = requireLua("ItemWidget")
+local band = bit.band
+M.args = {
+	btnClose = Types.Button,
+	goRewardItem = Types.GameObject,
+	goRefineRefund = Types.GameObject,
+	txtRefineRefund = Types.TMP_Text,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	btnDecompose = Types.Button,
+	btnFilter = Types.Button,
+	btnSelectAll = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goRewardItem)
+	self._goRewardItem:init(D.ResType.ranger_equip_refine_mat, 1)
+	self._goRewardItem:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClick(self._btnDecompose, function ()
+		if #self._selectedEquips == 0 then
+			V.showToast(SID.TIP_NO_EQUIP_SELECTED)
+
+			return
+		end
+
+		P._playerRanger:decomposeRangerEquips(self._selectedEquips)
+		table.clear(self._selectedEquips)
+		V.showRewardClaimPanel({
+			{
+				D.ResType.ranger_equip_refine_mat,
+				self._decomposeMat
+			}
+		})
+
+		self._decomposeMat = 0
+
+		self._goRewardItem:SetActive(false)
+		self:updateEquipData()
+		self:reloadData()
+	end)
+	self:setClick(self._goRewardItem._btnClick, function ()
+		self._goRewardItem:rewardclickCallback()
+	end)
+	self:setClick(self._btnFilter, function ()
+		UIManager.openPanel(PrefabDefine.RangerEquipFilterPanel, self._partQualityFilter, -1, function (partQualityFilter)
+			self._partQualityFilter = partQualityFilter
+
+			self:dealFilterSelect()
+			self:reloadData()
+		end)
+	end)
+	self:setClick(self._btnSelectAll, function ()
+		self:dealFilterSelect()
+		self:reloadData()
+	end)
+end
+
+function M:init()
+	self._selectedEquips = {}
+	self._availableEquips = {}
+	self._availableCount = 0
+	self._decomposeMat = 0
+	self._partQualityFilter = -1
+
+	self:updateEquipData()
+
+	local cellHeight = 120
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 9,
+		cellInitCount = 7,
+		cellHeight = cellHeight
+	})
+
+	self:reloadData()
+end
+
+function M:updateEquipData()
+	table.clear(self._availableEquips)
+
+	self._availableCount = 0
+	local data = P._playerRanger:getAvailableRangerEquips()
+	local equips = {}
+
+	for i = 1, #data do
+		if not P._playerRanger:isRangerEquipLocked(data[i].id) then
+			local dup = clone(data[i])
+			equips[#equips + 1] = dup
+			self._availableCount = self._availableCount + 1
+		end
+	end
+
+	for i = 1, #equips do
+		local equip = equips[i]
+
+		table.insert(self._availableEquips, equip)
+	end
+
+	self._goRewardItem:SetActive(false)
+	self._goRefineRefund:SetActive(false)
+	self:updateSelectCounter()
+end
+
+function M:dealFilterSelect()
+	table.clear(self._selectedEquips)
+
+	self._decomposeMat = 0
+
+	self._goRewardItem:SetActive(false)
+
+	self._firstSelectRow = nil
+	local partFilterValueBase = 2^D.RANGER_EQUIP_PART_FILTER_NUM
+
+	for i = 1, #self._availableEquips do
+		local equip = self._availableEquips[i]
+
+		if self._partQualityFilter then
+			local cfg = D._rangerEquipConfig[equip.cid]
+			local filterValue = 2^(cfg._level / 3 - 1) + 2^(cfg._quality + D.RANGER_EQUIP_PART_FILTER_NUM - 1)
+
+			if band(-partFilterValueBase, band(filterValue, self._partQualityFilter)) ~= 0 and band(partFilterValueBase - 1, band(filterValue, self._partQualityFilter)) ~= 0 then
+				equip.selected = true
+
+				if self._firstSelectRow == nil then
+					self._firstSelectRow = math.floor(i / ROW_CELL)
+				end
+
+				table.insert(self._selectedEquips, equip.id)
+
+				self._decomposeMat = self._decomposeMat + D._rangerEquipConfig[equip.cid]._decomposeGain
+			else
+				equip.selected = nil
+			end
+		else
+			equip.selected = nil
+		end
+	end
+
+	if self._decomposeMat > 0 then
+		self._goRewardItem:setNumText(self._decomposeMat)
+		self._goRewardItem:SetActive(true)
+	else
+		self._goRewardItem:SetActive(false)
+	end
+
+	self:updateSelectCounter()
+end
+
+function M:updateSelectCounter()
+	self._txtSelectedCounter:SetLocalize(SID.STR_SELECT_COUNTER, #self._selectedEquips, self._availableCount)
+end
+
+function M:reloadData()
+	self._scrollViewEx:reloadData(true)
+
+	if self._firstSelectRow then
+		self._scrollViewEx:moveToItemByIndex(self._firstSelectRow + 1)
+	end
+end
+
+function M:onCellNum()
+	return math.ceil(#self._availableEquips / ROW_CELL)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	for i = 1, ROW_CELL do
+		local item = goCell.items[i]
+		local info = self._availableEquips[i + ROW_CELL * (index - 1)]
+
+		if info then
+			item:SetVisible(true)
+			item:init(info.cid, 1)
+			item:setChoose2(info.selected)
+			self:setClick(item._btnClick, function ()
+				if not info.selected then
+					info.selected = true
+
+					table.insert(self._selectedEquips, info.id)
+
+					self._decomposeMat = self._decomposeMat + D._rangerEquipConfig[info.cid]._decomposeGain
+
+					item:setChoose2(true)
+					self._goRewardItem:SetActive(true)
+				else
+					info.selected = false
+
+					table.erase(self._selectedEquips, info.id)
+
+					self._decomposeMat = self._decomposeMat - D._rangerEquipConfig[info.cid]._decomposeGain
+
+					item:setChoose2(false)
+					self._goRewardItem:SetActive(self._decomposeMat > 0)
+				end
+
+				self._goRewardItem:setNumText(self._decomposeMat)
+				self:updateSelectCounter()
+			end)
+		else
+			item:SetVisible(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RowWidget.prefab", self._tfScrollContainer)
+	local width = self._tfScrollContainer.rect.width
+
+	lc.setSizeDelta(go, width, self._scrollViewEx._args.cellHeight)
+
+	go.items = {}
+
+	for i = 1, ROW_CELL do
+		go.items[i] = ItemWidget.create(go.transform)
+
+		go.items[i]._goScaleParent:SetLocalScale(0.95, 0.95, 0.95)
+	end
+
+	return go
+end
+
+return M

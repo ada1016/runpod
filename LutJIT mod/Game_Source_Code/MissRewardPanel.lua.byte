@@ -1,0 +1,216 @@
+local M = class("MissRewardPanel", requireLua("BasePanel"))
+M.args = {
+	delayTime = 0.4,
+	btnBg = Types.Button,
+	textTitle = Types.TMP_Text,
+	tfRewardArea = Types.Transform,
+	lgRewards = Types.LayoutGroup,
+	goTransformArea = Types.GameObject
+}
+local ItemWidget = requireLua("ItemWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._goRewards = {}
+end
+
+function M:addClicks()
+	self:setClickWithoutAction(self._btnBg, function ()
+		self:closePanel()
+	end)
+end
+
+function M:init(rewards, titleSid, closeCallback)
+	self._closeCallback = closeCallback
+
+	self._textTitle:SetLocalize(titleSid or SID.EXPIRED_REWARDS_TITLE)
+
+	self._rewardsData = rewards or {
+		{
+			10001,
+			10
+		},
+		{
+			10002,
+			20
+		},
+		{
+			10003,
+			30
+		},
+		{
+			10004,
+			20
+		},
+		{
+			10005,
+			10
+		}
+	}
+	local hasTransformToken = false
+	local transformSkins = {}
+
+	for i = 1, #rewards do
+		local cid = rewards[i].cid or rewards[i][1]
+		local num = rewards[i].num or rewards[i][2]
+
+		if D.isSkin(cid) and num < 0 then
+			hasTransformToken = true
+			transformSkins[#transformSkins + 1] = rewards[i]
+		end
+	end
+
+	for i = 1, #transformSkins do
+		table.erase(rewards, transformSkins[i])
+	end
+
+	if self._goTransformArea then
+		self._goTransformArea:SetActive(false)
+
+		local x, y = lc.getSizeDelta(self._tfRewardArea.parent.parent.parent)
+		self._showFullRow = math.floor(y / 140)
+
+		if hasTransformToken then
+			self._showFullRow = self._showFullRow - 1
+
+			if #self._rewardsData <= 5 then
+				self._tfRewardArea:GetComponent("LayoutElement").minHeight = 320
+			end
+		end
+
+		if hasTransformToken then
+			self._delayShowTimer = lc.setTimer(function ()
+				self._goTransformArea:SetActive(true)
+			end, 0.618)
+		end
+	else
+		local x, y = lc.getSizeDelta(self._tfRewardArea.parent.parent)
+		self._showFullRow = math.floor(y / 140)
+	end
+
+	self._rewardsData = D.foldRewards({}, self._rewardsData)
+
+	D.sortRewards(self._rewardsData, true)
+	self:updateUI()
+	Client.playSound("ui_Rewards_1")
+end
+
+function M:updateUI()
+	if #self._rewardsData > 0 then
+		self._btnBg.enabled = false
+	end
+
+	if self._delayTime <= 0 then
+		self:updateRewards()
+	else
+		self._timer = lc.setTimer(function ()
+			self:updateRewards()
+		end, self._delayTime, true)
+	end
+end
+
+function M:updateRewards()
+	local len = #self._rewardsData
+	local beginAlign = len <= 5 and 4 or 1
+	self._lgRewards.childAlignment = beginAlign
+
+	for i = 1, math.max(#self._goRewards, len) do
+		if i <= len then
+			if self._goRewards[i] == nil then
+				local goItemWidget = ItemWidget.create(self._tfRewardArea)
+				self._goRewards[i] = goItemWidget
+
+				self._goRewards[i]:SetActive(false)
+				self:setClick(goItemWidget._btnClick, function ()
+					goItemWidget:rewardclickCallback()
+				end)
+			end
+
+			local data = self._rewardsData[i]
+			local cid = data.cid or data[1]
+			local num = data.num or data[2]
+
+			self._goRewards[i]:init(cid, num, data[3])
+		else
+			self._goRewards[i]:SetActive(false)
+		end
+	end
+
+	local i = 0
+
+	lc.setAnchoredPosition(self._tfRewardArea, 0, 0)
+
+	local y = 0
+	self._timer = lc.setInterval(function ()
+		i = i + 1
+
+		if not self._goRewards[i] then
+			lc.stopTimer(self._timer)
+
+			self._timer = nil
+
+			return
+		end
+
+		self._lgRewards.childAlignment = i <= 5 and beginAlign or 0
+
+		self._goRewards[i]:SetActive(true)
+
+		local data = self._rewardsData[i]
+		local cid = data.cid or data[1]
+
+		if D.Quality.Blue <= D.toQuality(cid) then
+			self._goRewards[i]._goAnimGet:SetActive(true)
+		end
+
+		if i == len or i >= 15 then
+			self._btnBg.enabled = true
+		end
+
+		if i % 5 == 1 and i < len and i > 5 * self._showFullRow then
+			self._tfRewardArea:DOKill()
+			self._tfRewardArea:DOLocalMoveY(y + 140 * math.ceil((i - 5 * self._showFullRow) / 5), 0.5):SetLink(self.gameObject)
+		end
+	end, 0.1, true)
+end
+
+function M:closePanel()
+	if self._closeCallback then
+		self._closeCallback()
+
+		self._closeCallback = nil
+	end
+
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	if self._delayShowTimer then
+		lc.stopTimer(self._delayShowTimer)
+
+		self._delayShowTimer = nil
+	end
+
+	M.super.closePanel(self)
+end
+
+function M:OnDestroy()
+	if self._timer then
+		lc.stopTimer(self._timer)
+
+		self._timer = nil
+	end
+
+	if self._delayShowTimer then
+		lc.stopTimer(self._delayShowTimer)
+
+		self._delayShowTimer = nil
+	end
+
+	M.super.OnDestroy(self)
+end
+
+return M

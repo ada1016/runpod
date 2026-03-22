@@ -1,0 +1,35 @@
+local M = class("OfflineListWidget")
+local ItemWidget = requireLua("ItemWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/OfflineListWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+	go:init()
+
+	return go
+end
+
+function M:init()
+	ItemWidget.noCreate(self._goItemWidget)
+	self:updateUI()
+end
+
+function M:updateUI(idx, num1, hour1, num2, hour2)
+	self._goBg:SetActive(idx % 2 == 1)
+
+	self._tmpCommon.text = string.format("%d/%dh", num1, hour1)
+	self._tmpElite.text = string.format("%d/%dh", num2, hour2)
+end
+
+return M

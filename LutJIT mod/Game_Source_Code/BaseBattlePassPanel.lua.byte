@@ -1,0 +1,477 @@
+local M = class("BaseBattlePassPanel", requireLua("BasePanel"))
+local RewardWidget = requireLua("BPRewardWidget")
+
+function M:Awake()
+	self:initOnce()
+	M.super.Awake(self)
+
+	local cellNum = self._module:readMaxLevel()
+	local cellHeight = 164
+	self._cellHeight = cellHeight
+	local showHeight = self._scroll.transform.rect.height
+	local showWidth = self._scroll.transform.rect.width
+	self._showHeight = showHeight
+	self._showWidth = showWidth
+	local showCount = math.ceil(showHeight / cellHeight)
+	self._showCellCount = showCount
+	self._cellCout = math.min(showCount + 1, cellNum)
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		cellMargin = 0,
+		cellHeight = cellHeight,
+		cellInitCount = self._cellCout
+	})
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	M.super.OnDestroy(self)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on(self._bpCfg.e_levelChange, function ()
+		self:updateLevelRewards()
+		self:updateLevelExp()
+		self:jumpToLevel(self._module:getFirstRewardLevel())
+	end)
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+	self:on(self._bpCfg.e_expire, function ()
+		self:handleLastPeriod()
+	end)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnClaimAll, function ()
+		self:claimAllRewards()
+	end)
+	self:setClick(self._btnBuyStep2, function ()
+		self:handleBuyHighStep(2)
+	end)
+
+	if self._btnBuyLevel then
+		self:setClick(self._btnBuyLevel, function ()
+			UIManager.openPanel(PrefabDefine.BPBuyLevelPanel, self._module)
+		end)
+	end
+
+	if self._module:readBpStepNum() == 3 then
+		self:setClick(self._btnBuyStep3, function ()
+			self:handleBuyHighStep(3)
+		end)
+	end
+end
+
+function M:initOnce()
+end
+
+function M:init(parentPanel, param, isJump)
+	self._parentPanel = parentPanel
+	local maxLv = self._module:readMaxLevel()
+	self._showLastReward_interval = self._bpCfg.showLastReward_interval or maxLv
+
+	if self._bpCfg.showLastReward then
+		RewardWidget.noCreate(self._goLastReward, self._module, self._bpCfg.widgetCellProgress)
+		self._goLastReward:updateUI(maxLv)
+		self._goLastReward:setRewardsClick(self)
+	end
+
+	self._level = self._module:getCurRewardLevel()
+
+	self:updateUI()
+
+	if isJump then
+		self._scrollViewEx:moveToItemByIndex(1, nil, true, nil, function ()
+			local show, obj = self._scrollViewEx:isIdxShow(1)
+
+			if show and obj and obj._goItem2 then
+				obj._goItem2._goScaleParent.transform:DOShakeRotation(1.5, Vector3.static(0, 0, 25), 15, 50, true):SetLink(self.gameObject):SetEase(V.EASE_LINEAR)
+			end
+		end)
+	else
+		self._scrollViewEx:moveToItemByIndex(self:getShowLevel(), nil, true)
+	end
+
+	if self._textTitle and self._bpCfg.title then
+		self._textTitle:SetLocalize(self._bpCfg.title)
+	end
+end
+
+function M:OnPageOpened()
+	self:handleLastPeriod()
+end
+
+function M:updateUI()
+	self._scrollViewEx:reloadData()
+	self:updateStepUI()
+	self:updateLevelExp()
+	self:updateExpireTime()
+	self:updateDesc()
+
+	local maxLv = self._module:readMaxLevel()
+
+	self._goTopMask:SetActive(self._level < 1)
+	self._goBottomMask:SetActive(self._level < maxLv)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+	self:addEvents()
+	self:updateUI()
+	self._scrollViewEx:moveToItemByIndex(self:getShowLevel(), nil, true)
+end
+
+function M:hideInternal()
+	lc.stopTimer(self._secondTimer)
+
+	self._secondTimer = nil
+
+	self:removeEvents()
+	M.super.hideInternal(self)
+end
+
+function M:getShowLevel()
+	return self._module:getFirstRewardLevel()
+end
+
+function M:handleLastPeriod()
+	if self._module:isStatusOpen() then
+		self:updateLevelExp()
+		self:updateLevelRewards()
+		self:updateStepLastReward()
+
+		return
+	end
+
+	if not self._module:lastPeriodRewardsClaimed() then
+		local rewards = self._module:claimLastPeriodRewards()
+
+		if rewards and #rewards > 0 then
+			V.showMissRewardClaimPanel(rewards, self._bpCfg.missRewardTitleId)
+		end
+
+		self._level = self._module:getCurRewardLevel()
+
+		self:updateUI()
+		self._scrollViewEx:moveToItemByIndex(1, nil, true)
+
+		if self._module._key_redDot then
+			RedDotManager.update(self._module._key_redDot)
+		end
+
+		if self._bpCfg.exchangeReddot then
+			RedDotManager.update(self._bpCfg.exchangeReddot)
+		end
+	end
+end
+
+function M:updateDesc()
+end
+
+function M:updateBuyBtn()
+	local maxLv = self._module:readMaxLevel()
+
+	if self._btnBuyLevel then
+		self._btnBuyLevel:SetActive(self._level > 0 and self._level < maxLv and self._module:getLeftTime() < self._module:readDiamondBtnShowDay() * 86400)
+
+		if self._level < maxLv then
+			lc.setAnchoredPosition(self._btnBuyLevel.transform.parent, -self._showWidth / 6, -self._cellHeight * self._level)
+		end
+	end
+end
+
+function M:updateStepRewards(step)
+	local objs = self._scrollViewEx:getShowCellObjs()
+
+	for i, obj in ipairs(objs) do
+		obj:updateStepRewards(step)
+	end
+
+	if self._bpCfg.showLastReward and self._goLastReward then
+		self._goLastReward:updateStepRewards(step)
+	end
+end
+
+function M:updateStepLastReward()
+	if self._bpCfg.showLastReward then
+		local maxLv = self._module:readMaxLevel()
+		local lastCellIdx = self._scrollViewEx:getLastCellIdx()
+		local showRewardLevel = math.ceil(lastCellIdx / self._showLastReward_interval) * self._showLastReward_interval
+		local isShowing = self._scrollViewEx:isIdxShow(showRewardLevel)
+
+		if isShowing then
+			showRewardLevel = showRewardLevel + self._showLastReward_interval
+		end
+
+		if maxLv >= showRewardLevel then
+			isShowing = self._scrollViewEx:isIdxShow(showRewardLevel)
+
+			self._goLastReward:SetActive(self._bpCfg.showLastReward == true and not isShowing)
+			self._goLastReward:updateUI(showRewardLevel)
+		else
+			isShowing = false
+
+			self._goLastReward:SetActive(false)
+		end
+	end
+end
+
+function M:updateLevelRewards()
+	local newLv = self._module:getCurRewardLevel()
+
+	for level = self._level, newLv do
+		local show, goCell = self._scrollViewEx:isIdxShow(level)
+
+		if show then
+			goCell:updateUI(level)
+		end
+	end
+
+	self._level = newLv
+end
+
+function M:updateLevelExp()
+	local module = self._module
+	local maxLv = module:readMaxLevel()
+	self._maxLv = maxLv
+
+	if self._level == maxLv then
+		local lastLvExp = module:readUpLevelExp(self._level - 1)
+		local lvExp = module:readUpLevelExp(self._level)
+		local exp = module:getCurExp()
+		self._requiredExp = lvExp - lastLvExp
+		self._exp = math.min(exp - lastLvExp, self._requiredExp)
+	else
+		local lastLvExp = module:readUpLevelExp(self._level)
+		local lvExp = module:readUpLevelExp(self._level + 1)
+		local exp = module:getCurExp()
+		self._requiredExp = lvExp - lastLvExp
+		self._exp = math.min(exp - lastLvExp, self._requiredExp)
+	end
+
+	self._imgExpProgress.fillAmount = self._exp / self._requiredExp
+	self._textExpProgress.text = self._exp .. " / " .. self._requiredExp
+	self._textLevel.text = self._level
+
+	self:updateBuyBtn()
+end
+
+function M:updateStepUI()
+	local active2 = self._module:isStepUnlock(2)
+
+	self._btnBuyStep2.gameObject:SetActive(not active2)
+	self._goLock2:SetActive(not active2)
+	self._goStep2Bought:SetActive(active2)
+
+	if not active2 then
+		self:setShowPrice(self._textBuyStep2, 2)
+	end
+
+	if self._module:readBpStepNum() < 3 then
+		return
+	end
+
+	local active3 = self._module:isStepUnlock(3)
+
+	self._btnBuyStep3.gameObject:SetActive(not active3)
+	self._goLock3:SetActive(not active3)
+	self._goStep3Bought:SetActive(active3)
+
+	if not active3 then
+		self:setShowPrice(self._textBuyStep3, 3)
+	end
+end
+
+function M:setShowPrice(tmp, step)
+	local buyType, buyCost = self._module:readStepBuy(step)
+
+	if buyType == 0 then
+		tmp:SetLocalize(SID.STR_FREE)
+	elseif buyType == 1 then
+		tmp.text = P._playerStore:getDisplayPrice(buyCost)
+	elseif buyType == 2 then
+		tmp.text = string.format("%s%d", D.getTMPSpriteRichText("item_small_10002"), buyCost)
+	end
+end
+
+function M:updateExpireTime()
+	if self._secondTimer == nil then
+		self._secondTimer = lc.setInterval(function ()
+			self:updateExpireTime()
+		end, 0.5)
+	end
+
+	local seconds = self._module:getExpireTime() - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 1)
+end
+
+function M:handleBuyHighStep(step)
+	if self._module:readBpStepNum() < step then
+		return
+	end
+
+	local buyType, buyCost = self._module:readStepBuy(step)
+
+	if not self._module:isStatusOpen() then
+		return
+	end
+
+	if buyType == 0 then
+		self._module:unlockStep(step)
+	elseif buyType == 1 then
+		C.tryPurchase(buyCost, function ()
+			self:updateStepRewards(step)
+			self:updateStepUI()
+			self:jumpToLevel(self._module:getFirstRewardLevel())
+		end, D.PurchaseChannel.Main)
+	elseif buyType == 2 then
+		local needNum = buyCost
+		local enough = P._playerAsset:isAssetEnough(D.ResType.diamond, needNum)
+
+		if not enough then
+			UIManager.openPanel(PrefabDefine.DiamondPanel)
+
+			return
+		end
+
+		local costNum = needNum
+		local ret = V.tryShowDiamondConfirm(D.ResType.diamond, costNum, function ()
+			self:dealDiamondBuyHighStepLogic(step)
+		end)
+
+		if ret then
+			return
+		end
+
+		self:dealDiamondBuyHighStepLogic(step)
+	end
+end
+
+function M:dealDiamondBuyHighStepLogic(step)
+	local buyType, buyCost = self._module:readStepBuy(step)
+
+	if buyType ~= 2 then
+		return
+	end
+
+	local retCode, param1 = self._module:tryDiamondUnlockStep(step)
+
+	if retCode ~= ResultCode.OK then
+		V.showResultCode(retCode)
+
+		return
+	end
+
+	self:updateStepRewards(step)
+	self:updateStepUI()
+	self:jumpToLevel(self._module:getFirstRewardLevel())
+end
+
+function M:claimAllRewards()
+	local function dealFunc()
+		local rewards = self._module:claimAll()
+
+		if rewards then
+			V.showRewardClaimPanel(rewards, SID.CLEAR_CHEST_REWARD_TITLE)
+			self._scrollViewEx:reloadData(true)
+			self:jumpToLevel(self._module:getFirstRewardLevel())
+			self:claimAllCallback()
+		else
+			V.showToast(SID.TIP_NO_REWARDS_CLAIM)
+		end
+	end
+
+	if self._bpCfg.checkNet then
+		if lc.isNetworkNotReachable() then
+			V.showToast(SID.NETWORK_NOTREACHABLE)
+
+			return
+		end
+
+		Client.checkNetworkAsync(function ()
+			dealFunc()
+		end)
+	else
+		dealFunc()
+	end
+end
+
+function M:claimAllCallback()
+end
+
+function M:jumpToLevel(jumpLevel)
+	local delta = math.abs(self._scrollViewEx:getFirstCellIdx() - jumpLevel)
+	local moveTime = Mathf.Clamp((delta - 3) / self._showCellCount * 0.5, 0.1, 0.5)
+
+	self._scrollViewEx:moveToItemByIndex(jumpLevel, moveTime, nil, , function ()
+	end)
+end
+
+function M:onCellNum()
+	return self._module:readMaxLevel()
+end
+
+function M:customCellClick(goCell)
+	goCell:setRewardsClick(self)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = RewardWidget.create(self._tfContainer, self._bpCfg.widgetName, self._module, self._bpCfg.widgetCellProgress)
+
+		goCell:SetActive(true)
+		self:customCellClick(goCell)
+
+		if self._btnBuyLevel then
+			self._btnBuyLevel.transform.parent:SetAsLastSibling()
+		end
+	end
+
+	if self._bpCfg.showLastReward then
+		local module = self._module
+		local maxLv = module:readMaxLevel()
+		local maxCellIdx = index + self._cellCout - 1
+
+		if self._showLastReward_interval then
+			local lastCellIdx = self._scrollViewEx:getLastCellIdx()
+			local showRewardLevel = math.ceil(lastCellIdx / self._showLastReward_interval) * self._showLastReward_interval
+			local isShowing = self._scrollViewEx:isIdxShow(showRewardLevel)
+
+			if isShowing then
+				showRewardLevel = showRewardLevel + self._showLastReward_interval
+			end
+
+			if maxLv >= showRewardLevel then
+				self._goLastReward:updateUI(showRewardLevel)
+			end
+		end
+
+		if index == maxLv then
+			self._goLastReward:SetActive(false)
+		end
+	end
+
+	goCell:updateUI(index)
+
+	return goCell
+end
+
+function M:onRecycleCell(goCell, index)
+	if self._bpCfg.showLastReward then
+		local module = self._module
+		local maxLv = module:readMaxLevel()
+
+		if index == maxLv then
+			self._goLastReward:SetActive(true)
+		end
+	end
+end
+
+return M

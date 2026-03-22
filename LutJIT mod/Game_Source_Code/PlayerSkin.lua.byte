@@ -1,0 +1,880 @@
+local M = class("PlayerArmory")
+local BattlePropEnum = BattlePropEnum
+
+function M:ctor()
+end
+
+D._skinConfig = nil
+D._coreConfig = nil
+local QUALITY_GATLIN_SKIN_TOKEN = {
+	nil,
+	nil,
+	nil,
+	10014,
+	10015,
+	10016,
+	10032
+}
+local QUALITY_WEAPON_SKIN_TOKEN = {
+	nil,
+	nil,
+	nil,
+	10017,
+	10018,
+	10019,
+	10033
+}
+local QUALITY_WEAPON_CORE_TOKEN = {
+	nil,
+	nil,
+	nil,
+	10020,
+	10021,
+	10022,
+	10034
+}
+local QUALITY_DOME_SKIN_TOKEN = {
+	nil,
+	nil,
+	nil,
+	10023,
+	10024,
+	10025,
+	10035
+}
+
+local function skinId2Type(id)
+	if id >= 110000 and id < 120000 then
+		return D.SkinType.Gatlin
+	elseif id >= 120000 and id < 130000 then
+		return D.SkinType.Role
+	elseif id >= 130000 and id < 140000 then
+		return D.SkinType.Weapon
+	elseif id >= 140000 and id < 150000 then
+		return D.SkinType.Dome
+	end
+
+	return nil
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._activeSkins = lc.assignTable(meta, "activeSkins")
+	self._equipedWeaponSkins = lc.assignTable(meta, "equipedWeaponSkins")
+
+	if not self._equipedWeaponSkins[D.WEAPON_GATLIN] then
+		self._equipedWeaponSkins[D.WEAPON_GATLIN] = 110000
+	end
+
+	if not self._equipedWeaponSkins[0] then
+		self._equipedWeaponSkins[0] = 120000
+	end
+
+	if not self._equipedWeaponSkins[D.WEAPON_DOME] then
+		self._equipedWeaponSkins[D.WEAPON_DOME] = 140000
+	end
+
+	self._equipedSkinSkillMaps = lc.assignTable(meta, "equipedSkinSkillMaps")
+	self._equipedCoreSkillMaps = lc.assignTable(meta, "equipedCoreSkilllMaps")
+	self._equipedDomeSkillMaps = lc.assignTable(meta, "equipedDomeSkillMaps")
+	self._newSkinSkillFlags = lc.assignTable(meta, "newSkinSkillFlags")
+	self._newCoreSkillFlags = lc.assignTable(meta, "newCoreSkillFlags")
+	self._newDomeSkillFlags = lc.assignTable(meta, "newDomeSkillFlags")
+	self._newSkinEquipFlags = lc.assignTable(meta, "newSkinEquipFlags")
+	self._equipedTypeSkinSkillMaps = {
+		[D.SkinType.Role] = self._equipedSkinSkillMaps,
+		[D.SkinType.Weapon] = self._equipedCoreSkillMaps,
+		[D.SkinType.Dome] = self._equipedDomeSkillMaps
+	}
+end
+
+function M:start()
+	for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		if self:getEquipedSkin(i) then
+			self._newSkinEquipFlags[D.SkinType.Weapon * 100 + i] = 0
+		else
+			for skinId, cfg in pairs(D._skinWeaponConfig) do
+				if not cfg._hidden and self:getSkinLevel(skinId) > 0 and self:readWeapon(skinId) == i then
+					self._newSkinEquipFlags[D.SkinType.Weapon * 100 + i] = skinId
+
+					break
+				end
+			end
+		end
+	end
+end
+
+function M:getSkinLevel(skinId)
+	if skinId == D.DEFAULT_GATLIN_SKIN or skinId == D.DEFAULT_ROLE_SKIN or skinId == D.DEFAULT_DOME_SKIN then
+		return 5
+	end
+
+	return self._activeSkins[skinId] or 0
+end
+
+function M:getEquipedSkin(weapon)
+	return self._equipedWeaponSkins[weapon]
+end
+
+function M:setEquipedSkin(weapon, skinId)
+	self._equipedWeaponSkins[weapon] = skinId
+
+	if skinId and self:isNewSkin(skinId) then
+		self:removeNewSkin(skinId)
+	end
+
+	if weapon == D.WEAPON_GATLIN then
+		RedDotManager.update("city.role.system.warehouse")
+	elseif weapon == D.WEAPON_DOME then
+		RedDotManager.update("city.role.dome.skin")
+	elseif weapon == 0 then
+		RedDotManager.update("city.role.system.skin")
+	end
+
+	if D.WEAPON_GATLIN < weapon then
+		SimpleEvent.emit("weapon.skin.dirty", weapon)
+		RedDotManager.update("city.weapon")
+	end
+
+	SimpleEvent.emit("skin.equip.dirty", weapon)
+end
+
+function M:getSkinSkillGroup(skinType)
+	return P._playerRole:getGemGroup()
+end
+
+function M:unlockSkillGroup()
+	self._equipedTypeSkinSkillMaps[D.SkinType.Role][#self._equipedTypeSkinSkillMaps[D.SkinType.Role] + 1] = {
+		{},
+		{},
+		{}
+	}
+	self._equipedTypeSkinSkillMaps[D.SkinType.Weapon][#self._equipedTypeSkinSkillMaps[D.SkinType.Weapon] + 1] = {
+		{},
+		{},
+		{}
+	}
+	self._equipedTypeSkinSkillMaps[D.SkinType.Dome][#self._equipedTypeSkinSkillMaps[D.SkinType.Dome] + 1] = {
+		{},
+		{},
+		{}
+	}
+end
+
+function M:equipSkinSkill(skinType, index, skinId)
+	table.insert(self._equipedTypeSkinSkillMaps[skinType][self:getSkinSkillGroup(skinType)][index], skinId)
+end
+
+function M:removeSkinSkill(skinType, index, skinId)
+	table.erase(self._equipedTypeSkinSkillMaps[skinType][self:getSkinSkillGroup(skinType)][index], skinId)
+end
+
+function M:clearSkinSkill(skinType, index)
+	for i = 1, 3 do
+		table.clear(self._equipedTypeSkinSkillMaps[skinType][self:getSkinSkillGroup(skinType)][i])
+	end
+end
+
+function M:pasteSkinSkill(skinType, from, to)
+	if from == to then
+		return
+	end
+
+	for i = 1, 3 do
+		for j = 1, 3 do
+			self._equipedTypeSkinSkillMaps[skinType][to][i][j] = self._equipedTypeSkinSkillMaps[skinType][from][i][j]
+		end
+	end
+end
+
+function M:getEquipedSkinSkills(skinType)
+	local group = self:getSkinSkillGroup(skinType)
+
+	if not self._equipedTypeSkinSkillMaps[skinType][group] then
+		self._equipedTypeSkinSkillMaps[skinType][group] = {
+			{},
+			{},
+			{}
+		}
+	end
+
+	return self._equipedTypeSkinSkillMaps[skinType][group]
+end
+
+function M:getAvailableSkills(skinType)
+	local skills = {}
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+		local cfg = self:getCfg(skinId, type)
+
+		if type == skinType and cfg._effect ~= 0 then
+			skills[#skills + 1] = skinId
+		end
+	end
+
+	return skills
+end
+
+function M:isMaxLevel(skinId)
+	return self:getSkinLevel(skinId) == D.MAX_SKIN_STAR
+end
+
+function M:calcTransformCommonTokenNum(skinId, newNum)
+	return math.min(newNum, self:getSkinLevel(skinId) + P._playerAsset:getAssetNum(skinId) + newNum - D.MAX_SKIN_STAR)
+end
+
+function M:tryUpgradeSkin(skinId, useToken)
+	local level = self:getSkinLevel(skinId)
+
+	if D.MAX_SKIN_STAR <= level then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if level > 0 and not self:canCfgUpgradeSkin(skinId) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local cfg = self:getCfg(skinId)
+
+	if cfg._requireSkin and self:getSkinLevel(cfg._requireSkin) < level then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	local canUseToken = self:canCfgCommonTokenUpgrade(skinId)
+	local costCid = skinId
+
+	if useToken and canUseToken then
+		costCid = self:getCommonSkinToken(skinId)
+
+		if P._playerAsset:getAssetNum(costCid) < 1 then
+			return skinId, 1
+		end
+	else
+		costCid = skinId
+
+		if P._playerAsset:getAssetNum(costCid) < 1 then
+			return skinId, 1
+		end
+	end
+
+	self._activeSkins[skinId] = (self._activeSkins[skinId] or 0) + 1
+
+	P._playerAsset:increaseAssetNum(costCid, -1, self._activeSkins[skinId] == 1 and D.LogWay.unlock_skin or D.LogWay.upgrade_skin)
+
+	local skinType = skinId2Type(skinId)
+	local cfg = self:getCfg(skinId)
+
+	if D.WEAPON_GATLIN < cfg._weapon then
+		SimpleEvent.emit("weapon.skin.dirty", cfg._weapon)
+		RedDotManager.update("city.weapon")
+	end
+
+	if self._activeSkins[skinId] == 1 then
+		if skinType == D.SkinType.Role then
+			if cfg._weapon > 0 and cfg._weapon < 1000 then
+				self._newSkinSkillFlags[#self._newSkinSkillFlags + 1] = skinId
+
+				if not P._playerGuide:isGroupFinished(D.GuideGroupId.RoleSkinSkill) then
+					SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.RoleSkinSkill)
+				end
+			end
+		elseif skinType == D.SkinType.Weapon then
+			self._newCoreSkillFlags[#self._newCoreSkillFlags + 1] = skinId
+
+			if not P._playerGuide:isGroupFinished(D.GuideGroupId.WeaponSkinSkill) then
+				SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.WeaponSkinSkill)
+			end
+		elseif skinType == D.SkinType.Dome and cfg._weapon > 0 then
+			self._newDomeSkillFlags[#self._newDomeSkillFlags + 1] = skinId
+
+			if not P._playerGuide:isGroupFinished(D.GuideGroupId.DomeSkinSkill) then
+				SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.DomeSkinSkill)
+			end
+		end
+
+		if cfg._unlockAvatar then
+			P._playerAsset:increaseAssetNum(cfg._unlockAvatar, 1, D.LogWay.unlock_skin)
+		end
+
+		local flagType = skinType
+
+		if skinType == D.SkinType.Weapon then
+			flagType = skinType * 100 + cfg._weapon
+		end
+
+		if not self._newSkinEquipFlags[flagType] then
+			self._newSkinEquipFlags[flagType] = skinId
+		end
+	end
+
+	if skinType == D.SkinType.Role then
+		P._playerRole:dirtyAttack()
+		RedDotManager.update("city.role.system.skin")
+	elseif skinType == D.SkinType.Gatlin then
+		RedDotManager.update("city.role.system.warehouse")
+	elseif skinType == D.SkinType.Dome then
+		RedDotManager.update("city.role.dome.skin")
+	elseif skinType == D.SkinType.Weapon then
+		RedDotManager.update("city.weapon")
+	end
+
+	Trace.AF_traceUpgrade("Skin", skinId, self._activeSkins[skinId])
+
+	if lc._isCN then
+		P:saveGameData()
+	end
+
+	return ResultCode.OK
+end
+
+function M:isNewSkin(skinId)
+	local skinType = skinId2Type(skinId)
+	local flagType = skinType
+
+	if skinType == D.SkinType.Weapon then
+		flagType = skinType * 100 + D._skinWeaponConfig[skinId]._weapon
+	end
+
+	return self._newSkinEquipFlags[flagType] == skinId
+end
+
+function M:removeNewSkin(skinId)
+	local skinType = skinId2Type(skinId)
+	local flagType = skinType
+
+	if skinType == D.SkinType.Weapon then
+		flagType = skinType * 100 + D._skinWeaponConfig[skinId]._weapon
+	end
+
+	self._newSkinEquipFlags[flagType] = 0
+end
+
+function M:canCfgUpgradeSkin(skinId)
+	local cfg = self:getCfg(skinId)
+
+	if cfg._upgradeType then
+		return cfg._upgradeType ~= 0, cfg._upgradeType
+	else
+		return true, 2
+	end
+end
+
+function M:canCfgCommonTokenUpgrade(skinId)
+	local canUp, upType = self:canCfgUpgradeSkin(skinId)
+
+	return canUp and upType == 2
+end
+
+function M:canUpgradeSkin(skinId)
+	local level = self:getSkinLevel(skinId)
+
+	if D.MAX_SKIN_STAR <= level then
+		return false
+	end
+
+	local canCfgUp, upType = self:canCfgUpgradeSkin(skinId)
+
+	if level > 0 and not canCfgUp then
+		return false
+	end
+
+	local cfg = self:getCfg(skinId)
+
+	if cfg._requireSkin and self:getSkinLevel(cfg._requireSkin) < level then
+		return false
+	end
+
+	if P._playerAsset:isAssetEnough(skinId, 1) then
+		return true
+	end
+
+	if upType == 2 then
+		return level > 0 and P._playerAsset:isAssetEnough(self:getCommonSkinToken(skinId), 1)
+	end
+
+	return false
+end
+
+function M:canUpgradeSkinByType(skinType, weaponId)
+	local configs = D._skinConfigs[skinType]
+
+	for skinId, cfg in pairs(configs) do
+		if not cfg._hidden then
+			local readWeapon = self:readWeapon(skinId)
+
+			if weaponId then
+				if readWeapon == weaponId and self:canUpgradeSkin(skinId) then
+					return true
+				end
+			elseif self:canUpgradeSkin(skinId) and (readWeapon == 0 or readWeapon - 1000 == 0 or P._playerArmory:isWeaponUnlocked(readWeapon)) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:canEquipSkinByType(skinType, weaponId)
+	local configs = D._skinConfigs[skinType]
+
+	if skinType == D.SkinType.Weapon then
+		if weaponId == nil then
+			for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+				for skinId, cfg in pairs(configs) do
+					if not cfg._hidden and self:readWeapon(skinId) == i and self:isNewSkin(skinId) then
+						return true
+					end
+				end
+			end
+
+			return false
+		end
+
+		for skinId, cfg in pairs(configs) do
+			if not cfg._hidden and self:readWeapon(skinId) == weaponId and self:isNewSkin(skinId) then
+				return true
+			end
+		end
+	else
+		if skinType == D.SkinType.Role then
+			weaponId = 0
+		else
+			weaponId = 1
+		end
+
+		for skinId, cfg in pairs(configs) do
+			if not cfg._hidden and self:isNewSkin(skinId) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:getGatlinSkinDmgAdd()
+	local damageAdd = 0
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+		local cfg = self:getCfg(skinId, type)
+
+		if type == D.SkinType.Gatlin then
+			damageAdd = damageAdd + cfg._damageAdd * level
+		end
+	end
+
+	return damageAdd
+end
+
+function M:getTotalCritDmg(skinType)
+	local dmg = 0
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+
+		if type == skinType then
+			local cfg = self:getCfg(skinId, type)
+
+			if cfg._critDmgAdd then
+				dmg = dmg + cfg._critDmgAdd * level
+			end
+		end
+	end
+
+	return dmg
+end
+
+function M:getTotalStar(skinType)
+	local star = 0
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+
+		if type == skinType then
+			star = star + level
+		end
+	end
+
+	return star
+end
+
+function M:getTotalDomeHp(ignorePercent)
+	local hp = 0
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+		local cfg = self:getCfg(skinId, type)
+
+		if type == D.SkinType.Dome then
+			hp = hp + cfg._domeHp * level
+		end
+	end
+
+	if ignorePercent then
+		return hp
+	else
+		local hpPercent = self:getTotalDomeHpPercent()
+		hp = math.floor(hp + hp * hpPercent / 100)
+
+		return hp
+	end
+end
+
+function M:getTotalDomeHpPercent()
+	local hpPercent = 0
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+		local cfg = self:getCfg(skinId, type)
+
+		if type == D.SkinType.Dome then
+			hpPercent = hpPercent + cfg._domeHpPercent * level
+		end
+	end
+
+	return hpPercent
+end
+
+function M:getOrderedSkins(skinType, weaponId)
+	local skinStars = {}
+
+	for id, cfg in pairs(D._skinConfigs[skinType]) do
+		if not cfg._hidden then
+			if skinType == D.SkinType.Weapon then
+				local weapon = self:readWeapon(id, self._skinType)
+
+				if weaponId == nil or weapon == weaponId then
+					local v = 0
+					local level = self:getSkinLevel(id)
+
+					if level == 0 and P._playerAsset:isAssetEnough(id, 1) then
+						v = 999
+					elseif level > 0 then
+						v = 1
+					else
+						v = 0
+					end
+
+					if v ~= 0 or cfg._stage <= 1 then
+						skinStars[#skinStars + 1] = {
+							id,
+							v
+						}
+					elseif not cfg._requireSkin or self:getSkinLevel(cfg._requireSkin) > 0 then
+						skinStars[#skinStars + 1] = {
+							id,
+							v
+						}
+					end
+				end
+			else
+				local v = 0
+				local level = self:getSkinLevel(id)
+
+				if level == 0 and P._playerAsset:isAssetEnough(id, 1) then
+					v = 999
+				elseif level > 0 then
+					v = 1
+				else
+					v = 0
+				end
+
+				if v ~= 0 or cfg._stage == 1 then
+					skinStars[#skinStars + 1] = {
+						id,
+						v
+					}
+				elseif not cfg._requireSkin or self:getSkinLevel(cfg._requireSkin) > 0 then
+					if cfg._stage ~= -1 then
+						skinStars[#skinStars + 1] = {
+							id,
+							v
+						}
+					end
+				end
+			end
+		end
+	end
+
+	table.sort(skinStars, function (a, b)
+		local cfg1 = self:getCfg(a[1])
+		local cfg2 = self:getCfg(b[1])
+
+		if a[2] == b[2] then
+			if cfg1._quality == cfg2._quality then
+				local id1 = cfg1._index > 0 and cfg1._index or 9999
+				local id2 = cfg2._index > 0 and cfg2._index or 9999
+
+				return id1 < id2
+			else
+				return cfg2._quality < cfg1._quality
+			end
+		else
+			return b[2] < a[2]
+		end
+	end)
+
+	local displaySkins = {}
+
+	for i = 1, #skinStars do
+		displaySkins[i] = skinStars[i][1]
+	end
+
+	return displaySkins
+end
+
+function M:genBattleSkinInput(input)
+	input.skins = {}
+	local props = {
+		[0] = {},
+		[D.WEAPON_GATLIN] = {}
+	}
+	local skills = {}
+	local atk = 0
+	local domeTechPercent = P._playerArmory:getTotalDomeTechHpPercentAdd()
+	local skinHpPercent = self:getTotalDomeHpPercent()
+
+	for skinId, level in pairs(self._activeSkins) do
+		local type = skinId2Type(skinId)
+		local cfg = self:getCfg(skinId, type)
+		local rawWeapon = cfg._weapon
+		local effectWeapon = rawWeapon
+
+		if rawWeapon >= 1000 then
+			effectWeapon = rawWeapon - 1000
+		end
+
+		if type == D.SkinType.Gatlin then
+			if rawWeapon >= 1000 then
+				-- Nothing
+			elseif rawWeapon ~= 0 then
+				props[D.WEAPON_GATLIN][BattlePropEnum.DmgFinalAddPer] = (props[D.WEAPON_GATLIN][BattlePropEnum.DmgFinalAddPer] or 0) + cfg._damageAdd * level
+			end
+		elseif type == D.SkinType.Role then
+			if effectWeapon == 0 then
+				for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+					effectWeapon = i
+					props[effectWeapon] = props[effectWeapon] or {}
+
+					if rawWeapon >= 1000 then
+						props[effectWeapon][BattlePropEnum.DmgOutAddPerOnlyBattery] = (props[effectWeapon][BattlePropEnum.DmgOutAddPerOnlyBattery] or 0) + cfg._damageAdd * level
+					elseif rawWeapon == 0 then
+						props[effectWeapon][BattlePropEnum.DmgFinalAllAddPerOnlyBattery] = (props[effectWeapon][BattlePropEnum.DmgFinalAllAddPerOnlyBattery] or 0) + cfg._damageAdd * level
+					else
+						props[effectWeapon][BattlePropEnum.DmgFinalAddPer] = (props[effectWeapon][BattlePropEnum.DmgFinalAddPer] or 0) + cfg._damageAdd * level
+					end
+				end
+			else
+				props[effectWeapon] = props[effectWeapon] or {}
+
+				if rawWeapon >= 1000 then
+					props[effectWeapon][BattlePropEnum.DmgOutAddPerOnlyBattery] = (props[effectWeapon][BattlePropEnum.DmgOutAddPerOnlyBattery] or 0) + cfg._damageAdd * level
+				elseif rawWeapon == 0 then
+					props[effectWeapon][BattlePropEnum.DmgFinalAllAddPerOnlyBattery] = (props[effectWeapon][BattlePropEnum.DmgFinalAllAddPerOnlyBattery] or 0) + cfg._damageAdd * level
+				else
+					props[effectWeapon][BattlePropEnum.DmgFinalAddPer] = (props[effectWeapon][BattlePropEnum.DmgFinalAddPer] or 0) + cfg._damageAdd * level
+				end
+			end
+		elseif type == D.SkinType.Weapon then
+			local nature = D._weaponConfig[effectWeapon]._dmgType
+			props[0][BattlePropEnum.DamageNature1Per + nature - 1] = (props[0][BattlePropEnum.DamageNature1Per + nature - 1] or 0) + cfg._damageAdd * level
+		elseif type == D.SkinType.Dome then
+			props[0][BattlePropEnum.MaxHp] = (props[0][BattlePropEnum.MaxHp] or 0) + cfg._domeHp * level * (100 + domeTechPercent) / 100 * (100 + skinHpPercent) / 100
+		end
+
+		if cfg._critDmgAdd then
+			props[0][BattlePropEnum.CritDmg] = (props[0][BattlePropEnum.CritDmg] or 0) + cfg._critDmgAdd * level
+		end
+	end
+
+	local group = P._playerRole:getGemGroup()
+	local skinRouges = self._equipedSkinSkillMaps[group]
+
+	if skinRouges then
+		for i = 1, 3 do
+			for j = 1, #skinRouges[i] do
+				if skinRouges[i][j] and skinRouges[i][j] ~= 0 then
+					skills[#skills + 1] = {
+						skinRouges[i][j],
+						self:getSkinLevel(skinRouges[i][j])
+					}
+				end
+			end
+		end
+	end
+
+	local domeRogues = self._equipedDomeSkillMaps[group]
+
+	if domeRogues then
+		for i = 1, 3 do
+			for j = 1, #domeRogues[i] do
+				if domeRogues[i][j] and domeRogues[i][j] ~= 0 then
+					skills[#skills + 1] = {
+						domeRogues[i][j],
+						self:getSkinLevel(domeRogues[i][j])
+					}
+				end
+			end
+		end
+	end
+
+	local coreRouges = self._equipedCoreSkillMaps[group]
+
+	if coreRouges then
+		for i = 1, 3 do
+			for j = 1, #coreRouges[i] do
+				if coreRouges[i][j] and coreRouges[i][j] ~= 0 then
+					local level = self:getSkinLevel(coreRouges[i][j])
+					skills[#skills + 1] = {
+						coreRouges[i][j],
+						level
+					}
+					local cfg = self:getCfg(coreRouges[i][j], D.SkinType.Weapon)
+					props[cfg._weapon] = props[cfg._weapon] or {}
+					props[cfg._weapon][BattlePropEnum.DmgOutAddPer] = (props[cfg._weapon][BattlePropEnum.DmgOutAddPer] or 0) + cfg._skillLevelParam[level]
+				end
+			end
+		end
+	end
+
+	input.skins.atk = atk
+	input.skins.props = props
+	input.skins.skills = skills
+
+	return input
+end
+
+function M:loadBattleEnv(env)
+	for k, v in pairs(env.weaponLevels) do
+		self._weaponLevels[k] = env.weaponLevels[k]
+	end
+
+	if env.domeTechLevels then
+		for i = 1, 5 do
+			self._domeTechLevels[D._domeUpgradeConfig[i * 10]._tech] = env.domeTechLevels[i] or 0
+		end
+	end
+end
+
+function M:getCommonSkinToken(skinId)
+	local type = skinId2Type(skinId)
+	local quality = self:readQuality(skinId, type)
+
+	if type == D.SkinType.Gatlin then
+		return QUALITY_GATLIN_SKIN_TOKEN[quality]
+	elseif type == D.SkinType.Role then
+		return QUALITY_WEAPON_SKIN_TOKEN[quality]
+	elseif type == D.SkinType.Weapon then
+		return QUALITY_WEAPON_CORE_TOKEN[quality]
+	elseif type == D.SkinType.Dome then
+		return QUALITY_DOME_SKIN_TOKEN[quality]
+	end
+end
+
+function M:hasNoSkin(weapon)
+	local count = 0
+
+	for _, cfg in pairs(D._skinWeaponConfig) do
+		if not cfg._hidden and cfg._weapon == weapon then
+			count = count + 1
+
+			break
+		end
+	end
+
+	return count == 0
+end
+
+function M:hasNewSkillFlag(skinType, weapon)
+	if skinType == D.SkinType.Role then
+		return #self._newSkinSkillFlags > 0
+	elseif skinType == D.SkinType.Weapon then
+		if weapon then
+			for i = 1, #self._newCoreSkillFlags do
+				if self:readWeapon(self._newCoreSkillFlags[i], skinType) == weapon then
+					return true
+				end
+			end
+
+			return false
+		else
+			return #self._newCoreSkillFlags > 0
+		end
+	else
+		return #self._newDomeSkillFlags > 0
+	end
+end
+
+function M:getNewSkinSkillFlag(skinType)
+	if skinType == D.SkinType.Role then
+		return self._newSkinSkillFlags
+	elseif skinType == D.SkinType.Weapon then
+		return self._newCoreSkillFlags
+	elseif skinType == D.SkinType.Dome then
+		return self._newDomeSkillFlags
+	end
+end
+
+function M:clearNewSkillFlag(skinType)
+	if skinType == D.SkinType.Role then
+		table.clear(self._newSkinSkillFlags)
+		RedDotManager.update("city.role.system.skin")
+	elseif skinType == D.SkinType.Weapon then
+		table.clear(self._newCoreSkillFlags)
+		RedDotManager.update("city.weapon.skin")
+	elseif skinType == D.SkinType.Dome then
+		table.clear(self._newDomeSkillFlags)
+		RedDotManager.update("city.role.dome.skin")
+	end
+end
+
+function M:readQuality(skinId, skinType)
+	return self:getCfgByType(skinType)[skinId]._quality
+end
+
+function M:readWeapon(skinId, skinType)
+	skinType = skinType or skinId2Type(skinId)
+
+	return self:getCfgByType(skinType)[skinId]._weapon
+end
+
+function M:readRoleSkinSex(skinId)
+	local cfg = self:getCfgByType(D.SkinType.Role)[skinId]
+
+	return cfg and cfg._sex or 1
+end
+
+function M:readSkinStage(skinId)
+	local cfg = self:getCfg(skinId)
+
+	return cfg and cfg._stage or 1
+end
+
+function M:readSkinStageBg(skinId)
+	local cfg = self:getCfg(skinId)
+
+	return cfg and cfg._stageBg or 1
+end
+
+function M:getCfg(skinId)
+	local type = skinId2Type(skinId)
+
+	if not type then
+		return nil
+	end
+
+	return D._skinConfigs[type][skinId]
+end
+
+function M:readSkinType(skinId)
+	return skinId2Type(skinId)
+end
+
+function M:getCfgByType(skinType)
+	return D._skinConfigs[skinType]
+end
+
+return M

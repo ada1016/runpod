@@ -1,0 +1,3158 @@
+local M = class("PlayerActivitySparkScout", requireLua("PlayerActivityInstanceBase"))
+
+function M:ctor()
+	self._aType = D.ActivityType.SparkScout
+	self._minGradeId = 110
+	self._finalGradeId = 610
+	self._maxStarGradeId = 710
+end
+
+function M:initInstance()
+	self._activityType = D.ActivityType.SparkScout
+	self._persistentUid = D.ActivityPersistUID[self._activityType]
+	local rewardsCfgs = {}
+	local gradeCfgs = D._gradeSparkScoutConfig
+	local gradeStars = {}
+	local maxCfgGrade = self:getBaseGradeId()
+	local subGradeScores = {}
+
+	for i, gradeCfg in pairs(gradeCfgs) do
+		local gradeId = gradeCfg._id
+
+		if maxCfgGrade < gradeId then
+			maxCfgGrade = gradeId
+		end
+
+		if gradeCfg._rewards then
+			rewardsCfgs[#rewardsCfgs + 1] = gradeCfg._id
+		end
+
+		if gradeId % 10 ~= 0 then
+			local gId = gradeId - gradeId % 10
+			subGradeScores[gId] = (subGradeScores[gId] or 0) + gradeCfg._score
+			gradeStars[gId] = (gradeStars[gId] or 0) + 1
+		end
+	end
+
+	self._gradeStars = gradeStars
+	self._subGradeScores = subGradeScores
+	self._maxCfgGradeId = maxCfgGrade
+
+	for i = self:getFinalGrade() + 1, maxCfgGrade do
+		if not gradeCfgs[i] then
+			gradeCfgs[i] = gradeCfgs[i - 1]
+		end
+	end
+
+	local nextGradeMap = {}
+	local lastGradeMap = {}
+	local gradeId = self:getBaseGradeId()
+	local maxGradeCfgStarMap = {}
+
+	for i = 1, 9999 do
+		local grade = math.floor(gradeId / 100)
+		local gradeSub = math.floor(gradeId % 100 / 10)
+		local gradeStar = gradeId % 10
+
+		if gradeCfgs[gradeId + 1] then
+			nextGradeMap[gradeId] = gradeId + 1
+			gradeId = nextGradeMap[gradeId]
+		elseif gradeCfgs[grade * 100 + gradeSub * 10 + 10] then
+			nextGradeMap[gradeId] = grade * 100 + gradeSub * 10 + 10
+			lastGradeMap[nextGradeMap[gradeId]] = gradeId
+			gradeId = nextGradeMap[gradeId]
+			nextGradeMap[gradeId - 1] = nextGradeMap[gradeId]
+		elseif gradeCfgs[grade * 100 + 100 + 10] then
+			nextGradeMap[gradeId] = grade * 100 + 100 + 10
+			lastGradeMap[nextGradeMap[gradeId]] = gradeId
+			gradeId = nextGradeMap[gradeId]
+		else
+			break
+		end
+	end
+
+	self._nextGradeMap = nextGradeMap
+	lastGradeMap[self:getBaseGradeId()] = self:getBaseGradeId()
+	self._lastGradeMap = lastGradeMap
+	self._rewardGradeCfgIds = rewardsCfgs
+
+	table.sort(self._rewardGradeCfgIds)
+
+	self._gradesCfg = gradeCfgs
+
+	self:dealSubModuleInit()
+end
+
+function M:start()
+	M.super.start(self)
+
+	self._availableChips = {}
+	self._chipsDirty = true
+	self._chipPools = {}
+	self._chipPropsDirty = true
+	self._chipProps = {}
+	self._chipEffects = {}
+
+	self:tryUnlock()
+	self:trySettle()
+end
+
+function M:openCheck()
+	if lc._isCN then
+		return false
+	end
+
+	return D.isSystemUnlocked(D.SystemType.SparkScout) and (not self._data or self._data.expireClaimed)
+end
+
+function M:trySettle()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._data then
+		return false
+	end
+
+	if not self._data.expired then
+		local isInTimeRange = not P._playerActivity:isLaterTimeRange(self._data.id, C.getCurTime())
+
+		if isInTimeRange then
+			self:trySettleMatch(false)
+
+			return false
+		else
+			self:dealInstanceExpire()
+		end
+	end
+
+	if self._data.expireClaimed then
+		return true
+	end
+
+	if self._data.expireSettled then
+		return false
+	end
+
+	if self._battling then
+		SimpleEvent.emit("battle.quit", D.MissionType.SparkScout)
+
+		self._battling = false
+	end
+
+	if not self._gettingRankData then
+		self._gettingRankData = true
+		local star, _ = self:getGradeRewards()
+
+		if star == 0 then
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._data.expireClaimed = true
+
+			return false
+		end
+
+		P._playerRanker:getActivityRankData(D.RankType.SparkScoutRank, P._playerActivitySparkScout:getId(), function (data, selfRank, selfIndex)
+			self:getCurrentData().finalRank = selfRank or 9999
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._tmpSettleRankData = {
+				data,
+				selfRank,
+				selfIndex
+			}
+
+			SimpleEvent.emit("spark_scout.rank_reward")
+		end, function ()
+			self._gettingRankData = false
+
+			SimpleEvent.emit("spark_scout.rank_fail")
+		end)
+	end
+
+	return false
+end
+
+function M:unlockInstanceData()
+end
+
+function M:instanceDailyReset()
+	if not self._data then
+		return
+	end
+
+	if self:isExpired() then
+		return
+	end
+end
+
+function M:haveDot(auid)
+	return false
+end
+
+function M:isExpired()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self._data.expired == true
+end
+
+function M:getRandomData(activityId, subType)
+	local weaponBanList, seed = self:getWeaponBanList(activityId, subType)
+	local weapons = {}
+
+	for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+		if not table.contains(weaponBanList, i) then
+			weapons[#weapons + 1] = i
+		end
+	end
+
+	local conf = self:readCfg(subType)
+	local weaponCards = conf._weaponCard[seed % #conf._weaponCard + 1]
+	local weaponDecks = {}
+
+	for i = 1, #weapons do
+		weaponDecks[weapons[i]] = weapons[i] * 100 + weaponCards[i]
+	end
+
+	return weaponBanList, weapons, weaponDecks
+end
+
+function M:createCycleData(activityData)
+	self._subType = activityData.subType
+
+	self:clearOldGradeData()
+	self:clearScoreChangeData()
+
+	return {
+		gradeScore = 0,
+		battleNum = 0,
+		lastRankIdx = 999999999,
+		battleCrushWinCount = 0,
+		gradeStar = 0,
+		grade = 1,
+		entered = false,
+		duelCosted = false,
+		duelRefreshed = false,
+		subGrade = 1,
+		maxWinNum = 0,
+		battleWinCount = 0,
+		adRecoverTime = 0,
+		lastRankSet = false,
+		playTime = 0,
+		id = activityData.id,
+		subType = self._subType,
+		isBeta = C.isPvPBeta(),
+		extraRewardTime = C.getCurTime(),
+		chips = {},
+		chipNewDots = {},
+		chipLotteryCount = {},
+		droppingChips = {},
+		duelData = {},
+		chipSlots = {},
+		chipSlotUnlockNums = {},
+		pvpWeapons = {},
+		unlockedPvpWeaponSlots = {
+			1,
+			4,
+			7
+		},
+		matchExcludes = {},
+		shopBuyCount = {}
+	}
+end
+
+function M:dealInstanceOpen(activityData)
+	self:dealSubModuleInit()
+	P._playerRanker:resetGroup(D.RankType.SparkScoutRank)
+	P._playerBPSparkScout:tryNextPeriod(true, activityData.startTime, activityData.endTime)
+	P._playerAsset:resetAssetNum(D.ResType.spark_scout_wafer, 0)
+	P._playerAsset:resetAssetNum(D.ResType.spark_scout_sp_wafer, 0)
+	P._playerAsset:resetAssetNum(D.ResType.spark_scout_key, 0)
+	P._playerAsset:resetAssetNum(D.ResType.spark_scout_sp_key, 0)
+	P._playerAsset:resetAssetNum(D.ResType.spark_scout_duel_ticket, 0)
+	P._playerAsset:resetAssetNum(D.ResType.ark_spark_offline_right, 0)
+	P._playerExchange:resetExchangesByExchangeGroup(self:readExchangeGroup(self._data.subType))
+end
+
+function M:dealSubModuleInit()
+	if not self:isUnlock() then
+		return
+	end
+
+	self._data = self:getCurrentData()
+
+	if not self._data then
+		return
+	end
+
+	self._subType = self._data.subType
+
+	P._playerBPSparkScout:init(lc.assignTable(self._data, "bp"))
+	P._playerBPSparkScout:start()
+	P._playerSparkScoutOffline:init(lc.assignTable(self._data, "offline"))
+
+	self._data.atkCost1Level = ConfusedNumber.create(self._data.atkCost1Level or 1, "SparkScout_atkLevel1")
+	self._data.atkLevel = ConfusedNumber.create(self._data.atkLevel or 1, "SparkScout_atkLevel")
+	self._data.grade = ConfusedNumber.create(self._data.grade or 1, "SparkScout_grade")
+	self._data.subGrade = ConfusedNumber.create(self._data.subGrade or 1, "SparkScout_subGrade")
+	self._data.gradeStar = ConfusedNumber.create(self._data.gradeStar or 0, "SparkScout_gradeStar")
+	self._data.gradeScore = ConfusedNumber.create(self._data.gradeScore or 0, "SparkScout_gradeScore")
+	self._data.maxGradeId = ConfusedNumber.create(self._data.maxGradeId or self:getBaseGradeId(), "SparkScout_maxGradeId")
+	self._data.remainFreeRefreshCount = ConfusedNumber.create(self._data.remainFreeRefreshCount or 0, "SparkScout_FreeChipRefresh")
+	self._data.remainAdRefreshCount = ConfusedNumber.create(self._data.remainAdRefreshCount or 0, "SparkScout_AdChipRefresh")
+
+	if not self._data.unlockedPvpWeaponSlots then
+		self._data.unlockedPvpWeaponSlots = {
+			1,
+			4,
+			7
+		}
+	end
+
+	self._data.chips = self._data.chips or {}
+	self._data.chipNewDots = self._data.chipNewDots or {}
+	self._data.matchExcludes = self._data.matchExcludes or {}
+	self._data.droppingChips = self._data.droppingChips or {}
+	self._data.chipLotteryCount = self._data.chipLotteryCount or {}
+	self._data.freeChipClaim = self._data.freeChipClaim or {}
+	self._data.duelCosted = self._data.duelCosted or false
+
+	for i = 1, #self._data.droppingChips do
+		self._data.droppingChips[i] = ConfusedNumber.create(self._data.droppingChips[i], "SparkScout_DropChip")
+	end
+
+	self._subModuleInit = true
+	self._lastCardDropType = nil
+	self._curGrade = self._data.grade
+	self._curSubGrade = self._data.subGrade
+	self._curGradeStar = self._data.gradeStar
+	self._curGradeScore = self._data.gradeScore
+	self._data.curGradeId = ConfusedNumber.create(self:getCurGradeIdCal(), "SparkScout_curGradeId")
+	self._curGradeId = self._data.curGradeId
+	self._maxHistoryGradeId = self._data.maxGradeId
+	self._chipsDirty = true
+end
+
+function M:dealInstanceExpire()
+	self._data.expired = true
+	self._data.expireSettled = false
+	self._data.expireClaimed = false
+
+	self:clearOldGradeData()
+	self:clearScoreChangeData()
+	P._playerAsset:decreaseAssetNum(D.ResType.spark_scout_10057, P._playerAsset:getAssetNum(D.ResType.spark_scout_10057), D.LogWay.battle_pass_expire)
+	P._playerAsset:decreaseAssetNum(D.ResType.spark_scout_10062, P._playerAsset:getAssetNum(D.ResType.spark_scout_10062), D.LogWay.battle_pass_expire)
+	self:recordPlayTime()
+end
+
+function M:isBeta()
+	if self._data then
+		if self._data.expired and self._data.expireClaimed then
+			return C.isPvPBeta()
+		else
+			return self._data.isBeta
+		end
+	end
+
+	return C.isPvPBeta()
+end
+
+function M:updateBetaStatus()
+	if not self._data or self._data.expired then
+		return
+	end
+
+	self._data.isBeta = C.isPvPBeta()
+end
+
+function M:isEntered()
+	return self._data and self._data.entered
+end
+
+function M:isPoped()
+	return self._data and self._data.poped
+end
+
+function M:hasPrivilege()
+	return true
+end
+
+function M:hasPrivilege2()
+	return P._playerBPSparkScout:isClaimed(1, 2)
+end
+
+function M:getId()
+	return self._data.id or 1
+end
+
+function M:dealEnter()
+	self:dealFirstEnter()
+end
+
+function M:dealFirstEnter()
+	if self._data.entered then
+		return
+	end
+
+	local weaponBanList, weapons, weaponDecks = self:getRandomData(self._data.id, self._data.subType)
+	self._data.weaponDecks = weaponDecks
+	self._data.weaponBanList = weaponBanList
+	self._data.entered = true
+	local cfg = P._playerActivity:readCfg(self._data.id)
+
+	self:initAdPackNum(cfg._startTime)
+	P._playerSparkScoutOffline:initAdSweepNum(cfg._startTime)
+	self:initExtraRewardNum(cfg._startTime)
+	P._playerSparkScoutOffline:recordNewOfflineTime(cfg._startTime)
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.SparkChipCustom1)
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.SparkChipCustom2)
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.SparkChipCustom3)
+	P._playerAsset:tryClearItemCustomSelectIdx(D.ResType.SparkChipCustom4)
+end
+
+function M:dealPoped()
+	self._data.poped = true
+end
+
+function M:getSubType()
+	return self._data.subType
+end
+
+function M:getContinuousWinNum()
+	return self._data.maxWinNum
+end
+
+function M:getLotteryCount(dropType)
+	return self._data.chipLotteryCount[dropType] or 0
+end
+
+function M:getLotteryCountByBoxType(boxType)
+	if boxType == 1 then
+		return self:getLotteryCount(D.SparkScoutDropType.Pack1Drop) + self:getLotteryCount(D.SparkScoutDropType.GoldDrop)
+	else
+		return self:getLotteryCount(D.SparkScoutDropType.Pack2Drop) + self:getLotteryCount(D.SparkScoutDropType.SPGoldDrop)
+	end
+end
+
+function M:checkClaimFreeChip(boxType)
+	if self:isFreeChipClaimed(boxType) then
+		return ResultCode.REWARD_CLAIMED
+	end
+
+	local needCount, getCid = self:readFreeChipCfg(boxType)
+	local currentCount = self:getLotteryCountByBoxType(boxType)
+
+	if currentCount < needCount then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryClaimFreeChip(boxType)
+	local resCode = self:checkClaimFreeChip(boxType)
+
+	if resCode ~= ResultCode.OK then
+		return resCode
+	end
+
+	local needCount, getCid = self:readFreeChipCfg(boxType)
+	local selectedIdx, selectedId, selectedNum = P._playerAsset:getItemCustomSelectIdx(getCid)
+
+	if not selectedIdx then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	self._data.freeChipClaim[boxType] = true
+	selectedIdx, selectedId, selectedNum = P._playerAsset:getCustomItemCidNumByIdx(getCid, selectedIdx)
+	local rewards = self:addChip(selectedId)
+
+	SimpleEvent.emit("sparkScoutPool.dirty")
+
+	return ResultCode.OK, rewards
+end
+
+function M:isFreeChipClaimed(boxType)
+	return self._data.freeChipClaim[boxType]
+end
+
+function M:getGradeStar(gradeId)
+	return self._gradeStars[gradeId - gradeId % 10] or 1
+end
+
+function M:getCurEncoderGrade()
+	return self:getCurGradeId() * 1000 + self:getCurGradeScore()
+end
+
+function M:getCurGradeId()
+	return self._curGradeId()
+end
+
+function M:getCurGradeIdCal()
+	return self:getCurGrade() * 100 + self:getCurSubGrade() * 10 + self:getCurGradeStar()
+end
+
+function M:getCurGrade()
+	return self._curGrade()
+end
+
+function M:getCurSubGrade()
+	return self._curSubGrade()
+end
+
+function M:getCurGradeStar()
+	return self._curGradeStar()
+end
+
+function M:getCurGradeScore()
+	return self._curGradeScore()
+end
+
+function M:getMaxHistoryGradeId()
+	return self._maxHistoryGradeId()
+end
+
+function M:changeScore(delta)
+	self._curGradeScore = self._curGradeScore + delta
+end
+
+function M:decodeGradeId(gradeId)
+	if self:getFinalGrade() <= gradeId then
+		return 6, 1, gradeId - self:getFinalGrade()
+	end
+
+	return math.floor(gradeId / 100), math.floor(gradeId / 10) % 10, gradeId % 10
+end
+
+function M:changeGrade(gradeId)
+	self._curGradeId:reset2Value(gradeId)
+
+	local grade, subGrade, star = self:decodeGradeId(gradeId)
+
+	self._curGrade:reset2Value(grade)
+	self._curSubGrade:reset2Value(subGrade)
+	self._curGradeStar:reset2Value(star)
+
+	if self:getMaxHistoryGradeId() < gradeId then
+		if gradeId % 10 == 0 then
+			Trace.traceDesign_Activity("Scout_Level:%s:%s", nil, self._aType, self:getSubType(), Mathf.Clamp(gradeId, self:getBaseGradeId(), self:getFinalGrade() + 500))
+		end
+
+		self._maxHistoryGradeId:reset2Value(gradeId)
+		TaskHelper:updateTaskValueMax(D.TaskType.SPARK_SCOUT_GRADE, gradeId)
+	end
+end
+
+function M:getBaseGradeId()
+	return self._minGradeId
+end
+
+function M:getFinalGrade()
+	return self._finalGradeId
+end
+
+function M:getMaxStarGradeId()
+	return self._maxStarGradeId
+end
+
+function M:getGradeCfgById(gradeId)
+	if gradeId <= self:getFinalGrade() then
+		return self._gradesCfg[gradeId]
+	end
+
+	return self._gradesCfg[gradeId] or self._gradesCfg[self._maxCfgGradeId]
+end
+
+function M:getNextGradeId(gradeId)
+	if self:getFinalGrade() <= gradeId then
+		if self:getMaxStarGradeId() < gradeId + 1 then
+			return gradeId
+		end
+
+		return gradeId + 1
+	end
+
+	return self._nextGradeMap[gradeId] or gradeId + 1
+end
+
+function M:getNextUpGradeId(gradeId)
+	if self:getFinalGrade() <= gradeId then
+		return gradeId + 1
+	end
+
+	if gradeId % 10 == 0 then
+		return gradeId + 1
+	end
+
+	return self._nextGradeMap[gradeId] or gradeId + 1
+end
+
+function M:getLastGradeId(gradeId)
+	if gradeId <= self:getBaseGradeId() then
+		return self:getBaseGradeId()
+	end
+
+	if self:getFinalGrade() < gradeId then
+		return gradeId - 1
+	end
+
+	if gradeId % 10 == 0 then
+		return self._lastGradeMap[gradeId]
+	end
+
+	return gradeId - 1
+end
+
+function M:getLastDownGradeId(gradeId)
+	return self:getLastGradeId(gradeId)
+end
+
+function M:parseGradeId(parseGradeId)
+	local maxId = self:getFinalGrade()
+
+	if maxId <= parseGradeId then
+		return 6, 1, parseGradeId - maxId
+	end
+
+	return math.floor(parseGradeId / 100), math.floor(parseGradeId / 10) % 10, parseGradeId % 10
+end
+
+function M:getStarDiff(baseGradeId, targetGradeId)
+	return self:getStarNumById(targetGradeId) - self:getStarNumById(baseGradeId)
+end
+
+function M:getStarNumById(gradeId)
+	local max = self:getFinalGrade()
+
+	if max <= gradeId then
+		return gradeId - max + self:readRealStarNum(max)
+	end
+
+	return self:readRealStarNum(gradeId)
+end
+
+function M:addScore(scoreNum)
+	scoreNum = math.abs(scoreNum) or 0
+	local gradeId = self:getCurGradeId()
+	local gradeCfg = self:getGradeCfgById(gradeId)
+	local nextGradeId = self:getNextUpGradeId(gradeId)
+
+	if self:getMaxStarGradeId() < nextGradeId then
+		return
+	end
+
+	self:changeScore(scoreNum)
+
+	local currentScore = self:getCurGradeScore()
+
+	if gradeCfg._score <= currentScore then
+		self:tryUpGrade()
+	end
+
+	local current = self:getCurGradeScore()
+
+	SimpleEvent.emit("spark_scout.score.update")
+end
+
+function M:reduceScore(scoreNum)
+	scoreNum = math.abs(scoreNum) or 0
+	local gradeId = self:getCurGradeId()
+	local originScore = self:getCurGradeScore()
+
+	self:changeScore(-scoreNum)
+
+	local currentScore = self:getCurGradeScore()
+
+	if currentScore < 0 then
+		self:tryDownGrade()
+	end
+
+	SimpleEvent.emit("spark_scout.score.update")
+end
+
+function M:tryUpGrade()
+	local gradeId = self:getCurGradeId()
+	local gradeCfg = self:getGradeCfgById(gradeId)
+	local maxGrade = self:getFinalGrade() <= gradeId
+	local nextGradeId = self:getNextUpGradeId(gradeId)
+	local currentScore = self:getCurGradeScore()
+
+	if maxGrade and currentScore < gradeCfg._score then
+		return
+	end
+
+	self:changeGrade(nextGradeId)
+	self:changeScore(-gradeCfg._score)
+
+	local newGradeId = self:getCurGradeId()
+	currentScore = self:getCurGradeScore()
+
+	if self:getMaxStarGradeId() <= newGradeId then
+		if currentScore > 0 then
+			self:changeScore(-currentScore)
+		end
+
+		return
+	end
+
+	if gradeCfg._score <= currentScore then
+		self:tryUpGrade()
+	end
+end
+
+function M:tryDownGrade()
+	local gradeId = self:getCurGradeId()
+	local gradeCfg = self:getGradeCfgById(gradeId)
+	local isMinGrade = gradeId == self:getBaseGradeId()
+
+	if isMinGrade then
+		local currentScore = self:getCurGradeScore()
+
+		if currentScore < 0 then
+			self:changeScore(-currentScore)
+		end
+
+		return
+	end
+
+	local currentScore = self:getCurGradeScore()
+
+	if currentScore > 0 then
+		return
+	end
+
+	self:changeGrade(self:getLastDownGradeId(gradeId))
+
+	gradeId = self:getCurGradeId()
+	gradeCfg = self:getGradeCfgById(gradeId)
+
+	self:changeScore(gradeCfg._score)
+
+	currentScore = self:getCurGradeScore()
+	local minGrade = gradeId == self:getBaseGradeId()
+
+	if currentScore < 0 then
+		self:tryDownGrade()
+	end
+end
+
+function M:getFinalRank()
+	return self:getCurrentData().finalRank
+end
+
+function M:hasSettleRewards()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self:getCurrentData().finalRank ~= nil
+end
+
+function M:getRankRewards()
+	local rewards = {}
+
+	if self._data.isBeta then
+		return rewards
+	end
+
+	local rank = P._playerActivitySparkScout:getFinalRank()
+	local conf = nil
+
+	if rank ~= 9999 then
+		for i = 1, #D._rankSparkScoutConfig do
+			conf = D._rankSparkScoutConfig[i]
+
+			if rank <= conf._max then
+				for j = 1, #conf._rewardCids do
+					rewards[#rewards + 1] = {
+						conf._rewardCids[j],
+						conf._rewardNums[j]
+					}
+				end
+
+				break
+			end
+		end
+	end
+
+	return rewards, conf
+end
+
+function M:getGradeRewards(subType, all)
+	local ids = self._rewardGradeCfgIds
+	local claimNum = 0
+	local gradeId = all and self:getFinalGrade() or self:getMaxHistoryGradeId()
+	local totalRewards = {}
+
+	if self:isBeta() then
+		return 0, totalRewards
+	end
+
+	for i = 1, #ids do
+		if all or ids[i] <= gradeId then
+			local cfg = self._gradesCfg[ids[i]]
+
+			if cfg._rewards then
+				claimNum = claimNum + 1
+
+				D.foldCidsAndNums2Rewards(totalRewards, cfg._rewards[1], cfg._rewards[2])
+			end
+		else
+			break
+		end
+	end
+
+	return claimNum, totalRewards
+end
+
+function M:tryClaimSettleRewards()
+	local items = {}
+
+	if not self._data.expired then
+		return
+	end
+
+	if not self._data.expireSettled then
+		return
+	end
+
+	if self._data.expireClaimed then
+		return
+	end
+
+	local _, gradeRewards = self:getGradeRewards(self._data.subType)
+	local rankRewards, conf = self:getRankRewards()
+
+	table.append(items, P._playerAsset:increaseAssetNumsByList(gradeRewards, D.LogWay.spark_scout_grade))
+	table.append(items, P._playerAsset:increaseAssetNumsByList(rankRewards, D.LogWay.spark_scout_rank))
+
+	self._data.expireClaimed = true
+	self._tmpSettleRankData = nil
+	local rankId = #D._rankSparkScoutConfig
+	local rankIdx = self:getFinalRank() or -1
+	local ranks = self:readLimitRank()
+	local lenRanks = lc.lenTable(ranks)
+	local leftValue = 1
+	local rightValue = ranks[1]
+
+	for i = 1, lenRanks - 1 do
+		if ranks[i] < rankIdx then
+			leftValue = ranks[i] + 1
+			rightValue = ranks[i + 1]
+		end
+	end
+
+	if rankIdx <= ranks[lenRanks] then
+		Trace.traceDesign_Activity("ScoutRewards_Claim:%s:%s", nil, self._aType, self:getSubType(), leftValue .. "-" .. rightValue)
+	end
+
+	if P._playerStore:getPayMoney() > 0 then
+		for i = #D._rankSparkScoutConfig, 1, -1 do
+			if D._rankSparkScoutConfig[i]._min <= rankIdx and rankIdx <= D._rankSparkScoutConfig[i]._max then
+				rankId = D._rankSparkScoutConfig[i]._id
+
+				break
+			end
+		end
+
+		if rankId < #D._rankSparkScoutConfig then
+			-- Nothing
+		end
+	end
+
+	Trace.traceDesign_Activity("ScoutPlay_Time:%s:%s", nil, self._aType, self:getSubType(), math.floor(self._data.playTime / 3600))
+	Trace.AF_traceEvent("Scout_PayMoney", {
+		{
+			_key = "id",
+			_value = self._data.id
+		},
+		{
+			_key = "num",
+			_value = P._playerRecord:getActivityPurchase(self._data.id) or 0
+		},
+		{
+			_key = "finalScore",
+			_value = self:getCurEncoderGrade() or 0
+		},
+		{
+			_key = "rankIdx",
+			_value = rankIdx
+		}
+	})
+	P:saveGameData()
+
+	return items
+end
+
+function M:isSettleClaimed()
+	return self._data.expireClaimed
+end
+
+function M:getBaseAtk()
+	local baseAtk = (self:getAtkLevel() - 1) * self:readCurrentCfg()._atkUpgrade[2] + self:readCurrentCfg()._atkUpgrade[1]
+
+	return math.floor(baseAtk)
+end
+
+function M:getAtk()
+	local baseAtk = (self:getAtkLevel() - 1) * self:readCurrentCfg()._atkUpgrade[2] + self:readCurrentCfg()._atkUpgrade[1]
+	local _, props = self:calcGemEffects(self._data.chipSlots)
+	props = props[0]
+
+	if props then
+		if props[BattlePropEnum.AtkAddPer] then
+			baseAtk = baseAtk + math.floor(baseAtk * props[BattlePropEnum.AtkAddPer] / 100)
+		end
+
+		if props[BattlePropEnum.Atk] then
+			baseAtk = baseAtk + props[BattlePropEnum.Atk]
+		end
+	end
+
+	return math.floor(baseAtk)
+end
+
+function M:getNextAtk()
+	local baseAtk = self:getAtkLevel() * self:readCurrentCfg()._atkUpgrade[2] + self:readCurrentCfg()._atkUpgrade[1]
+	local _, props = self:calcGemEffects(self._data.chipSlots)
+
+	if props and props[0] then
+		props = props[0]
+
+		if props[BattlePropEnum.AtkAddPer] then
+			baseAtk = baseAtk + math.floor(baseAtk * props[BattlePropEnum.AtkAddPer] / 100)
+		end
+
+		if props[BattlePropEnum.Atk] then
+			baseAtk = baseAtk + props[BattlePropEnum.Atk]
+		end
+	end
+
+	return baseAtk
+end
+
+function M:getBaseDomeHp()
+	local baseHp = (self:getAtkLevel() - 1) * self:readCurrentCfg()._hpUpgrade[2] + self:readCurrentCfg()._hpUpgrade[1]
+
+	return baseHp
+end
+
+function M:getDomeHp()
+	local baseHp = (self:getAtkLevel() - 1) * self:readCurrentCfg()._hpUpgrade[2] + self:readCurrentCfg()._hpUpgrade[1]
+	local _, props = self:calcGemEffects(self._data.chipSlots)
+
+	if props and props[0] then
+		props = props[0]
+
+		if props[BattlePropEnum.MaxHp] then
+			baseHp = baseHp + props[BattlePropEnum.MaxHp]
+		end
+
+		if props[BattlePropEnum.MaxHpAddPer] then
+			baseHp = baseHp + math.floor(baseHp * props[BattlePropEnum.MaxHpAddPer] / 100)
+		end
+	end
+
+	return baseHp
+end
+
+function M:getNextDomeHp()
+	local baseHp = self:getAtkLevel() * self:readCurrentCfg()._hpUpgrade[2] + self:readCurrentCfg()._hpUpgrade[1]
+	local _, props = self:calcGemEffects(self._data.chipSlots)
+
+	if props and props[0] then
+		props = props[0]
+
+		if props[BattlePropEnum.MaxHp] then
+			baseHp = baseHp + props[BattlePropEnum.MaxHp]
+		end
+
+		if props[BattlePropEnum.MaxHpAddPer] then
+			baseHp = baseHp + math.floor(baseHp * props[BattlePropEnum.MaxHpAddPer] / 100)
+		end
+	end
+
+	return baseHp
+end
+
+function M:getAtkLevel()
+	return self._data.atkLevel()
+end
+
+function M:getAtkUpgradeCost(resType)
+	if resType == D.ResType.spark_scout_wafer then
+		return self:readCurrentCfg()._atkCost[1] + self:readCurrentCfg()._atkCost[2] * (self._data.atkCost1Level() - 1)
+	else
+		return self:readCurrentCfg()._atkCostSp
+	end
+end
+
+function M:canUpgradeAtk()
+	return P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, self:getAtkUpgradeCost(D.ResType.spark_scout_wafer)) or P._playerAsset:isAssetEnough(D.ResType.spark_scout_sp_wafer, self:getAtkUpgradeCost(D.ResType.spark_scout_sp_wafer))
+end
+
+function M:tryUpgradeAtkLevel(resType)
+	if resType == D.ResType.spark_scout_wafer then
+		local cost = self:getAtkUpgradeCost(resType)
+
+		if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, cost) then
+			return ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.spark_scout_wafer
+		end
+
+		self._data.atkLevel = self._data.atkLevel + 1
+		self._data.atkCost1Level = self._data.atkCost1Level + 1
+
+		P._playerAsset:increaseAssetNum(D.ResType.spark_scout_wafer, -cost, D.LogWay.spark_scout_upgrade_atk)
+
+		return ResultCode.OK
+	else
+		local cost = self:getAtkUpgradeCost(resType)
+
+		if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_sp_wafer, cost) then
+			return ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.spark_scout_wafer
+		end
+
+		self._data.atkLevel = self._data.atkLevel + 1
+
+		P._playerAsset:increaseAssetNum(D.ResType.spark_scout_sp_wafer, -cost, D.LogWay.spark_scout_upgrade_atk)
+
+		return ResultCode.OK
+	end
+end
+
+function M:isPvpWeaponValid()
+	local firstValid = self:getPvpWeapon(1) or self:getPvpWeapon(2) or self:getPvpWeapon(3)
+	local secondValid = self:getPvpWeapon(4) or self:getPvpWeapon(5) or self:getPvpWeapon(6)
+	local thirdValid = self:getPvpWeapon(7) or self:getPvpWeapon(8) or self:getPvpWeapon(9)
+
+	return firstValid and secondValid and thirdValid
+end
+
+function M:getPvpWeapon(index)
+	return self._data.pvpWeapons[index]
+end
+
+function M:setPvpWeapon(index, weapon)
+	self._data.pvpWeapons[index] = weapon
+	self._chipsDirty = true
+end
+
+function M:isPvpWeaponSlotUnlocked(index)
+	return table.contains(self._data.unlockedPvpWeaponSlots, index)
+end
+
+function M:isAllPvpWeaponSlotUnlocked(index)
+	return #self._data.unlockedPvpWeaponSlots >= 9
+end
+
+function M:getPvpWeaponUnlockCost(index)
+	return index % 3 == 2 and self:readCurrentCfg()._weaponUnlockCost[1] or self:readCurrentCfg()._weaponUnlockCost[2]
+end
+
+function M:checkUnlockPvpWeaponSlot(index)
+	if index < 1 or index > 9 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isPvpWeaponSlotUnlocked(index) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if not self:isPvpWeaponSlotUnlocked(index - 1) then
+		return ResultCode.PLS_UNLOCK_PREV_SLOT
+	end
+
+	local cost = self:getPvpWeaponUnlockCost(index)
+	local enough = P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, cost)
+
+	if not enough then
+		return D.ResType.spark_scout_wafer, cost
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryUnlockPvpWeaponSlot(index)
+	local cost = self:getPvpWeaponUnlockCost(index)
+
+	if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_wafer, cost) then
+		return ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.spark_scout_wafer
+	end
+
+	P._playerAsset:increaseAssetNum(D.ResType.spark_scout_wafer, -cost, D.LogWay.spark_scout_unlock_pvp_weapon_slot)
+
+	self._data.unlockedPvpWeaponSlots[#self._data.unlockedPvpWeaponSlots + 1] = index
+
+	return ResultCode.OK
+end
+
+function M:getWeaponBanList(activityId, subType)
+	local conf = self:readCfg(subType)
+	local seed = activityId
+	local weaponBanList = conf._weaponBanList[seed % #conf._weaponBanList + 1]
+
+	return weaponBanList, seed
+end
+
+function M:getWeaponDeck(weapon)
+	if self._data.weaponDecks then
+		return self._data.weaponDecks[weapon]
+	else
+		return weapon * 100 + 1
+	end
+end
+
+function M:getAvailableMissionEnemies(activityId)
+	activityId = activityId or self:getId()
+	local index = activityId % 1000
+	local conf = self:readCfg()
+	local poolIndex = index % #conf._lowEnemyPool == 0 and #conf._lowEnemyPool or index % #conf._lowEnemyPool
+
+	return conf._lowEnemyPool[poolIndex], conf._eliteEnemyPool[poolIndex]
+end
+
+function M:genMissionId(gradeId)
+	gradeId = gradeId or self:getCurGradeId()
+	local maxMsId = 50000 + self:getFinalGrade()
+
+	if not self._missionIdCache then
+		self._missionIdCache = {}
+		local cfg = P._playerMission:getCfgByType(D.MissionType.SparkScout)
+
+		for i, v in pairs(cfg) do
+			if maxMsId <= i then
+				self._missionIdCache[#self._missionIdCache + 1] = i
+			end
+		end
+
+		table.sort(self._missionIdCache)
+	end
+
+	local curMissionId = gradeId + 50000
+
+	if maxMsId <= curMissionId then
+		local result = nil
+
+		for i = #self._missionIdCache, 1, -1 do
+			if self._missionIdCache[i] <= curMissionId then
+				result = self._missionIdCache[i]
+
+				break
+			end
+		end
+
+		result = result or self._missionIdCache[#self._missionIdCache]
+
+		return result
+	end
+
+	return curMissionId
+end
+
+function M:startMission(msId, matchData, isDuel)
+	self._battling = true
+	self._matchData = matchData
+	self._isDuel = isDuel
+	self._battleSettleRewards = nil
+	local maxExcludeNums = C._appConfig.pvpMatchExcludeNum or self:readCurrentCfg()._matchExcludeNum
+	local grade = self:getCurGradeId()
+	local maxExcludeNum = grade < 640 and maxExcludeNums[1] or grade < 670 and maxExcludeNums[2] or maxExcludeNums[3]
+
+	while #self._data.matchExcludes >= maxExcludeNum - 1 do
+		table.remove(self._data.matchExcludes, 1)
+	end
+
+	table.insert(self._data.matchExcludes, matchData._userId)
+
+	self._matchData.isDuel = isDuel
+	self._data.otherMatchData = {
+		gradeId = self._matchData.gradeId,
+		msId = self._matchData.msId
+	}
+	self._data.msId = msId
+
+	self:getBattleEnemies()
+
+	local gradeId = self:getCurGradeId()
+	local starSum = self:getStarNumById(gradeId)
+	starSum = Mathf.Clamp(starSum, 1, 5000)
+
+	Trace.traceDesign_Activity("Scout_Level_BattleNum:%s:%s", nil, self._aType, self:getSubType(), starSum)
+
+	if self._data.battleNum == 0 then
+		Trace.traceDesign_Activity("Scout_Level:%s:%s", nil, self._aType, self:getSubType(), self:getCurGradeId())
+	end
+
+	if isDuel then
+		self:clearDuelData()
+	end
+
+	P:saveGameData()
+end
+
+function M:getBattleEnemies()
+	if not self._data._missionEnemies then
+		local missionEnemies = {}
+		local index = self:getId() % 1000
+		local conf = self:readCfg(self._data.subType)
+		local lowEnemyPool, eliteEnemyPool = self:getAvailableMissionEnemies(self:getId())
+
+		for i = 1, #lowEnemyPool do
+			missionEnemies[#missionEnemies + 1] = {
+				lowEnemyPool[i],
+				0
+			}
+		end
+
+		table.shuffle(missionEnemies, math.randomer(math.random(1000)))
+
+		missionEnemies[5] = {
+			0,
+			eliteEnemyPool[math.random(#eliteEnemyPool)]
+		}
+
+		for i = 6, #missionEnemies do
+			missionEnemies[i] = nil
+		end
+
+		table.shuffle(missionEnemies, math.randomer(math.random(1000)))
+
+		self._data._missionEnemies = missionEnemies
+
+		for i = 4, #self._data._missionEnemies do
+			self._data._missionEnemies[i] = nil
+		end
+	end
+
+	return self._data._missionEnemies
+end
+
+function M:getNextMissionEnemiesInfo()
+	local missionEnemies = self:getBattleEnemies()
+	local normalEnemies = {}
+	local eliteEnemies = {}
+
+	for i = 1, #missionEnemies do
+		local enemyGroup = missionEnemies[i]
+
+		if enemyGroup[1] ~= 0 then
+			normalEnemies[#normalEnemies + 1] = enemyGroup[1]
+		end
+
+		if enemyGroup[2] ~= 0 then
+			eliteEnemies[#eliteEnemies + 1] = enemyGroup[2]
+		end
+	end
+
+	return normalEnemies, eliteEnemies
+end
+
+function M:calcWinScore(gradeId, otherGradeId)
+	local baseScore = self:readBaseWinScore(gradeId)
+	local winScore = self:readWinScore(gradeId)
+	local deltaScore = self:readDeltaScore(gradeId)
+	local starDiff = self:getStarDiff(gradeId, otherGradeId)
+	local winOrLoseScore = math.max(baseScore, winScore + deltaScore * starDiff)
+
+	return winOrLoseScore
+end
+
+function M:finishMission(msId, result, battleData)
+	self:trySettleMatch(true, result, battleData)
+
+	self._matchData = nil
+	self._data.matchSeed = nil
+
+	if result == D.BattleResult.Win then
+		TaskHelper:increaseTaskValue(D.TaskType.SPARK_SCOUT_WIN, 1)
+	end
+
+	self._data._missionEnemies = nil
+	self._battling = false
+
+	self:updateBetaStatus()
+	self:uploadRankDataV2(self:getId())
+	self:uploadMatchData()
+end
+
+function M:recordBattleData(winCount, crushCount, dangerWinCount)
+	self._data.battleWinCount = winCount or 0
+	self._data.battleCrushWinCount = crushCount or 0
+	self._data.dangerWinCount = dangerWinCount or 0
+
+	P:saveGameData()
+end
+
+function M:trySettleMatch(isBattle, result, battleData)
+	if not self._data.otherMatchData then
+		return
+	end
+
+	self._lastGradeData = self:genGradeData()
+
+	if not isBattle then
+		result = D.BattleResult.Quit
+		battleData = {
+			winCount = self._data.battleWinCount or 0,
+			crushWin = self._data.battleCrushWinCount or 0,
+			dangerWinCount = self._data.dangerWinCount or 0
+		}
+		self._data.battleWinCount = nil
+		self._data.battleCrushWinCount = nil
+
+		if not P._playerActivity:isSparkScoutOpening() then
+			return
+		end
+	end
+
+	if self._data.expired then
+		self._battleSettleRewards = {}
+
+		return
+	end
+
+	local oldBigGrade = self._lastGradeData.grade
+
+	Trace.traceDesign_Activity("Scout_WinLose:%s:%s:%s", nil, self._aType, self:getSubType(), Mathf.Clamp(oldBigGrade, 1, 10), result == D.BattleResult.Win and 1 or 0)
+
+	local otherMatchData = self._data.otherMatchData
+	local otherGradeId = otherMatchData.gradeId
+	local msId = otherMatchData.msId
+	local gradeId = self:getCurGradeId()
+	self._data.rankTimestamp = C.getCurTime() - self:readActivityStartTime()
+
+	if result == D.BattleResult.Win then
+		local contWinNum = battleData.contWin or 0
+		local crushWinNum = battleData.crushWin or 0
+		local completeWin = battleData.winCount == 3
+		local dangerWinCount = battleData.dangerWinCount or 0
+		local baseScore = self:readBaseWinScore(gradeId)
+		local winScore = self:readWinScore(gradeId)
+		local deltaScore = self:readDeltaScore(gradeId)
+		local starDiff = self:getStarDiff(gradeId, otherGradeId)
+		local winAddScore = self:readWinAddScore(self:getContinuousWinNum() + 1)
+		local crushWinAddScore = crushWinNum * self:readExtraAddScore(1)
+		local completeWinAddScore = 0
+
+		if completeWin then
+			completeWinAddScore = self:readExtraAddScore(3)
+		end
+
+		local dangerWinAddScore = 0
+		dangerWinAddScore = dangerWinAddScore and self:readExtraAddScore(2) * dangerWinCount
+		local winOrLoseScore = math.max(baseScore, winScore + deltaScore * starDiff)
+		local resultScore = winOrLoseScore + completeWinAddScore + crushWinAddScore + winAddScore + dangerWinAddScore
+		local duelScore = 0
+
+		if self._isDuel then
+			duelScore = resultScore
+			resultScore = resultScore + duelScore
+		end
+
+		resultScore = math.abs(resultScore)
+
+		P._playerAsset:increaseAssetNumsByList(self:getSettleRewards(msId, true, true), D.LogWay.finish_spark_scout)
+		self:addScore(resultScore)
+		P._playerBPSparkScout:addExp(1)
+
+		if self:getLeftExtraRewardNum() > 0 then
+			self:recordExtraReward()
+		end
+
+		self._data.maxWinNum = (self._data.maxWinNum or 0) + 1
+		self._data.failNum = 0
+		self._scoreChangeData = {
+			winOrLose = winOrLoseScore,
+			dangerWinCount = dangerWinCount,
+			dangerWinAddScore = dangerWinAddScore,
+			completeWin = completeWin,
+			completeWinAddScore = completeWinAddScore,
+			continuousNum = self._data.maxWinNum,
+			continuous = winAddScore,
+			crushNum = crushWinAddScore,
+			crush = crushWinNum,
+			totalScore = resultScore,
+			isDuel = self._isDuel,
+			duel = duelScore
+		}
+	else
+		local littleLose = battleData.winCount == 1
+		local crushWinNum = battleData.crushWin or 0
+		local dangerWinCount = battleData.dangerWinCount or 0
+		self._losing = true
+
+		P._playerAsset:increaseAssetNumsByList(self:getSettleRewards(msId, true, false), D.LogWay.finish_spark_scout)
+
+		if self:getLeftExtraRewardNum() > 0 then
+			self:recordExtraReward()
+		end
+
+		local baseScore = self:readBaseLoseScore(gradeId)
+		local loseScore = self:readLoseScore(gradeId)
+		local deltaScore = self:readDeltaScore(gradeId)
+		local starDiff = self:getStarDiff(gradeId, otherGradeId)
+		local winOrLoseScore = loseScore + deltaScore * starDiff * -1
+
+		if baseScore > winOrLoseScore then
+			winOrLoseScore = baseScore
+		end
+
+		local littleLoseScore = littleLose and self:readExtraAddScore(4) or 0
+		local crushWinAddScore = crushWinNum * self:readExtraAddScore(1)
+		local dangerWinAddScore = 0
+		dangerWinAddScore = dangerWinAddScore and self:readExtraAddScore(2) * dangerWinCount
+		local resultScore = winOrLoseScore
+		resultScore = -math.abs(resultScore) + littleLoseScore + crushWinAddScore + dangerWinAddScore
+
+		if resultScore > 0 then
+			self:addScore(resultScore)
+		else
+			self:reduceScore(resultScore)
+		end
+
+		self._data.failNum = (self._data.failNum or 0) + 1
+		self._data.maxWinNum = 0
+		self._scoreChangeData = {
+			continuousNum = 0,
+			continuous = 0,
+			winOrLose = -winOrLoseScore,
+			littleLose = littleLose,
+			littleLoseScore = littleLoseScore,
+			crushNum = crushWinAddScore,
+			crush = crushWinNum,
+			dangerWinCount = dangerWinCount,
+			dangerWinAddScore = dangerWinAddScore,
+			totalScore = -resultScore
+		}
+	end
+
+	self._data.battleNum = (self._data.battleNum or 0) + 1
+	self._data.otherMatchData = nil
+	self._lastSettleResult = result
+end
+
+function M:getLastSettleResult()
+	return self._lastSettleResult
+end
+
+function M:getScoreChangeData()
+	return self._scoreChangeData
+end
+
+function M:clearScoreChangeData()
+	self._scoreChangeData = nil
+end
+
+function M:genGradeData()
+	return {
+		score = self:getCurEncoderGrade(),
+		gradeId = self:getCurGradeId(),
+		grade = self:getCurGrade(),
+		subGrade = self:getCurSubGrade(),
+		gradeStar = self:getCurGradeStar(),
+		gradeScore = self:getCurGradeScore()
+	}
+end
+
+function M:getOldGradeData()
+	return self._lastGradeData
+end
+
+function M:clearOldGradeData()
+	self._lastGradeData = nil
+end
+
+function M:getSettleRewards(msId, isFinish, win)
+	if self._battleSettleRewards and isFinish then
+		return self._battleSettleRewards
+	end
+
+	local rewards = {}
+
+	if self._isDuel then
+		local cids, nums = self:readDuelRewards(win)
+
+		D.foldCidsAndNums2Rewards(rewards, cids, nums)
+	end
+
+	if self:getLeftExtraRewardNum() > 0 then
+		local gradeId = self:getCurGradeId()
+		local cids, nums = self:readExtraRewards(gradeId)
+
+		D.foldCidsAndNums2Rewards(rewards, cids, nums)
+	end
+
+	if self:getBattleNum() <= self:readBattleFreePackNum() then
+		local cids, nums = self:readBattleFreePackRewards()
+
+		D.foldCidsAndNums2Rewards(rewards, cids, nums)
+	end
+
+	if isFinish then
+		self._battleSettleRewards = rewards
+	end
+
+	return rewards
+end
+
+local EXCLUDE_CHIPS = {
+	3530027,
+	3630027,
+	3730027
+}
+
+function M:calcChipPools()
+	for i = D.Quality.Blue, D.Quality.COLORFUL do
+		if self._chipPools[i] == nil then
+			self._chipPools[i] = {}
+		else
+			table.clear(self._chipPools[i])
+		end
+	end
+
+	for _, conf in pairs(D._activitySparkScoutChipConfig) do
+		local quality = conf._quality
+
+		if not self._data.chips[conf._id] then
+			local effect = conf._effect
+			local weaponId = D._gemEffectConfig[effect]._weaponId
+
+			if conf._weight > 0 and not table.contains(self._data.weaponBanList, weaponId) and not table.contains(EXCLUDE_CHIPS, conf._id) then
+				table.insert(self._chipPools[quality], conf)
+			end
+		end
+	end
+
+	return self._chipPools
+end
+
+function M:checkLottery(dropType)
+	local cid, cost = self:getDropCost(dropType)
+
+	if not P._playerAsset:isAssetEnough(cid, cost) then
+		return ResultCode.RESOURCE_NOT_ENOUGH
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryLottery(dropType)
+	local retCode = self:checkLottery(dropType)
+
+	if retCode ~= ResultCode.OK then
+		return retCode
+	end
+
+	local cid, cost = self:getDropCost(dropType)
+
+	P._playerAsset:decreaseAssetNum(cid, cost, D.LogWay.spark_scout_shop)
+
+	local rewards = P._playerActivitySparkScout:dropChips(dropType)
+	self._data.chipLotteryCount[dropType] = (self._data.chipLotteryCount[dropType] or 0) + 1
+
+	P:saveGameData(dropType == D.SparkScoutDropType.GoldDrop or D.SparkScoutDropType.SPGoldDrop)
+
+	return ResultCode.OK, rewards
+end
+
+function M:dropChips(dropType)
+	local chips = {}
+	local weights, num = nil
+
+	if dropType then
+		self._data.dropType = dropType
+	end
+
+	local preNum = 0
+
+	if not dropType then
+		preNum = #self._data.droppingChips
+	end
+
+	table.clear(self._data.droppingChips)
+
+	local cfg = self:readCurrentCfg()
+
+	if self._data.dropType == D.SparkScoutDropType.Pack1Drop or self._data.dropType == D.SparkScoutDropType.GoldDrop then
+		if dropType == D.SparkScoutDropType.GoldDrop then
+			self._data.goldDropCount = (self._data.goldDropCount or 0) + 1
+		end
+
+		num = DropHelper.getByDropId(self:readPack1ChipNumDropId())
+		num = math.max(num, preNum)
+		weights = cfg._pack1ChipDropWeights
+	elseif self._data.dropType == D.SparkScoutDropType.Pack2Drop or self._data.dropType == D.SparkScoutDropType.SPGoldDrop then
+		num = DropHelper.getByDropId(self:readPack2ChipNumDropId())
+		num = math.max(num, preNum)
+		weights = cfg._pack2ChipDropWeights
+
+		if dropType == D.SparkScoutDropType.SPGoldDrop then
+			self._data.spGoldDropCount = (self._data.spGoldDropCount or 0) + 1
+		end
+	end
+
+	if dropType then
+		self:calcChipPools()
+	end
+
+	for i = 1, num do
+		local chip = self:dropOneChip(weights)
+		chips[#chips + 1] = {
+			chip,
+			1
+		}
+		self._data.droppingChips[i] = ConfusedNumber.create(chip, "SparkScout_DropChip")
+	end
+
+	if dropType then
+		self._data.remainAdRefreshCount:reset2Value(1)
+
+		local haveFreeRefresh = P._playerAsset:getAssetNum(D.ResType.spark_scout_10057) > 0
+
+		self._data.remainFreeRefreshCount:reset2Value(haveFreeRefresh and 1 or 0)
+	end
+
+	self._lastCardDropType = dropType
+
+	return chips
+end
+
+function M:dropOneChip(weights, chipType)
+	local pool = self._chipPools
+	local newWeights = clone(weights)
+
+	for i = D.Quality.Blue, D.Quality.COLORFUL do
+		if not pool[i] or #pool[i] == 0 then
+			newWeights[i - D.Quality.Blue + 1] = 0
+		end
+	end
+
+	local quality = DropHelper.randomIndexByWeights(newWeights) + D.Quality.Blue - 1
+	local chip = nil
+
+	if D.Quality.Blue <= quality and quality <= D.Quality.COLORFUL then
+		chip = DropHelper.dropFromGroup(pool[quality])
+
+		table.erase(pool[quality], chip)
+	else
+		local quality = DropHelper.randomIndexByWeights(weights) + D.Quality.Blue - 1
+		local pool = {}
+
+		for _, conf in pairs(D._activitySparkScoutChipConfig) do
+			if conf._quality == quality then
+				local effect = conf._effect
+
+				if not table.contains(self._data.weaponBanList, D._gemEffectConfig[effect]._weaponId) then
+					table.insert(pool, conf)
+				end
+			end
+		end
+
+		chip = DropHelper.dropFromGroup(pool)
+	end
+
+	return chip._id
+end
+
+function M:getRemainFreeRefreshcount()
+	return self._data.remainFreeRefreshCount()
+end
+
+function M:getRemainAdRefreshCount()
+	return self._data.remainAdRefreshCount()
+end
+
+function M:refreshChips(isAd)
+	if isAd then
+		self._data.remainAdRefreshCount = self._data.remainAdRefreshCount - 1
+	else
+		self._data.remainFreeRefreshCount = self._data.remainFreeRefreshCount - 1
+	end
+
+	local chips = self:dropChips()
+
+	if Client.isMultipleDeivce() and P._playerRight:isSVIP() then
+		P:saveGameData(true)
+	end
+
+	return chips
+end
+
+function M:getDroppingChips()
+	return self._data.droppingChips, self._data.dropType
+end
+
+function M:claimChips()
+	for i = 1, #self._data.droppingChips do
+		local chip = self._data.droppingChips[i]()
+
+		if chip then
+			self:addChip(chip)
+		end
+	end
+
+	table.clear(self._data.droppingChips)
+	P:saveGameData()
+end
+
+function M:getDropCost(dropType)
+	if dropType == D.SparkScoutDropType.GoldDrop then
+		local count = self._data.goldDropCount or 0
+		local costParams = self:readCurrentCfg()._pack3Cost
+
+		return D.ResType.spark_scout_wafer, costParams[1] + costParams[2] * count
+	elseif dropType == D.SparkScoutDropType.SPGoldDrop then
+		local count = self._data.spGoldDropCount or 0
+		local costParams = self:readCurrentCfg()._pack4Cost
+
+		return D.ResType.spark_scout_sp_wafer, costParams[1] + costParams[2] * count
+	elseif dropType == D.SparkScoutDropType.Pack1Drop then
+		return D.ResType.spark_scout_key, 1
+	else
+		return D.ResType.spark_scout_sp_key, 1
+	end
+end
+
+function M:hasOpenPackDot(dropType)
+	for type = D.SparkScoutDropType.Pack1Drop, D.SparkScoutDropType.Pack2Drop do
+		local cid, cost = self:getDropCost(type)
+
+		if (dropType == nil or dropType == type) and P._playerAsset:isAssetEnough(cid, cost) then
+			return true
+		end
+	end
+
+	if dropType == nil then
+		for i = 1, 2 do
+			local ret1 = self:checkClaimFreeChip(i)
+
+			if ret1 == ResultCode.OK then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:getBattleNum()
+	return self._data.battleNum or 0
+end
+
+function M:getLastDropType()
+	return self._lastCardDropType or D.SparkScoutDropType.MissionDrop
+end
+
+function M:getRemainFreeRefreshCount()
+	return self._data.remainFreeRefreshCount()
+end
+
+function M:getRemainAdRefreshCount()
+	return self._data.remainAdRefreshCount()
+end
+
+function M:hasHigherQualityChip(cid, includeEqual)
+	local quality = D._gemConfig[cid]._quality
+	local quailtyGap = 100000
+	local startQuality = includeEqual and quality or quality + 1
+
+	for i = startQuality, D.Quality.COLORFUL do
+		if self._data.chips[cid + quailtyGap * (i - quality)] then
+			return true
+		end
+	end
+end
+
+function M:addChip(cid)
+	if not self._data.chips[cid] then
+		self._data.chips[cid] = 1
+		self._chipsDirty = true
+
+		if not self:hasHigherQualityChip(cid) then
+			self._data.chipNewDots[cid] = true
+			local quailtyGap = 100000
+			local quality = D._gemConfig[cid]._quality
+
+			for i = D.Quality.Blue, quality - 1 do
+				self._data.chipNewDots[cid - quailtyGap] = nil
+				quailtyGap = quailtyGap + 100000
+			end
+		end
+
+		return {
+			{
+				cid,
+				1
+			}
+		}
+	else
+		local decomposeGold = self:readCurrentCfg()._chipDecomposeGold[D._activitySparkScoutChipConfig[cid]._quality - D.Quality.Blue + 1]
+		local rewards = P._playerAsset:increaseAssetNum(D.ResType.spark_scout_wafer, decomposeGold, D.LogWay.spark_scout_chip_overflow)
+
+		return rewards
+	end
+end
+
+function M:getChips()
+	return self._data.chips
+end
+
+function M:removeChipNew(cid)
+	self._data.chipNewDots[cid] = nil
+end
+
+function M:getAvailableChips()
+	if not self._chipsDirty then
+		return self._availableChips
+	end
+
+	table.clear(self._availableChips)
+
+	local emptySlotPart = {}
+	local equipedChips = {}
+	local weapons = {}
+
+	for i = 1, 9 do
+		if self._data.pvpWeapons[i] then
+			weapons[#weapons + 1] = self._data.pvpWeapons[i]
+		end
+	end
+
+	for part, chipSlots in pairs(self._data.chipSlots) do
+		if part < 100 or part > 100 and table.contains(weapons, part - 100) then
+			local chipSlotUnlockNum = (self._data.chipSlotUnlockNums[part] or 0) + 1
+
+			for i = 1, chipSlotUnlockNum do
+				if chipSlots[i] then
+					equipedChips[chipSlots[i]] = true
+				else
+					emptySlotPart[part] = true
+				end
+			end
+		end
+	end
+
+	for chip, _ in pairs(self._data.chips) do
+		if not equipedChips[chip] then
+			local conf = D._gemConfig[chip]
+			local quality = conf._quality
+			local weapon = D._gemEffectConfig[conf._effect]._weaponId
+			local part = weapon == 0 and conf._part or 100 + weapon
+			local filterValue = weapon == 0 and 2^(part - 1) or 2^(weapon + D.PART_FILTER_NUM - 1)
+			local replaceQuality = 0
+
+			for equipChip, _ in pairs(equipedChips) do
+				if (equipChip - chip) % 100000 == 0 then
+					replaceQuality = D._gemConfig[equipChip]._quality
+
+					break
+				end
+			end
+
+			local invalid = self:hasHigherQualityChip(chip)
+			local chipInfo = {
+				cid = chip,
+				quality = quality,
+				weapon = weapon,
+				part = part,
+				replaceQuality = replaceQuality,
+				dot = not invalid and (emptySlotPart[part] and replaceQuality == 0 or replaceQuality > 0 and replaceQuality < quality),
+				filterValue = filterValue,
+				invalid = invalid,
+				new = self._data.chipNewDots[chip]
+			}
+			self._availableChips[#self._availableChips + 1] = chipInfo
+		end
+	end
+
+	self._chipsDirty = false
+
+	return self._availableChips
+end
+
+function M:getEquipedChips(part)
+	if not self._data.chipSlots[part] then
+		self._data.chipSlots[part] = {}
+	end
+
+	return self._data.chipSlots[part]
+end
+
+function M:getChipSlots()
+	return self._data.chipSlots
+end
+
+function M:getWeaponChipSlots()
+	local slots = {}
+
+	for k, v in pairs(self._data.chipSlots) do
+		if k > 100 then
+			slots[k] = v
+		end
+	end
+
+	return slots
+end
+
+function M:getPartChipSlots()
+	local slots = {}
+
+	for k, v in pairs(self._data.chipSlots) do
+		if k < 100 then
+			slots[k] = v
+		end
+	end
+
+	return slots
+end
+
+function M:equipChip(cid, index)
+	local part = D._gemEffectConfig[D._gemConfig[cid]._effect]._weaponId
+
+	if part == 0 then
+		part = D._gemConfig[cid]._part
+	else
+		part = part + 100
+	end
+
+	self:getEquipedChips(part)[index] = cid
+
+	SimpleEvent.emit("spark.atk.dirty")
+	Trace.AF_traceEquip("Chip", cid, 1)
+
+	self._chipsDirty = true
+	self._chipPropsDirty = true
+end
+
+function M:unequipChip(part, index)
+	self:getEquipedChips(part)[index] = nil
+
+	SimpleEvent.emit("spark.atk.dirty")
+
+	self._chipsDirty = true
+	self._chipPropsDirty = true
+end
+
+function M:getChipNum()
+	local num = 0
+
+	for _, _ in pairs(self._data.chips) do
+		num = num + 1
+	end
+
+	return num
+end
+
+function M:isChipSlotLocked(part, index)
+	local chipSlotUnlockNum = (self._data.chipSlotUnlockNums[part] or 0) + 1
+
+	return index > chipSlotUnlockNum
+end
+
+function M:getChipUnlockCost(part, index)
+	if part > 100 then
+		return self:readCurrentCfg()._weaponChipUnlockCost[index]
+	else
+		return self:readCurrentCfg()._equipChipUnlockCost[index]
+	end
+end
+
+function M:tryUnlockChipSlot(part)
+	local cost = self:getChipUnlockCost(part, (self._data.chipSlotUnlockNums[part] or 0) + 1)
+	local costCid = D.ResType.spark_scout_wafer
+
+	if P._playerAsset:getAssetNum(costCid) < cost then
+		return costCid, cost
+	end
+
+	P._playerAsset:increaseAssetNum(costCid, -cost, D.LogWay.spark_scout_unlock_chip_slot)
+
+	self._data.chipSlotUnlockNums[part] = (self._data.chipSlotUnlockNums[part] or 0) + 1
+	self._chipsDirty = true
+
+	SimpleEvent.emit("sparkScout.chipSlot.unlock")
+end
+
+function M:getRankValue()
+	if lc._isCN then
+		return self:getCurGradeId()
+	else
+		return self:getCurGradeId() * 1000000 + (self._data.rankTimestamp and 1000000 - self._data.rankTimestamp or 0)
+	end
+end
+
+function M:uploadRankDataV2(auid)
+	local limitScore = self:readCurrentCfg()._limitScore
+
+	if limitScore[#limitScore] <= self:getMaxHistoryGradeId() then
+		P._playerRanker:uploadActivityRankData(D.RankType.SparkScoutRank, auid, self:getRankValue(), {
+			atk = self:getAtk(),
+			cn = self:getChipNum()
+		})
+	end
+end
+
+function M:getRankData(auid, callback, failCallback)
+	P._playerRanker:getCachedActivityRankData(D.RankType.SparkScoutRank, auid, callback, failCallback)
+end
+
+function M:checkCheat()
+	if lc._isMobile and not Client._saveData.isInBlacklist then
+		local cheating = false
+
+		if cheating then
+			Client.addBlacklist()
+		end
+	end
+end
+
+function M:getCurrentExcludes()
+	return self._data.matchExcludes or {}
+end
+
+function M:setDuelRefreshed()
+	self._data.duelRefreshed = true
+end
+
+function M:isDuelRefreshed()
+	return self._data.duelRefreshed
+end
+
+function M:resetDuelRefresh()
+	self._data.duelRefreshed = false
+end
+
+function M:setDuelCosted(cost)
+	self._data.duelCosted = cost
+end
+
+function M:tryDuelCost()
+	if self:isDuelCosted() then
+		return
+	end
+
+	P._playerAsset:decreaseAssetNum(D.ResType.spark_scout_duel_ticket, 1, D.LogWay.spark_scout_duel)
+	self:setDuelCosted(true)
+	SimpleEvent.emit("spark.duel.cost")
+end
+
+function M:isDuelCosted()
+	return self._data.duelCosted
+end
+
+function M:setDuelData(duelData)
+	self._data.duelData = duelData
+
+	if not self._data.duelRefreshed then
+		-- Nothing
+	end
+
+	self:setDuelCosted(false)
+	P:saveGameData(true)
+end
+
+function M:getDuelData()
+	return self._data.duelData
+end
+
+function M:hasDuelData()
+	return self._data.duelData ~= nil and #self._data.duelData >= 3
+end
+
+function M:clearDuelData()
+	table.clear(self._data.duelData)
+	self:resetDuelRefresh()
+end
+
+function M:genMatchData()
+	local data = P:genMiniRankData()
+	data.activityId = self:getId()
+	data.score = self:getCurEncoderGrade()
+	data.rankId = P._playerRanker:getGroup(D.RankType.SparkScoutRank)
+	data.atk = self:getAtk()
+	data.cn = self:getChipNum()
+	data.gradeId = self:getCurGradeId()
+	data.matchVersion = D.SPARK_SCOUT_MATCH_VERSION
+	data.battleData = {}
+
+	return data
+end
+
+function M:canShowSparkScoutRankGroup(duelData, curGradeId)
+	local limits = self:readCurrentCfg()._limitScore
+	local requireGradeId = limits[#limits]
+
+	if (curGradeId or self:getCurGradeId()) < requireGradeId then
+		return false
+	end
+
+	local otherRankId = duelData.rankId or 0
+	local selfGroup = P._playerRanker:getGroup(D.RankType.SparkScoutRank)
+
+	if not selfGroup or selfGroup == otherRankId then
+		return false
+	end
+
+	return true
+end
+
+function M:uploadMatchData()
+	if lc._isCN then
+		return
+	end
+
+	if lc._isMobile or C._config.withUpload then
+		local rankId = P._playerRanker:getGroup(D.RankType.SparkScoutRank)
+
+		if not rankId then
+			P._playerRanker:initRanker(D.RankType.SparkScoutRank, self:getId(), function ()
+				self:uploadMatchData()
+			end)
+
+			return
+		end
+
+		local data = self:genMatchData()
+
+		self:genBattleInput(data.battleData, true)
+
+		if lc._isRelease then
+			FirebaseManager:WriteToCollection("match_data_spark", C._userId, LuaTableJson.encodeToCJson(data))
+		else
+			FirebaseManager:WriteToCollection("dev_match_data_spark", C._userId, LuaTableJson.encodeToCJson(data))
+		end
+	end
+end
+
+function M:findMatch(callback)
+	local grade = self:getCurGradeId()
+
+	self:findMatchData(grade, self:getCurrentExcludes(), callback)
+end
+
+function M:cancelMatch()
+	if self._matching then
+		self._matching = false
+	end
+
+	if self._matchTimer then
+		lc.stopTimer(self._matchTimer)
+
+		self._matchTimer = nil
+	end
+
+	if self._matchCallback then
+		self._matchCallback(0)
+
+		self._matchCallback = nil
+	end
+end
+
+function M:findRobotData(grade, callback)
+	local robot = D._sparkScoutRobotConfig[grade] or D._sparkScoutRobotConfig[grade + 1]
+
+	if not robot and D.SPARK_SCOUT_MAX_GRADE < grade / 100 then
+		for i = 1, 99 do
+			robot = D._sparkScoutRobotConfig[grade - i]
+
+			if robot then
+				break
+			end
+		end
+	end
+
+	if robot then
+		local matchData = {
+			score = robot._id * 1000
+		}
+		local battleData = {}
+		local randomWeapons = {}
+
+		for i = D.WEAPON_GATLIN, D.MAX_WEAPON_ID do
+			if self:getWeaponDeck(i) then
+				randomWeapons[#randomWeapons + 1] = i
+			end
+		end
+
+		table.shuffle(randomWeapons, math.randomer(math.random(1000)))
+
+		local weaponNums = robot._weapons
+		local pvpWeapons = {}
+		local weaponCount = 0
+
+		for i = 1, 3 do
+			pvpWeapons[i] = {}
+			local weaponNum = weaponNums[i]
+
+			for j = 1, weaponNum do
+				weaponCount = weaponCount + 1
+				pvpWeapons[i][#pvpWeapons[i] + 1] = randomWeapons[weaponCount]
+			end
+		end
+
+		local chipQualities = {}
+
+		for i = 1, #robot._chipQualitys do
+			local quality = robot._chipQualitys[i]
+			local num = robot._chipNums[i]
+
+			for j = 1, num do
+				if #chipQualities == 72 then
+					break
+				end
+
+				chipQualities[#chipQualities + 1] = quality
+			end
+		end
+
+		for i = #chipQualities + 1, 4 * weaponCount + 36 do
+			chipQualities[#chipQualities + 1] = 0
+		end
+
+		table.shuffle(chipQualities, math.randomer(math.random(1000)))
+
+		local chipIdx = 1
+		local chipSlots = {}
+		local totalChipNum = 0
+
+		for i = 1, weaponCount do
+			local weapon = randomWeapons[i]
+			local weaponChips = {}
+			local usedEffects = {}
+
+			for j = 1, 4 do
+				local quality = chipQualities[chipIdx]
+				chipIdx = chipIdx + 1
+
+				if quality > 0 then
+					local chip = self:randomWeaponChip(weapon, quality, usedEffects)
+
+					if chip then
+						weaponChips[#weaponChips + 1] = chip
+						usedEffects[D._gemConfig[chip]._effect] = true
+						totalChipNum = totalChipNum + 1
+					end
+				end
+			end
+
+			chipSlots[100 + weapon] = weaponChips
+		end
+
+		for i = 1, D.PART_NUM do
+			local weaponChips = {}
+			local usedEffects = {}
+
+			for j = 1, 6 do
+				local quality = chipQualities[chipIdx]
+				chipIdx = chipIdx + 1
+
+				if quality > 0 then
+					local chip = self:randomWeaponChip(0, quality, usedEffects)
+
+					if chip then
+						weaponChips[#weaponChips + 1] = chip
+						usedEffects[D._activitySparkScoutChipConfig[chip]._effect] = true
+						totalChipNum = totalChipNum + 1
+					end
+				end
+			end
+
+			chipSlots[i] = weaponChips
+		end
+
+		local atk = robot._atk
+		local hp = robot._blood
+		local cn = math.random(robot._showChipNums[1], robot._showChipNums[2])
+
+		if grade >= 300 then
+			atk = math.random(self:readCurrentCfg()._robotAtkRandom[1], self:readCurrentCfg()._robotAtkRandom[2]) * self:getAtk() / 100
+
+			for i = 1, self:getAtkLevel() do
+				local baseAtk = (i - 1) * self:readCurrentCfg()._atkUpgrade[2] + self:readCurrentCfg()._atkUpgrade[1]
+
+				if atk <= baseAtk then
+					atk = baseAtk
+					hp = (i - 1) * self:readCurrentCfg()._hpUpgrade[2] + self:readCurrentCfg()._hpUpgrade[1]
+
+					break
+				end
+			end
+
+			cn = math.floor(math.random(self:readCurrentCfg()._robotAtkRandom[1], self:readCurrentCfg()._robotAtkRandom[2]) * self:getChipNum() / 100)
+
+			if cn < totalChipNum then
+				cn = totalChipNum
+			end
+		end
+
+		battleData.defaultBlood = hp
+		battleData.pvp_weapons = pvpWeapons
+		battleData.gems = {
+			effects = self:calcGemEffects(chipSlots)
+		}
+		battleData.equips = {
+			atks = {
+				[0] = atk
+			}
+		}
+		matchData.battleData = battleData
+		matchData.isRobot = true
+		matchData.name = "User"
+
+		for i = 1, 6 do
+			local char = 65 + math.random(25)
+
+			if math.random() > 0.5 then
+				char = char + 32
+			end
+
+			matchData.name = matchData.name .. string.char(char)
+		end
+
+		matchData.gradeId = math.floor(matchData.score / 1000)
+		matchData.atk = atk
+		matchData.cn = cn
+
+		callback(matchData)
+	end
+end
+
+function M:randomWeaponChip(weapon, quality, excludes)
+	local allChips = D._activityQualityGemConfig[quality]
+
+	for i = 1, #allChips do
+		local weaponId = D._gemEffectConfig[allChips[i]._effect]._weaponId
+
+		if weaponId == weapon and not excludes[allChips[i]._effect] then
+			return allChips[i]._id
+		end
+	end
+end
+
+function M:findMatchData(grade, excludes, callback, isDuel)
+	self._matching = true
+	self._data.matchSeed = self._data.matchSeed or math.random(100)
+	local conf = D._gradeSparkScoutConfig[grade]
+	local robotRate = conf._robotRate
+
+	if self._data.maxWinNum and self._data.maxWinNum > 0 then
+		robotRate = robotRate - conf._robotRate1 * self._data.maxWinNum
+	end
+
+	if self._data.failNum and self._data.failNum > 0 then
+		robotRate = robotRate + conf._robotRate1 * self._data.failNum
+	end
+
+	self._matchCallback = callback
+
+	if C._config.noQuery or not isDuel and self._data.matchSeed < robotRate then
+		self._matchTimer = lc.setTimer(function ()
+			if P then
+				if self._matching then
+					self._matching = nil
+					self._matchTimer = nil
+
+					self:findRobotData(grade, callback)
+				else
+					self._matching = nil
+					self._matchTimer = nil
+
+					callback(0)
+				end
+			end
+		end, 1 + 2 * math.random())
+
+		return
+	end
+
+	local realExcludes = {}
+
+	table.append(realExcludes, excludes)
+	table.insert(realExcludes, C._userId)
+
+	local maxExcludeNums = C._appConfig.pvpMatchExcludeNum or self:readCurrentCfg()._matchExcludeNum
+	local myGrade = self:getCurGradeId()
+	local maxExcludeNum = myGrade < 640 and maxExcludeNums[1] or myGrade < 670 and maxExcludeNums[2] or maxExcludeNums[3]
+
+	for i = 1, #realExcludes - maxExcludeNum do
+		table.remove(realExcludes, 1)
+	end
+
+	local rankId = P._playerRanker:getGroup(D.RankType.SparkScoutRank)
+
+	if not rankId then
+		P._playerRanker:initRanker(D.RankType.SparkScoutRank, self:getId(), function ()
+			if self._matching and P then
+				self:findMatchData(grade, realExcludes, callback)
+			end
+		end)
+
+		return
+	end
+
+	local queue = {}
+	local index = 1
+
+	if self:getCurGradeId() < 300 then
+		table.insert(queue, {
+			rankId = 0,
+			grade = grade
+		})
+
+		local lastGrade = self:getLastGradeId(grade)
+		local nextGrade = self:getNextGradeId(grade)
+
+		for i = 1, 20 do
+			table.insert(queue, {
+				rankId = 0,
+				grade = lastGrade
+			})
+			table.insert(queue, {
+				rankId = 0,
+				grade = nextGrade
+			})
+
+			nextGrade = self:getNextGradeId(nextGrade)
+			lastGrade = self:getLastGradeId(lastGrade)
+		end
+	else
+		table.insert(queue, {
+			grade = grade,
+			rankId = rankId
+		})
+
+		local lastGrade = self:getLastGradeId(grade)
+		local nextGrade = self:getNextGradeId(grade)
+
+		for i = 1, 10 do
+			table.insert(queue, {
+				grade = lastGrade,
+				rankId = rankId
+			})
+			table.insert(queue, {
+				grade = nextGrade,
+				rankId = rankId
+			})
+
+			nextGrade = self:getNextGradeId(nextGrade)
+			lastGrade = self:getLastGradeId(lastGrade)
+		end
+
+		for i = 1, 21 do
+			local item = queue[i]
+
+			table.insert(queue, {
+				rankId = 0,
+				grade = item.grade
+			})
+		end
+
+		for i = 1, 10 do
+			table.insert(queue, {
+				grade = lastGrade,
+				rankId = rankId
+			})
+			table.insert(queue, {
+				grade = nextGrade,
+				rankId = rankId
+			})
+
+			nextGrade = self:getNextGradeId(nextGrade)
+			lastGrade = self:getLastGradeId(lastGrade)
+		end
+
+		for i = 43, 62 do
+			local item = queue[i]
+
+			table.insert(queue, {
+				rankId = 0,
+				grade = item.grade
+			})
+		end
+	end
+
+	local function searchNext()
+		if not self._matching or not P then
+			callback(0)
+
+			return
+		end
+
+		if index >= #queue then
+			callback(nil)
+
+			return
+		end
+
+		local current = queue[index]
+		index = index + 1
+
+		self:queryMatchData(current.rankId, current.grade, realExcludes, 1, function (data)
+			if self._matching and P then
+				callback(data)
+			end
+		end, function ()
+			searchNext()
+		end)
+	end
+
+	searchNext()
+end
+
+function M:queryMatchData(rankId, grade, excludes, n, callback, failCallback)
+	local col = (C._config.matchOnline or lc._isRelease) and "match_data_spark" or "dev_match_data_spark"
+
+	LuaHelper.QueryActivityMatchData(col, "gradeId", self:getId(), rankId, grade, D.SPARK_SCOUT_MATCH_VERSION, excludes, true, n, function (jsonStr)
+		jsonStr = string.unicodeToUtf8(jsonStr)
+		local tbl = LuaTableJson.decodeFromLuaJson(jsonStr)
+
+		if next(tbl) then
+			for id, v in pairs(tbl) do
+				v._userId = id
+
+				callback(v)
+
+				return
+			end
+		else
+			failCallback()
+		end
+	end)
+end
+
+function M:tryRefreshDuel()
+end
+
+local function wrapEffectValue(effect, value, index)
+	if effect == 401 then
+		value = value * 5
+	elseif effect == 502 then
+		value = value * 2
+	elseif effect == 701 then
+		value = value * 20 / 100
+	elseif effect == 806 then
+		value = value * 5
+	elseif effect == 36 and index == 2 then
+		value = math.min(D._globalConfig._chip_level_atk_limit, P:getLevel() * value)
+	end
+
+	return value
+end
+
+function M:calcGemEffects(chipSlots)
+	if not self._chipPropsDirty then
+		return self._chipEffects, self._chipProps
+	end
+
+	local props = self._chipProps
+	local effects = self._chipEffects
+
+	table.clear(props)
+	table.clear(effects)
+
+	if chipSlots then
+		for k, slots in pairs(chipSlots) do
+			for j = 1, 6 do
+				if slots[j] and slots[j] > 0 then
+					local cid = slots[j]
+					local conf = D._gemConfig[cid]
+					local effect = conf._effect
+
+					if effects[effect] == nil then
+						if conf._param then
+							effects[effect] = conf._param
+						else
+							effects[effect] = {}
+							local len_params = lc.lenTable(conf._params)
+
+							for i = 1, len_params do
+								effects[effect][i] = conf._params[i]
+							end
+						end
+
+						if conf._param then
+							effects[effect] = wrapEffectValue(effect, effects[effect])
+						else
+							for i = 1, #effects[effect] do
+								effects[effect][i] = wrapEffectValue(effect, effects[effect][i], i)
+							end
+						end
+					elseif conf._param then
+						effects[effect] = effects[effect] + wrapEffectValue(effect, conf._param)
+					else
+						local len_params = lc.lenTable(conf._params)
+
+						for i = 1, len_params do
+							effects[effect][i] = effects[effect][i] + wrapEffectValue(effect, conf._params[i], i)
+						end
+					end
+
+					local effectConf = D._gemEffectConfig[effect]
+
+					if effectConf._props then
+						local key = effectConf._skillId and effectConf._skillId ~= 0 and -effectConf._skillId or effectConf._weaponId
+
+						for k = 1, #effectConf._props do
+							local prop = effectConf._props[k]
+
+							if not props[key] then
+								props[key] = {}
+							end
+
+							local value = conf._param or conf._params[k]
+							props[key][prop] = (props[key][prop] or 0) + wrapEffectValue(effect, value, k)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return self._chipEffects, self._chipProps
+end
+
+function M:genBattleInput(input, selfOnly)
+	local equips = {
+		atks = {
+			[0] = self:getAtk()
+		}
+	}
+	local gems = {
+		effects = self:calcGemEffects(self._data.chipSlots)
+	}
+	input.gems = gems
+	input.equips = equips
+	local pvpWeapons = {
+		{},
+		{},
+		{}
+	}
+	local pvpRouges = {}
+
+	for i = 1, 3 do
+		for j = 1, 3 do
+			pvpWeapons[i][j] = self._data.pvpWeapons[i * 3 + j - 3]
+
+			if pvpWeapons[i][j] then
+				local rouges = {}
+				local deck = self:getWeaponDeck(pvpWeapons[i][j])
+				local cards = D._sparkScoutWeaponCardConfig[deck]._cardIds
+
+				for i = 1, #cards do
+					rouges[#rouges + 1] = cards[i]
+				end
+
+				pvpRouges[pvpWeapons[i][j]] = rouges
+			end
+		end
+	end
+
+	input.pvp_rogues = pvpRouges
+	input.pvp_weapons = pvpWeapons
+	input.defaultBlood = self:getBaseDomeHp()
+
+	if not selfOnly then
+		input.match_data = self:genMatchData()
+	end
+
+	input.pvp_modules = {}
+
+	if self:hasPrivilege() then
+		input.pvp_modules[#input.pvp_modules + 1] = {
+			29999,
+			1
+		}
+	end
+
+	if self:hasPrivilege2() then
+		input.pvp_modules[#input.pvp_modules + 1] = {
+			29998,
+			math.random(1, 3)
+		}
+	end
+
+	if not selfOnly and self._matchData then
+		input.oppInput = self._matchData.battleData
+
+		if not input.oppInput.pvp_rogues then
+			local pvpRouges = {}
+
+			for i = 1, 3 do
+				for j = 1, 3 do
+					if input.oppInput.pvp_weapons[i][j] then
+						local rouges = {}
+						local deck = self:getWeaponDeck(input.oppInput.pvp_weapons[i][j])
+						local cards = D._sparkScoutWeaponCardConfig[deck]._cardIds
+
+						for i = 1, #cards do
+							rouges[#rouges + 1] = cards[i]
+						end
+
+						pvpRouges[input.oppInput.pvp_weapons[i][j]] = rouges
+					end
+				end
+			end
+
+			input.oppInput.pvp_rogues = pvpRouges
+		end
+
+		input.oppInput.match_data = self._matchData
+	end
+
+	if not selfOnly and self._data._missionEnemies then
+		input.missionEnemies = self._data._missionEnemies
+	end
+end
+
+function M:getLeftBuyNum(iapId)
+	local limit = self:getMaxBuyNum(iapId)
+
+	if limit == -1 then
+		return 999
+	end
+
+	return limit - self:getBuyCount(iapId)
+end
+
+function M:getMaxBuyNum(iapId)
+	return P._playerStore:readBuyLimit(iapId)
+end
+
+function M:getBuyCount(iapId)
+	if not self._data.shopBuyCount then
+		self._data.shopBuyCount = {}
+	end
+
+	return self._data.shopBuyCount[iapId] or 0
+end
+
+function M:recordBuyCount(iapId)
+	self._data.shopBuyCount[iapId] = self:getBuyCount(iapId) + 1
+end
+
+function M:getLeftAdPackNum()
+	if not self._data.adRecoverTime then
+		self._data.adRecoverTime = C.getCurTime()
+	end
+
+	local dt = C.getCurTime() - self._data.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local num = math.floor(dt / self:readAdRecoverSeconds())
+	num = math.min(num, self:readAdMaxCacheNum())
+
+	return num
+end
+
+function M:getAdPackCountdown(ct)
+	ct = ct or C.getCurTime()
+	local dt = ct - self._data.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local recoverT = self:readAdRecoverSeconds()
+	local num = math.ceil(dt / recoverT)
+	num = math.min(num, self:readAdMaxCacheNum())
+
+	return recoverT * num - dt
+end
+
+function M:initAdPackNum(startTime)
+	self._data.adRecoverTime = startTime - self:readAdRecoverSeconds()
+end
+
+function M:recordAdPack(initNum)
+	local num = self:getLeftAdPackNum()
+
+	if num == self:readAdMaxCacheNum() then
+		self._data.adRecoverTime = C.getCurTime() - self:readAdRecoverSeconds() * (initNum or num - 1)
+	else
+		self._data.adRecoverTime = self._data.adRecoverTime + self:readAdRecoverSeconds()
+	end
+
+	local cid, num = self:readAdPackRewards()
+
+	if not initNum then
+		P._playerAsset:increaseAssetNum(cid, num, D.LogWay.spark_scout_shop_ad)
+	end
+end
+
+function M:getLeftExtraRewardNum()
+	if not self._data.extraRewardTime then
+		self._data.extraRewardTime = C.getCurTime()
+	end
+
+	local dt = C.getCurTime() - self._data.extraRewardTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local num = math.floor(dt / self:readExtraRewardRecoverSeconds())
+	num = math.min(num, self:readExtraRewardMaxNum())
+
+	return num
+end
+
+function M:getExtraRewardCountdown(ct)
+	ct = ct or C.getCurTime()
+	local dt = ct - self._data.extraRewardTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local recoverT = self:readExtraRewardRecoverSeconds()
+	local num = math.ceil(dt / recoverT)
+	num = math.min(num, self:readExtraRewardMaxNum())
+
+	return recoverT * num - dt
+end
+
+function M:initExtraRewardNum(startTime)
+	self._data.extraRewardTime = startTime - self:readExtraRewardRecoverSeconds() * self:readExtraRewardDefaultNum()
+end
+
+function M:recordExtraReward(initNum)
+	local num = self:getLeftExtraRewardNum()
+	local oneSeconds = self:readExtraRewardRecoverSeconds()
+	local maxNum = self:readExtraRewardMaxNum()
+
+	if num == maxNum then
+		self._data.extraRewardTime = C.getCurTime() - oneSeconds * (num - 1)
+	else
+		self._data.extraRewardTime = self._data.extraRewardTime + oneSeconds
+	end
+end
+
+function M:recordEnterTime()
+	local curTime = C.getCurTime()
+	self._enterActivityTime = curTime
+end
+
+function M:recordPlayTime()
+	if self._enterActivityTime then
+		local curTime = C.getCurTime()
+
+		if curTime - self._enterActivityTime > 0 then
+			self._data.playTime = (self._data.playTime or 0) + curTime - self._enterActivityTime
+		end
+
+		self._enterActivityTime = nil
+	end
+end
+
+function M:hasWeaponEquipDot()
+	for i = 1, 9 do
+		if not self:getPvpWeapon(i) and self:isPvpWeaponSlotUnlocked(i) then
+			return true
+		end
+	end
+end
+
+function M:hasWeaponUnlockDot()
+	for i = 1, 9 do
+		if self:checkUnlockPvpWeaponSlot(i) == ResultCode.OK then
+			return true
+		end
+	end
+end
+
+function M:hasChipEquipDot()
+	local availableChips = self:getAvailableChips()
+
+	for i = 1, #availableChips do
+		if availableChips[i].dot then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:hasWeaponChipEquipDot()
+	local availableChips = self:getAvailableChips()
+
+	for i = 1, #availableChips do
+		if availableChips[i].dot and availableChips[i].weapon > 0 then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:hasCommonChipEquipDot()
+	local availableChips = self:getAvailableChips()
+
+	for i = 1, #availableChips do
+		if availableChips[i].dot and availableChips[i].weapon == 0 then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:readGradeName(gradeId)
+	return self:getGradeCfgById(gradeId)._nameSid
+end
+
+function M:readGradeById(gradeId)
+	return self:getGradeCfgById(gradeId)._grade
+end
+
+function M:readRealStarNum(gradeId)
+	return self:getGradeCfgById(gradeId)._starSum
+end
+
+function M:readShowSubGrade(gradeId)
+	return self:getGradeCfgById(gradeId)._showSubGrade
+end
+
+function M:readExtraRewards(gradeId)
+	local cfg = self:getGradeCfgById(gradeId)
+
+	return cfg._battleExtraRewards[1], cfg._battleExtraRewards[2]
+end
+
+function M:readDeltaScore(gradeId)
+	return self:getGradeCfgById(gradeId)._deltaScore
+end
+
+function M:readWinScore(gradeId)
+	return self:getGradeCfgById(gradeId)._winScore
+end
+
+function M:readBaseWinScore(gradeId)
+	return self:readDeltaScore(gradeId)
+end
+
+function M:readBaseLoseScore(gradeId)
+	return self:readDeltaScore(gradeId)
+end
+
+function M:readLoseScore(gradeId)
+	return self:getGradeCfgById(gradeId)._loseScore
+end
+
+function M:readGradeScore(gradeId)
+	return self:getGradeCfgById(gradeId)._score
+end
+
+function M:readGradeCfg(gradeId)
+	return D._gradeSparkScoutConfig[gradeId]
+end
+
+function M:readAdPackParams(subType)
+	return D._activitySparkScoutConfig[subType or 1]._shopAdPackParams
+end
+
+function M:readAdRecoverSeconds()
+	return self:readAdPackParams()[2] * 3600
+end
+
+function M:readAdMaxCacheNum()
+	return self:readAdPackParams()[1]
+end
+
+function M:readAdPackRewards()
+	local rewards = self:readCurrentCfg()._shopAdPackRewards
+
+	return rewards[1], rewards[2]
+end
+
+function M:readActivityStartTime()
+	local activityTimeData = P._playerActivity:getSparkScoutData()
+
+	if not activityTimeData then
+		return 0
+	end
+
+	return activityTimeData.startTime
+end
+
+function M:readWeaponCards(weaponId)
+	return D._sparkScoutWeaponCardConfig[weaponId]._cardIds or {}
+end
+
+function M:readGradeRewards(grade)
+	return self._gradeRewards[grade]._rewards[1], self._gradeRewards[grade]._rewards[2]
+end
+
+function M:readPreviewGradeRewards()
+	return self:readCurrentCfg()._showGradeRewardCids
+end
+
+function M:getRewardGradeIds()
+	return self._rewardGradeCfgIds
+end
+
+function M:readNameSid()
+	return self:readCurrentCfg()._nameSid
+end
+
+function M:readQuickPatrolHour()
+	return self:readCurrentCfg()._quickPatrolHour
+end
+
+function M:readAdSweepMaxNum()
+	return self:readCurrentCfg()._quickPatrolAdNum[1]
+end
+
+function M:readAdSweepRecoverSeconds()
+	return self:readCurrentCfg()._quickPatrolAdNum[2] * 3600
+end
+
+function M:readAdSweepRequireGradeId()
+	return self:readCurrentCfg()._quickPatrolAdLimitGrade
+end
+
+function M:readOfflineRequireGradeId()
+	return self:readCurrentCfg()._offlineLimitGrade
+end
+
+function M:readLimitRank()
+	return self:readCurrentCfg()._limitRank
+end
+
+function M:readExtraRewardMaxNum()
+	return self:readCurrentCfg()._battleExtraRewardParams[1]
+end
+
+function M:readExtraRewardDefaultNum()
+	return self:readCurrentCfg()._battleExtraRewardParams[2]
+end
+
+function M:readExtraRewardRecoverSeconds()
+	return self:readCurrentCfg()._battleExtraRewardParams[3] * 60
+end
+
+function M:readBattleFreePackNum()
+	return self:readCurrentCfg()._battleFreePackNum
+end
+
+function M:readFreeChipCfg(boxType)
+	local cfg = nil
+
+	if boxType == 1 then
+		cfg = self:readCurrentCfg()._freeChipCfg1
+	else
+		cfg = self:readCurrentCfg()._freeChipCfg2
+	end
+
+	return cfg[1], cfg[2]
+end
+
+function M:readBattleFreePackRewards()
+	return D.ResType.spark_scout_key, 1
+end
+
+function M:readPack1ChipDropWeight()
+	return self:readCurrentCfg()._pack1ChipDropWeights
+end
+
+function M:readPack2ChipDropWeight()
+	return self:readCurrentCfg()._pack2ChipDropWeights
+end
+
+function M:readPack1ChipNumDropId()
+	return self:readCurrentCfg()._pack1ChipRandomNumDropId
+end
+
+function M:readPack2ChipNumDropId()
+	return self:readCurrentCfg()._pack2ChipRandomNumDropId
+end
+
+function M:readRogueCardDropRates()
+	return self:readCurrentCfg()._rogueCardWeightRates[1], self:readCurrentCfg()._rogueCardWeightRates[2]
+end
+
+function M:readDuelRewards(win)
+	local cfg = self:readCurrentCfg()
+
+	if win then
+		return cfg._duelRewardCidsWin, cfg._duelRewardNumsWin
+	else
+		return cfg._duelRewardCidsLose, cfg._duelRewardNumsLose
+	end
+end
+
+function M:readDuelRewardNums()
+	return self:readCurrentCfg()._duelRewardNums
+end
+
+function M:readWinAddScore(num)
+	local cfg = self:readCurrentCfg()._winAddScore
+
+	if num <= lc.lenTable(cfg) then
+		return cfg[num]
+	end
+
+	return cfg[lc.lenTable(cfg)]
+end
+
+function M:readKillAddScore(num)
+	local cfg = self:readCurrentCfg()._killAddScore
+
+	if num <= lc.lenTable(cfg) then
+		return cfg[num]
+	end
+
+	return cfg[lc.lenTable(cfg)]
+end
+
+function M:readExtraAddScore(num)
+	local cfg = self:readCurrentCfg()._extraAddScore
+
+	if num <= lc.lenTable(cfg) then
+		return cfg[num]
+	end
+
+	return 0
+end
+
+function M:readCurrentCfg()
+	if self._data then
+		return D._activitySparkScoutConfig[self._data.subType]
+	end
+
+	return D._activitySparkScoutConfig[1]
+end
+
+function M:readExchangeGroup(subType)
+	return self:readCfg(subType)._exchangeGroup
+end
+
+function M:readCfg(subType)
+	return D._activitySparkScoutConfig[subType or 1]
+end
+
+return M

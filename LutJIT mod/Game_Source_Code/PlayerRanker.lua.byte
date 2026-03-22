@@ -1,0 +1,1174 @@
+local M = class("PlayerRanker")
+
+function M:ctor()
+end
+
+local mainMissionRankArrange = {
+	{
+		"2025/01/04",
+		{
+			0
+		}
+	},
+	{
+		"2025/01/12",
+		{
+			1
+		}
+	},
+	{
+		"2025/01/18",
+		{
+			2
+		}
+	},
+	{
+		"2025/01/23",
+		{
+			3
+		}
+	},
+	{
+		"2025/01/27",
+		{
+			4
+		}
+	},
+	{
+		"2025/01/31",
+		{
+			5
+		}
+	},
+	{
+		"2025/02/03",
+		{
+			6
+		}
+	},
+	{
+		"2025/02/07",
+		{
+			7
+		}
+	},
+	{
+		"2025/02/09",
+		{
+			8
+		}
+	},
+	{
+		"2025/02/10",
+		{
+			9
+		}
+	},
+	{
+		"2025/02/12",
+		{
+			10
+		}
+	},
+	{
+		"2025/02/13",
+		{
+			11
+		}
+	},
+	{
+		"2025/02/15",
+		{
+			12
+		}
+	},
+	{
+		"2025/02/16",
+		{
+			13
+		}
+	},
+	{
+		"2025/02/17",
+		{
+			14
+		}
+	},
+	{
+		"2025/02/18",
+		{
+			15
+		}
+	},
+	{
+		"2025/02/19",
+		{
+			16
+		}
+	},
+	{
+		"2025/02/20",
+		{
+			17,
+			18
+		}
+	},
+	{
+		"2025/02/21",
+		{
+			19
+		}
+	},
+	{
+		"2025/02/22",
+		{
+			20,
+			21
+		}
+	},
+	{
+		"2025/02/23",
+		{
+			22
+		}
+	},
+	{
+		"2025/02/24",
+		{
+			23
+		}
+	},
+	{
+		"2025/02/25",
+		{
+			24
+		}
+	},
+	{
+		"2025/02/26",
+		{
+			25,
+			26
+		}
+	},
+	{
+		"2025/02/27",
+		{
+			27
+		}
+	},
+	{
+		"2025/02/28",
+		{
+			28
+		}
+	},
+	{
+		"2025/03/01",
+		{
+			29,
+			30
+		}
+	},
+	{
+		"2025/03/02",
+		{
+			31,
+			32
+		}
+	},
+	{
+		"2025/03/03",
+		{
+			33,
+			34,
+			35
+		}
+	},
+	{
+		"2025/03/04",
+		{
+			36,
+			37
+		}
+	},
+	{
+		"2025/03/05",
+		{
+			38,
+			39,
+			40
+		}
+	},
+	{
+		"2025/03/06",
+		{
+			41,
+			42,
+			43,
+			44
+		}
+	},
+	{
+		"2025/03/07",
+		{
+			45,
+			46,
+			47,
+			48,
+			49,
+			50,
+			51
+		}
+	},
+	{
+		"2025/03/08",
+		{
+			52,
+			53,
+			54,
+			55,
+			56,
+			57,
+			58
+		}
+	},
+	{
+		"2025/03/09",
+		{
+			59,
+			60,
+			61,
+			62,
+			63,
+			64,
+			65
+		}
+	},
+	{
+		"2025/03/10",
+		{
+			66,
+			67,
+			68,
+			69,
+			70,
+			71,
+			72
+		}
+	}
+}
+
+local function timestampToUtcDate(timestamp)
+	return os.date("!%Y/%m/%d", timestamp)
+end
+
+M.RankTypeDoc = {
+	[D.RankType.MainMissionRank] = "group_%s",
+	[D.RankType.MonopolyRank] = "group_%s@%s",
+	[D.RankType.ArkRebuildRank] = "group_%s@%s",
+	[D.RankType.ArkRebuildRankOld] = "group_%s@%s",
+	[D.RankType.DomeRank] = "group_%s@%s",
+	[D.RankType.CrisisZoneRank] = "global@%s",
+	[D.RankType.SparkScoutRank] = "group_%s@%s",
+	[D.RankType.InviteRank] = "%s%s"
+}
+M.RankTypeGroupLimit = {
+	[D.RankType.MainMissionRank] = D._globalConfig._stage_rank_limit,
+	[D.RankType.MonopolyRank] = 12000,
+	[D.RankType.ArkRebuildRank] = 6000,
+	[D.RankType.DomeRank] = 100,
+	[D.RankType.CrisisZoneRank] = D._globalConfig._crisis_zone_rank_limit,
+	[D.RankType.SparkScoutRank] = 99999999,
+	[D.RankType.InviteRank] = 5000
+}
+M.RankTypeGroupSplitWeights = {
+	[D.RankType.MainMissionRank] = {},
+	[D.RankType.MonopolyRank] = {
+		1,
+		1,
+		2,
+		2,
+		3,
+		3
+	},
+	[D.RankType.ArkRebuildRank] = {
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		2,
+		2,
+		2,
+		2,
+		2,
+		2,
+		3,
+		3,
+		3,
+		3,
+		3,
+		3
+	},
+	[D.RankType.DomeRank] = {},
+	[D.RankType.SparkScoutRank] = {
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000,
+		2000,
+		4000
+	},
+	[D.RankType.InviteRank] = {}
+}
+M.EmptyTable = {}
+
+function M:init(meta)
+	self._meta = meta
+	self._mainMissionGroup = meta.mainMissionGroup
+	self._mainMissionRankScore50 = meta.mainMissionRankScore50 or nil
+	self._mainMissionDataCache = {}
+	self._mainMissionDailyVoteList = lc.assignTable(meta, "mainMissionDailyVoteList")
+	self._monopolyGroup = meta.monopolyGroup
+	self._monopolyDataCache = {}
+	self._arkRebuildGroup = meta.arkRebuildGroup
+	self._arkRebuildDataCache = {}
+	self._sparkScoutGroup = meta.sparkScoutGroup
+	self._sparkScoutDataCache = {}
+	self._domeGroup = meta.domeGroup
+	self._domeDataCache = {}
+	self._arkRebuildCollection = meta.arkRebuildCollection or D.RankType.ArkRebuildRankOld
+	self._globalRankScoreLimitMap = lc.assignTable(meta, "globalRankScoreLimitMap")
+	self._globalDataCacheMap = lc.assignTable(meta, "globalDataCacheMap")
+end
+
+function M:start()
+	M.RankTypeGroupLimit[D.RankType.ArkRebuildRank] = Client._appConfig.arkRebuildRankLimit84 or M.RankTypeGroupLimit[D.RankType.ArkRebuildRank]
+	M.RankTypeGroupSplitWeights[D.RankType.ArkRebuildRank] = Client._appConfig.arkRebuildRankGroupSplitWeight84 or M.RankTypeGroupSplitWeights[D.RankType.ArkRebuildRank]
+
+	if D.isSystemUnlocked(D.SystemType.StageRank) and not self:isRankInited(D.RankType.MainMissionRank) then
+		local createTime = P:getCreateTime()
+		local utcDateStr = timestampToUtcDate(createTime)
+
+		if mainMissionRankArrange[#mainMissionRankArrange][1] <= utcDateStr then
+			self:uploadMainMissionRankData(P._playerMission:getMainMissionRankValue())
+		else
+			for k, v in ipairs(mainMissionRankArrange) do
+				if utcDateStr <= v[1] then
+					local group = v[2][math.random(1, #v[2])] + 1
+					self._mainMissionGroup = group
+					self._meta.mainMissionGroup = group
+
+					self:uploadMainMissionRankData(P._playerMission:getMainMissionRankValue())
+
+					break
+				end
+			end
+		end
+	end
+end
+
+function M:dailyReset()
+	table.clear(self._mainMissionDailyVoteList)
+end
+
+function M:getRankId()
+	return C._userId
+end
+
+function M:isRankInited(rankType)
+	if rankType == D.RankType.MainMissionRank then
+		return self._mainMissionGroup ~= nil
+	elseif rankType == D.RankType.DomeRank then
+		return self._domeGroup ~= nil
+	elseif string.startsWith(rankType, D.RankType.MonopolyRank) then
+		return self._monopolyGroup ~= nil
+	elseif string.startsWith(rankType, D.RankType.ArkRebuildRank) then
+		return self._arkRebuildGroup ~= nil
+	elseif string.startsWith(rankType, D.RankType.SparkScoutRank) then
+		return self._sparkScoutGroup ~= nil
+	else
+		return true
+	end
+end
+
+function M:initRanker(rankType, activityId, callback)
+	if not self:isRankInited(rankType) and not self._registeringRank then
+		self._registeringRank = true
+
+		local function registerRankerCallback(group)
+			self._registeringRank = false
+
+			if group == -1 then
+				if not self._triedInitRanker then
+					self._triedInitRanker = true
+
+					self:initRanker(rankType, activityId, callback)
+
+					return
+				end
+			elseif not self:isRankInited(rankType) then
+				if rankType == D.RankType.MainMissionRank then
+					self._mainMissionGroup = group
+					self._meta.mainMissionGroup = group
+				elseif rankType == D.RankType.DomeRank then
+					self._domeGroup = group
+					self._meta.domeGroup = group
+				elseif string.startsWith(rankType, D.RankType.MonopolyRank) then
+					self._monopolyGroup = group
+					self._meta.monopolyGroup = group
+				elseif string.startsWith(rankType, D.RankType.ArkRebuildRank) then
+					self._arkRebuildGroup = group
+					self._meta.arkRebuildGroup = group
+					self._arkRebuildCollection = D.RankType.ArkRebuildRank
+					self._meta.arkRebuildCollection = D.RankType.ArkRebuildRank
+				elseif string.startsWith(rankType, D.RankType.SparkScoutRank) then
+					self._sparkScoutGroup = group
+					self._meta.sparkScoutGroup = group
+				end
+
+				if callback then
+					callback()
+				end
+			end
+		end
+
+		if lc._isCN then
+			Request.sendRegisterRanker(rankType, activityId, registerRankerCallback)
+		else
+			local doc = rankType
+
+			if activityId then
+				doc = doc .. activityId
+			end
+
+			if not lc._isRelease then
+				doc = "dev_" .. doc
+			end
+
+			LuaHelper.registerRanker(registerRankerCallback, doc, M.RankTypeGroupSplitWeights[rankType], C.getCurTime(), M.RankTypeGroupLimit[rankType])
+		end
+	end
+end
+
+function M:resetGroup(rankType)
+	if rankType == D.RankType.MonopolyRank then
+		self._monopolyGroup = nil
+		self._meta.monopolyGroup = nil
+	elseif rankType == D.RankType.ArkRebuildRank then
+		self._arkRebuildGroup = nil
+		self._meta.arkRebuildGroup = nil
+	elseif rankType == D.RankType.SparkScoutRank then
+		self._sparkScoutGroup = nil
+		self._meta.sparkScoutGroup = nil
+	end
+end
+
+function M:getGroup(rankType)
+	if rankType == D.RankType.MainMissionRank then
+		return self._mainMissionGroup
+	elseif rankType == D.RankType.DomeRank then
+		return self._domeGroup
+	elseif rankType == D.RankType.MonopolyRank then
+		return self._monopolyGroup
+	elseif rankType == D.RankType.ArkRebuildRank then
+		return self._arkRebuildGroup
+	elseif rankType == D.RankType.SparkScoutRank then
+		return self._sparkScoutGroup
+	elseif rankType == D.RankType.InviteRank then
+		return ""
+	end
+end
+
+function M:getCachedMainMissionRankData(callback)
+	local today = Client.getDayOffset()
+
+	if self._mainMissionDataCache.day == today and callback then
+		callback(self._mainMissionDataCache.rankList, self._mainMissionDataCache.selfRank)
+
+		return
+	end
+
+	local data = lc.getTableKeyValue(D.RankType.MainMissionRank)
+
+	if data then
+		self._mainMissionDataCache = data
+
+		if self._mainMissionDataCache.day == today and callback then
+			callback(self._mainMissionDataCache.rankList, self._mainMissionDataCache.selfRank)
+
+			return
+		end
+	end
+
+	self:getMainMissionRankData(callback)
+end
+
+function M:getMainMissionRankData(callback)
+	local rankType = D.RankType.MainMissionRank
+
+	if not self:isRankInited(rankType) then
+		self:initRanker(rankType, nil, function ()
+			self:getMainMissionRankData(callback)
+		end)
+
+		return
+	end
+
+	M.queryRankData(rankType, self._mainMissionGroup, nil, function (tbl)
+		local rankList, selfRank = self:loadMainMissionRankData(tbl)
+		self._mainMissionDataCache = {
+			day = Client.getDayOffset(),
+			rankList = rankList,
+			selfRank = selfRank
+		}
+
+		lc.setTableKeyValue(D.RankType.MainMissionRank, self._mainMissionDataCache)
+
+		if callback then
+			callback(rankList, selfRank)
+		end
+	end)
+end
+
+function M:loadMainMissionRankData(tbl)
+	local hasSelf = false
+	local rankList = {}
+
+	for userId, data in pairs(tbl) do
+		data._userId = userId
+		rankList[#rankList + 1] = data
+
+		if userId == self:getRankId() then
+			data.avatar = P._playerProfile:getAvatar()
+			data.name = P:getName()
+			hasSelf = true
+		end
+	end
+
+	if not hasSelf then
+		local data = P:genRankData()
+		data._userId = self:getRankId()
+		data.rankValue = P._playerMission:getMainMissionRankValue()
+		rankList[#rankList + 1] = data
+	end
+
+	table.sort(rankList, function (a, b)
+		return b.rankValue < a.rankValue
+	end)
+
+	local selfRank = nil
+
+	for i = 1, #rankList do
+		rankList[i].rank = i
+
+		if rankList[i]._userId == self:getRankId() then
+			selfRank = i
+		end
+	end
+
+	self._mainMissionRankScore50 = rankList[60] and rankList[60].rankValue or 0
+	self._meta.mainMissionRankScore50 = self._mainMissionRankScore50
+
+	return rankList, selfRank
+end
+
+function M:uploadMainMissionRankData(rankValue)
+	if not lc._isMobile and not C._config.withUpload and not lc._isCN then
+		return
+	end
+
+	if self:isRankInited(D.RankType.MainMissionRank) then
+		local rankData = P:genMiniRankData(D.RankType.MainMissionRank)
+		rankData.rankValue = rankValue
+
+		M.uploadRankData(D.RankType.MainMissionRank, self._mainMissionGroup, nil, self:getRankId(), LuaTableJson.encodeToCJson(rankData))
+		table.clear(self._mainMissionDataCache)
+		lc.setTableKeyValue(D.RankType.MainMissionRank, nil)
+	else
+		self:initRanker(D.RankType.MainMissionRank, nil, function ()
+			self:uploadMainMissionRankData(rankValue)
+		end)
+	end
+end
+
+function M:calcMainMissionTop3Votes(total)
+	local group = self._mainMissionGroup or 1
+	local now = C.getCurTime()
+	local zero = C.getMondayTimestamp(C.getTodayZeroTimestamp())
+	local dt = (now - zero) / 60
+	local weekOffset = zero / 86400 / 7
+	local seed = group * 10000 + weekOffset
+	local randomer = math.randomer(seed)
+	local votes = {
+		0,
+		0,
+		0
+	}
+	local probility = {
+		50,
+		30,
+		20
+	}
+	probility[1] = probility[1] + randomer:get(0, 20) - 10
+	probility[2] = probility[2] + randomer:get(0, 20) - 10
+	probility[3] = 100 - probility[1] - probility[2]
+	local total = total or 1000
+	local voteRate = (70 + randomer:get(0, 40) - 20) / 100
+	local voteNum = 0
+	local preVoteNum = 1
+
+	for i = 0, 10080 do
+		if i < dt then
+			voteNum = dt * total * voteRate / 1440
+
+			for j = preVoteNum, math.floor(voteNum) do
+				for k = 1, 3 do
+					votes[k] = votes[k] + (randomer:get(1, 100) <= probility[k] and 1 or 0)
+				end
+			end
+
+			preVoteNum = voteNum
+		end
+	end
+
+	return votes
+end
+
+function M:getMainMissionDailyVoteList()
+	return self._mainMissionDailyVoteList
+end
+
+function M:setMainMissionDailyVote(vote)
+	if #self._mainMissionDailyVoteList == 0 then
+		P._playerAsset:increaseAssetNum(D._globalConfig._rank_like_reward[1], D._globalConfig._rank_like_reward[2], D.LogWay.stage_rank_like)
+	end
+
+	self._mainMissionDailyVoteList[#self._mainMissionDailyVoteList + 1] = vote
+end
+
+function M:getActivityRankDataCache(rankType)
+	if rankType == D.RankType.ArkRebuildRank then
+		return self._arkRebuildDataCache
+	elseif rankType == D.RankType.MonopolyRank then
+		return self._monopolyDataCache
+	elseif rankType == D.RankType.DomeRank then
+		return self._domeDataCache
+	elseif rankType == D.RankType.SparkScoutRank then
+		if C._config.noQuery then
+			local today = Client.getDayOffset()
+			local myData = P:genMiniRankData(rankType)
+			myData.rankValue = P._playerActivitySparkScout:getRankValue()
+			myData.cn = P._playerActivitySparkScout:getChipNum()
+			myData.atk = P._playerActivitySparkScout:getAtk()
+			myData.rank = 1
+
+			return {
+				day = today,
+				rankList = {
+					myData
+				}
+			}
+		end
+
+		return self._sparkScoutDataCache
+	elseif rankType == D.RankType.InviteRank and C._config.noQuery then
+		local today = Client.getDayOffset()
+		local myData = P:genMiniRankData(rankType)
+		myData.rankValue = P._playerActivityAnniversary:getBeInvitePoint()
+		myData.rank = 1
+
+		return {
+			day = today,
+			rankList = {
+				myData
+			}
+		}
+	end
+
+	return M.EmptyTable
+end
+
+function M:getCachedActivityRankData(rankType, activityId, callback, failCallback)
+	local today = Client.getDayOffset()
+	local dataCache = self:getActivityRankDataCache(rankType)
+
+	if dataCache.day == today and callback then
+		callback(dataCache.rankList, dataCache.selfRank)
+
+		return
+	end
+
+	self:getActivityRankData(rankType, activityId, callback, failCallback)
+end
+
+function M:getActivityRankData(rankType, activityId, callback, failCallback)
+	if not self:isRankInited(rankType, activityId) then
+		self:initRanker(rankType, activityId, function ()
+			self:getActivityRankData(rankType, activityId, callback)
+		end)
+
+		return
+	end
+
+	local col = rankType == D.RankType.ArkRebuildRank and self._arkRebuildCollection or rankType
+
+	M.queryRankData(col, self:getGroup(rankType), activityId, function (tbl)
+		if tbl == "nil" then
+			if failCallback then
+				failCallback()
+			end
+
+			return
+		end
+
+		local rankList, selfRank, selfIndex = self:loadActivityRankData(rankType, tbl)
+		local dataCache = self:getActivityRankDataCache(rankType)
+		dataCache.t = Client.getCurTime()
+		dataCache.rankList = rankList
+		dataCache.selfRank = selfRank
+
+		lc.setTableKeyValue(rankType, dataCache)
+
+		if callback then
+			callback(rankList, selfRank, selfIndex)
+		end
+	end, "nil")
+end
+
+local function getActivityRankConfig(rankType)
+	if rankType == D.RankType.MonopolyRank then
+		return D._activityMonopolyConfig[1]
+	elseif rankType == D.RankType.ArkRebuildRank then
+		return D._activityArkRebuildConfig[1]
+	elseif rankType == D.RankType.SparkScoutRank then
+		return D._activitySparkScoutConfig[1]
+	elseif rankType == D.RankType.DomeRank then
+		return P._playerDome:getRankCfg()
+	else
+		return M.EmptyTable
+	end
+end
+
+function M:loadActivityRankData(rankType, tbl)
+	local rankCfg = getActivityRankConfig(rankType)
+	local splitRankRequirements = rankCfg._limitScore
+	local splitRanks = rankCfg._limitRank
+	local hasSelf = false
+	local rankList = {}
+	local selfData = nil
+
+	if rankType == D.RankType.ArkRebuildRank then
+		selfData = P:genRankData()
+		selfData._userId = self:getRankId()
+		selfData.rankValue = P._playerActivityArkRebuild:getRankValue()
+		selfData.arkAtk = P._playerActivityArkRebuild:getAtk()
+		selfData.cn = P._playerActivityArkRebuild:getTotalCardNum()
+	elseif rankType == D.RankType.MonopolyRank then
+		selfData = P:genRankData()
+		selfData._userId = self:getRankId()
+		selfData.rankValue = P._playerActivityMonopoly:getRankValue()
+	elseif rankType == D.RankType.SparkScoutRank then
+		selfData = P:genRankData()
+		selfData._userId = self:getRankId()
+		selfData.rankValue = P._playerActivitySparkScout:getRankValue()
+		selfData.atk = P._playerActivitySparkScout:getAtk()
+		selfData.cn = P._playerActivitySparkScout:getChipNum()
+	elseif rankType == D.RankType.DomeRank then
+		selfData = P._playerDome:getSelfRankData()
+		selfData._userId = self:getRankId()
+	elseif rankType == D.RankType.InviteRank then
+		-- Nothing
+	end
+
+	for userId, data in pairs(tbl) do
+		data._userId = userId
+		rankList[#rankList + 1] = data
+
+		if userId == self:getRankId() and selfData and selfData.rankValue > 0 then
+			hasSelf = true
+
+			if lc._isCN then
+				selfData.timestamp = data.timestamp
+			end
+
+			rankList[#rankList] = selfData
+		end
+	end
+
+	if rankType ~= D.RankType.InviteRank and not hasSelf and selfData.rankValue > 0 then
+		rankList[#rankList + 1] = selfData
+	end
+
+	table.sort(rankList, function (a, b)
+		return b.rankValue < a.rankValue
+	end)
+
+	local timeSplits = 10000000000.0
+
+	if rankType == D.RankType.MonopolyRank or rankType == D.RankType.DomeRank or rankType == D.RankType.SparkScoutRank then
+		timeSplits = 1000000
+	end
+
+	if lc._isCN then
+		timeSplits = 1
+	end
+
+	if splitRanks and #splitRankRequirements ~= #splitRanks then
+		for i = 1, #rankList do
+			if rankList[i].rankValue < splitRankRequirements[#splitRankRequirements] * timeSplits then
+				for j = #rankList, i, -1 do
+					rankList[j] = nil
+				end
+
+				break
+			end
+		end
+	end
+
+	local truncateIndex, selfRank, selfIndex = nil
+
+	for i = 1, #rankList do
+		if splitRanks then
+			for j = #splitRanks, 1, -1 do
+				if rankList[i].rankValue < splitRankRequirements[j] * timeSplits then
+					if not rankList[i - 1] or rankList[i - 1].rank <= splitRanks[j] then
+						rankList[i].rank = 1 + splitRanks[j]
+
+						break
+					end
+
+					rankList[i].rank = rankList[i - 1].rank + 1
+
+					break
+				elseif j == 1 then
+					rankList[i].rank = i
+				end
+			end
+		else
+			rankList[i].rank = i
+		end
+
+		if rankList[i]._userId == self:getRankId() then
+			selfRank = rankList[i].rank
+			selfIndex = i
+		end
+	end
+
+	return rankList, selfRank, selfIndex
+end
+
+function M:uploadActivityRankData(rankType, activityId, rankValue, extraRankData)
+	if not lc._isMobile and not C._config.withUpload then
+		return
+	end
+
+	if self:isRankInited(rankType) then
+		local group = self:getGroup(rankType)
+		local rankData = P:genMiniRankData(rankType)
+		rankData.rankValue = rankValue
+
+		if extraRankData then
+			for k, v in pairs(extraRankData) do
+				rankData[k] = v
+			end
+		end
+
+		M.uploadRankData(rankType, group, activityId, self:getRankId(), LuaTableJson.encodeToCJson(rankData))
+		table.clear(self:getActivityRankDataCache(rankType))
+		lc.setTableKeyValue(rankType, nil)
+	else
+		self:initRanker(rankType, activityId, function ()
+			self:uploadActivityRankData(rankType, activityId, rankValue, extraRankData)
+		end)
+	end
+end
+
+function M:getCachedGlobalRankData(rankType, docId, callback, failCallback)
+	local today = Client.getDayOffset()
+	local doc = nil
+
+	if lc._isCN then
+		doc = docId
+	else
+		doc = string.format(M.RankTypeDoc[rankType], docId)
+	end
+
+	local key = string.format("%s|%s", rankType, doc)
+	local cache = self._globalDataCacheMap[key]
+
+	if cache and cache.day == today and callback then
+		callback(cache.rankList, cache.selfRank)
+
+		return
+	end
+
+	local data = lc.getTableKeyValue(key)
+
+	if data then
+		cache = data
+
+		if cache.day == today and callback then
+			callback(cache.rankList, cache.selfRank)
+
+			return
+		end
+	end
+
+	self:getGlobalRankData(rankType, doc, callback, failCallback)
+end
+
+function M:getGlobalRankData(rankType, doc, callback, failCallback)
+	local function callbackWrap(tbl)
+		if tbl == "nil" then
+			if failCallback then
+				failCallback()
+			end
+
+			return
+		end
+
+		local rankList, selfRank = self:loadGlobalRankData(tbl)
+		local limit = M.RankTypeGroupLimit[rankType]
+		local key = string.format("%s|%s", rankType, doc)
+		self._globalRankScoreLimitMap[key] = rankList[limit] and rankList[limit].rankValue or 0
+
+		if not lc._isCN then
+			self._globalDataCacheMap[key] = {
+				day = Client.getDayOffset(),
+				rankList = rankList,
+				selfRank = selfRank
+			}
+
+			lc.setTableKeyValue(key, self._globalDataCacheMap[doc])
+		end
+
+		if callback then
+			callback(rankList, selfRank)
+		end
+	end
+
+	if lc._isCN then
+		Request.sendGetRankData(rankType, doc, nil, 500, callbackWrap)
+	else
+		local col = rankType
+
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		M.queryRankDataInner(col, doc, callbackWrap)
+	end
+end
+
+function M:loadGlobalRankData(tbl)
+	local rankList = {}
+
+	for userId, data in pairs(tbl) do
+		data._userId = userId
+		rankList[#rankList + 1] = data
+	end
+
+	table.sort(rankList, function (a, b)
+		return b.rankValue < a.rankValue
+	end)
+
+	local selfRank = nil
+
+	for i = 1, #rankList do
+		rankList[i].rank = i
+
+		if rankList[i]._userId == self:getRankId() then
+			selfRank = i
+		end
+	end
+
+	return rankList, selfRank
+end
+
+function M:uploadGlobalRankData(rankType, docId, rankValue)
+	if not lc._isMobile and not C._config.withUpload then
+		return
+	end
+
+	if lc._isCN then
+		local rankData = P:genMiniRankData(rankType)
+		rankData.rankValue = rankValue
+
+		V.uploadPlayerInfo()
+		Request.sendUploadRankData(rankType, docId, nil, LuaTableJson.encodeToCJson(rankData), nil)
+
+		return
+	end
+
+	local col = rankType
+
+	if not lc._isRelease then
+		col = "dev_" .. col
+	end
+
+	local doc = string.format(M.RankTypeDoc[rankType], docId)
+	local key = string.format("%s|%s", rankType, doc)
+
+	if rankValue <= (self._globalRankScoreLimitMap[key] or 0) then
+		return
+	end
+
+	M.queryRankDataInner(col, doc, function (tbl)
+		if tbl == "nil" then
+			return
+		end
+
+		local rankList, selfRank = self:loadGlobalRankData(tbl)
+		local limit = M.RankTypeGroupLimit[rankType]
+		self._globalRankScoreLimitMap[key] = rankList[limit] and rankList[limit].rankValue or 0
+
+		if not lc._isCN then
+			self._globalDataCacheMap[key] = {
+				day = Client.getDayOffset(),
+				rankList = rankList,
+				selfRank = selfRank
+			}
+
+			lc.setTableKeyValue(key, self._globalDataCacheMap[doc])
+		end
+
+		if rankValue <= (self._globalRankScoreLimitMap[key] or 0) then
+			return
+		end
+
+		local rankData = P:genMiniRankData(rankType)
+		rankData.rankValue = rankValue
+
+		if selfRank ~= nil then
+			M.uploadRankDataInner(col, doc, self:getRankId(), LuaTableJson.encodeToCJson(rankData))
+		else
+			local delIds = {}
+
+			for i = limit, #rankList do
+				delIds[#delIds + 1] = rankList[i]._userId
+			end
+
+			if #delIds > 0 then
+				M.uploadRankDataInnerV3(col, doc, self:getRankId(), LuaTableJson.encodeToCJson(rankData), delIds)
+			else
+				M.uploadRankDataInner(col, doc, self:getRankId(), LuaTableJson.encodeToCJson(rankData))
+			end
+		end
+
+		self._globalDataCacheMap[key] = nil
+
+		lc.setTableKeyValue(key, nil)
+	end)
+end
+
+function M.parseData(jsonStr)
+	jsonStr = string.unicodeToUtf8(jsonStr)
+	local tbl = LuaTableJson.decodeFromLuaJson(jsonStr)
+	local isEmptyMsg = false
+
+	if not next(tbl) then
+		isEmptyMsg = true
+
+		return {}
+	end
+
+	return tbl
+end
+
+function M.queryRankDataInner(col, doc, callback, defaultValue, noRetry)
+	if not noRetry then
+		Client.queryRankDataV2(col, doc, function (jsonData)
+			if jsonData == "nil" then
+				lc.setTimer(function ()
+					M.queryRankDataInner(col, doc, callback, defaultValue, true)
+				end, 10)
+
+				return
+			end
+
+			callback(M.parseData(jsonData))
+		end, defaultValue)
+	else
+		Client.queryRankDataV2(col, doc, function (jsonData)
+			if jsonData ~= "nil" then
+				callback(M.parseData(jsonData))
+			else
+				callback(jsonData)
+			end
+		end, defaultValue)
+	end
+end
+
+function M.uploadRankDataInner(col, doc, key, value, noRetry)
+	if not noRetry then
+		Client.uploadRankDataV2(col, doc, key, value, function ()
+			lc.setTimer(function ()
+				M.uploadRankDataInner(col, doc, key, value, true)
+			end, 2)
+		end)
+	else
+		Client.uploadRankDataV2(col, doc, key, value)
+	end
+end
+
+function M.uploadRankDataInnerV3(col, doc, key, value, delKeys, noRetry)
+	if not noRetry then
+		Client.uploadRankDataV3(col, doc, key, value, delKeys, function ()
+			lc.setTimer(function ()
+				M.uploadRankDataInnerV3(col, doc, key, value, delKeys, true)
+			end, 2)
+		end)
+	else
+		Client.uploadRankDataV3(col, doc, key, value, delKeys)
+	end
+end
+
+function M.queryRankData(rankType, rankId, subRankId, callback, defaultValue)
+	local col = rankType == D.RankType.ArkRebuildRank and P._playerRanker._arkRebuildCollection or rankType
+
+	if lc._isCN then
+		Request.sendGetRankData(col, subRankId, rankId, 500, callback)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = string.format(M.RankTypeDoc[rankType], rankId, subRankId)
+
+		M.queryRankDataInner(col, doc, callback, defaultValue)
+	end
+end
+
+function M.uploadRankData(rankType, rankId, subRankId, key, value)
+	local col = rankType == D.RankType.ArkRebuildRank and P._playerRanker._arkRebuildCollection or rankType
+
+	if lc._isCN then
+		V.uploadPlayerInfo()
+		Request.sendUploadRankData(col, subRankId, rankId, value, nil)
+	else
+		if not lc._isRelease then
+			col = "dev_" .. col
+		end
+
+		local doc = string.format(M.RankTypeDoc[rankType], rankId, subRankId)
+
+		M.uploadRankDataInner(col, doc, key, value)
+	end
+end
+
+return M

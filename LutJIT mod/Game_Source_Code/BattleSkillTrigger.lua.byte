@@ -1,0 +1,1450 @@
+local BattleTriggerEnum = BattleTriggerEnum
+local M = table.new(32, 0)
+M[10001] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 10002,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 10003,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	}
+}
+M[10025] = {
+	{
+		version = 2,
+		on_pos = 2,
+		trigger_skill_id = 10026,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	},
+	{
+		trigger_weapon = 100,
+		on_pos = 2,
+		trigger_skill_id = 10003,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	}
+}
+M[1] = {
+	{
+		trigger_probability = 10,
+		trigger_skill_id = 102,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addPro = 10 * self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return subSkill:getProp(BattlePropEnum.TriggerProbabilityAddPer, 0) + addPro
+		end,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_skill_id = 104,
+		trigger_on = "1-104-1",
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.WhenCast,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local dtAngle = D._battleGlobalConfig._ator_slanting_angle
+			local agnle = 0
+
+			if index == 1 then
+				if self._isLeft then
+					agnle = self._angle - dtAngle
+				else
+					agnle = self._angle + dtAngle
+				end
+			elseif index == 2 then
+				if self._isLeft then
+					agnle = self._angle - dtAngle / 2
+				else
+					agnle = self._angle + dtAngle / 2
+				end
+			end
+
+			bullet:setDirByAngle(agnle)
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+	},
+	{
+		ignore_cur_enemy = true,
+		trigger_on = "1-104-2",
+		dir_type = 4,
+		trigger_skill_id = 104,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		fc_dir_angle = function (self)
+			return self._isLeft and self._angle + 90 or self._angle - 90
+		end,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_probability = 20,
+		trigger_skill_id = 103,
+		dir_type = 2,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addNum = self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return (addNum + 1) * 20
+		end
+	},
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 105,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addNum = self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return addNum * 50
+		end,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_skill_id = 106,
+		version = 2,
+		on_pos = 0,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			if tEnemy._isToBeDestroyed then
+				return false
+			end
+
+			return true
+		end,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			tEnemy:onHit(bullet)
+			bullet:hitEnemy(tEnemy)
+		end
+	}
+}
+M[101] = {
+	{
+		trigger_probability = 10,
+		trigger_skill_id = 102,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addPro = 10 * self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return subSkill:getProp(BattlePropEnum.TriggerProbabilityAddPer, 0) + addPro
+		end,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_skill_id = 104,
+		trigger_on = "1-104-1",
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.WhenCast,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local dtAngle = D._battleGlobalConfig._ator_slanting_angle
+			local agnle = 0
+
+			if index == 1 then
+				if self._isLeft then
+					agnle = self._angle + dtAngle
+				else
+					agnle = self._angle - dtAngle
+				end
+			elseif index == 2 then
+				if self._isLeft then
+					agnle = self._angle + dtAngle / 2
+				else
+					agnle = self._angle - dtAngle / 2
+				end
+			end
+
+			bullet:setDirByAngle(agnle)
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+	},
+	{
+		dir_type = 6,
+		trigger_on = "1-104-2",
+		dir_angle = -90,
+		ignore_cur_enemy = true,
+		trigger_skill_id = 104,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		dir_type = 6,
+		trigger_on = "1-104-2",
+		dir_angle = 90,
+		ignore_cur_enemy = true,
+		trigger_skill_id = 104,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_probability = 40,
+		trigger_skill_id = 103,
+		dir_type = 2,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addNum = self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return (addNum + 1) * 40
+		end
+	},
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 105,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_add_trigger_probability = function (self, subSkill)
+			local addNum = self._battleSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return addNum * 50
+		end,
+		check = function (self, subSkill, tEnemy)
+			return self._isCouldTrigger
+		end
+	},
+	{
+		trigger_skill_id = 107,
+		version = 2,
+		on_pos = 0,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			if tEnemy._isToBeDestroyed then
+				return false
+			end
+
+			return true
+		end,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			tEnemy:onHit(bullet)
+			bullet:hitEnemy(tEnemy)
+		end
+	},
+	check = function (self, subSkill, tEnemy)
+		if tEnemy._isToBeDestroyed then
+			return false
+		end
+
+		return true
+	end
+}
+M[2] = {
+	{
+		on_pos = 1,
+		trigger_skill_id = 203,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			if not subSkill._battleWeapon:getEffect(202) then
+				return false
+			end
+
+			local buff = tEnemy:getBuff(BattleDefine.BuffId.rbp_burn)
+
+			if buff == nil then
+				return false
+			end
+
+			return true
+		end
+	},
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 204,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			if tEnemy._skill204Triggered then
+				return false
+			end
+
+			return true
+		end,
+		fc_cast = function (self, subSkill, tEnemy)
+			tEnemy._skill204Triggered = true
+
+			opt.dict_arg8:clear()
+
+			opt.dict_arg8[tEnemy._id] = true
+			local enemy = self._battleSession:randomOneEnemyInRange(tEnemy._position, 3, opt.dict_arg8)
+
+			if enemy == nil then
+				enemy = self._battleSession:randomOneEnemy(opt.dict_arg8)
+			end
+
+			opt.dict_arg8:clear()
+
+			if enemy == nil then
+				return
+			end
+
+			local triggerSkill = subSkill._battleWeapon:getSkill(204)
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setPos(tEnemy._position.x, tEnemy._position.y)
+			bullet:setLineBeganTarget(tEnemy)
+			bullet:setTargetEnemy(enemy)
+
+			bullet._subType = 2
+			bullet._plasmaType = 3
+
+			bullet:stepMove(0)
+			self:addSubBullets(bullet)
+
+			if bullet._view then
+				bullet._view:posEvent()
+			end
+		end
+	},
+	{
+		trigger_probability = 20,
+		dir_type = 2,
+		trigger_skill_id = 206,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[201] = {
+	{
+		trigger_skill_id = 203,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		getSkill = function (self)
+			return self._battleWeapon:getSkill(203)
+		end,
+		check = function (self, subSkill, tEnemy)
+			if not subSkill._battleWeapon:getEffect(202) then
+				return false
+			end
+
+			local buff = tEnemy:getBuff(BattleDefine.BuffId.rbp_burn)
+
+			if buff == nil then
+				return false
+			end
+
+			return true
+		end
+	}
+}
+M[202] = M[201]
+M[205] = M[201]
+M[3] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 301,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	},
+	{
+		effect_on = 305,
+		dir_type = 2,
+		trigger_skill_id = 304,
+		seek_enemy_type = 3,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		cast_add_num = function (self, subSkill)
+			return subSkill:getProp(BattlePropEnum.Salvo, 0)
+		end,
+		onBulletCreate = function (self, bullet, index)
+			if bullet._lockEnemy == nil then
+				bullet._dmgDelay = 0.3
+			end
+		end
+	},
+	{
+		on_pos = 1,
+		trigger_skill_id = 307,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos
+	},
+	{
+		effect_on = 306,
+		dir_type = 2,
+		trigger_skill_id = 304,
+		seek_enemy_type = 3,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		cast_add_num = function (self, subSkill)
+			local param = self._battleWeapon:getEffect(351)
+
+			return param - 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			if bullet._lockEnemy == nil then
+				bullet._dmgDelay = 0.3
+			end
+		end
+	}
+}
+M[321] = {
+	{
+		version = 2,
+		on_pos = 2,
+		trigger_skill_id = 322,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[301] = {
+	{
+		on_pos = 1,
+		trigger_skill_id = 307,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 303,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet, index)
+			bullet:setScale(self._scale)
+
+			if bullet._view then
+				bullet._view._obj:SetLocalScale(self._scale, self._scale, 1)
+			end
+		end
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 306,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet, index)
+			bullet:setScale(self._scale)
+
+			if bullet._view then
+				bullet._view._obj:SetLocalScale(self._scale, self._scale, 1)
+			end
+		end
+	},
+	{
+		trigger_probability = 100,
+		on_pos = 4,
+		trigger_skill_id = 305,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 310,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet)
+			if bullet._position.x - bullet._radius < self._battleSession._screenEdgeX1 then
+				bullet._position.x = self._battleSession._screenEdgeX1 + bullet._radius
+			end
+
+			if self._battleSession._screenEdgeX2 < bullet._position.x + bullet._radius then
+				bullet._position.x = self._battleSession._screenEdgeX2 - bullet._radius
+			end
+		end
+	},
+	{
+		effect_on = 306,
+		dir_type = 2,
+		trigger_skill_id = 304,
+		seek_enemy_type = 3,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		cast_add_num = function (self, subSkill)
+			local param = self._battleWeapon:getEffect(351)
+
+			return param - 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			if bullet._lockEnemy == nil then
+				bullet._dmgDelay = 0.3
+			end
+		end
+	}
+}
+M[304] = {
+	{
+		on_pos = 1,
+		trigger_skill_id = 307,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos
+	},
+	{
+		effect_on = 302,
+		trigger_skill_id = 304,
+		dir_type = 2,
+		trigger_probability = 60,
+		seek_enemy_type = 3,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			bullet._blockTrigger = true
+
+			if bullet._lockEnemy == nil then
+				bullet._dmgDelay = 0.3
+			end
+		end
+	},
+	{
+		on_pos = 2,
+		trigger_probability = 60,
+		trigger_skill_id = 311,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[4] = {
+	{
+		effect_on = 402,
+		trigger_skill_id = 402,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill)
+			return self._4trigger402Count < 5
+		end,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			self._4trigger402Count = self._4trigger402Count + 1
+
+			bullet:setBeganTargt(tEnemy)
+		end
+	},
+	{
+		trigger_probability = 60,
+		effect_on = 403,
+		trigger_skill_id = 410,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos
+	},
+	{
+		trigger_probability = 50,
+		on_pos = 1,
+		trigger_skill_id = 406,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[402] = {
+	{
+		trigger_probability = 25,
+		effect_on = 407,
+		trigger_skill_id = 403,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[406] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 407,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	}
+}
+M[5] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 501,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet, index)
+			bullet:setScale(self._scale)
+		end
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 502,
+		trigger_when = BattleTriggerEnum.WhenEffect,
+		onBulletCreate = function (self, bullet)
+			self:initBullet502(bullet)
+		end
+	}
+}
+M[6] = {
+	{
+		dir_type = 5,
+		trigger_skill_id = 601,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			bullet:setDirByAngle(self._angle)
+			bullet:updateTriangleArea()
+
+			if self._battleWeapon:getEffect(607) and self._view then
+				local obj = self._sessionView:createAndPlayVFX("Bullet_6_traction", 1)
+
+				if obj then
+					obj:SetPosition(self._position.x, self._position.y, 0)
+					obj:SetLocalRotation(0, 0, self._angle)
+				end
+			end
+		end
+	},
+	{
+		dir_type = 5,
+		trigger_skill_id = 604,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			bullet:setDirByAngle(self._angle)
+			bullet:updateTriangleArea()
+		end
+	},
+	{
+		effect_on = 608,
+		trigger_skill_id = 602,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		cast_add_num = function (self, subSkill)
+			local p = self._battleWeapon:getEffect(652)
+
+			return p - 1
+		end,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			local battleWeapon = self._battleWeapon
+			local totalNum = battleWeapon:getEffect(652)
+			local len = Vector2.Distance(tEnemy._position, battleWeapon._rotatePos)
+
+			battleWeapon._rotation:SetEuler(0, 0, self._angle + 5 / len * 10 * (index - (1 + totalNum) / 2))
+			opt.vec3_1:Set(battleWeapon._rotatePos):AddXYZ(battleWeapon._rotation:MulVec3XYZ(len, 0, 0))
+			bullet:setPos(opt.vec3_1.x, opt.vec3_1.y)
+		end
+	},
+	{
+		on_pos = 1,
+		trigger_skill_id = 608,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local angle = self._battleRandomLib:randomMN(0, 360)
+			local bullet = subSkill:createBullet()
+
+			bullet:setPos(tEnemy._position.x, tEnemy._position.y)
+			bullet:setDirByAngle(angle)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+
+			local bullet = subSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+			bullet:setDirByAngle(angle + 90)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+		end
+	}
+}
+M[601] = {
+	{
+		effect_on = 603,
+		trigger_skill_id = 602,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		cast_add_num = function (self, subSkill)
+			local addNum = subSkill:getProp(BattlePropEnum.Salvo, 0)
+
+			return addNum
+		end,
+		onBulletCreate = function (self, bullet)
+			local triangleArea = self._triangleArea
+			local x, y = BattleMathLib.random_inside_triangle(triangleArea.A, triangleArea.B, triangleArea.C)
+
+			bullet:setPos(x, y)
+		end
+	},
+	{
+		on_pos = 1,
+		dir_type = 7,
+		trigger_skill_id = 606,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	},
+	{
+		trigger_skill_id = 608,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local angle = self._battleRandomLib:randomMN(0, 360)
+			local bullet = subSkill:createBullet()
+
+			bullet:setPos(self._position.x, self._position.y)
+			bullet:setDirByAngle(angle)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+
+			local bullet = subSkill:createBullet()
+
+			bullet:setPos(tEnemy._position.x, tEnemy._position.y)
+			bullet:setDirByAngle(angle + 90)
+
+			if bullet._view then
+				bullet._view:posEvent()
+				bullet._view:rotationEvent()
+			end
+		end
+	}
+}
+M[602] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 603,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	}
+}
+M[621] = {
+	{
+		version = 2,
+		on_pos = 2,
+		trigger_skill_id = 622,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos
+	}
+}
+M[622] = {
+	{
+		trigger_skill_id = 623,
+		version = 2,
+		on_pos = 4,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		cast_add_num = function ()
+			return 2
+		end
+	}
+}
+M[623] = {
+	{
+		version = 2,
+		on_pos = 2,
+		trigger_skill_id = 624,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	}
+}
+M[7] = {
+	{
+		on_pos = 1,
+		trigger_skill_id = 704,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	},
+	{
+		effect_on = 704,
+		trigger_probability = 50,
+		trigger_skill_id = 707,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			bullet:setBeganTargt(tEnemy)
+		end
+	}
+}
+M[701] = {
+	{
+		on_pos = 1,
+		trigger_skill_id = 702,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[8] = {}
+M[9] = {
+	{
+		trigger_skill_id = 903,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			if self._battleWeapon:getEffect(901) then
+				local params = D.getBattleEffectParams(901)
+				local s = (self._damageNum - 1) * params[1] / 100
+
+				bullet:setScale(1 + s)
+			end
+
+			if self._battleWeapon:getEffect(902) then
+				local params = D.getBattleEffectParams(902)
+				bullet._damageAddPer = (self._damageNum - 1) * params[1]
+			end
+		end
+	},
+	{
+		ignore_cur_enemy = true,
+		trigger_skill_id = 901,
+		dir_type = 5,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local tdAngle = 20 * (index - 1.5)
+
+			bullet:setDirByAngle(self._angle + tdAngle)
+		end
+	},
+	{
+		dir_type = 5,
+		trigger_probability = 20,
+		ignore_cur_enemy = true,
+		trigger_skill_id = 901,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local tdAngle = 40 * (index - 1.5)
+
+			bullet:setDirByAngle(self._angle + tdAngle)
+		end
+	},
+	{
+		trigger_skill_id = 904,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			local x = self._position.x
+			local y = self._position.y
+
+			bullet:setPos(x, y)
+		end
+	},
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 907,
+		version = 2,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local triggerSkill = subSkill._battleWeapon:getSkill(907)
+
+			if triggerSkill == nil then
+				return
+			end
+
+			local range = triggerSkill:getProp(BattlePropEnum.AtkRange, 3)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(tEnemy._position, range)
+
+			if allEnemys == nil or #allEnemys == 0 then
+				return
+			end
+
+			local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys)
+
+			if enemy == nil then
+				return
+			end
+
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setTargetPosition(self._position, enemy._position)
+		end
+	}
+}
+M[901] = {
+	{
+		ignore_cur_enemy = true,
+		trigger_skill_id = 902,
+		dir_type = 5,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local tdAngle = 20 * (index - 1.5)
+
+			bullet:setDirByAngle(self._angle + tdAngle)
+		end
+	},
+	{
+		trigger_skill_id = 902,
+		dir_type = 5,
+		ignore_cur_enemy = true,
+		trigger_probability = 20,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		cast_add_num = function ()
+			return 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local tdAngle = 40 * (index - 1.5)
+
+			bullet:setDirByAngle(self._angle + tdAngle)
+		end
+	},
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 907,
+		version = 2,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local triggerSkill = subSkill._battleWeapon:getSkill(907)
+
+			if triggerSkill == nil then
+				return
+			end
+
+			local range = triggerSkill:getProp(BattlePropEnum.AtkRange, 3)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(tEnemy._position, range)
+
+			if allEnemys == nil or #allEnemys == 0 then
+				return
+			end
+
+			local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys)
+
+			if enemy == nil then
+				return
+			end
+
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setTargetPosition(self._position, enemy._position)
+		end
+	}
+}
+M[902] = {
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 907,
+		version = 2,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local triggerSkill = subSkill._battleWeapon:getSkill(907)
+
+			if triggerSkill == nil then
+				return
+			end
+
+			local range = triggerSkill:getProp(BattlePropEnum.AtkRange, 3)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(tEnemy._position, range)
+
+			if allEnemys == nil or #allEnemys == 0 then
+				return
+			end
+
+			local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys)
+
+			if enemy == nil then
+				return
+			end
+
+			local bullet = triggerSkill:createBullet()
+
+			bullet:setTargetPosition(self._position, enemy._position)
+		end
+	}
+}
+M[904] = {
+	{
+		version = 2,
+		on_pos = 1,
+		trigger_skill_id = 905,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[908] = M[902]
+M[10] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 1001,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			local scale = bullet._scale + (self._bulletAddScale or 0)
+
+			bullet:setScale(scale)
+
+			if self._tmpDamageAddPer then
+				bullet._damageAddPer = self._tmpDamageAddPer
+			end
+
+			bullet._hitIndex = self._hitIndex
+		end
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 1002,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			local scale = bullet._scale + (self._bulletAddScale or 0)
+
+			bullet:setScale(scale)
+
+			if bullet._view then
+				bullet._view._obj:SetLocalScale(bullet._scale, bullet._scale, 1)
+			end
+
+			local triggerSkill = bullet._battleWeapon:getSkill(1008)
+
+			if triggerSkill then
+				local bullet2 = triggerSkill:createBullet()
+
+				bullet2:setScale(scale * 1.25)
+				bullet2:setPos(bullet._position.x, bullet._position.y)
+
+				if bullet2._view then
+					bullet2._view:posEvent()
+					bullet2._view._obj:SetLocalScale(scale * 1.25, scale * 1.25, 1)
+				end
+			end
+		end
+	},
+	{
+		on_pos = 2,
+		trigger_skill_id = 1005,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			local scale = bullet._scale + (self._bulletAddScale or 0)
+
+			bullet:setScale(scale * 1.5)
+		end
+	},
+	{
+		on_pos = 2,
+		dir_type = 2,
+		trigger_skill_id = 1007,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	},
+	{
+		effect_on = 1003,
+		trigger_skill_id = 1004,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			opt.dict_arg32:clear()
+
+			opt.dict_arg32[tEnemy._id] = true
+			local params = D.getBattleEffectParams(1003)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(tEnemy._position, params[2])
+
+			for i = 1, params[1] do
+				local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys, opt.dict_arg32)
+
+				if enemy == nil then
+					break
+				end
+
+				opt.dict_arg32[enemy._id] = true
+				local triggerSkill = subSkill._battleWeapon:getSkill(1004)
+				local bullet = triggerSkill:createBullet()
+
+				bullet:setTargetPosition(self._position, enemy._position)
+			end
+
+			opt.dict_arg32:clear()
+		end
+	},
+	{
+		effect_on = 1006,
+		trigger_skill_id = 1207,
+		trigger_weapon = 12,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local battleWeapon = self._battleSession:getWeapon(12)
+
+			if battleWeapon == nil then
+				return
+			end
+
+			local level = battleWeapon:getCloneLevel()
+
+			battleWeapon:createCloneBeeByParam(level, tEnemy._position, 90, self._battleWeapon)
+		end
+	}
+}
+M[1001] = {
+	{
+		trigger_probability = 100,
+		trigger_skill_id = 1009,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			if self._1009TriggerCount == nil then
+				self._1009TriggerCount = 1
+			else
+				self._1009TriggerCount = self._1009TriggerCount + 1
+			end
+
+			bullet:setBeganTargt(tEnemy)
+		end,
+		check = function (self)
+			if self._1009TriggerCount == nil or self._1009TriggerCount < 5 then
+				return true
+			end
+
+			return false
+		end
+	},
+	{
+		trigger_skill_id = 1004,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		check = function (self)
+			if self._battleWeapon:getEffect(1008) then
+				local chargeDuration = self._battleWeapon._chargeDurationOrigin
+
+				if chargeDuration > 0.5 then
+					return true
+				end
+			end
+
+			return false
+		end,
+		fc_cast = function (self, subSkill)
+			opt.dict_arg32:clear()
+
+			local params = D.getBattleEffectParams(1003)
+			local num = self._battleWeapon:getEffect(1008)
+			num = num * math.floor(self._battleWeapon._chargeDurationOrigin / 0.5)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(self._position, params[2])
+
+			for i = 1, num do
+				local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys, opt.dict_arg32)
+
+				if enemy == nil then
+					break
+				end
+
+				opt.dict_arg32[enemy._id] = true
+				local triggerSkill = subSkill._battleWeapon:getSkill(1004)
+				local bullet = triggerSkill:createBullet()
+
+				bullet:setTargetPosition(self._position, enemy._position)
+			end
+
+			opt.dict_arg32:clear()
+		end
+	}
+}
+M[1006] = {
+	{
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		getSkill = function (self)
+			local battleWeapon = self._battleSession:getWeapon(7)
+
+			if battleWeapon == nil then
+				return
+			end
+
+			return battleWeapon:getSkill(702)
+		end
+	}
+}
+M[11] = {
+	{
+		on_pos = 2,
+		trigger_skill_id = 1103,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet)
+			if bullet._position.x - bullet._radius < self._battleSession._screenEdgeX1 then
+				bullet._position.x = self._battleSession._screenEdgeX1 + bullet._radius
+			end
+
+			if self._battleSession._screenEdgeX2 < bullet._position.x + bullet._radius then
+				bullet._position.x = self._battleSession._screenEdgeX2 - bullet._radius
+			end
+
+			if self._battleSession._screenEdgeY2 < bullet._position.y then
+				bullet._position.y = self._battleSession._screenEdgeY2 - bullet._radius
+			end
+
+			if bullet._position.y < self._battleSession._screenEdgeY1 then
+				bullet._position.y = self._battleSession._screenEdgeY1 + 0.5
+			end
+		end
+	},
+	{
+		dir_type = 6,
+		dir_angle = -45,
+		trigger_skill_id = 1105,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	},
+	{
+		dir_type = 6,
+		dir_angle = 45,
+		trigger_skill_id = 1105,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos
+	},
+	{
+		on_pos = 1,
+		trigger_skill_id = 1101,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		onBulletCreate = function (self, bullet)
+			self._bulletPortalIn = bullet
+			bullet._trigSrc = self
+		end
+	},
+	{
+		trigger_skill_id = 1102,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet)
+			bullet._bulletPortalIn = self._bulletPortalIn
+			self._bulletPortalIn._bulletPortalOut = bullet
+
+			if bullet._position.x - bullet._size[1] / 2 < self._battleSession._screenEdgeX1 then
+				bullet._position.x = self._battleSession._screenEdgeX1 + bullet._size[1] / 2
+			end
+
+			if self._battleSession._screenEdgeX2 < bullet._position.x + bullet._size[1] / 2 then
+				bullet._position.x = self._battleSession._screenEdgeX2 - bullet._size[1] / 2
+			end
+
+			if self._battleSession._screenEdgeY2 < bullet._position.y + bullet._size[1] / 2 then
+				bullet._position.y = self._battleSession._screenEdgeY2 - bullet._size[1] / 2
+			end
+
+			if bullet._position.y - bullet._size[1] / 2 < self._battleSession._screenEdgeY1 then
+				bullet._position.y = self._battleSession._screenEdgeY1 + 0.5
+			end
+		end,
+		check = function (self, subSkill, tEnemy)
+			if self._bulletPortalIn then
+				return true
+			end
+
+			return false
+		end
+	}
+}
+M[1201] = {
+	{
+		trigger_probability = 60,
+		trigger_on = "12-1204-1",
+		ignore_cur_enemy = true,
+		trigger_skill_id = 1204,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		check = function (self, subSkill, tEnemy)
+			if self._belongBee and not self._belongBee._isClone then
+				return true
+			end
+
+			return false
+		end,
+		cast_add_num = function ()
+			return 2
+		end,
+		onBulletCreate = function (self, bullet, index)
+			local dtAngle = 30
+
+			bullet:setDirByAngle(self._angle - 180 + 135 + dtAngle * index)
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+	}
+}
+M[1204] = {
+	{
+		trigger_skill_id = 907,
+		trigger_weapon = 9,
+		version = 2,
+		trigger_when = BattleTriggerEnum.KillOnTargetPos,
+		fc_cast = function (self, subSkill, tEnemy)
+			local triggerSkill = subSkill._battleWeapon:getSkill(907)
+
+			if triggerSkill == nil then
+				return
+			end
+
+			local range = self._battleSkill:getProp(BattlePropEnum.AtkRange, 3)
+			local allEnemys = self._battleSession._battleEnemyFinder:getEnemysInRange(tEnemy._position, range)
+
+			if allEnemys == nil or #allEnemys == 0 then
+				return
+			end
+
+			local enemy = self._battleSession:randomOneEnemyFromInput(allEnemys)
+
+			if enemy == nil then
+				return
+			end
+
+			local bullet = triggerSkill:createBullet(self._battleWeapon)
+
+			bullet:setTargetPosition(self._position, enemy._position)
+		end
+	}
+}
+M[1202] = M[1201]
+M[1203] = M[1201]
+M[20100] = {
+	{
+		trigger_probability = 20,
+		trigger_skill_id = 20101,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	},
+	{
+		trigger_skill_id = 20102,
+		dir_type = 4,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		fc_dir_angle = function (bullet)
+			return bullet._angle + 60
+		end,
+		onBulletCreate = function (self, bullet)
+			bullet:setScale(self._scale)
+
+			if bullet._view then
+				bullet._view:scaleEvent()
+			end
+		end
+	},
+	{
+		trigger_skill_id = 20102,
+		dir_type = 4,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitFirstOnTargetPos,
+		fc_dir_angle = function (bullet)
+			return bullet._angle - 60
+		end,
+		onBulletCreate = function (self, bullet)
+			bullet:setScale(self._scale)
+
+			if bullet._view then
+				bullet._view:scaleEvent()
+			end
+		end
+	}
+}
+M[20700] = {
+	{
+		version = 2,
+		on_pos = 1,
+		trigger_skill_id = 20701,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+M[21000] = {
+	{
+		trigger_probability = 30,
+		trigger_skill_id = 21001,
+		version = 2,
+		on_pos = 1,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos
+	}
+}
+local Dd_Angle_21100_1 = {
+	-90,
+	90
+}
+local Dd_Angle_21100_2 = {
+	-45,
+	45,
+	135,
+	225
+}
+M[21100] = {
+	{
+		trigger_probability = 50,
+		trigger_skill_id = 21101,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		cast_add_num = function (self)
+			return self._battleSkill:getProp(BattlePropEnum.BattlePropParam1, 0) + 1
+		end,
+		onBulletCreate = function (self, bullet, index)
+			if self._battleWeapon:getEffect(21101) then
+				bullet:setDirByAngle(self._angle + Dd_Angle_21100_2[index])
+			else
+				bullet:setDirByAngle(self._angle + Dd_Angle_21100_1[index])
+			end
+
+			if bullet._view then
+				bullet._view:rotationEvent()
+			end
+		end
+	}
+}
+M[21101] = {
+	{
+		trigger_skill_id = 21103,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		check = function (self)
+			local x = self._position.x
+			local y = self._position.y
+
+			if BattleMathLib.sqrt_dis_xy(x, y, 0, BattleDefine.DOME_CENTER) <= BattleDefine.DOME_RADIUS_SQRT then
+				return false
+			end
+
+			return true
+		end
+	}
+}
+M[21200] = {
+	{
+		trigger_skill_id = 21203,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.BulletDestoryOnCurPos,
+		onBulletCreate = function (self, bullet, index)
+			bullet._dmgDelay = 1.8
+		end
+	}
+}
+M[21300] = {
+	{
+		dir_type = 5,
+		trigger_skill_id = 21303,
+		trigger_probability = 50,
+		version = 2,
+		on_pos = 2,
+		trigger_when = BattleTriggerEnum.HitOnTargetPos,
+		onBulletCreate = function (self, bullet, index, tEnemy)
+			bullet:setPos(self._position.x, self._position.y - 1)
+			bullet:setDir(tEnemy._position)
+
+			if bullet._view then
+				bullet._view:scaleEvent()
+				bullet._view:rotationEvent()
+			end
+		end
+	}
+}
+
+return M

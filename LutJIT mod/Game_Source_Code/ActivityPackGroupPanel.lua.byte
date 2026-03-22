@@ -1,0 +1,116 @@
+local M = class("ActivityPackGroupPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	txtTitle = Types.TMP_Text,
+	imgIcon = Types.Image,
+	txtItemNum = Types.TMP_Text,
+	tfContainer = Types.Transform
+}
+local CellWidget = requireLua("ActivityPackGroupWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:addEvents()
+	self:on("day.cross", function ()
+		self:updateUI()
+	end)
+end
+
+function M:init(packNameSid, exchanceGroup, purchaseList, successCallback)
+	self._packNameSid = packNameSid
+	self._exchanceGroup = exchanceGroup
+	self._purchaseList = purchaseList
+	self._successCallback = successCallback
+	self._widgets = {}
+
+	self._txtTitle:SetLocalize(SID.TITLE_EVENT_PACK, -packNameSid)
+
+	local exchanges = P._playerExchange:getExchangeIdsByType(self._exchanceGroup)
+	self._exchangeList = exchanges
+	self._showIds = {}
+
+	for i = 1, #self._exchangeList do
+		table.insert(self._showIds, {
+			#self._showIds + 1,
+			1,
+			self._exchangeList[i]
+		})
+	end
+
+	for i = 1, #self._purchaseList do
+		table.insert(self._showIds, {
+			#self._showIds + 1,
+			2,
+			self._purchaseList[i]
+		})
+	end
+
+	self:updateUI()
+end
+
+function M:getLeftCount(cfg)
+	local idx = cfg[1]
+	local buyType = cfg[2]
+	local id = cfg[3]
+
+	if buyType == 1 then
+		return P._playerExchange:getLeftExchangeCount(id)
+	else
+		return P._playerStore:getLeftBuyCount(id)
+	end
+end
+
+function M:updateUI()
+	table.sort(self._showIds, function (a, b)
+		local aleft = self:getLeftCount(a) > 0
+		local bleft = self:getLeftCount(b) > 0
+
+		if aleft ~= bleft then
+			return aleft
+		end
+
+		if a[2] ~= a[2] then
+			return a[2] == 1
+		end
+
+		return a[1] < b[1]
+	end)
+
+	for k, cfg in pairs(self._showIds) do
+		local widget = nil
+		local idx = cfg[1]
+		local buyType = cfg[2]
+		local id = cfg[3]
+
+		if not self._widgets[idx] then
+			widget = CellWidget.create(self._tfContainer)
+
+			widget:init(self, function ()
+				self:updateUI()
+
+				if self._successCallback then
+					self._successCallback()
+				end
+			end)
+
+			self._widgets[idx] = widget
+		else
+			widget = self._widgets[idx]
+		end
+
+		widget:updateUI(cfg, self._packNameSid)
+	end
+end
+
+function M:syncUI()
+	self:updateUI()
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

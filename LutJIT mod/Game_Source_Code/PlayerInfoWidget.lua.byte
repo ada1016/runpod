@@ -1,0 +1,126 @@
+local M = class("PlayerInfoWidget", BLB)
+M.args = {
+	txtLevel = Types.TMP_Text,
+	txtName = Types.TMP_Text,
+	tfAvatar = Types.Transform,
+	imgExpBar = Types.Image,
+	imgDot = Types.Image,
+	goRes1 = Types.GameObject,
+	goRes2 = Types.GameObject,
+	goRes3 = Types.GameObject,
+	btnPlayerInfo = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	self._txtLevel.text = P:getLevel()
+
+	V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+
+	self._imgExpBar.fillAmount = P._playerProfile:getExpProgress()
+
+	V.loadAvatar(self._tfAvatar, P._playerProfile:getAvatar(), P._playerProfile:getAvatarFrame())
+	self:refreshDot()
+end
+
+function M:Start()
+	self._lbRes1 = LuaHelper.GetLuaBehaviour(self._goRes1)
+	self._lbRes2 = LuaHelper.GetLuaBehaviour(self._goRes2)
+	self._lbRes3 = LuaHelper.GetLuaBehaviour(self._goRes3)
+
+	self:addClicks()
+end
+
+function M:addClicks()
+	self:setClick(self._btnPlayerInfo, function ()
+		UIManager.openPanel(PrefabDefine.ProfileSettingPanel, 1)
+	end)
+end
+
+function M:OnEnable()
+	self:addEvents()
+end
+
+function M:OnDisable()
+	self:removeEvents()
+end
+
+function M:addEvents()
+	self:on("rightcard.update", function (rightCardType)
+		if rightCardType == D.RightCardType.SVIP then
+			V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+		end
+	end)
+	self:on("exp.dirty", function ()
+		self._txtLevel.text = P:getLevel()
+		self._imgExpBar.fillAmount = P._playerProfile:getExpProgress()
+	end)
+	self:on("level.dirty", function ()
+		self._txtLevel.text = P:getLevel()
+		self._imgExpBar.fillAmount = P._playerProfile:getExpProgress()
+
+		self:refreshDot()
+	end)
+	self:on("name.dirty", function ()
+		V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+	end)
+	self:on("avatar.dirty", function ()
+		V.loadAvatar(self._tfAvatar, P._playerProfile:getAvatar(), P._playerProfile:getAvatarFrame())
+	end)
+	self:on("avatarFrame.expire", function ()
+		V.loadAvatar(self._tfAvatar, P._playerProfile:getAvatar(), P._playerProfile:getAvatarFrame())
+	end)
+	self:on("avatarMedal.expire", function ()
+		V.setPlayerName(self._txtName, P:getName(), P:getPlayerNameColorType(), nil, P._playerProfile:getAvatarMedal())
+	end)
+	self:on("prop.dirty", function (id)
+		if D.AVATAR_BEGIN <= id and id <= D.AVATAR_END or D.AVATAR_FRAME_BEGIN <= id and id <= D.AVATAR_FRAME_END or D.AVATAR_MEDAL_BEGIN <= id and id <= D.AVATAR_MEDAL_END then
+			self:refreshDot()
+		end
+	end)
+	self:on("avatar.flag.dirty", function ()
+		self:refreshDot()
+	end)
+	self:on("avatarFrame.flag.dirty", function ()
+		self:refreshDot()
+	end)
+	self:on("avatarMedal.flag.dirty", function ()
+		self:refreshDot()
+	end)
+	self:on("mail.received", function ()
+		self:refreshDot()
+	end)
+	self:on("mail.read", function ()
+		self:refreshDot()
+	end)
+end
+
+function M:setDisplayItems(res1, res2, res3)
+	if res1 then
+		self._goRes1:SetActive(true)
+		self._lbRes1:init(res1)
+	else
+		self._goRes1:SetActive(false)
+	end
+
+	if res2 then
+		self._goRes2:SetActive(true)
+		self._lbRes2:init(res2)
+	else
+		self._goRes2:SetActive(false)
+	end
+
+	if res3 then
+		self._goRes3:SetActive(true)
+		self._lbRes3:init(res3)
+	else
+		self._goRes3:SetActive(false)
+	end
+end
+
+function M:refreshDot()
+	self._imgDot:SetActive(P._playerRecord:hasNewAvatar() or P._playerRecord:hasNewAvatarFrame() or P._playerRecord:hasNewAvatarMedal())
+end
+
+return M

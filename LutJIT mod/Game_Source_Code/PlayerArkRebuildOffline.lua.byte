@@ -1,0 +1,242 @@
+local M = class("PlayerArkRebuildOffline")
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.offlineRecordTime = self._meta.offlineRecordTime or -1
+	self._meta.offlineRandomSeed = self._meta.offlineRandomSeed or 0
+	self._meta.fullPopped = self._meta.fullPopped or false
+	self._meta.recordAdSweepNum = self._meta.recordAdSweepNum or 0
+	self._meta.adRecoverTime = self._meta.adRecoverTime or 0
+
+	self:start()
+end
+
+function M:start()
+	if self._meta.offlineRecordTime == -1 then
+		self:recordNewOfflineTime(C.getCurTime() - 3600)
+	end
+end
+
+function M:dealOpen()
+	self._meta.offlineRecordTime = self._meta.offlineRecordTime or -1
+	self._meta.offlineRandomSeed = self._meta.offlineRandomSeed or self:regenOfflineRandomSeed()
+	self._meta.fullPopped = self._meta.fullPopped or false
+end
+
+function M:getAdSweepCountdown(ct)
+	ct = ct or C.getCurTime()
+	local dt = ct - self._meta.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local recoverT = P._playerActivityArkRebuild:readAdSweepRecoverSeconds()
+	local num = math.ceil(dt / recoverT)
+	num = math.min(num, P._playerActivityArkRebuild:readAdSweepMaxNum())
+
+	return recoverT * num - dt
+end
+
+function M:getLeftAdSweepNum()
+	if not self._meta.adRecoverTime then
+		self._meta.adRecoverTime = C.getCurTime()
+	end
+
+	local dt = C.getCurTime() - self._meta.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local num = math.floor(dt / P._playerActivityArkRebuild:readAdSweepRecoverSeconds())
+	num = math.min(num, P._playerActivityArkRebuild:readAdSweepMaxNum())
+
+	return num
+end
+
+function M:initAdSweepNum(startTime)
+	self._meta.adRecoverTime = startTime - P._playerActivityArkRebuild:readAdSweepRecoverSeconds()
+end
+
+function M:recordAdSweep(targetNum)
+	local num = self:getLeftAdSweepNum()
+
+	if num == P._playerActivityArkRebuild:readAdSweepMaxNum() then
+		self._meta.adRecoverTime = C.getCurTime() - P._playerActivityArkRebuild:readAdSweepRecoverSeconds() * (targetNum or num - 1)
+	else
+		self._meta.adRecoverTime = self._meta.adRecoverTime + P._playerActivityArkRebuild:readAdSweepRecoverSeconds()
+	end
+end
+
+function M:resetPop()
+	self._meta.fullPopped = false
+end
+
+function M:isPoped()
+	return self._meta.fullPopped
+end
+
+function M:recordPop()
+	if not self._meta.fullPopped then
+		self._meta.fullPopped = true
+	end
+end
+
+function M:readOfflineShowTime()
+	return 3600
+end
+
+function M:getOfflineFullTimeSeconds()
+	return self:getOfflineFullHour() * 3600
+end
+
+function M:readOfflineFullTime()
+	return D._globalConfig._offline_max_time
+end
+
+function M:readOfflineFullTimeSeconds()
+	return D._globalConfig._offline_max_time * 3600
+end
+
+function M:recordNewOfflineTime(newT)
+	if newT then
+		self._meta.offlineRecordTime = newT
+	else
+		local dt = (C.getCurTime() - self._meta.offlineRecordTime) % 3600
+
+		if self:isOfflineTimeFull() then
+			dt = 0
+		end
+
+		self._meta.offlineRecordTime = C.getCurTime() - dt
+	end
+
+	self:regenOfflineRandomSeed()
+end
+
+function M:regenOfflineRandomSeed()
+	self._meta.offlineRandomSeed = math.random(1, 1000000)
+
+	return self._meta.offlineRandomSeed
+end
+
+function M:getOfflineRandomSeed()
+	return self._meta.offlineRandomSeed
+end
+
+function M:getRecordOfflineTime()
+	return self._meta.offlineRecordTime
+end
+
+function M:getOfflineTime()
+	if self._meta.offlineRecordTime < 0 then
+		return 0
+	end
+
+	return C.getCurTime() - self._meta.offlineRecordTime
+end
+
+function M:isOfflineTimeFull()
+	return self:getOfflineFullTimeSeconds() < self:getOfflineTime()
+end
+
+function M:calSweepRewards(total, dt)
+	local cfgs = P._playerMission:getCfgByType(D.MissionType.ArkRebuild)
+	local msId = P._playerActivityArkRebuild:getCurMission() - 1
+	local cfg = cfgs[msId]
+	local cids = cfg._offlineRewardIds
+	local nums = cfg._offlineRewardNums
+	dt = P._playerActivityArkRebuild:readQuickPatrolHour() * 3600
+	dt = math.min(self:getOfflineFullTimeSeconds(), dt)
+	local calHour = math.floor(dt / 3600)
+
+	for i, cid in ipairs(cids) do
+		local num = nums[i]
+		local hour = 1
+		local getNum = math.floor(dt / (hour * 3600)) * num
+
+		if getNum > 0 then
+			total[cid] = (total[cid] or 0) + getNum
+		end
+	end
+
+	local randomCids = cfg._randomRewardCids
+	local randomNums = cfg._randomRewardNums
+
+	for i = 1, calHour do
+		for key, cid in ipairs(randomCids) do
+			local weight = randomNums[key]
+			local get = math.random(1, 10000) < weight
+
+			if get then
+				total[cid] = (total[cid] or 0) + 1
+			end
+		end
+	end
+
+	for cid, num in pairs(total) do
+		total[cid] = math.floor(total[cid] * self:getExtraOfflineTimeRate())
+	end
+
+	return total
+end
+
+function M:calOfflineRewards(total, dt)
+	local cfgs = P._playerMission:getCfgByType(D.MissionType.ArkRebuild)
+	local msId = P._playerActivityArkRebuild:getCurMission() - 1
+	local cfg = cfgs[msId]
+	local cids = cfg._offlineRewardIds
+	local nums = cfg._offlineRewardNums
+	dt = math.min(self:getOfflineFullTimeSeconds(), dt)
+	local calHour = math.floor(dt / 3600)
+
+	for i, cid in ipairs(cids) do
+		local num = nums[i]
+		local hour = 1
+		local getNum = math.floor(dt / (hour * 3600)) * num
+
+		if getNum > 0 then
+			total[cid] = (total[cid] or 0) + getNum
+		end
+	end
+
+	local randomObj = BattleRandomLib.new(self:getOfflineRandomSeed())
+	local randomCids = cfg._randomRewardCids
+	local randomNums = cfg._randomRewardNums
+
+	for i = 1, calHour do
+		for key, cid in ipairs(randomCids) do
+			local weight = randomNums[key]
+			local get = randomObj:randomTrueWithRange(weight, 10000)
+
+			if get then
+				total[cid] = (total[cid] or 0) + 1
+			end
+		end
+	end
+
+	for cid, num in pairs(total) do
+		total[cid] = math.floor(total[cid] * self:getExtraOfflineTimeRate())
+	end
+
+	return total
+end
+
+function M:getOfflineFullHour()
+	local hour = self:readOfflineFullTime()
+
+	if P._playerAsset:getAssetNum(D.ResType.ark_spark_offline_right) > 0 then
+		hour = hour + D._globalConfig._offline_max_add_of_ark_and_spark
+	end
+
+	return hour
+end
+
+function M:getExtraOfflineTimeRate()
+	local num = 100
+
+	return num / 100
+end
+
+return M

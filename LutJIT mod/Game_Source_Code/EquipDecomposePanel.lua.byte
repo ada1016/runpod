@@ -1,0 +1,348 @@
+local M = class("EquipDecomposePanel", requireLua("BasePanel"))
+local Types = Types
+local ROW_CELL = 6
+local filterSelectedColor = "4F9989"
+local filterUnSelectedColor = "2D605C"
+local filterTextUnSelectedColor = "44B0A5"
+local filterTextSelectedColor = "42FFD7"
+local ItemWidget = requireLua("ItemWidget")
+M.args = {
+	btnClose = Types.Button,
+	goGradeFilterContainer = Types.GameObject,
+	goQualityFilterContainer = Types.GameObject,
+	goRewardItem = Types.GameObject,
+	txtGradeFilter = Types.TMP_Text,
+	txtQualityFilter = Types.TMP_Text,
+	goRefineRefund = Types.GameObject,
+	txtRefineRefund = Types.TMP_Text,
+	imgOutlineGradeFilter = Types.Image,
+	imgOutlineQualityFilter = Types.Image,
+	btnGradeFilter = Types.Button,
+	btnQualityFilter = Types.Button,
+	tfScrollContainer = Types.Transform,
+	scroll = Types.ScrollRect,
+	btnDecompose = Types.Button,
+	goLessThan1 = Types.GameObject,
+	imgLessThanQuality = Types.Image,
+	goAnd = Types.GameObject,
+	goLessThan2 = Types.GameObject,
+	txtLessThanGrade = Types.TMP_Text,
+	txtSelectedCounter = Types.TMP_Text,
+	btnFilter = Types.Button,
+	btnSelectAll = Types.Button
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	ItemWidget.noCreate(self._goRewardItem)
+	self._goRewardItem:init(D.ResType.equip_refine_mat, 1)
+	self._goRewardItem:SetActive(false)
+end
+
+function M:addClicks()
+	self:setClick(self._btnDecompose, function ()
+		if #self._selectedEquips == 0 then
+			V.showToast(SID.TIP_NO_EQUIP_SELECTED)
+
+			return
+		end
+
+		P._playerRole:decomposeEquips(self._selectedEquips)
+		table.clear(self._selectedEquips)
+		V.showRewardClaimPanel({
+			{
+				D.ResType.equip_refine_mat,
+				self._decomposeGold + self._decomposeGoldRefund
+			}
+		})
+
+		self._decomposeGold = 0
+		self._decomposeGoldRefund = 0
+
+		self._goRewardItem:SetActive(false)
+		self:updateEquipData()
+		self:reloadData()
+	end)
+	self:setClick(self._btnGradeFilter, function ()
+		self._goGradeFilterContainer:SetActive(true)
+	end)
+	self:setClick(self._btnQualityFilter, function ()
+		self._goQualityFilterContainer:SetActive(true)
+	end)
+	self:setClick(self._goRewardItem._btnClick, function ()
+		self._goRewardItem:rewardclickCallback()
+	end)
+	self:setClick(self._btnFilter, function ()
+		UIManager.openPanel(PrefabDefine.EquipFilterPanel, function (qualityFilter, gradeFilter)
+			self._qualityFilter = qualityFilter
+			self._gradeFilter = gradeFilter
+			self._imgLessThanQuality.color = Color.str2Static(V.QUALITY_FILTER_COLOR[math.min(D.Quality.Orange, self._qualityFilter)])
+
+			self._txtLessThanGrade:SetLocalize(SID.STR_GRADE_X, math.min(self._minGrade + 6, self._gradeFilter))
+			self:dealFilterSelect()
+			self:reloadData()
+		end)
+	end)
+	self:setClick(self._btnSelectAll, function ()
+		self:dealFilterSelect()
+		self:reloadData()
+	end)
+end
+
+function M:init()
+	self._selectedEquips = {}
+	self._availableEquips = {}
+	self._availableCount = 0
+	self._decomposeGold = 0
+	self._decomposeGoldRefund = 0
+	self._minGrade = math.max(1, P._playerRole:getMaxEquipGrade() - 6)
+	self._qualityFilter = lc.getIntKeyValue(D.EQUIP_QUALITY_FILTER, 999)
+	self._gradeFilter = lc.getIntKeyValue(D.EQUIP_GRADE_FILTER, 999)
+	self._imgLessThanQuality.color = Color.str2Static(V.QUALITY_FILTER_COLOR[math.min(D.Quality.Orange, self._qualityFilter)])
+
+	self._txtLessThanGrade:SetLocalize(SID.STR_GRADE_X, math.min(self._minGrade + 6, self._gradeFilter))
+	self:updateEquipData()
+
+	local cellHeight = 120
+	self._scrollViewEx = ScrollViewEx.create(self._scroll, self, {
+		bottomPadding = 0,
+		topPadding = 20,
+		cellMargin = 9,
+		cellInitCount = 7,
+		cellHeight = cellHeight
+	})
+
+	self:reloadData()
+end
+
+function M:updateEquipData()
+	table.clear(self._availableEquips)
+
+	self._availableCount = 0
+	local data = P._playerRole:getAvaliableEquips()
+	local equips = {}
+
+	for i = 1, #data do
+		local dup = clone(data[i])
+
+		if dup.usingInOtherGroup == nil and not dup.lock then
+			equips[#equips + 1] = dup
+		end
+
+		if data[i].usingInOtherGroup and data[i].num > 1 then
+			table.erase(dup.ids, P._playerRole._equipSlotsNew[data[i].usingInOtherGroup][data[i].part])
+
+			dup.num = dup.num - 1
+			equips[#equips + 1] = dup
+		end
+
+		self._availableCount = self._availableCount + dup.num
+	end
+
+	for i = 1, #equips do
+		local equip = equips[i]
+
+		table.insert(self._availableEquips, equip)
+	end
+
+	self._goRewardItem:SetActive(false)
+	self._goRefineRefund:SetActive(false)
+	self:updateSelectCounter()
+end
+
+function M:dealFilterSelect()
+	table.clear(self._selectedEquips)
+
+	self._decomposeGold = 0
+	self._decomposeGoldRefund = 0
+
+	self._goRewardItem:SetActive(false)
+
+	self._firstSelectRow = nil
+
+	for i = 1, #self._availableEquips do
+		local equip = self._availableEquips[i]
+
+		if self._gradeFilter > 0 or self._qualityFilter > 0 then
+			if (self._gradeFilter == 0 or equip.grade <= self._gradeFilter) and (self._qualityFilter == 0 or equip.quality <= self._qualityFilter) then
+				equip.selected = true
+
+				if self._firstSelectRow == nil then
+					self._firstSelectRow = math.floor(i / ROW_CELL)
+				end
+
+				if equip.ids then
+					table.append(self._selectedEquips, equip.ids)
+
+					self._decomposeGold = self._decomposeGold + D._equipConfig[equip.cid]._decomposeGold * #equip.ids
+
+					for _, id in ipairs(equip.ids) do
+						local refineCount = P._playerRole:getEquipById(id):refineCount()
+
+						if refineCount > 0 then
+							self._decomposeGoldRefund = self._decomposeGoldRefund + math.floor(refineCount * D._equipRefineConfig[equip.grade * 10 + equip.quality]._cost * 0.7)
+						end
+					end
+				else
+					table.insert(self._selectedEquips, equip.id)
+
+					self._decomposeGold = self._decomposeGold + D._equipConfig[equip.cid]._decomposeGold
+					local refineCount = P._playerRole:getEquipById(equip.id):refineCount()
+
+					if refineCount > 0 then
+						self._decomposeGoldRefund = self._decomposeGoldRefund + math.floor(refineCount * D._equipRefineConfig[equip.grade * 10 + equip.quality]._cost * 0.7)
+					end
+				end
+			else
+				equip.selected = nil
+			end
+		else
+			equip.selected = nil
+		end
+	end
+
+	if self._decomposeGold > 0 then
+		self._goRewardItem:setNumText(self._decomposeGold)
+		self._goRewardItem:SetActive(true)
+	else
+		self._goRewardItem:SetActive(false)
+	end
+
+	self._goRefineRefund:SetActive(self._decomposeGoldRefund > 0)
+
+	if self._decomposeGoldRefund > 0 then
+		self._txtRefineRefund.text = math.floor(self._decomposeGoldRefund)
+	end
+
+	self:updateSelectCounter()
+end
+
+function M:updateSelectCounter()
+	self._txtSelectedCounter:SetLocalize(SID.STR_SELECT_COUNTER, #self._selectedEquips, self._availableCount)
+end
+
+function M:reloadData()
+	self._scrollViewEx:reloadData(true)
+
+	if self._firstSelectRow then
+		self._scrollViewEx:moveToItemByIndex(self._firstSelectRow + 1)
+	end
+end
+
+function M:onCellNum()
+	return math.ceil(#self._availableEquips / ROW_CELL)
+end
+
+function M:onAddCell(goCell, index)
+	if goCell == nil then
+		goCell = self:createRowCell()
+	end
+
+	for i = 1, ROW_CELL do
+		local item = goCell.items[i]
+		local info = self._availableEquips[i + ROW_CELL * (index - 1)]
+
+		if info then
+			item:SetVisible(true)
+			item:init(info.cid, info.num)
+			item:setEquipQuality(info.quality, info.grade)
+			item:setChoose2(info.selected)
+			self:setClick(item._btnClick, function ()
+				if not info.selected then
+					info.selected = true
+
+					if info.ids then
+						table.append(self._selectedEquips, info.ids)
+
+						self._decomposeGold = self._decomposeGold + D._equipConfig[info.cid]._decomposeGold * #info.ids
+
+						for _, id in ipairs(info.ids) do
+							local refineCount = P._playerRole:getEquipById(id):refineCount()
+
+							if refineCount > 0 then
+								self._decomposeGoldRefund = self._decomposeGoldRefund + math.floor(refineCount * D._equipRefineConfig[info.grade * 10 + info.quality]._cost * 0.7)
+							end
+						end
+					else
+						table.insert(self._selectedEquips, info.id)
+
+						self._decomposeGold = self._decomposeGold + D._equipConfig[info.cid]._decomposeGold
+						local refineCount = P._playerRole:getEquipById(info.id):refineCount()
+
+						if refineCount > 0 then
+							self._decomposeGoldRefund = self._decomposeGoldRefund + math.floor(refineCount * D._equipRefineConfig[info.grade * 10 + info.quality]._cost * 0.7)
+						end
+					end
+
+					item:setChoose2(true)
+					self._goRewardItem:setNumText(self._decomposeGold + self._decomposeGoldRefund)
+					self._goRewardItem:SetActive(true)
+				else
+					info.selected = false
+
+					if info.ids then
+						for i = 1, #info.ids do
+							table.erase(self._selectedEquips, info.ids[i])
+						end
+
+						self._decomposeGold = self._decomposeGold - D._equipConfig[info.cid]._decomposeGold * #info.ids
+
+						for _, id in ipairs(info.ids) do
+							local refineCount = P._playerRole:getEquipById(id):refineCount()
+
+							if refineCount > 0 then
+								self._decomposeGoldRefund = self._decomposeGoldRefund - math.floor(refineCount * D._equipRefineConfig[info.grade * 10 + info.quality]._cost * 0.7)
+							end
+						end
+					else
+						table.erase(self._selectedEquips, info.id)
+
+						self._decomposeGold = self._decomposeGold - D._equipConfig[info.cid]._decomposeGold
+						local refineCount = P._playerRole:getEquipById(info.id):refineCount()
+
+						if refineCount > 0 then
+							self._decomposeGoldRefund = self._decomposeGoldRefund - math.floor(refineCount * D._equipRefineConfig[info.grade * 10 + info.quality]._cost * 0.7)
+						end
+					end
+
+					item:setChoose2(false)
+					self._goRewardItem:setNumText(self._decomposeGold + self._decomposeGoldRefund)
+					self._goRewardItem:SetActive(self._decomposeGold > 0)
+				end
+
+				self:updateSelectCounter()
+				self._goRefineRefund:SetActive(self._decomposeGoldRefund > 0)
+
+				if self._decomposeGoldRefund > 0 then
+					self._txtRefineRefund.text = math.floor(self._decomposeGoldRefund)
+				end
+			end)
+		else
+			item:SetVisible(false)
+		end
+	end
+
+	return goCell
+end
+
+function M:createRowCell()
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/RowWidget.prefab", self._tfScrollContainer)
+	local width = self._tfScrollContainer.rect.width
+
+	lc.setSizeDelta(go, width, self._scrollViewEx._args.cellHeight)
+
+	go.items = {}
+
+	for i = 1, ROW_CELL do
+		go.items[i] = ItemWidget.create(go.transform)
+
+		go.items[i]._goScaleParent:SetLocalScale(0.95, 0.95, 0.95)
+	end
+
+	return go
+end
+
+return M

@@ -1,0 +1,546 @@
+local dup = requireLua("duplicate_define")
+local lc = lc
+local tonumber = tonumber
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local M = {
+	[150001] = {
+		150001,
+		150001,
+		4,
+		1,
+		dup._1248,
+		30,
+		1,
+		5,
+		dup._1249,
+		dup._1250,
+		201,
+		{
+			20100
+		},
+		nil,
+		dup._20,
+		5,
+		11,
+		"Ranger_150001",
+		nil,
+		0.5,
+		60,
+		nil,
+		1,
+		1,
+		1,
+		nil,
+		1
+	},
+	[150002] = {
+		150002,
+		150002,
+		4,
+		2,
+		dup._1248,
+		30,
+		1,
+		3,
+		dup._1249,
+		dup._1250,
+		202,
+		{
+			20200,
+			20201
+		},
+		nil,
+		dup._116,
+		8,
+		11,
+		"Ranger_150002",
+		nil,
+		0.5,
+		60,
+		nil,
+		1,
+		1,
+		1,
+		0.2
+	},
+	[150003] = {
+		150003,
+		150003,
+		4,
+		3,
+		dup._1248,
+		30,
+		1,
+		4,
+		dup._1249,
+		dup._1250,
+		203,
+		{
+			20300
+		},
+		nil,
+		dup._182,
+		6,
+		11,
+		"Ranger_150003",
+		nil,
+		0.5,
+		60,
+		nil,
+		1,
+		1,
+		nil,
+		nil,
+		1
+	},
+	[150004] = {
+		150004,
+		150004,
+		4,
+		4,
+		dup._1248,
+		30,
+		1,
+		2,
+		dup._1249,
+		dup._1250,
+		204,
+		{
+			20400,
+			20401
+		},
+		nil,
+		dup._19,
+		7,
+		11,
+		"Ranger_150004",
+		1,
+		nil,
+		60,
+		nil,
+		1
+	},
+	[150005] = {
+		150005,
+		150005,
+		4,
+		5,
+		dup._1248,
+		30,
+		1,
+		1,
+		dup._1249,
+		dup._1250,
+		205,
+		{
+			20500
+		},
+		nil,
+		dup._95,
+		9,
+		11,
+		"Ranger_150005",
+		1,
+		nil,
+		60,
+		nil,
+		1,
+		1,
+		1
+	},
+	[150006] = {
+		150006,
+		150006,
+		5,
+		6,
+		dup._1248,
+		30,
+		3,
+		4,
+		dup._1251,
+		dup._1252,
+		206,
+		{
+			20600,
+			20601
+		},
+		nil,
+		{
+			6,
+			106
+		},
+		12,
+		9,
+		"Ranger_150006",
+		1,
+		nil,
+		60,
+		9,
+		1,
+		1,
+		1
+	},
+	[150007] = {
+		150007,
+		150007,
+		5,
+		7,
+		dup._1248,
+		30,
+		3,
+		1,
+		dup._1251,
+		dup._1252,
+		207,
+		{
+			20700
+		},
+		nil,
+		{
+			7,
+			107
+		},
+		10,
+		11,
+		"Ranger_150007",
+		nil,
+		0.5,
+		60,
+		nil,
+		1,
+		1,
+		1,
+		0.5
+	},
+	[150008] = {
+		150008,
+		150008,
+		6,
+		8,
+		dup._1248,
+		30,
+		10,
+		3,
+		dup._1253,
+		dup._1254,
+		208,
+		{
+			20800
+		},
+		20851,
+		{
+			8,
+			108,
+			208
+		},
+		15,
+		11,
+		"Ranger_150008",
+		1,
+		nil,
+		60,
+		4,
+		1,
+		1,
+		1
+	},
+	[150009] = {
+		150009,
+		150009,
+		6,
+		9,
+		dup._1248,
+		30,
+		10,
+		5,
+		dup._1253,
+		dup._1254,
+		209,
+		dup._493,
+		nil,
+		{
+			9,
+			109,
+			209
+		},
+		20,
+		11,
+		"Ranger_150009",
+		1,
+		nil,
+		60,
+		nil,
+		1,
+		1,
+		1
+	},
+	[150010] = {
+		150010,
+		150010,
+		5,
+		10,
+		dup._1248,
+		30,
+		3,
+		3,
+		dup._1251,
+		dup._1252,
+		210,
+		{
+			21000
+		},
+		nil,
+		{
+			10,
+			110
+		},
+		12,
+		11,
+		"Ranger_150010",
+		1,
+		nil,
+		15,
+		nil,
+		1,
+		1,
+		1,
+		0.733
+	},
+	[150011] = {
+		150011,
+		150011,
+		5,
+		11,
+		dup._1248,
+		30,
+		3,
+		5,
+		dup._1251,
+		dup._1252,
+		211,
+		{
+			21100,
+			21101
+		},
+		nil,
+		{
+			11,
+			111
+		},
+		10,
+		11,
+		"Ranger_150011",
+		nil,
+		nil,
+		60,
+		nil,
+		1,
+		1,
+		1
+	},
+	[150012] = {
+		150012,
+		150012,
+		5,
+		12,
+		dup._1248,
+		30,
+		3,
+		2,
+		dup._1251,
+		dup._1252,
+		212,
+		{
+			21200,
+			21201
+		},
+		nil,
+		{
+			12,
+			112
+		},
+		10,
+		11,
+		"Ranger_150012",
+		1,
+		nil,
+		60,
+		4,
+		1,
+		1,
+		1
+	},
+	[150013] = {
+		150013,
+		150013,
+		6,
+		13,
+		dup._1248,
+		30,
+		10,
+		1,
+		dup._1253,
+		dup._1254,
+		213,
+		{
+			21300,
+			21301
+		},
+		nil,
+		{
+			13,
+			113,
+			213
+		},
+		12,
+		9,
+		"Ranger_150013",
+		1,
+		nil,
+		60,
+		4,
+		1,
+		1,
+		1
+	},
+	[150014] = {
+		150014,
+		150014,
+		6,
+		14,
+		dup._1248,
+		30,
+		10,
+		4,
+		dup._1253,
+		dup._1254,
+		214,
+		{
+			21400,
+			21401
+		},
+		nil,
+		{
+			14,
+			114,
+			214
+		},
+		8,
+		11,
+		"Ranger_150014",
+		nil,
+		nil,
+		60,
+		nil,
+		1,
+		1,
+		1,
+		0.6
+	}
+}
+local mapKeyIndex = {
+	k395049 = 9,
+	k2455765 = 7,
+	k7829023 = 12,
+	k15255765 = 2,
+	k13849634 = 3,
+	k5956351 = 20,
+	k10888430 = 21,
+	k1142943 = 17,
+	k1643364 = 15,
+	k1677555 = 4,
+	k12414756 = 22,
+	k5254258 = 10,
+	k8717735 = 23,
+	k14141933 = 14,
+	k16766597 = 24,
+	k15834445 = 11,
+	k8012688 = 25,
+	k5917749 = 6,
+	k6116350 = 26,
+	k13909709 = 16,
+	k13631784 = 27,
+	k664170 = 8,
+	k13855072 = 5,
+	k15366985 = 18,
+	k1644150 = 1,
+	k3726466 = 19,
+	k7170577 = 13
+}
+local mapKeyDimension = {}
+local arrayMt = {
+	__index = function (table, key)
+		local val = rawget(table, -key)
+		key = tonumber(key)
+
+		if key == nil then
+			return nil
+		end
+
+		if val then
+			return table[-key] + lc._encryptOffset + -9965
+		end
+	end
+}
+local mt = {
+	__call = function (table, key)
+		return table[mapKeyIndex[key]]
+	end,
+	__index = function (table, key)
+		local tKey = dup.dup(key)
+
+		if mapKeyIndex[tKey] == nil then
+			return nil
+		end
+
+		if key == "_nameSid" then
+			if table[2] == nil then
+				return nil
+			end
+
+			return SID["SID_RANGER_NAMESID_" .. table[2]]
+		end
+
+		local val = table[mapKeyIndex[tKey]]
+
+		if val == nil then
+			return
+		end
+
+		local d = mapKeyDimension[tKey]
+
+		if d == 0 then
+			return val + lc._encryptOffset + -9965
+		elseif d == 1 then
+			if val[0] == nil then
+				if getmetatable(val) == nil then
+					setmetatable(val, arrayMt)
+				end
+
+				val[0] = true
+			end
+		elseif d == 2 and val[0] == nil then
+			for i = 1, #val do
+				if getmetatable(val[i]) == nil then
+					setmetatable(val[i], arrayMt)
+				end
+			end
+
+			val[0] = true
+		end
+
+		return val
+	end,
+	__newindex = function (_, index, value)
+		log.f("ERROR", "This is a read-only table!")
+		assert(false)
+	end
+}
+
+for k, v in pairs(M) do
+	setmetatable(v, mt)
+end
+
+return M

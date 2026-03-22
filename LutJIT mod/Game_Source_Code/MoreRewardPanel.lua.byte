@@ -1,0 +1,83 @@
+local M = class("MoreRewardPanel", requireLua("BasePanel"))
+M.args = {
+	btnClose = Types.Button,
+	btnMask = Types.Button,
+	btnDiscord = Types.Button,
+	btnFacebook = Types.Button,
+	goDiscordReward = Types.GameObject,
+	goFacebookReward = Types.GameObject,
+	txtDiscordReward = Types.TMP_Text,
+	txtFacebookReward = Types.TMP_Text,
+	txtBindTip = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:init(closedCallback)
+	self:updateUI()
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnDiscord, function ()
+		lc.openUrl(D.URL_MOVE_REWARD_DISCORD)
+		MainGameRoot:showGlobalMask()
+		lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+
+			local claimed = P._playerRecord:isDiscordJumped()
+
+			P._playerRecord:tryClaimDiscordJumpedRewards()
+
+			if not claimed then
+				V.showRewardClaimPanel({
+					{
+						D._globalConfig._more_reward_jump[1],
+						D._globalConfig._more_reward_jump[2]
+					}
+				})
+				self:updateUI()
+			end
+		end, 1)
+	end)
+	self:setClick(self._btnFacebook, function ()
+		lc.openUrl(D.URL_MOVE_REWARD_FACEBOOK)
+		MainGameRoot:showGlobalMask()
+		lc.setTimer(function ()
+			MainGameRoot:hideGlobalMask()
+
+			local claimed = P._playerRecord:isFacebookJumped()
+
+			P._playerRecord:tryClaimFacebookJumpedRewards()
+
+			if not claimed then
+				V.showRewardClaimPanel({
+					{
+						D._globalConfig._more_reward_jump[1],
+						D._globalConfig._more_reward_jump[2]
+					}
+				})
+			end
+
+			self:updateUI()
+		end, 1)
+	end)
+end
+
+function M:updateUI()
+	self._goDiscordReward:SetActive(not P._playerRecord:isDiscordJumped())
+	self._goFacebookReward:SetActive(not P._playerRecord:isFacebookJumped())
+
+	self._txtDiscordReward.text = D._globalConfig._more_reward_jump[2]
+	self._txtFacebookReward.text = D._globalConfig._more_reward_jump[2]
+
+	self._txtBindTip:SetLocalizeS(SID.TIP_BIND_DISCORD_ACCOUNT, string.format("%s%d", D.getTMPSpriteRichText("item_small_10002"), 200))
+end
+
+function M:closePanel()
+	M.super.closePanel(self)
+end
+
+return M

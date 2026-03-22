@@ -1,0 +1,2004 @@
+local M = class("PlayerActivityArkRebuild", requireLua("PlayerActivityInstanceBase"))
+
+function M:ctor()
+end
+
+local CardType = {
+	MODULE = 6,
+	ADVANCE_CARD = 5,
+	NORMAL_CARD = 2,
+	WEAPON = 1,
+	CHAIN_CARD = 3,
+	COMBO_CARD = 4
+}
+local INDEX_MAP = {
+	4,
+	2,
+	1,
+	3,
+	5
+}
+
+local function getCardType(conf)
+	if conf._type == 2 then
+		return CardType.ADVANCE_CARD
+	elseif conf._type == 3 then
+		return CardType.COMBO_CARD
+	elseif conf._type == 1 then
+		if conf._weaponTreeType == nil then
+			return CardType.NORMAL_CARD
+		else
+			return CardType.CHAIN_CARD
+		end
+	else
+		return CardType.NORMAL_CARD
+	end
+end
+
+local function fillEnemyPool(conf, pool, index)
+	if index == 1 then
+		table.append(pool, conf._lowEnemyPool)
+	elseif index == 2 then
+		table.append(pool, conf._middleEnemyPool)
+	elseif index == 3 then
+		table.append(pool, conf._highEnemyPool)
+	else
+		table.append(pool, conf._eliteEnemyPool)
+	end
+end
+
+function M:initInstance()
+	self._activityType = D.ActivityType.ArkRebuild
+	self._persistentUid = D.ActivityPersistUID[self._activityType]
+	local cfgs = D._arkRebuildMilestoneConfig
+	local milestones = {}
+
+	for i = 1, #cfgs do
+		local cfg = cfgs[i]
+
+		if not milestones[cfg._period] then
+			milestones[cfg._period] = {}
+		end
+
+		local tb = milestones[cfg._period]
+		tb[#tb + 1] = cfg
+	end
+
+	self._milestoneRewards = milestones
+	self._weaponDirty = true
+	self._remainWeapons = {}
+	self._gotWeapons = {}
+
+	self:dealSubModuleInit()
+end
+
+function M:start()
+	M.super.start(self)
+	self:tryUnlock()
+	self:trySettle()
+end
+
+function M:openCheck()
+	return D.isSystemUnlocked(D.SystemType.ArkRebuild) and (not self._data or self._data.expireClaimed)
+end
+
+function M:trySettle()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._data then
+		return false
+	end
+
+	if not self._data.expired then
+		local isInTimeRange = not P._playerActivity:isLaterTimeRange(self._data.id, C.getCurTime())
+
+		if isInTimeRange then
+			return false
+		else
+			self:dealInstanceExpire()
+		end
+	end
+
+	if self._data.expireClaimed then
+		return true
+	end
+
+	if self._data.expireSettled then
+		return false
+	end
+
+	if self._battling then
+		SimpleEvent.emit("battle.quit", D.MissionType.ArkRebuild)
+
+		self._battling = false
+	end
+
+	if not self._gettingRankData then
+		self._gettingRankData = true
+		local star, _ = P._playerActivityArkRebuild:getMilestoneRewards(self:getSubType())
+
+		if star == 0 then
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._data.expireClaimed = true
+
+			return false
+		end
+
+		P._playerRanker:getActivityRankData(D.RankType.ArkRebuildRank, P._playerActivityArkRebuild:getId(), function (data, selfRank, selfIndex)
+			self:getCurrentData().finalRank = selfRank or 9999
+			self._data.expireSettled = true
+			self._gettingRankData = false
+			self._tmpSettleRankData = {
+				data,
+				selfRank,
+				selfIndex
+			}
+
+			SimpleEvent.emit("ark_rebulid.rank_reward")
+		end, function ()
+			self._gettingRankData = false
+
+			SimpleEvent.emit("ark_rebulid.rank_fail")
+		end)
+	end
+
+	return false
+end
+
+function M:unlockInstanceData()
+end
+
+function M:instanceDailyReset()
+	if not self._data then
+		return
+	end
+
+	if self:isExpired() then
+		return
+	end
+end
+
+function M:haveDot(auid)
+	return false
+end
+
+function M:isExpired()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self._data.expired == true
+end
+
+function M:getBanData(startTime, subType)
+	if not startTime then
+		return self._data.weaponBanList, self._data.moduleBanList
+	end
+
+	local conf = self:readCfg(subType)
+	local zero = C.getMondayTimestamp(C.getZeroTimestamp(startTime))
+	local weekOffset = zero / 86400 / 7
+	local seed = math.floor(weekOffset)
+	local randomer = math.randomer(seed)
+	local weaponBanList = conf._weaponBanList[seed % #conf._weaponBanList + 1]
+	local moduleBanList = {}
+	local list = {}
+
+	table.clear(list)
+
+	for i = 1, #D._arkRebuildModuleConfig do
+		if D._arkRebuildModuleConfig[i]._weight ~= 0 then
+			list[#list + 1] = i
+		end
+	end
+
+	for i = 1, #D._battlePassArkRebuildConfig do
+		local conf = D._battlePassArkRebuildConfig[i]
+
+		if conf._cids2[1] < 10000 then
+			table.erase(list, conf._cids2[1])
+		end
+
+		if conf._cids3[1] < 10000 then
+			table.erase(list, conf._cids3[1])
+		end
+	end
+
+	for i = 1, conf._moduleBanNum do
+		local rand = randomer:get(1, #list)
+		moduleBanList[#moduleBanList + 1] = list[rand]
+
+		table.remove(list, rand)
+	end
+
+	return weaponBanList, moduleBanList, randomer
+end
+
+function M:createCycleData(activityData)
+	local weaponBanList, moduleBanList, randomer = self:getBanData(activityData.startTime, activityData.subType)
+	self._subType = activityData.subType
+	local conf = self:readCurrentCfg()
+	local weaponSlotUnlockList = {}
+
+	for i = 1, #conf._weaponUnlockCost do
+		weaponSlotUnlockList[i] = conf._weaponUnlockCost[i] == 0 and true or nil
+	end
+
+	local cards = {}
+
+	for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+		if not table.contains(weaponBanList, i) then
+			cards[i] = 1
+		end
+	end
+
+	local lastMsId = nil
+	lastMsId = (not self._data or math.max(self._data.lastMsId or 40001, self._data.curMission())) and 40001
+
+	return {
+		atkLevel = 1,
+		adRecoverTime = 0,
+		curMission = 40001,
+		lastRankSet = false,
+		lastRankIdx = 999999999,
+		poped = false,
+		milestoneClaimIdx = 0,
+		curLoadout = 1,
+		entered = false,
+		atkCost1Level = 1,
+		playTime = 0,
+		id = activityData.id,
+		subType = self._subType,
+		lastMsId = lastMsId,
+		shopBuyCount = {},
+		cards = cards,
+		moduleNums = {},
+		moduleList = {},
+		weaponSlots = {},
+		weaponSlotUnlockList = weaponSlotUnlockList,
+		weaponStageUnlockList = {},
+		weaponDecks = {},
+		cardSelectingData = {},
+		weaponBanList = weaponBanList,
+		moduleBanList = moduleBanList,
+		missionEnemiess = {},
+		enemyPool = {},
+		lowEnemyPool = clone(conf._lowEnemyPool),
+		middleEnemyPool = clone(conf._middleEnemyPool),
+		highEnemyPool = clone(conf._highEnemyPool),
+		eliteEnemyPool = clone(conf._eliteEnemyPool),
+		enemySeed = randomer._nextSeed
+	}
+end
+
+function M:dealInstanceOpen(activityData)
+	self:dealSubModuleInit()
+	P._playerRanker:resetGroup(D.RankType.ArkRebuildRank)
+	P._playerBPArkRebuild:tryNextPeriod(true, activityData.startTime, activityData.endTime)
+	P._playerAsset:resetAssetNum(D.ResType.ark_rebuild_gold, 0)
+	P._playerAsset:resetAssetNum(D.ResType.ark_rebuild_sp_gold, 0)
+	P._playerAsset:resetAssetNum(D.ResType.ark_rebuild_ticket_common, 0)
+	P._playerAsset:resetAssetNum(D.ResType.ark_rebuild_ticket_advance, 0)
+	P._playerAsset:resetAssetNum(D.ResType.ark_spark_offline_right, 0)
+	P._playerExchange:resetExchangesByExchangeGroup(self:readExchangeGroup(self._data.subType))
+end
+
+function M:dealSubModuleInit()
+	if not self:isUnlock() then
+		return
+	end
+
+	self._data = self:getCurrentData()
+
+	if not self._data then
+		return
+	end
+
+	self._subType = self._data.subType
+
+	P._playerBPArkRebuild:init(lc.assignTable(self._data, "bp"))
+	P._playerArkRebuildOffline:init(lc.assignTable(self._data, "offline"))
+
+	local msId = self._data.curMission
+
+	P._playerBPArkRebuild:syncExp(msId - 40001)
+
+	self._weaponStages = {}
+	self._weaponInvalidCards = {}
+	self._cardPools = {
+		{},
+		{},
+		{},
+		{},
+		{},
+		{}
+	}
+	self._data.weaponNewCards = self._data.weaponNewCards or {}
+	self._data.moduleNums = self._data.moduleNums or {}
+	self._data.moduleList = self._data.moduleList or {}
+	self._data.atkCost1Level = ConfusedNumber.create(self._data.atkCost1Level or 1, "ArkRebuild_atkLevel1")
+	self._data.atkLevel = ConfusedNumber.create(self._data.atkLevel or 1, "ArkRebuild_atkLevel")
+	self._data.curMission = ConfusedNumber.create(self._data.curMission or 40001, "ArkRebuild_mission")
+	self._data.offModules = self._data.offModules or {}
+	self._data.curLoadout = self._data.curLoadout or 1
+
+	if not self._data.weaponSlotsLoadout or #self._data.weaponSlotsLoadout == 0 then
+		self._data.weaponSlotsLoadout = {
+			self._data.weaponSlots
+		}
+	end
+
+	if not self._data.weaponDecksLoadout or #self._data.weaponDecksLoadout == 0 then
+		self._data.weaponDecksLoadout = {
+			self._data.weaponDecks
+		}
+	end
+
+	if not self._data.nameLoadout then
+		self._data.nameLoadout = {}
+	end
+
+	self:verifyWeaponDecks()
+
+	self._subModuleInit = true
+	self._lastCardDropType = nil
+end
+
+function M:dealInstanceExpire()
+	self._data.expired = true
+	self._data.expireSettled = false
+	self._data.expireClaimed = false
+
+	self:recordPlayTime()
+end
+
+function M:isEntered()
+	return self._data and self._data.entered
+end
+
+function M:isPoped()
+	return self._data and self._data.poped
+end
+
+function M:getId()
+	return self._data.id or 1
+end
+
+function M:dealEnter()
+	self:dealFirstEnter()
+end
+
+function M:dealFirstEnter()
+	if self._data.entered then
+		return
+	end
+
+	self._data.entered = true
+	local cfg = P._playerActivity:readCfg(self._data.id)
+
+	self:initAdPackNum(cfg._startTime)
+	P._playerArkRebuildOffline:initAdSweepNum(cfg._startTime)
+	P._playerArkRebuildOffline:recordNewOfflineTime(cfg._startTime)
+end
+
+function M:dealPoped()
+	self._data.poped = true
+end
+
+function M:getSubType()
+	return self._data.subType
+end
+
+function M:getFinalRank()
+	return self:getCurrentData().finalRank
+end
+
+function M:hasSettleRewards()
+	if not self:isUnlock() then
+		return
+	end
+
+	local data = self:getCurrentData()
+
+	if not data then
+		return
+	end
+
+	if data.expireClaimed then
+		return
+	end
+
+	return self:getCurrentData().finalRank ~= nil
+end
+
+function M:getRankRewards()
+	local rewards = {}
+	local rank = P._playerActivityArkRebuild:getFinalRank()
+	local conf = nil
+
+	if rank ~= 9999 then
+		for i = 1, #D._rankArkRebuildConfig do
+			conf = D._rankArkRebuildConfig[i]
+
+			if rank <= conf._max then
+				local cnt = lc.lenTable(conf._rewardCids)
+
+				for j = 1, cnt do
+					rewards[#rewards + 1] = {
+						conf._rewardCids[j],
+						conf._rewardNums[j]
+					}
+				end
+
+				break
+			end
+		end
+	end
+
+	return rewards, conf
+end
+
+function M:getMilestoneRewards(subType, all)
+	local rewardsCfg = self:readMilestoneCfg(subType)
+	local claimNum = 0
+	local exp = all and 9999999999.0 or self:getCurMilestoneExp()
+	local totalMilestoneRewards = {}
+
+	for i = 1, #rewardsCfg do
+		if all or rewardsCfg[i]._exp <= exp then
+			claimNum = claimNum + 1
+
+			D.foldCidsAndNums2Rewards(totalMilestoneRewards, rewardsCfg[i]._cids, rewardsCfg[i]._nums)
+		else
+			break
+		end
+	end
+
+	return claimNum, totalMilestoneRewards
+end
+
+function M:tryClaimSettleRewards()
+	local items = {}
+
+	if not self._data.expired then
+		return
+	end
+
+	if not self._data.expireSettled then
+		return
+	end
+
+	if self._data.expireClaimed then
+		return
+	end
+
+	local _, milestoneRewards = self:getMilestoneRewards(self._data.subType)
+	local rankRewards, conf = self:getRankRewards()
+
+	table.append(items, P._playerAsset:increaseAssetNumsByList(milestoneRewards, D.LogWay.ark_rebuild_rank))
+	table.append(items, P._playerAsset:increaseAssetNumsByList(rankRewards, D.LogWay.ark_rebuild_rank))
+
+	self._data.expireClaimed = true
+	self._tmpSettleRankData = nil
+
+	if conf then
+		Trace.traceDesign_Activity("RebuildRwards_Claim:%s:%s", nil, D.ActivityType.ArkRebuild, self:getSubType(), conf._min .. "-" .. conf._max)
+	end
+
+	Trace.traceDesign_Activity("RebuildPlay_Time:%s:%s", nil, D.ActivityType.ArkRebuild, self:getSubType(), math.floor(self._data.playTime / 3600))
+	Trace.AF_traceEvent("Rebuild_PayMoney", {
+		{
+			_key = "id",
+			_value = self._data.id
+		},
+		{
+			_key = "num",
+			_value = P._playerRecord:getActivityPurchase(self._data.id) or 0
+		},
+		{
+			_key = "finalMsId",
+			_value = self:getCurMission() or 40001
+		},
+		{
+			_key = "rankIdx",
+			_value = self:getFinalRank() or -1
+		}
+	})
+
+	local rankIdx = self:getFinalRank() or -1
+
+	P._playerArkRebuildLottery:tryOpenActivity(self._data)
+
+	return items
+end
+
+function M:isSettleClaimed()
+	return self._data.expireClaimed
+end
+
+function M:getAtk()
+	local baseAtk = (self:getAtkLevel() - 1) * 20 + 100
+
+	if self:isModuleActive(D.ModuleType.CARD_ATK_ADD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.CARD_ATK_ADD]._params
+		local totalNum = self:getTotalCardNum()
+		baseAtk = baseAtk + totalNum / params[1] * params[2]
+	end
+
+	if self:isModuleActive(D.ModuleType.EMPTY_SLOT_ATK_ADD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.EMPTY_SLOT_ATK_ADD]._params
+		local addPercent = 0
+
+		for i = 1, 5 do
+			if self:isWeaponSlotUnlock(i) and self:getWeaponSlots()[INDEX_MAP[i]] == nil then
+				addPercent = addPercent + params[1]
+			end
+		end
+
+		baseAtk = baseAtk + baseAtk * addPercent / 100
+	end
+
+	return math.floor(baseAtk)
+end
+
+function M:getNextAtk()
+	local baseAtk = self:getAtkLevel() * 20 + 100
+
+	if self:isModuleActive(D.ModuleType.CARD_ATK_ADD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.CARD_ATK_ADD]._params
+		local totalNum = self:getTotalCardNum()
+		baseAtk = baseAtk + totalNum / params[1] * params[2]
+	end
+
+	if self:isModuleActive(D.ModuleType.EMPTY_SLOT_ATK_ADD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.EMPTY_SLOT_ATK_ADD]._params
+		local addPercent = 0
+
+		for i = 1, 5 do
+			if self:isWeaponSlotUnlock(i) and self:getWeaponSlots()[INDEX_MAP[i]] == nil then
+				addPercent = addPercent + params[1]
+			end
+		end
+
+		baseAtk = baseAtk + baseAtk * addPercent / 100
+	end
+
+	return baseAtk
+end
+
+function M:getDomeHp()
+	local baseHp = (self:getAtkLevel() - 1) * 20 + 1000
+
+	if self:isModuleActive(D.ModuleType.DOME_HP_ADD_BY_ATK) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.DOME_HP_ADD_BY_ATK]._params
+		local hpAdd = self:getAtk() * params[1]
+		baseHp = hpAdd + baseHp
+	end
+
+	return baseHp
+end
+
+function M:getNextDomeHp()
+	local baseHp = self:getAtkLevel() * 20 + 1000
+
+	if self:isModuleActive(D.ModuleType.DOME_HP_ADD_BY_ATK) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.DOME_HP_ADD_BY_ATK]._params
+		local hpAdd = self:getAtk() * params[1]
+		baseHp = hpAdd + baseHp
+	end
+
+	return baseHp
+end
+
+function M:getAtkLevel()
+	return self._data.atkLevel()
+end
+
+function M:getAtkUpgradeCost(resType)
+	if resType == D.ResType.ark_rebuild_gold then
+		if self:isModuleActive(D.ModuleType.ATK_GOLD_COST_LIMIT) then
+			local params = D._arkRebuildModuleConfig[D.ModuleType.ATK_GOLD_COST_LIMIT]._params
+
+			return math.min(params[1], 100 + 20 * self._data.atkCost1Level())
+		end
+
+		return 100 + 20 * self._data.atkCost1Level()
+	else
+		return 100
+	end
+end
+
+function M:canUpgradeAtk()
+	return P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_gold, self:getAtkUpgradeCost(D.ResType.ark_rebuild_gold)) or P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_sp_gold, self:getAtkUpgradeCost(D.ResType.ark_rebuild_sp_gold))
+end
+
+function M:tryUpgradeAtkLevel(resType)
+	if resType == D.ResType.ark_rebuild_gold then
+		local cost = self:getAtkUpgradeCost(resType)
+
+		if not P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_gold, cost) then
+			return ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.ark_rebuild_gold
+		end
+
+		self._data.atkLevel = self._data.atkLevel + 1
+		self._data.atkCost1Level = self._data.atkCost1Level + 1
+
+		P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_gold, -cost, D.LogWay.ark_rebuild_upgrade_atk)
+		self:markNeedReduceWinExtraHp()
+
+		return ResultCode.OK
+	else
+		local cost = self:getAtkUpgradeCost(resType)
+
+		if not P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_sp_gold, cost) then
+			return ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.ark_rebuild_gold
+		end
+
+		self._data.atkLevel = self._data.atkLevel + 1
+
+		P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_sp_gold, -cost, D.LogWay.ark_rebuild_upgrade_atk)
+		self:markNeedReduceWinExtraHp()
+
+		return ResultCode.OK
+	end
+end
+
+function M:isPreWeaponSlotUnlock(idx)
+	local prevSlot = INDEX_MAP[idx] - 1
+
+	if prevSlot == 0 then
+		return true
+	end
+
+	local prevSlotIdx = table.findArray(INDEX_MAP, prevSlot)
+
+	if not self:isWeaponSlotUnlock(prevSlotIdx) then
+		return false
+	end
+
+	return true
+end
+
+function M:checkUnlockWeaponSlot(idx)
+	if idx < 1 or idx > 5 then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if self:isWeaponSlotUnlock(idx) then
+		return ResultCode.NOT_MEET_CONDITION
+	end
+
+	if not self:isPreWeaponSlotUnlock(idx) then
+		return ResultCode.PLS_UNLOCK_PREV_SLOT
+	end
+
+	local cost = self:readWeaponUnlockCost(idx)
+	local enough = P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_gold, cost)
+
+	if not enough then
+		return D.ResType.ark_rebuild_gold, cost
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryUnlockWeaponSlot(idx)
+	local resultCode, param = self:checkUnlockWeaponSlot(idx)
+
+	if resultCode ~= ResultCode.OK then
+		return resultCode, param
+	end
+
+	local cost = self:readWeaponUnlockCost(idx)
+
+	P._playerAsset:decreaseAssetNum(D.ResType.ark_rebuild_gold, cost, D.LogWay.ark_rebuild_unlock_weapon)
+
+	self._data.weaponSlotUnlockList[idx] = true
+
+	return ResultCode.OK
+end
+
+function M:checkUnlockWeaponStage(weaponId)
+	local currentStage = self:getWeaponUnlockStage(weaponId)
+
+	if currentStage >= 3 then
+		return nil
+	end
+
+	local nextStage = currentStage + 1
+	local cost = self:readCardStageUnlockCost(nextStage)
+	local enough = P._playerAsset:isAssetEnough(D.ResType.ark_rebuild_gold, cost)
+
+	if not enough then
+		return D.ResType.ark_rebuild_gold, cost
+	end
+
+	return ResultCode.OK
+end
+
+function M:tryUnlockWeaponStage(weaponId)
+	local code, param = self:checkUnlockWeaponStage(weaponId)
+
+	if code ~= ResultCode.OK then
+		return code, param
+	end
+
+	local currentStage = self:getWeaponUnlockStage(weaponId)
+	local nextStage = currentStage + 1
+	local cost = self:readCardStageUnlockCost(nextStage)
+
+	P._playerAsset:decreaseAssetNum(D.ResType.ark_rebuild_gold, cost, D.LogWay.ark_rebuild_unlock_stage)
+
+	self._data.weaponStageUnlockList[weaponId] = nextStage
+
+	return ResultCode.OK
+end
+
+function M:getWeaponUnlockStage(weaponId)
+	if self._data.weaponStageUnlockList[weaponId] and type(self._data.weaponStageUnlockList[weaponId]) ~= "number" then
+		return 1
+	end
+
+	return self._data.weaponStageUnlockList[weaponId] or 1
+end
+
+function M:readCardStageUnlockCost(idx)
+	return self:readCurrentCfg()._stageUnlockCost[idx]
+end
+
+function M:readWeaponUnlockCost(idx)
+	return self:readCurrentCfg()._weaponUnlockCost[idx]
+end
+
+function M:isWeaponSlotUnlock(idx)
+	if not self._data.weaponSlotUnlockList then
+		self._data.weaponSlotUnlockList = {
+			nil,
+			nil,
+			true
+		}
+	end
+
+	return self._data.weaponSlotUnlockList[idx] == true
+end
+
+function M:getCurLoadout()
+	return self._data.curLoadout
+end
+
+function M:setCurLoadout(loadout)
+	self._data.curLoadout = loadout
+
+	self:verifyWeaponDecks()
+	SimpleEvent.emit("ark_rebuild.loadout.change", loadout)
+end
+
+function M:getLoadoutName(loadout)
+	return self._data.nameLoadout[loadout or self._data.curLoadout]
+end
+
+function M:setLoadoutName(loadout, name)
+	self._data.nameLoadout[loadout] = name
+end
+
+function M:getWeaponSlots()
+	if not self._data.weaponSlotsLoadout[self._data.curLoadout] then
+		self._data.weaponSlotsLoadout[self._data.curLoadout] = {}
+	end
+
+	return self._data.weaponSlotsLoadout[self._data.curLoadout]
+end
+
+function M:setWeaponSlot(slot, weapon)
+	self:markNeedReduceWinExtraHp()
+
+	self:getWeaponSlots()[slot] = weapon
+
+	self:verifyWeaponDecks()
+end
+
+function M:getWeaponDeck(weapon)
+	if not self._data.weaponDecksLoadout[self._data.curLoadout] then
+		self._data.weaponDecksLoadout[self._data.curLoadout] = {}
+	end
+
+	return self._data.weaponDecksLoadout[self._data.curLoadout][weapon]
+end
+
+function M:setWeaponDeck(weapon, deck)
+	if self:getWeaponDeck(weapon) == nil or #self:getWeaponDeck(weapon) ~= #deck then
+		self:markNeedReduceWinExtraHp()
+	else
+		for i = 1, #deck do
+			if self:getWeaponDeck(weapon)[i] ~= deck[i] then
+				self:markNeedReduceWinExtraHp()
+
+				break
+			end
+		end
+	end
+
+	self._data.weaponDecksLoadout[self._data.curLoadout][weapon] = clone(deck)
+
+	self:verifyWeaponDecks()
+end
+
+function M:getWeaponStage(weapon)
+	if self:getWeaponDeck(weapon) then
+		return math.ceil((#self:getWeaponDeck(weapon) + 1) / 4)
+	else
+		return 1
+	end
+end
+
+function M:getCurrentWeaponStages()
+	return self._weaponStages
+end
+
+function M:verifyWeaponDecks()
+	table.clear(self._weaponStages)
+	table.clear(self._weaponInvalidCards)
+
+	for _, weapon in pairs(self:getWeaponSlots()) do
+		self._weaponStages[weapon] = self:getWeaponStage(weapon)
+	end
+
+	for _, weapon in pairs(self:getWeaponSlots()) do
+		if self:getWeaponDeck(weapon) then
+			for _, card in ipairs(self:getWeaponDeck(weapon)) do
+				local conf = D._battleRougeCardConfig[card]
+
+				if conf._type == 3 then
+					for i = 1, #conf._unlockWeaponCards, 3 do
+						local needWeapon = conf._unlockWeaponCards[i]
+						local needStage = conf._unlockWeaponCards[i + 1]
+
+						if not self._weaponStages[needWeapon] or self._weaponStages[needWeapon] < needStage then
+							if not self._weaponInvalidCards[weapon] then
+								self._weaponInvalidCards[weapon] = {}
+							end
+
+							self._weaponInvalidCards[weapon][#self._weaponInvalidCards[weapon] + 1] = card
+
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function M:getWeaponInvalidCards(weapon)
+	return self._weaponInvalidCards[weapon]
+end
+
+function M:getWeaponStar(weapon)
+	if self:getWeaponDeck(weapon) then
+		return #self:getWeaponDeck(weapon)
+	else
+		return 0
+	end
+end
+
+function M:getCards()
+	return self._data.cards
+end
+
+function M:getCardNum(card)
+	return self._data.cards[card] or 0
+end
+
+function M:getTotalCardNum()
+	local total = 0
+
+	for card, num in pairs(self._data.cards) do
+		total = total + num
+	end
+
+	for module, num in pairs(self._data.moduleNums) do
+		total = total + num
+	end
+
+	return total
+end
+
+function M:getModules()
+	return self._data.moduleNums
+end
+
+function M:getModuleList()
+	return self._data.moduleList
+end
+
+function M:isModuleActive(module)
+	return self._data.moduleNums[module] ~= nil and not self._data.offModules[module]
+end
+
+function M:increaseTotalToken(num)
+	self._total.totalToken = self:getTotalTokenNum() + num
+end
+
+function M:getTotalTokenNum()
+	return self._total.totalToken or 0
+end
+
+function M:isAutoBattleUnlocked()
+	return self:readAutoRequireTokenNum() <= self:getTotalTokenNum()
+end
+
+function M:isAutoBattle()
+	return self:isAutoBattleUnlocked() and self._data.autoBattle
+end
+
+function M:toggleAutoBattle()
+	self._data.autoBattle = not self._data.autoBattle
+
+	return self._data.autoBattle
+end
+
+function M:getCurMission()
+	return self._data.curMission()
+end
+
+function M:getCurMilestoneExp()
+	return self:getCurMission() - 40001
+end
+
+function M:getMissionEnemiess(msId)
+	if self._data.missionEnemiess[msId] then
+		return self._data.missionEnemiess[msId]
+	else
+		local randomer = math.randomer(self._data.enemySeed or 0)
+		local pools = {
+			self._data.lowEnemyPool,
+			self._data.middleEnemyPool,
+			self._data.highEnemyPool,
+			self._data.eliteEnemyPool
+		}
+		local conf = D._missionArkRebuildConfig[msId]
+		self._data.missionEnemiess[msId] = {}
+
+		for j = 1, #conf._enemyId do
+			local pool = pools[conf._enemyId[j]]
+
+			if #pool == 0 then
+				fillEnemyPool(self:readCurrentCfg(), pool, conf._enemyId[j])
+			end
+
+			local rand = randomer:get(1, #pool)
+			self._data.missionEnemiess[msId][j] = pool[rand]
+
+			table.erase(pool, pool[rand])
+		end
+
+		for j = 1, conf._eliteId[1] or 0 do
+			local pool = pools[4]
+
+			if #pool == 0 then
+				fillEnemyPool(self:readCurrentCfg(), pool, 4)
+			end
+
+			local rand = randomer:get(1, #pool)
+			self._data.missionEnemiess[msId][#conf._enemyId + j] = pool[rand]
+
+			table.erase(pool, pool[rand])
+		end
+
+		local needClean = true
+
+		if needClean then
+			self._data.missionEnemiess[msId - 1] = nil
+		end
+
+		self._data.enemySeed = randomer._nextSeed
+
+		return self._data.missionEnemiess[msId]
+	end
+end
+
+function M:markNeedReduceWinExtraHp()
+	self._needReduceWinExtraHp = true
+end
+
+function M:getWinExtraHp()
+	return self._data.winExtraHp or 0
+end
+
+function M:startMission()
+	self._battling = true
+	local msId = self._data.curMission()
+
+	if D._globalConfig._ark_rebuild_extra_hp_disable_mission <= msId then
+		self._data.winExtraHp = 0
+	elseif self._data.winExtraHp and self._data.winExtraHp > 0 and self._needReduceWinExtraHp and self._losing then
+		self._data.winExtraHp = math.max(self._data.winExtraHp - 8, 0)
+	end
+
+	self._needReduceWinExtraHp = nil
+	self._battleSettleRewards = nil
+
+	P:setMsType(D.MissionType.ArkRebuild)
+end
+
+function M:changeMission(msId)
+	local curMs = self:getCurMission()
+	self._data.curMission = self._data.curMission + msId - curMs
+
+	P._playerBPArkRebuild:syncExp(self:getCurMission() - 40001)
+end
+
+function M:skipMission()
+	self._data.passTimestamp = C.getCurTime()
+	local rewards = {}
+	local targetMsId = math.ceil((self._data.lastMsId - 1 + 40000) / 2)
+
+	for msId = self._data.curMission(), targetMsId - 1 do
+		self._battleSettleRewards = nil
+
+		if D._missionArkRebuildConfig[msId]._winCard then
+			rewards[D.ResType.ark_rebuild_ticket_common] = (rewards[D.ResType.ark_rebuild_ticket_common] or 0) + 1
+
+			P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_ticket_common, 1, D.LogWay.finish_ark_rebuild)
+		end
+
+		local settleRewards = self:getSettleRewards(msId, true)
+
+		P._playerAsset:increaseAssetNumsByList(settleRewards, D.LogWay.finish_ark_rebuild)
+
+		for i = 1, #settleRewards do
+			local cid = settleRewards[i][1]
+			local num = settleRewards[i][2]
+			rewards[cid] = (rewards[cid] or 0) + num
+		end
+
+		Trace.traceDesign_Activity("RebuildStageSuccess:%s:%d", nil, D.ActivityType.ArkRebuild, self._data.subType, msId)
+
+		local val = msId % 10000
+
+		for i = 1, #D._arkRebuildMilestoneConfig do
+			if val == D._arkRebuildMilestoneConfig[i]._exp then
+				Trace.traceDesign_Activity("RebuildMilestone_Reach:%s:%d", nil, D.ActivityType.ArkRebuild, self._data.subType, i)
+
+				break
+			end
+		end
+
+		self._losing = nil
+		self._data.failNum = nil
+		self._data.curMission = self._data.curMission + 1
+
+		self:getMissionEnemiess(msId + 1)
+	end
+
+	P._playerBPArkRebuild:syncExp(self:getCurMission() - 40001)
+	self:uploadRankDataV2(self:getId())
+
+	return rewards
+end
+
+function M:getLastMissionId()
+	if self._data.lastMsId then
+		return self._data.lastMsId - 1
+	else
+		return 40001
+	end
+end
+
+function M:finishMission(msId, result)
+	self._battling = false
+
+	if msId ~= self:getCurMission() then
+		return
+	end
+
+	if result == D.BattleResult.Win then
+		local completeMission = self:getCurMission()
+		self._data.passTimestamp = C.getCurTime()
+		self._data.curMission = self._data.curMission + 1
+
+		if D._missionArkRebuildConfig[msId]._winCard then
+			self:dropSelectCards(D.ArkRebuildDropType.MissionDrop)
+		end
+
+		P._playerAsset:increaseAssetNumsByList(self:getSettleRewards(msId, true), D.LogWay.finish_ark_rebuild)
+		P._playerBPArkRebuild:syncExp(self:getCurMission() - 40001)
+		self:uploadRankDataV2(self:getId())
+		Trace.traceDesign_Activity("RebuildStageSuccess:%s:%d", nil, D.ActivityType.ArkRebuild, self._data.subType, msId)
+
+		local val = msId % 10000
+
+		for i = 1, #D._arkRebuildMilestoneConfig do
+			if val == D._arkRebuildMilestoneConfig[i]._exp then
+				Trace.traceDesign_Activity("RebuildMilestone_Reach:%s:%d", nil, D.ActivityType.ArkRebuild, self._data.subType, i)
+
+				break
+			end
+		end
+
+		local level = msId % 10000
+
+		if level > 20 and (self._data.failNum == nil or self._data.failNum == 0) then
+			self._data.winExtraHp = math.min(50, (self._data.winExtraHp or 0) + 8)
+		end
+
+		self._losing = nil
+		self._data.failNum = nil
+
+		TaskHelper:updateTaskValueMax(D.TaskType.COMPLETE_ARK_REBUILD, completeMission % 10000)
+	else
+		self._losing = true
+
+		Trace.traceDesign_Activity("RebuildStageFail:%s:%d", nil, D.ActivityType.ArkRebuild, self._data.subType, msId)
+
+		self._data.failNum = (self._data.failNum or 0) + 1
+	end
+end
+
+function M:getSettleRewards(msId, isFinish)
+	if self._battleSettleRewards and isFinish then
+		return self._battleSettleRewards
+	end
+
+	local conf = D._missionArkRebuildConfig[msId]
+	local rewards = {}
+	local goldNum = 0
+
+	for i = 1, #conf._winRewardIds do
+		if conf._winRewardIds[i] == D.ResType.ark_rebuild_gold then
+			goldNum = conf._winRewardNums[i]
+		end
+
+		local num = conf._winRewardNums[i]
+
+		if conf._winRewardIds[i] == D.ResType.ark_rebuild_sp_gold and self:isModuleActive(D.ModuleType.WIN_EXTRA_SP_GOLD) then
+			local params = D._arkRebuildModuleConfig[D.ModuleType.WIN_EXTRA_SP_GOLD]._params
+			num = num + num * params[1] / 100
+		end
+
+		rewards[#rewards + 1] = {
+			conf._winRewardIds[i],
+			num
+		}
+	end
+
+	if isFinish then
+		if self:isModuleActive(D.ModuleType.WIN_EXTRA_GOLD) then
+			local params = D._arkRebuildModuleConfig[D.ModuleType.WIN_EXTRA_GOLD]._params
+
+			if math.random(0, 100) < params[1] and goldNum > 0 then
+				rewards[#rewards + 1] = {
+					D.ResType.ark_rebuild_gold,
+					goldNum * params[2] / 100
+				}
+			end
+		end
+
+		self._battleSettleRewards = rewards
+	end
+
+	return rewards
+end
+
+function M:getDropCost(dropType)
+	if dropType == D.ArkRebuildDropType.GoldDrop then
+		local count = self._data.goldDropCount or 0
+		local costParams = self:readCurrentCfg()._pack3Cost
+
+		return D.ResType.ark_rebuild_gold, costParams[1] + costParams[2] * count
+	elseif dropType == D.ArkRebuildDropType.SPGoldDrop then
+		local count = self._data.spGoldDropCount or 0
+		local costParams = self:readCurrentCfg()._pack4Cost
+
+		if self:isModuleActive(D.ModuleType.PACK_SP_GOLD_COST_LIMIT) then
+			local params = D._arkRebuildModuleConfig[D.ModuleType.PACK_SP_GOLD_COST_LIMIT]._params
+
+			return D.ResType.ark_rebuild_sp_gold, math.min(costParams[1] + costParams[2] * count, params[1])
+		end
+
+		return D.ResType.ark_rebuild_sp_gold, costParams[1] + costParams[2] * count
+	elseif dropType == D.ArkRebuildDropType.Pack1Drop then
+		return D.ResType.ark_rebuild_ticket_common, 1
+	else
+		return D.ResType.ark_rebuild_ticket_advance, 1
+	end
+end
+
+function M:hasOpenPackDot(dropType)
+	for type = D.ArkRebuildDropType.Pack1Drop, D.ArkRebuildDropType.GoldDrop do
+		local needCheck = false
+
+		if type ~= D.ArkRebuildDropType.GoldDrop then
+			needCheck = true
+		elseif type == D.ArkRebuildDropType.GoldDrop then
+			needCheck = self:readCurrentCfg()._pack3UnlockStage < self:getCurMission() % 10000 and (self._data.goldDropCount or 0) == 0
+		elseif type == D.ArkRebuildDropType.SPGoldDrop then
+			needCheck = self:readCurrentCfg()._pack3UnlockStage < self:getCurMission() % 10000 and (self._data.spGoldDropCount or 0) == 0
+		end
+
+		if needCheck then
+			local cid, cost = self:getDropCost(type)
+
+			if (dropType == nil or dropType == type) and P._playerAsset:isAssetEnough(cid, cost) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function M:dropSelectCards(dropType)
+	local cards = {}
+	local weights, num = nil
+
+	if dropType then
+		self._data.dropType = dropType
+	end
+
+	if self._data.dropType == D.ArkRebuildDropType.MissionDrop then
+		num = 3
+		weights = self:readCurrentCfg()._cardDropWeights
+	elseif self._data.dropType == D.ArkRebuildDropType.Pack1Drop or self._data.dropType == D.ArkRebuildDropType.GoldDrop then
+		if dropType == D.ArkRebuildDropType.GoldDrop then
+			self._data.goldDropCount = (self._data.goldDropCount or 0) + 1
+		end
+
+		num = 3
+		weights = self:readCurrentCfg()._pack1CardDropWeights
+	elseif self._data.dropType == D.ArkRebuildDropType.Pack2Drop or self._data.dropType == D.ArkRebuildDropType.SPGoldDrop then
+		num = 3
+		weights = self:readCurrentCfg()._pack2CardDropWeights
+
+		if dropType == D.ArkRebuildDropType.SPGoldDrop then
+			self._data.spGoldDropCount = (self._data.spGoldDropCount or 0) + 1
+		end
+	end
+
+	if self:isModuleActive(D.ModuleType.SELECT_CARD_NUM_ADD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.SELECT_CARD_NUM_ADD]._params
+		num = num + params[1]
+	end
+
+	if dropType then
+		self:calcCardPools()
+	end
+
+	for i = 1, num do
+		if not dropType and i == 2 then
+			self:calcCardPools()
+
+			local card = cards[1]
+
+			if D._battleRougeCardConfig[card] then
+				table.erase(self._cardPools[self:getCardTypById(card)], D._battleRougeCardConfig[card])
+			else
+				table.erase(self._cardPools[CardType.MODULE], card)
+			end
+		end
+
+		cards[#cards + 1] = self:dropOneCard(weights, self._data.dropType ~= D.ArkRebuildDropType.MissionDrop)
+		self._data.cardSelectingData[i] = cards[i]
+	end
+
+	if dropType then
+		self._hasExtraSelectModule = (self._data.dropType == D.ArkRebuildDropType.Pack1Drop or self._data.dropType == D.ArkRebuildDropType.GoldDrop) and self:isModuleActive(D.ModuleType.SELECT_CARD_EXTRA_CHANCE_PERCENT)
+		self._data.remainAdRefreshCount = 1
+	end
+
+	self._lastCardDropType = dropType
+
+	return self._data.cardSelectingData
+end
+
+function M:getLastDropType()
+	return self._lastCardDropType or D.ArkRebuildDropType.MissionDrop
+end
+
+function M:getRemainAdRefreshCount()
+	return self._data.remainAdRefreshCount or 1
+end
+
+function M:getRemainWeapons()
+	if self._weaponDirty then
+		table.clear(self._remainWeapons)
+		table.clear(self._gotWeapons)
+
+		self._gotWeapons[1] = D.WEAPON_GATLIN
+
+		for i = D.WEAPON_GATLIN + 1, D.MAX_WEAPON_ID do
+			if self._data.cards[i] and self._data.cards[i] > 0 then
+				self._gotWeapons[#self._gotWeapons + 1] = i
+			elseif not table.contains(self._data.cardSelectingData, i) then
+				if not table.contains(self._data.weaponBanList, i) then
+					self._remainWeapons[#self._remainWeapons + 1] = i
+				end
+			end
+		end
+	end
+
+	return self._remainWeapons, self._gotWeapons
+end
+
+function M:calcCardPools()
+	local remainWeapons, gotWeapons = self:getRemainWeapons()
+
+	for i = CardType.WEAPON, CardType.MODULE do
+		table.clear(self._cardPools[i])
+	end
+
+	table.append(self._cardPools[CardType.WEAPON], remainWeapons)
+
+	local multiCardMinus = 0
+
+	for _, weapon in ipairs(gotWeapons) do
+		for _, conf in ipairs(D._weaponAllCards[weapon]) do
+			local type = getCardType(conf)
+
+			if self:getCardNum(conf._id) < conf._selectMax and (getCardType(conf) ~= CardType.COMBO_CARD or not table.contains(self._data.weaponBanList, conf._unlockWeaponCards[4])) then
+				self._cardPools[type][#self._cardPools[type] + 1] = conf
+				multiCardMinus = multiCardMinus + self:getCardNum(conf._id)
+			end
+		end
+	end
+
+	for _, conf in ipairs(D._arkRebuildModuleConfig) do
+		if not table.contains(self._data.moduleBanList, conf._id) and self._data.moduleNums[conf._id] == nil and conf._weight > 0 then
+			self._cardPools[CardType.MODULE][#self._cardPools[CardType.MODULE] + 1] = -conf._id
+		end
+	end
+
+	return self._cardPools, multiCardMinus
+end
+
+function M:dropOneCard(weights, ignoreLimit)
+	local newWeights = clone(weights)
+	local stageLimits = self:readCurrentCfg()._cardDropStages
+	local curMissionStage = self:getCurMission() % 10000
+
+	if ignoreLimit then
+		curMissionStage = 9999
+	end
+
+	for i = 1, #stageLimits do
+		if curMissionStage < stageLimits[i] then
+			newWeights[i] = 0
+		end
+	end
+
+	local cardPools = self._cardPools
+
+	for i = CardType.WEAPON, CardType.MODULE do
+		if #cardPools[i] == 0 then
+			newWeights[i] = 0
+		end
+	end
+
+	local dropType = DropHelper.randomIndexByWeights(newWeights)
+
+	if dropType == -1 then
+		return self:dropOneCardNormal(weights, ignoreLimit)
+	end
+
+	local card = nil
+
+	if dropType == CardType.WEAPON then
+		card = cardPools[dropType][math.random(#cardPools[dropType])]
+
+		table.erase(cardPools[dropType], card)
+
+		self._weaponDirty = true
+	elseif dropType == CardType.MODULE then
+		card = cardPools[dropType][math.random(#cardPools[dropType])]
+
+		table.erase(cardPools[dropType], card)
+	else
+		local cardStageDropStages = self:readCurrentCfg()._cardStageDropStages
+		local drop = DropHelper.dropFromGroup(cardPools[dropType], function (e)
+			return cardStageDropStages[e._stage] <= curMissionStage
+		end)
+		card = drop._id
+
+		table.erase(cardPools[dropType], drop)
+	end
+
+	return card
+end
+
+function M:dropOneCardNormal(weights, ignoreLimit, isRecall)
+	local remainWeapons, gotWeapons = self:getRemainWeapons()
+	local dropType = nil
+	local newWeights = clone(weights)
+	local stageLimits = self:readCurrentCfg()._cardDropStages
+	local curMissionStage = self:getCurMission() % 10000
+
+	if ignoreLimit then
+		curMissionStage = 9999
+	end
+
+	for i = 1, #stageLimits do
+		if curMissionStage < stageLimits[i] then
+			newWeights[i] = 0
+		end
+	end
+
+	if #remainWeapons > 0 then
+		dropType = DropHelper.randomIndexByWeights(newWeights)
+	else
+		newWeights[1] = 0
+		dropType = DropHelper.randomIndexByWeights(newWeights)
+	end
+
+	local card = nil
+
+	if dropType == 1 then
+		card = remainWeapons[math.random(1, #remainWeapons)]
+		self._weaponDirty = true
+	elseif dropType == 6 then
+		local module = DropHelper.dropFromGroup(D._arkRebuildModuleConfig, function (e)
+			return not table.contains(self._data.moduleBanList, e._id) and not table.contains(self._data.cardSelectingData, -e._id)
+		end)._id
+		card = -module
+	else
+		local weapon = gotWeapons[math.random(1, #gotWeapons)]
+		local cardStageDropStages = self:readCurrentCfg()._cardStageDropStages
+		local drop = nil
+
+		if dropType == 4 then
+			drop = DropHelper.dropFromGroup(D._weaponAllCards[weapon], function (e)
+				return dropType == getCardType(e) and not table.contains(self._data.cardSelectingData, e._id) and cardStageDropStages[e._stage] <= curMissionStage and not table.contains(self._data.weaponBanList, e._unlockWeaponCards[4])
+			end)
+		else
+			drop = DropHelper.dropFromGroup(D._weaponAllCards[weapon], function (e)
+				return dropType == getCardType(e) and not table.contains(self._data.cardSelectingData, e._id) and cardStageDropStages[e._stage] <= curMissionStage
+			end)
+		end
+
+		if drop then
+			card = drop._id
+		elseif not isRecall then
+			return self:dropOneCard(weights, ignoreLimit, true)
+		else
+			card = DropHelper.dropFromGroup(D._weaponAllCards[1], function (e)
+				return 102
+			end)._id
+		end
+	end
+
+	return card
+end
+
+function M:refreshCards()
+	self._data.remainAdRefreshCount = 0
+
+	table.clear(self._data.cardSelectingData)
+
+	local cards = self:dropSelectCards()
+
+	if Client.isMultipleDeivce() and P._playerRight:isSVIP() then
+		P:saveGameData(true)
+	end
+
+	return cards
+end
+
+function M:getSelectingCardData()
+	return self._data.cardSelectingData
+end
+
+function M:selectCard(index, isDrawAgain)
+	local cardId = self._data.cardSelectingData[index]
+
+	if cardId > 0 then
+		self:addCard(cardId, 1)
+	else
+		local module = -cardId
+
+		self:addModule(module)
+	end
+
+	if not isDrawAgain and self._hasExtraSelectModule then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.SELECT_CARD_EXTRA_CHANCE_PERCENT]._params
+
+		if math.random(0, 100) < params[1] then
+			self._data.cardSelectingData[index] = 0
+
+			return true
+		else
+			table.clear(self._data.cardSelectingData)
+
+			return false
+		end
+	else
+		table.clear(self._data.cardSelectingData)
+
+		return false
+	end
+end
+
+function M:getCardTypById(id)
+	return getCardType(D._battleRougeCardConfig[id])
+end
+
+function M:addCard(card, num)
+	num = num or 1
+	self._data.cards[card] = (self._data.cards[card] or 0) + num
+	local cardConf = D._battleRougeCardConfig[card]
+	local maxNum = cardConf._selectMax
+	local isMax = false
+
+	if maxNum < self._data.cards[card] then
+		isMax = true
+		local overNum = self._data.cards[card] - maxNum
+		self._data.cards[card] = maxNum
+		local decomposeGold = overNum * self:readCurrentCfg()._cardDecomposeGold[getCardType(cardConf)]
+
+		if decomposeGold > 0 then
+			P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_gold, decomposeGold, D.LogWay.ark_decompose_card)
+		end
+	end
+
+	if not isMax and self:isModuleActive(D.ModuleType.GAIN_GOLD_PER_CARD) then
+		local params = D._arkRebuildModuleConfig[D.ModuleType.GAIN_GOLD_PER_CARD]._params
+
+		P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_gold, params[1], D.LogWay.ark_rebuild_module_35)
+	end
+
+	if num < 0 and self._data.cards[card] == 0 then
+		self._data.cards[card] = nil
+	end
+
+	if card < 100 then
+		self._weaponDirty = true
+
+		SimpleEvent.emit("ark_rebuild.weapon.dirty")
+	elseif not isMax then
+		local weapon = cardConf._belongWeapon
+
+		if not self._data.weaponNewCards[weapon] then
+			self._data.weaponNewCards[weapon] = {}
+		end
+
+		self._data.weaponNewCards[weapon][#self._data.weaponNewCards[weapon] + 1] = card
+
+		SimpleEvent.emit("ark_rebuild.weapon.card.dirty", weapon)
+	end
+end
+
+function M:addModule(m)
+	if not self._data.newModules then
+		self._data.newModules = {}
+	end
+
+	if self._data.moduleNums[m] == 1 then
+		local decomposeGold = self:readCurrentCfg()._cardDecomposeGold[6]
+
+		if decomposeGold > 0 then
+			P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_gold, decomposeGold, D.LogWay.ark_decompose_card)
+		end
+	else
+		if self:isModuleActive(D.ModuleType.GAIN_GOLD_PER_CARD) then
+			local params = D._arkRebuildModuleConfig[D.ModuleType.GAIN_GOLD_PER_CARD]._params
+
+			P._playerAsset:increaseAssetNum(D.ResType.ark_rebuild_gold, params[1], D.LogWay.ark_rebuild_module_35)
+		end
+
+		table.insert(self._data.newModules, m)
+		table.insert(self._data.moduleList, 1, m)
+
+		self._data.moduleNums[m] = 1
+
+		SimpleEvent.emit("ark_rebuild.module.dirty")
+	end
+end
+
+function M:isNewModule(m)
+	return table.contains(self._data.newModules or {}, m)
+end
+
+function M:removeNewModule(m)
+	if self._data.newModules then
+		table.erase(self._data.newModules, m)
+	end
+end
+
+function M:setModuleOff(m, off)
+	if off then
+		self._data.offModules[m] = 1
+	else
+		self._data.offModules[m] = nil
+	end
+
+	SimpleEvent.emit("ark_rebuild.module.dirty")
+end
+
+function M:isModuleOff(m)
+	return self._data.offModules[m] ~= nil
+end
+
+function M:getRankValue()
+	if lc._isCN then
+		return (self:getCurMission() - 1) % 1000
+	else
+		return (self:getCurMission() - 1) % 1000 * 10000000000.0 + (self._data.passTimestamp and 10000000000.0 - self._data.passTimestamp or 0)
+	end
+end
+
+function M:uploadRankDataV2(auid)
+	local limitScore = self:readCurrentCfg()._limitScore
+
+	if limitScore[#limitScore] <= self:getCurMission() % 1000 then
+		if limitScore[1] <= self:getCurMission() % 1000 then
+			self:checkCheat()
+		end
+
+		P._playerRanker:uploadActivityRankData(D.RankType.ArkRebuildRank, auid, self:getRankValue(), {
+			arkAtk = self:getAtk(),
+			cn = self:getTotalCardNum()
+		})
+	end
+end
+
+function M:getRankData(auid, callback, failCallback)
+	P._playerRanker:getCachedActivityRankData(D.RankType.ArkRebuildRank, auid, callback, failCallback)
+end
+
+function M:checkCheat()
+	if lc._isMobile and not Client._saveData.isInBlacklist then
+		local cheating = false
+
+		if self._data.playTime < 3600 then
+			cheating = true
+
+			Trace.AF_traceEvent("e_cheat", {
+				{
+					_key = "num",
+					_value = math.floor(self._data.playTime)
+				},
+				{
+					_key = "cheatWay",
+					_value = "ArkRebuildTime"
+				},
+				{
+					_key = "ranker",
+					_value = string.format("%s|group_%s@%s", D.RankType.ArkRebuildRank, P._playerRanker:getGroup(D.RankType.ArkRebuildRank), self:getId())
+				}
+			})
+		else
+			local totalNum = self:getTotalCardNum()
+
+			if totalNum < 60 then
+				cheating = true
+
+				Trace.AF_traceEvent("e_cheat", {
+					{
+						_key = "num",
+						_value = totalNum
+					},
+					{
+						_key = "cheatWay",
+						_value = "ArkRebuildCardNum"
+					},
+					{
+						_key = "ranker",
+						_value = string.format("%s|group_%s@%s", D.RankType.ArkRebuildRank, P._playerRanker:getGroup(D.RankType.ArkRebuildRank), self:getId())
+					}
+				})
+			elseif self:getAtk() > 99999 and P._playerRecord:getActivityPurchase(self._data.id) < 200 then
+				cheating = true
+
+				Trace.AF_traceEvent("e_cheat", {
+					{
+						_key = "num",
+						_value = self:getAtk()
+					},
+					{
+						_key = "cheatWay",
+						_value = "ArkRebuildAtk"
+					},
+					{
+						_key = "ranker",
+						_value = string.format("%s|group_%s@%s", D.RankType.ArkRebuildRank, P._playerRanker:getGroup(D.RankType.ArkRebuildRank), self:getId())
+					}
+				})
+			end
+		end
+
+		if cheating then
+			Client.addBlacklist()
+		end
+	end
+end
+
+local POS_MAP = {
+	1,
+	4,
+	5,
+	2,
+	3
+}
+
+function M:genBattleInput(input)
+	local weapons = {
+		fixes = {}
+	}
+	local rogues = {}
+	local weaponSlots = self:getWeaponSlots()
+
+	for i = 1, 5 do
+		weapons.fixes[POS_MAP[i]] = weaponSlots[i] or 0
+
+		if weaponSlots[i] and self:getWeaponDeck(weaponSlots[i]) then
+			for _, cardId in pairs(self:getWeaponDeck(weaponSlots[i])) do
+				rogues[#rogues + 1] = cardId
+			end
+		end
+	end
+
+	local equips = {
+		atks = {
+			[0] = self:getAtk()
+		}
+	}
+	local effects = {}
+	local modules = {}
+
+	if self:isModuleActive(D.ModuleType.MODULE_DAMAGE_ADD) then
+		local count = 0
+
+		for _, num in pairs(self._data.moduleNums) do
+			count = count + num
+		end
+
+		local params = D._arkRebuildModuleConfig[D.ModuleType.MODULE_DAMAGE_ADD]._params
+		local damageAdd = count / params[1] * params[2]
+		effects[D.ModuleType.MODULE_DAMAGE_ADD] = damageAdd
+	end
+
+	local curModules = self._data.moduleNums
+
+	for _, id in ipairs(self._data.moduleList) do
+		if self:isModuleActive(id) then
+			local conf = D._arkRebuildModuleConfig[id]
+			local num = curModules[id]
+
+			if num > 0 and conf._inBattle and conf._effect then
+				if effects[id] == nil then
+					effects[id] = conf._params[1]
+				else
+					effects[id] = effects[id] + conf._params[1]
+				end
+			end
+		end
+	end
+
+	modules.effects = effects
+	input.rogues = rogues
+	input.equips = equips
+	input.modules = modules
+	input.weapons = weapons
+end
+
+function M:getLeftBuyNum(iapId)
+	local limit = self:getMaxBuyNum(iapId)
+
+	if limit == -1 then
+		return 999
+	end
+
+	return limit - self:getBuyCount(iapId)
+end
+
+function M:getMaxBuyNum(iapId)
+	return P._playerStore:readBuyLimit(iapId)
+end
+
+function M:getBuyCount(iapId)
+	if not self._data.shopBuyCount then
+		self._data.shopBuyCount = {}
+	end
+
+	return self._data.shopBuyCount[iapId] or 0
+end
+
+function M:recordBuyCount(iapId)
+	self._data.shopBuyCount[iapId] = self:getBuyCount(iapId) + 1
+end
+
+function M:getLeftAdPackNum()
+	if not self._data.adRecoverTime then
+		self._data.adRecoverTime = C.getCurTime()
+	end
+
+	local dt = C.getCurTime() - self._data.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local num = math.floor(dt / self:readAdRecoverSeconds())
+	num = math.min(num, self:readAdMaxCacheNum())
+
+	return num
+end
+
+function M:getAdPackCountdown(ct)
+	ct = ct or C.getCurTime()
+	local dt = ct - self._data.adRecoverTime
+
+	if dt < 0 then
+		return 0
+	end
+
+	local recoverT = self:readAdRecoverSeconds()
+	local num = math.ceil(dt / recoverT)
+	num = math.min(num, self:readAdMaxCacheNum())
+
+	return recoverT * num - dt
+end
+
+function M:initAdPackNum(startTime)
+	self._data.adRecoverTime = startTime - self:readAdRecoverSeconds()
+end
+
+function M:recordAdPack(initNum)
+	local num = self:getLeftAdPackNum()
+
+	if num == self:readAdMaxCacheNum() then
+		self._data.adRecoverTime = C.getCurTime() - self:readAdRecoverSeconds() * (initNum or num - 1)
+	else
+		self._data.adRecoverTime = self._data.adRecoverTime + self:readAdRecoverSeconds()
+	end
+
+	local cid, num = self:readAdPackRewards()
+
+	if not initNum then
+		P._playerAsset:increaseAssetNum(cid, num, D.LogWay.ark_rebuild_shop_ad)
+	end
+end
+
+function M:recordEnterArkRebuildTime()
+	local curTime = C.getCurTime()
+	self._enterArkRebuildTime = curTime
+end
+
+function M:recordPlayTime()
+	if self._enterArkRebuildTime then
+		local curTime = C.getCurTime()
+
+		if curTime - self._enterArkRebuildTime > 0 then
+			self._data.playTime = (self._data.playTime or 0) + curTime - self._enterArkRebuildTime
+		end
+
+		self._enterArkRebuildTime = nil
+	end
+end
+
+function M:hasNewCardOfWeapon(weapon)
+	if self._data.weaponNewCards[weapon] then
+		return #self._data.weaponNewCards[weapon] > 0
+	else
+		return false
+	end
+end
+
+function M:removeWeaponNewCardDot(weapon, card)
+	if card then
+		table.erase(self._data.weaponNewCards[weapon], card)
+	else
+		table.clear(self._data.weaponNewCards[weapon])
+	end
+end
+
+function M:isNewCard(card)
+	local weapon = D._battleRougeCardConfig[card]._belongWeapon
+
+	if self._data.weaponNewCards[weapon] then
+		return table.contains(self._data.weaponNewCards[weapon], card)
+	else
+		return false
+	end
+end
+
+function M:hasWeaponCardDot(weapon)
+	if self:hasNewCardOfWeapon(weapon) then
+		return true
+	end
+
+	return false
+end
+
+function M:canUpWeapon(weapon)
+	local weaponSlots = self:getWeaponSlots()
+
+	for i = 1, 5 do
+		if weaponSlots[i] == weapon then
+			return false
+		end
+	end
+
+	for i = 1, 5 do
+		if self._data.weaponSlotUnlockList[i] and weaponSlots[INDEX_MAP[i]] == nil then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:readAdPackParams(subType)
+	return D._activityArkRebuildConfig[subType or 1]._shopAdPackParams
+end
+
+function M:readAdRecoverSeconds()
+	return self:readAdPackParams()[2] * 3600
+end
+
+function M:readAdMaxCacheNum()
+	return self:readAdPackParams()[1]
+end
+
+function M:readAdPackRewards()
+	local rewards = self:readCurrentCfg()._shopAdPackRewards
+
+	return rewards[1], rewards[2]
+end
+
+function M:readPreviewMilestoneRewards()
+	return self:readCurrentCfg()._showMilestoneRewardCids
+end
+
+function M:readNameSid()
+	return self:readCurrentCfg()._nameSid
+end
+
+function M:readMilestoneCfg(period)
+	return self._milestoneRewards[period or 1]
+end
+
+function M:readQuickPatrolHour()
+	return self:readCurrentCfg()._quickPatrolHour
+end
+
+function M:readAdSweepMaxNum()
+	return self:readCurrentCfg()._quickPatrolAdNum[1]
+end
+
+function M:readAdSweepRecoverSeconds()
+	return self:readCurrentCfg()._quickPatrolAdNum[2] * 3600
+end
+
+function M:readAutoRequireTokenNum()
+	return self:readCurrentCfg()._autoRequireToken
+end
+
+function M:readCurrentCfg()
+	if self._data then
+		return D._activityArkRebuildConfig[self._data.subType]
+	end
+
+	return D._activityArkRebuildConfig[1]
+end
+
+function M:readExchangeGroup(subType)
+	return self:readCfg(subType)._exchangeGroup
+end
+
+function M:readCfg(subType)
+	return D._activityArkRebuildConfig[subType or 1]
+end
+
+return M

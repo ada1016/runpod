@@ -1,0 +1,47 @@
+local M = class("WeaponEntryWidget")
+
+function M.create(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/WeaponEntryWidget.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVarPeer(go, go.peer)
+
+	return go
+end
+
+function M:setLevel(level)
+	self._txtLevel:SetLocalize(SID.STR_LEVEL_X, level)
+	self._txtUnlockLevel:SetLocalize(SID.STR_LEVEL_X, level)
+end
+
+function M:setDesc(desc, id)
+	if id then
+		self._txtDesc:SetLocalize(desc, id, -D._battleRougeCardConfig[id]._nameSid)
+		self._txtUnlockDesc:SetLocalize(desc, id, -D._battleRougeCardConfig[id]._nameSid)
+	else
+		self._txtDesc:SetLocalize(desc)
+		self._txtUnlockDesc:SetLocalize(desc)
+	end
+end
+
+function M:setLock(lock)
+	self._lock = lock
+
+	self._goLock:SetActive(lock)
+	self._txtDesc.gameObject:SetActive(not lock)
+	self._txtLevel.gameObject:SetActive(not lock)
+end
+
+function M:setLinkClick()
+	if self._lock then
+		self._txtUnlockDesc:GetComponent("TMP_Text_LinkHandler"):SetLinkClick(function (linkId)
+			UIManager.openPanel(PrefabDefine.WeaponTreePanel, tonumber(linkId))
+		end)
+	else
+		self._txtDesc:GetComponent("TMP_Text_LinkHandler"):SetLinkClick(function (linkId)
+			UIManager.openPanel(PrefabDefine.WeaponTreePanel, tonumber(linkId))
+		end)
+	end
+end
+
+return M

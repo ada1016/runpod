@@ -1,0 +1,137 @@
+local M = class("StatsWidget")
+
+function M.createSetting(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StatsWidgetOfMainSetting.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.createSettle(parent)
+	local go = LuaUnity.createGameObjectWithPeer("Assets/FW/Prefabs/UI/widget/StatsWidgetOfMainSettle.prefab", parent)
+
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M.noCreate(go)
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(weaponData)
+end
+
+function M:updateUI(weaponData, panel)
+	self:loadWeaponDamages(weaponData, self._tfContainer, panel)
+end
+
+function M:loadWeaponDamages(weaponDatas, tfContainer, panel)
+	for i = 1, tfContainer.childCount do
+		local weapon = tfContainer:GetChild(i - 1).gameObject
+
+		weapon:SetActive(false)
+	end
+
+	for i = 1, #weaponDatas do
+		local weaponData = weaponDatas[i]
+		local id = weaponData.id
+		local stage = weaponData.stage
+		local star = weaponData.star
+		local dmg = weaponData.dmg
+		local dps = weaponData.dps
+		local kill = weaponData.kill or 0
+		local weapon = nil
+
+		if i <= tfContainer.childCount then
+			weapon = tfContainer:GetChild(i - 1).gameObject
+		else
+			weapon = LuaUnity.createGameObject(string.format("Assets/FW/Prefabs/UI/widget/WeaponDamageWidget.prefab"), tfContainer)
+		end
+
+		weapon:SetActive(true)
+		lc.prefabVarPeer(weapon)
+
+		if D.WEAPON_DOME < id then
+			weapon._tfStars:SetVisible(false)
+			weapon._tfSkills:SetActive(true)
+			weapon._imgRanger:SetActive(true)
+			weapon._imgIcon:SetActive(false)
+			LuaUnity.setTPSprite(weapon._imgRanger, "item/item_" .. id, true, true)
+			weapon._tfSkills:SetActive(true)
+
+			local equipedSkills = D._rangerConfig[id]._mainSkills
+
+			for i = 1, 3 do
+				if equipedSkills[i] then
+					weapon["_imgSkill" .. i]:SetActive(true)
+
+					local type = D._rangerSkillConfig[equipedSkills[i]]._group + 1
+
+					if type == 3 then
+						weapon._goDomeSkill3:SetActive(false)
+						weapon._goRangerSkill3:SetActive(true)
+						LuaUnity.setTPSprite(weapon._imgRangerSkill3, "weapon/weapon_" .. D._rangerSkillConfig[equipedSkills[i]]._weapon, true, true)
+					else
+						LuaUnity.setTPSprite(weapon["_imgSkill" .. i], string.format("ranger/RangerSkill-%d-%d", id % 100, i), true)
+					end
+				else
+					weapon["_imgSkill" .. i]:SetActive(false)
+				end
+			end
+		elseif id == D.WEAPON_DOME then
+			weapon._imgRanger:SetActive(false)
+			weapon._imgIcon:SetActive(true)
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. P._playerSkin:getEquipedSkin(id), true)
+			weapon._tfStars:SetVisible(false)
+			weapon._tmpLv.transform.parent:SetVisible(false)
+			weapon._tfSkills:SetActive(true)
+
+			local equipedSkills = P._playerSkin:getEquipedSkinSkills(D.SkinType.Dome)
+
+			for i = 1, 3 do
+				if equipedSkills[i][1] then
+					weapon["_imgSkill" .. i]:SetActive(true)
+					LuaUnity.setTPSprite(weapon["_imgSkill" .. i], "skill/item_skill_" .. equipedSkills[i][1])
+				else
+					weapon["_imgSkill" .. i]:SetActive(false)
+				end
+			end
+		else
+			weapon._imgRanger:SetActive(false)
+			weapon._imgIcon:SetActive(true)
+			LuaUnity.setTPSprite(weapon._imgIcon, "weapon/small_weapon_" .. id, true)
+			weapon._tfSkills:SetActive(false)
+
+			weapon._tmpLv.text = stage
+			local isMax = BattleManager:getSession()._battleRouge._pool:isMaxStar(id)
+
+			weapon._goMax:SetActive(isMax)
+			weapon._tfStars:SetActive(not isMax)
+
+			local starNum = star
+
+			if not isMax then
+				for i = 1, 4 do
+					weapon._tfStars:GetChild(i):GetChild(0):SetActive(i <= starNum)
+				end
+			end
+		end
+
+		weapon._txtDamage.text = string.formatNumber(math.ceil(dmg))
+		weapon._txtDps.text = string.formatNumber(dps)
+
+		panel:setClickWithoutAction(weapon._btnIcon, function ()
+			UIManager.openPanel(PrefabDefine.BattleSkillDmgRecordPanel, id)
+		end)
+	end
+end
+
+return M

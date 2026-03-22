@@ -1,0 +1,553 @@
+local M = class("PlayerArkRebuildLottery")
+
+function M:ctor()
+end
+
+function M:init(meta)
+	self._meta = meta
+	self._meta.unlock = self._meta.unlock or false
+	self._aType = D.ActivityType.ArkRebuildLottery
+	self._persistentUid = D.ActivityPersistUID[self._aType]
+	self._total = self._meta.total
+	self._subTotal = self._meta.subTotal
+	self._current = self._meta.current
+
+	if self._total then
+		self._total.luckyValue = ConfusedNumber.create(self._total.luckyValue or 0, "luckyValue")
+		self._total.freeNum = self._total.freeNum or 0
+	end
+
+	if self._current and self._current[self._persistentUid] then
+		self._current[self._persistentUid].totalDrawNum = ConfusedNumber.create(self._current[self._persistentUid].totalDrawNum or 0, "totalDrawNum")
+		self._current[self._persistentUid].currentDrawNum = ConfusedNumber.create(self._current[self._persistentUid].currentDrawNum or 0, "currentDrawNum")
+		self._current[self._persistentUid].currentExchangeNum = ConfusedNumber.create(self._current[self._persistentUid].currentExchangeNum or 0, "currentExchangeNum")
+		self._current[self._persistentUid].totalExchangeNum = ConfusedNumber.create(self._current[self._persistentUid].totalExchangeNum or 0, "totalExchangeNum")
+		self._current[self._persistentUid].todayFreeNum = ConfusedNumber.create(self._current[self._persistentUid].todayFreeNum or 1, "totalExchangeNum")
+		self._data = self._current[self._persistentUid]
+	end
+
+	self._defaultSubType = 1
+	self._lastLuckDrawNum = 0
+end
+
+function M:tryUnlock()
+	if self:isUnlock() then
+		return false
+	end
+
+	self._meta.unlock = true
+	self._total = lc.assignTable(self._meta, "total")
+	self._total.num = self._total.num or 0
+	self._total.luckyValue = ConfusedNumber.create(self._total.luckyValue or 0, "luckyValue")
+	self._subTotal = lc.assignTable(self._meta, "subTotal")
+	self._current = lc.assignTable(self._meta, "current")
+
+	return true
+end
+
+function M:start()
+	self:updateTimeCallback()
+end
+
+function M:dailyReset()
+	if not self:isOpening() then
+		return
+	end
+
+	self._data.todayFreeNum:reset2Value(1)
+end
+
+function M:isUnlock()
+	return self._meta.unlock
+end
+
+function M:haveDot()
+	return self:haveFree()
+end
+
+function M:haveFree()
+	if not self:isOpening() then
+		return false
+	end
+
+	if self._current[self._persistentUid].todayFreeNum() > 0 then
+		return true
+	end
+
+	return false
+end
+
+function M:getData(uid)
+	return self._current[uid]
+end
+
+function M:isOpening()
+	if not self:isUnlock() then
+		return false
+	end
+
+	if not self._data then
+		return false
+	end
+
+	if self._data.expired then
+		return false
+	end
+
+	local ct = C.getCurTime()
+
+	return self._data.startTime <= ct and ct <= self._data.endTime
+end
+
+function M:getEndTime()
+	return self._data and self._data.endTime or 0
+end
+
+function M:testForceOpenActivity()
+	if self:isOpening() then
+		return
+	end
+
+	self:tryUnlock()
+
+	local subType = 1
+	local drawNum, exchangeNum = self:calLimitNum(subType, 1)
+	local openData = {
+		finalRank = 1,
+		arkRebuildId = 99999,
+		entered = false,
+		uid = self._persistentUid,
+		subType = subType,
+		todayFreeNum = ConfusedNumber.create(1, "todayFreeNum"),
+		currentDrawNum = ConfusedNumber.create(0, "currentDrawNum"),
+		totalDrawNum = ConfusedNumber.create(drawNum, "totalDrawNum"),
+		currentExchangeNum = ConfusedNumber.create(0, "currentExchangeNum"),
+		totalExchangeNum = ConfusedNumber.create(exchangeNum, "totalExchangeNum"),
+		startTime = C.getCurTime(),
+		endTime = C.getCurTime() + 259200
+	}
+
+	self:dealOpen(openData)
+end
+
+function M:tryOpenActivity(data)
+	if self:isOpening() then
+		return
+	end
+
+	local arkRebuildId = data.id
+
+	if not arkRebuildId then
+		return
+	end
+
+	local finalRank = data.finalRank
+
+	if self:readLimitRankIdx() < finalRank then
+		return
+	end
+
+	local startTime, endTime = P._playerActivity:readTime(arkRebuildId)
+	local lotteryStartTime = endTime
+	local lotteryEndTime = endTime + 345600
+	local ct = C.getCurTime()
+
+	if ct < lotteryStartTime then
+		return
+	end
+
+	if lotteryEndTime < ct then
+		return
+	end
+
+	self:tryUnlock()
+
+	local subType = 1
+	local drawNum, exchangeNum = self:calLimitNum(subType, data.finalRank)
+	local openData = {
+		entered = false,
+		uid = self._persistentUid,
+		arkRebuildId = arkRebuildId,
+		subType = subType,
+		finalRank = data.finalRank,
+		todayFreeNum = ConfusedNumber.create(1, "todayFreeNum"),
+		currentDrawNum = ConfusedNumber.create(0, "currentDrawNum"),
+		totalDrawNum = ConfusedNumber.create(drawNum, "totalDrawNum"),
+		currentExchangeNum = ConfusedNumber.create(0, "currentExchangeNum"),
+		totalExchangeNum = ConfusedNumber.create(exchangeNum, "totalExchangeNum"),
+		startTime = lotteryStartTime,
+		endTime = lotteryEndTime
+	}
+
+	self:dealOpen(openData)
+end
+
+function M:dealOpen(data)
+	self._current[self._persistentUid] = data
+	self._data = self._current[self._persistentUid]
+
+	self:updateTimeCallback()
+	SimpleEvent.emit("ark_rebuild.lottery.open")
+end
+
+function M:isEntered()
+	return self._data.entered
+end
+
+function M:tryEnter()
+	if not self._data or self._data.entered then
+		return
+	end
+
+	self._data.entered = true
+end
+
+function M:updateTimeCallback()
+	if not self:isUnlock() then
+		return
+	end
+
+	GameClock:removeTimeCallback("ark_rebuild.lottery")
+
+	if not self:isOpening() then
+		return
+	end
+
+	GameClock:registerTimeCallback("ark_rebuild.lottery", self._data.endTime, function ()
+		SimpleEvent.emit("ark_rebuild.lottery.expire")
+	end)
+end
+
+function M:getCurrentData()
+	return self._data
+end
+
+function M:resetExchanges(subType)
+end
+
+function M:dealExpire(activityData)
+	local instanceData = self._current[activityData.uid]
+
+	if not instanceData then
+		return
+	end
+
+	instanceData.expired = true
+end
+
+function M:getRedDot(uid)
+	return false
+end
+
+function M:getLeftDrawNum()
+	return self._data.totalDrawNum() - self._data.currentDrawNum()
+end
+
+function M:getMaxDrawNum()
+	return self._data.totalDrawNum()
+end
+
+function M:tryLottery(multi)
+	local subType = self._data.subType
+	local costCid, costNum, drawNum = nil
+
+	if multi then
+		drawNum = self:readMultiDrawNum()
+		costCid, costNum = self:getMoreCost(subType)
+	else
+		drawNum = 1
+		costCid, costNum = self:getOneCost(subType)
+	end
+
+	local leftDrawNum = self:getLeftDrawNum()
+
+	if leftDrawNum < drawNum then
+		return ResultCode.THIS_TIME_NUM_MAX
+	end
+
+	if not P._playerAsset:isAssetEnough(costCid, costNum) then
+		return ResultCode.RESOURCE_NOT_ENOUGH
+	end
+
+	if multi then
+		P._playerAsset:decreaseAssetNum(costCid, costNum, D.LogWay.ark_rebuild_lottery_10)
+	else
+		P._playerAsset:decreaseAssetNum(costCid, costNum, D.LogWay.ark_rebuild_lottery_1)
+	end
+
+	local rewards, resultIdxs = self:dealLottery(drawNum)
+
+	return ResultCode.OK, rewards, resultIdxs
+end
+
+function M:tryFreeLottery()
+	if not self:haveFree() then
+		return ResultCode.DAILY_NUM_MAX
+	end
+
+	local currentData = self._data
+	local subType = currentData.subType
+	currentData.freeNum = (currentData.freeNum or 0) + 1
+
+	Trace.traceDesign("RebuildCarnival_FreeDraw:%d", Mathf.Clamp(currentData.freeNum, 1, 800))
+
+	currentData.todayFreeNum = currentData.todayFreeNum - 1
+	self._total.freeNum = (self._total.freeNum or 0) + 1
+	local rewards, resultIdxs = self:dealLottery(1, true)
+
+	return ResultCode.OK, rewards, resultIdxs
+end
+
+function M:dealLottery(drawNum, isFree)
+	drawNum = drawNum or 1
+
+	self:resetLastLuckDrawNum()
+
+	local currentData = self._data
+	local subType = currentData.subType
+	local specialCid = self:readSpeicalCid(subType)
+	local results = {}
+	local resultIdxs = {}
+	local dropId = self:getDrawDropId(subType)
+	local drops = DropHelper.readDropsById(dropId)
+	local subTotal = self:getSubTotal(subType)
+	local luckDropId = self:readLuckyDrop(subType)
+	local luck = self:readMaxLucky(subType)
+
+	for i = 1, drawNum do
+		self._total.luckyValue = self._total.luckyValue + 1
+		local cid, num = nil
+
+		if luck <= self._total.luckyValue() then
+			cid, num = DropHelper.getByDropId(luckDropId)
+		else
+			local fixCounts = self:readFixCounts(subType)
+
+			if fixCounts then
+				local index = table.findArray(fixCounts, (subTotal.num or 0) + 1)
+
+				if index then
+					dropId = self:readFixDrop(subType)[index]
+				end
+			end
+
+			local lucks = self:readLuckyArea(subType)
+			local multiValues = self:readLuckyAreaMulti(subType)
+			local multiValue = multiValues[1]
+			local lv = self._total.luckyValue()
+
+			for j = 1, #lucks do
+				if lv <= lucks[j] then
+					multiValue = multiValues[j]
+
+					break
+				end
+			end
+
+			cid, num = DropHelper.dropOne(drops, nil, 1, nil, {
+				[specialCid] = (multiValue - 1) * drops[1]._weight
+			})
+		end
+
+		local tempRes = P._playerAsset:increaseAssetNum(cid, num, drawNum > 1 and D.LogWay.ark_rebuild_lottery_10 or D.LogWay.ark_rebuild_lottery_1)
+
+		D.foldRewards(results, tempRes)
+
+		if not isFree then
+			self._data.currentDrawNum = self._data.currentDrawNum + 1
+		end
+
+		subTotal.num = (subTotal.num or 0) + 1
+		self._total.num = self._total.num + 1
+
+		Trace.traceDesign("RebuildCarnival_Draw:%d", Mathf.Clamp(self._data.currentDrawNum(), 1, 800))
+
+		local dropIdx = table.findArray(drops, function (drop)
+			return drop._itemId == cid and drop._minNum == num
+		end)
+
+		if dropIdx ~= 4 and dropIdx == 7 then
+			-- Nothing
+		end
+
+		if cid == specialCid then
+			if self._lastLuckDrawNum == 0 then
+				self._lastLuckDrawNum = self._total.luckyValue()
+
+				P._playerActivity:tryUploadDrawData(self:getUploadActivityId(), self._total.luckyValue(), tempRes[1][1], tempRes[1][2], true)
+			end
+
+			self._total.luckyValue:reset()
+		end
+
+		resultIdxs[#resultIdxs + 1] = dropIdx
+	end
+
+	P:saveGameData(true)
+
+	return results, resultIdxs
+end
+
+function M:getUploadActivityId()
+	return string.format("lottery_%d", self._data and self._data.arkRebuildId or 1)
+end
+
+function M:getLeftExchangeNum()
+	return self._data.totalExchangeNum() - self._data.currentExchangeNum()
+end
+
+function M:recordExchangeRes(exchangeCount)
+	self._data.currentExchangeNum = self._data.currentExchangeNum + exchangeCount
+end
+
+function M:calLimitNum(subType, rankIdx)
+	local idxList = self:readDrawIdxes(subType)
+	local exchangeNumList = self:readExchangeNums(subType)
+	local drawNumList = self:readDrawNums(subType)
+	local len = lc.lenTable(idxList)
+	local getDrawNum = 0
+	local getExchangeNum = 0
+
+	for i = 1, len do
+		local idx = idxList[i]
+
+		if rankIdx <= idx then
+			getDrawNum = drawNumList[i]
+			getExchangeNum = exchangeNumList[i]
+
+			break
+		end
+	end
+
+	return getDrawNum, getExchangeNum
+end
+
+function M:getDrawDropId(subType)
+	return self:readDrop(subType)
+end
+
+function M:getSubTotal(subType)
+	if not self._subTotal[subType] then
+		self._subTotal[subType] = {}
+	end
+
+	return self._subTotal[subType]
+end
+
+function M:getSubType(uid)
+	return self._current[uid].subType
+end
+
+function M:getTotalNum()
+	return self._total.num
+end
+
+function M:getLuckyValue()
+	return self._total.luckyValue()
+end
+
+function M:getOneCost(subType)
+	return self:readOneCost(subType)
+end
+
+function M:getMoreCost(subType)
+	return self:readMoreCost(subType)
+end
+
+function M:getDefaultExchangeGroup()
+	return self._defaultExchangeGroup
+end
+
+function M:getLastLuckDrawNum()
+	return self._lastLuckDrawNum
+end
+
+function M:resetLastLuckDrawNum()
+	if self._lastLuckDrawNum == 0 then
+		return
+	end
+
+	self._lastLuckDrawNum = 0
+end
+
+function M:readNameSid(id)
+	return self:getCfg(id)._nameSid
+end
+
+function M:readLimitRankIdx(id)
+	return self:getCfg(id or self._defaultSubType)._limitRankIdx
+end
+
+function M:readDrawIdxes(id)
+	return self:getCfg(id)._rankIdx
+end
+
+function M:readDrawNums(id)
+	return self:getCfg(id)._drawNum
+end
+
+function M:readExchangeNums(id)
+	return self:getCfg(id)._exchangeNum
+end
+
+function M:readOneCost(id)
+	local cfg = self:getCfg(id)
+
+	return cfg._costCid, cfg._costNum
+end
+
+function M:readMoreCost(id)
+	local cfg = self:getCfg(id)
+
+	return cfg._costCid, cfg._costMoreNum
+end
+
+function M:readDrop(id)
+	return self:getCfg(id)._drop
+end
+
+function M:readLuckyDrop(id)
+	return self:getCfg(id)._luckyDrop
+end
+
+function M:readMaxLucky(id)
+	return self:getCfg(id)._luckyValue
+end
+
+function M:readLuckyArea(id)
+	return self:getCfg(id)._luckyValueArea
+end
+
+function M:readLuckyAreaMulti(id)
+	return self:getCfg(id)._luckyValueMulti
+end
+
+function M:readSpeicalCid(id)
+	return self:getCfg(id)._specialCid
+end
+
+function M:readFixCounts(id)
+	return self:getCfg(id)._fixCounts
+end
+
+function M:readFixDrop(id)
+	return self:getCfg(id)._fixDropIdxs
+end
+
+function M:readExchangeGroup(id)
+	return self:getCfg(id)._exchangeGroup
+end
+
+function M:readExchangeId(id)
+	return self:getCfg(id)._exchangeId
+end
+
+function M:getCfg(id)
+	return D._arkRebuildLotteryConfig[self._defaultSubType]
+end
+
+function M:readMultiDrawNum()
+	return 10
+end
+
+return M

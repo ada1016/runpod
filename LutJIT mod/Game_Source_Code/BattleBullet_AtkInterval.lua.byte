@@ -1,0 +1,142 @@
+local M = class("BattleBullet_AtkInterval", requireLua("BattleBullet"))
+local SUPER = M.super
+local BattlePropEnum = BattlePropEnum
+
+function M:init(id, battleSkill)
+	SUPER.init(self, id, battleSkill)
+
+	self._damageAddNum = 0
+	self._willDestroyed = false
+	self._atkReady = false
+	local atkInterval = battleSkill:getProp(BattlePropEnum.AtkInterval, 0)
+	local atkIntervalAddPer = battleSkill:getProp(BattlePropEnum.AtkIntervalAddPer, 0)
+	atkIntervalAddPer = math.max(atkIntervalAddPer, -80)
+	self._atkInterval = atkInterval * (1 + atkIntervalAddPer / 100)
+	local dmgNum = battleSkill:getProp(BattlePropEnum.DamageNum, 0)
+	local dmgNumAddPer = battleSkill:getProp(BattlePropEnum.DamageNumAddPer, 0)
+	local dmgNumMul = battleSkill:getProp(BattlePropEnum.DamageNumMul, 1)
+	self._releaseAtkNum = dmgNum * (1 + dmgNumAddPer / 100) / (1 + atkIntervalAddPer / 100) * dmgNumMul
+	self._atkIntervalInitial = self._atkInterval
+
+	if self._cid == 408 then
+		self._atkInterval = 0.05
+	end
+end
+
+function M:step(dt)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self:stepLiveDuration(dt)
+
+	if self._isToBeDestroyed then
+		return
+	end
+
+	if self:checkOutBounday() then
+		return
+	end
+
+	if self._atkInterval then
+		self._atkInterval = self._atkInterval - dt
+
+		if self._atkInterval <= 0 then
+			if self._willDestroyed then
+				self:markToBeDestroyed()
+
+				return
+			else
+				self:clearEnemyHitted()
+
+				self._atkInterval = self._atkIntervalInitial
+				self._atkReady = true
+			end
+		end
+	end
+
+	if self._atkReady then
+		self:releaseAttack()
+		self:checkEnemyCollision(dt)
+	end
+
+	self:stepMove(dt)
+
+	if self._battleWeapon:getEffect(504) then
+		local params = D.getBattleEffectParams(504)
+
+		if self._battleSession:getWeapon(params[1]) then
+			local bullets = self._battleSession._battleBullets
+			local lineYMin = self._position.y - self._size[2] / 2
+			local lineYMax = self._position.y + self._size[2] / 2
+
+			for i = 1, #bullets do
+				local bullet = bullets[i]
+
+				if not bullet._isToBeDestroyed and not bullet._block504 and bullet._cid == params[1] and lineYMin <= bullet._position.y and bullet._position.y <= lineYMax then
+					local angle = bullet._angle
+					local b1 = bullet._battleWeapon:createBullet(angle - 5, bullet._position.x, bullet._position.y)
+					b1._block504 = true
+					local b2 = bullet._battleWeapon:createBullet(angle + 5, bullet._position.x, bullet._position.y)
+					b2._block504 = true
+
+					bullet:markToBeDestroyed()
+				end
+			end
+		end
+	end
+
+	self:stepDmgRangeAdd()
+end
+
+function M:releaseAttack()
+	self._atkReady = false
+	self._damageNum = self._damageNum + 1
+
+	if math.floor(self._damageAddNum + self._releaseAtkNum) <= self._damageNum then
+		self._willDestroyed = true
+	end
+
+	if self._view and self._view.releaseAttackEvent then
+		self._view:releaseAttackEvent()
+	end
+
+	if self._cid == 408 then
+		local castSkill = self._battleWeapon:getSkill(409)
+		local bullet = castSkill:createBullet()
+
+		bullet:setPos(self._position.x, self._position.y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:scaleEvent()
+		end
+	end
+
+	if self._cid == 1002 and self._battleWeapon:getEffect(1007) then
+		local castSkill = self._battleWeapon:getSkill(1003)
+		local bullet = castSkill:createBullet()
+		local x, y = BattleMathLib.random_inside_circle(self._radius)
+
+		bullet:setPos(self._position.x + x, self._position.y + y)
+
+		if bullet._view then
+			bullet._view:posEvent()
+			bullet._view:scaleEvent()
+		end
+	end
+
+	if self._cid == 5 then
+		local effPar = self._battleWeapon:getEffect(554)
+
+		if effPar then
+			self:addScale(effPar / 200)
+
+			if self._view then
+				self._view:scaleEvent()
+			end
+		end
+	end
+end
+
+return M

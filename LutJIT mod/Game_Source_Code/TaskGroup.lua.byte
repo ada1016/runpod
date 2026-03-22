@@ -1,0 +1,173 @@
+local M = class("TaskGroup")
+local Task = requireLua("Task")
+
+function M:ctor(meta)
+	self._meta = meta
+	self._tasks = {}
+
+	if meta.tasks ~= nil then
+		for i = 1, #meta.tasks do
+			self._tasks[i] = Task.create(meta.tasks[i], self)
+		end
+	end
+
+	self:checkResetTasks()
+end
+
+local function __needResetTasks(self)
+	if self._meta.nextRefreshTimestamp == nil then
+		return true
+	end
+
+	if self._meta.nextRefreshTimestamp < Client.getTodayZeroTimestamp() then
+		return true
+	end
+
+	return false
+end
+
+local function __resetTasks(self)
+	self._meta.tasks = {}
+	self._tasks = {}
+	local groupType = self._meta.groupType
+	local count = groupType == D.TaskGroupType.seasonly and 6 or 3
+
+	for i = 1, count do
+		self:resetTask(i)
+	end
+
+	if groupType == D.TaskGroupType.daily then
+		self._meta.nextRefreshTimestamp = Client.getTodayZeroTimestamp(1)
+	elseif groupType == D.TaskGroupType.weekly then
+		self._meta.nextRefreshTimestamp = Client.getTodayZeroTimestamp(7)
+	elseif groupType == D.TaskGroupType.seasonly then
+		self._meta.nextRefreshTimestamp = Client.getTodayZeroTimestamp(28)
+	end
+end
+
+function M:checkResetTasks()
+	if __needResetTasks(self) then
+		__resetTasks(self)
+	end
+end
+
+function M:resetTask(index)
+	local cid = D._taskCids[lc.random(#D._taskCids)]
+	self._meta.tasks[index] = {
+		id = index,
+		cid = cid
+	}
+	local task = Task.create(self._meta.tasks[index], self)
+	self._tasks[index] = task
+
+	return task
+end
+
+function M:nextRefreshTimestamp()
+	return self._meta.nextRefreshTimestamp
+end
+
+function M:groupType()
+	return self._meta.groupType
+end
+
+function M:round()
+	return self._meta.round or self._meta.groupType == D.TaskGroupType.daily and 1 or 0
+end
+
+function M:nextRound()
+	self._meta.round = (self._meta.round or 1) + 1
+
+	__resetTasks(self)
+end
+
+function M:claimableRewardNum()
+	local num = 0
+
+	for i = 1, #self._tasks do
+		local task = self._tasks[i]
+
+		if task:isClaimable() then
+			num = num + task:rewardNum()
+		end
+	end
+
+	return num
+end
+
+function M:isClaimable()
+	for i = 1, #self._tasks do
+		local task = self._tasks[i]
+
+		if task:isClaimable() then
+			return true
+		end
+	end
+
+	return false
+end
+
+function M:isAllClaimed()
+	for i = 1, #self._tasks do
+		local task = self._tasks[i]
+
+		if not task:isClaimed() then
+			return false
+		end
+	end
+
+	return true
+end
+
+function M:updateValueByType(type, isInc, value)
+	local isDirty = false
+
+	for i = 1, #self._tasks do
+		local task = self._tasks[i]
+
+		if task:type() == type then
+			task:updateCurValue(isInc, value)
+
+			isDirty = true
+		end
+	end
+
+	return isDirty
+end
+
+function M:claimRewards(isAd)
+	local claimedData = {}
+	local from = P._playerSeason:seasonPoint()
+	local num = 0
+
+	for i = 1, #self._tasks do
+		local task = self._tasks[i]
+
+		if task:isClaimable() then
+			local delta = task:rewardNum() * (isAd and 2 or 1)
+			num = num + delta
+
+			task:setClaimed(isAd)
+
+			claimedData[#claimedData + 1] = {
+				i,
+				D.ResType.season_point,
+				from,
+				delta
+			}
+			from = from + delta
+		end
+	end
+
+	if num > 0 then
+		P._playerSeason:incSeasonPoint(num)
+	end
+
+	return claimedData
+end
+
+function M:nextSeason()
+	__resetTasks(self)
+end
+
+return M

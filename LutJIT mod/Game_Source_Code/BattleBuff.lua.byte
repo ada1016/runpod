@@ -1,0 +1,119 @@
+local M = class("BattleBuff")
+local BattleDefine = BattleDefine
+local DamageReason = BattleDefine.DamageReason
+local BattlePropEnum = BattlePropEnum
+local BattleBuffEnum = BattleBuffEnum
+
+function M:ctor(battleSession)
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+end
+
+function M:init(id, duration, target, skill)
+	self._id = id
+	self._duration = duration
+	self._target = target
+	self._skill = skill
+	self._initialDuration = duration
+	local cfg = D._battleBuffConfig[id]
+	self._type = cfg._type
+	self._prop = cfg._prop
+	self._val = cfg._val
+	self._prefab = cfg._prefab
+	self._maxStack = cfg._maxStack
+	self._limitStack = cfg._limitStack
+	self._params = cfg._params
+	self._negative = cfg._negative
+	self._isRegulate = cfg._isRegulate
+	self._removed = cfg._removed
+	self._textSid = cfg._textSid
+	self._initialVal = self._val
+	self._mainClass = cfg._mainClass
+	self._hpDitry = cfg._hpDitry
+	self._stack = 1
+	self._block = nil
+	self._boosted = nil
+	self._maxDmgRate = nil
+	self._gap = 0
+	self._isToBeDestroyed = false
+
+	if skill then
+		if skill._id == 10027 then
+			if id == 54 then
+				self._val = skill._battleWeapon._skinSlillsParam[10027]
+			else
+				self._val = -skill._battleWeapon._skinSlillsParam[10027]
+			end
+		elseif skill._id == 10028 then
+			self._val = skill._battleWeapon._skinSlillsParam[10028]
+		else
+			local add = 0
+			local addPer = 0
+
+			if self._mainClass == BattleDefine.BuffMainClass.Knockback then
+				add = add + skill:getProp(BattlePropEnum.KnockbackIntensityUp, 0)
+				addPer = addPer + skill:getProp(BattlePropEnum.KnockbackIntensityUpAddPer, 0) / 100
+			elseif self._mainClass == BattleDefine.BuffMainClass.SlowDown then
+				add = skill:getProp(BattlePropEnum.SlowdownIntensityUp, 0)
+			end
+
+			self._val = self._val + add
+			self._val = self._val + self._val * addPer
+
+			if self._id == BattleDefine.BuffId.slowdown_stack then
+				local addStackNum = skill:getProp(BattlePropEnum.BuffStackAddNum, 0)
+				self._stack = self._stack + addStackNum
+			elseif self._id == BattleDefine.BuffId.collapse then
+				self._maxStack = math.min(self._limitStack, self._maxStack + skill:getProp(BattlePropEnum.CollapseBuffMaxStackAddNum, 0))
+			end
+
+			self._val = self._val * self._stack
+			self._maxStack = math.min(self._limitStack, self._maxStack + skill:getProp(BattlePropEnum.BuffMaxStackAddNum, 0))
+		end
+	end
+end
+
+function M:resetDuration(duration)
+	if self._maxStack == 1 then
+		self._duration = duration
+	elseif self._maxStack > 1 then
+		if self._stack < self._maxStack then
+			self._stack = self._stack + 1
+			self._val = self._initialVal * self._stack
+		end
+
+		self._duration = duration
+	end
+end
+
+function M:reduceStack()
+	self._stack = self._stack - 1
+
+	if self._stack <= 0 then
+		self._isToBeDestroyed = true
+	end
+end
+
+function M:isMaxStack()
+	return self._maxStack <= self._stack
+end
+
+function M:step(dt)
+	if self._hpDitry then
+		self._gap = self._gap + dt
+
+		if self._params[1] <= self._gap then
+			self._gap = 0
+
+			self._target:onBuffCast(self, self._skill, self._hpDitry)
+		end
+	end
+
+	self._duration = self._duration - dt
+
+	if self._duration <= 0 then
+		self._isToBeDestroyed = true
+	end
+end
+
+return M

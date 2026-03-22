@@ -1,0 +1,55 @@
+local M = class("BattleBullet_Aoe", requireLua("BattleBullet"))
+local SUPER = M.super
+local math = math
+local Mathf = Mathf
+
+function M:ctor(battleSession)
+	SUPER.ctor(self)
+
+	self._battleSession = battleSession
+	self._battleRandomLib = battleSession._battleRandomLib
+
+	if not self._battleSession:isSkipView() then
+		self._view = requireLua("BattleBulletView").new(battleSession)
+	end
+end
+
+function M:checkEnemyCollision()
+	local enemys = self._battleSession:getEnemys(self)
+	local cnt = #enemys
+
+	for j = 1, cnt do
+		local enemy = enemys[j]
+
+		if not enemy._isToBeDestroyed and self._battleSession:isIntersectBetweenBulletAndEnemy(self, enemy) then
+			enemy:onHit(self)
+			self:hitEnemy(enemy)
+			self:tryTriggerHitEffect(enemy)
+		end
+	end
+
+	self:markToBeDestroyed()
+end
+
+function M:hitEnemy(enemy)
+	self._hitEnemysMap[enemy._id] = enemy
+
+	self._battleSkill:appendBuffsToEnemy(enemy, self)
+end
+
+function M:markToBeDestroyed(reason)
+	if self._isToBeDestroyed then
+		return
+	end
+
+	self._isToBeDestroyed = true
+	self._destroyReason = reason
+
+	if self._view then
+		self._view:explodeEvent()
+	end
+
+	self._battleSkill:bulletMarkToBeDestroyed(self)
+end
+
+return M

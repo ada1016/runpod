@@ -1,0 +1,102 @@
+local M = class("LangChooseArea")
+
+function M.noCreate(go)
+	local t = tolua.getpeer(go)
+
+	if t then
+		return
+	end
+
+	LuaUnity.setPeer(go)
+	setmetatable(go.peer, M)
+	lc.prefabVar(go, go.peer)
+
+	return go
+end
+
+function M:init(panel, selectCallback)
+	self._panel = panel
+	self._selectCallback = selectCallback
+	self._langWidgetopened = nil
+	self._languageInited = nil
+end
+
+function M:doAction(language)
+	self._language = language
+
+	self._ator:ResetTrigger("Hide")
+
+	self._langWidgetopened = not self._langWidgetopened
+
+	self._ator:SetInteger("Status", self._langWidgetopened and 1 or 0)
+
+	if self._langWidgetopened then
+		self:tryInitLanguageWidget()
+	else
+		self._ator:SetTrigger("Hide")
+	end
+end
+
+function M:tryInitLanguageWidget()
+	if self._languageInited then
+		return
+	end
+
+	self._languageInited = true
+	local langs = D.UnionLanguages
+	local langNum = #langs
+	local btnNum = 1
+	self._selectIdx = 0
+
+	for i = 1, #D.UnionLanguages do
+		if self._language == i then
+			self._selectIdx = i
+
+			break
+		end
+	end
+
+	for i = 1, langNum - btnNum do
+		GameObject.Instantiate(self._btnPrototype, self._tfLanguageBtnParent)
+	end
+
+	for i = 1, langNum do
+		local langId = i
+		local btnTf = self._tfLanguageBtnParent:GetChild(i - 1 + 2)
+
+		btnTf:SetActive(true)
+		self._panel:setClick(btnTf:GetComponent("Button"), function ()
+			self._selectIdx = i
+
+			self:updateLanguages()
+			self:doAction()
+
+			if self._selectCallback then
+				self._selectCallback(langId or 0)
+			end
+		end)
+
+		local tfTxt = btnTf:GetChild(0):GetComponent("Text")
+
+		if langId == 1 then
+			tfTxt.text = LcLocalization.getTextStr(SID.ALL_LANGUAGE_STR)
+		else
+			tfTxt.text = langs[i]
+		end
+	end
+
+	self:updateLanguages()
+end
+
+function M:updateLanguages()
+	local langs = D.UnionLanguages
+
+	for i = 1, #langs do
+		local tfBtn = self._tfLanguageBtnParent:GetChild(i - 1 + 2)
+		local text = tfBtn:GetChild(0):GetComponent("Text")
+		local targetColor = Color.str2Static(i == self._selectIdx and "77C3B4" or "398E7D")
+		text.color = targetColor
+	end
+end
+
+return M

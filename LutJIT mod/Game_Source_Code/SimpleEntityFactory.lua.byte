@@ -1,0 +1,31 @@
+local M = class("SimpleEntityFactory")
+local requireLua = requireLua
+
+function M:ctor(module, capacity)
+	self._module = requireLua(module)
+	self._entitys = table.new(0, capacity)
+end
+
+function M:getEntity(p1)
+	local entity = self._entitys[#self._entitys]
+	local new = false
+
+	if entity == nil then
+		entity = self._module.create(p1)
+		new = true
+	else
+		self._entitys[#self._entitys] = nil
+	end
+
+	return entity, new
+end
+
+function M:putEntity(entity)
+	self._entitys[#self._entitys + 1] = entity
+end
+
+function M:cleanEntitys()
+	table.clear(self._entitys)
+end
+
+return M

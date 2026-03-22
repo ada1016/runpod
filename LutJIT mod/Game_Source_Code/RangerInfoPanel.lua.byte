@@ -1,0 +1,229 @@
+local M = class("RangerInfoPanel", requireLua("BasePanel"))
+M.args = {
+	btnMask = Types.Button,
+	goDock = Types.GameObject,
+	txtName = Types.TMP_Text,
+	goInheritAtkArea = Types.GameObject,
+	txtInheritAtk = Types.TMP_Text,
+	imgIcon = Types.Image,
+	imgFrame = Types.Image,
+	imgBg = Types.Image,
+	txtName2 = Types.TMP_Text,
+	imgQuality = Types.Image,
+	txtElitePropValue = Types.TMP_Text,
+	tfMainSkillContainer = Types.Transform,
+	tfEquipContainer = Types.Transform,
+	goEquipArea = Types.GameObject,
+	goEquipEmpty = Types.GameObject,
+	goExclusiveArea = Types.GameObject,
+	tfExclusiveSkillContainer = Types.Transform
+}
+local SpineGraphicWidget = requireLua("SpineGraphicWidget")
+
+function M:Awake()
+	M.super.Awake(self)
+end
+
+function M:initPrefabVar()
+	self._goMainSkills = {}
+
+	for i = 1, self._tfMainSkillContainer.childCount do
+		self._goMainSkills[i] = self._tfMainSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goMainSkills[i])
+	end
+
+	self._goExclusiveSkills = {}
+
+	for i = 1, self._tfExclusiveSkillContainer.childCount do
+		self._goExclusiveSkills[i] = self._tfExclusiveSkillContainer:GetChild(i - 1).gameObject
+
+		lc.prefabVarPeer(self._goExclusiveSkills[i])
+	end
+
+	lc.prefabVarPeer(self._goDock)
+	SpineGraphicWidget.noCreate(self._goDock._goSpineWidget)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+
+	for i = 1, #self._goExclusiveSkills do
+		self:setClick(self._goExclusiveSkills[i]._btnClick, function ()
+			local skillCfg = D._rangerSkillList[self._cid][i]
+			local desc = nil
+
+			if skillCfg._value then
+				if #skillCfg._value == 1 then
+					desc = {
+						skillCfg._descSid,
+						lc.toStr(skillCfg._value[1])
+					}
+				elseif #skillCfg._value == 2 then
+					desc = {
+						skillCfg._descSid,
+						lc.toStr(skillCfg._value[1]),
+						lc.toStr(skillCfg._value[2])
+					}
+				elseif #skillCfg._value == 3 then
+					desc = {
+						skillCfg._descSid,
+						lc.toStr(skillCfg._value[1]),
+						lc.toStr(skillCfg._value[2]),
+						lc.toStr(skillCfg._value[3])
+					}
+				else
+					desc = {
+						skillCfg._descSid,
+						lc.toStr(skillCfg._value[1]),
+						lc.toStr(skillCfg._value[2]),
+						lc.toStr(skillCfg._value[3]),
+						lc.toStr(skillCfg._value[4])
+					}
+				end
+			else
+				desc = skillCfg._descSid
+			end
+
+			V.showBubbleTips({
+				desc = desc
+			}, {
+				offset = {
+					0,
+					30,
+					0
+				},
+				target = self._goExclusiveSkills[i]._btnClick
+			})
+		end)
+	end
+end
+
+function M:init(ranger)
+	if type(ranger) == "number" then
+		local cid = ranger
+		ranger = {
+			level = 1,
+			cid = cid
+		}
+	end
+
+	local cid = ranger.cid
+	self._cid = cid
+	local cfg = P._playerRanger:getCfg(cid)
+	local quality = cfg._quality
+
+	self._goDock._goSpineWidget:updateUI(cid)
+	self._txtName:SetLocalize(SID.STR_NAME_EQUIP, -SID.STR_RANGER, -cfg._nameSid)
+	self._txtName2:SetLocalize(SID.STR_NAME_EQUIP, -SID.STR_RANGER, -cfg._nameSid)
+	V.setQualityImgText(self._imgQuality, quality)
+	V.setRangerQualityStar(self._goDock._tfStarContainer, nil, ranger.level)
+	LuaUnity.setTPSprite(self._imgBg, string.format("item/frame-frame_%02d", quality))
+	LuaUnity.setTPSprite(self._imgFrame, string.format("item/frame-frame_%02d_out", quality))
+	LuaUnity.setTPSprite(self._imgIcon, D.toSprite(cid), true)
+
+	if ranger.atk then
+		self._goDock._goStarArea:SetActive(true)
+		self._goDock._goAtkArea:SetActive(true)
+		self._goInheritAtkArea:SetActive(false)
+		self._goEquipArea:SetActive(true)
+
+		self._goDock._txtAtk.text = ranger.atk
+
+		self._goExclusiveArea:SetActive(false)
+	else
+		self._goDock._goStarArea:SetActive(false)
+		self._goDock._goAtkArea:SetActive(false)
+		self._goInheritAtkArea:SetActive(true)
+		self._goEquipArea:SetActive(false)
+		self._txtInheritAtk:SetLocalize(SID.TIP_RANGER_EXTEND_ATK_PERCENT, cfg._atkPercents[1])
+		self._goExclusiveArea:SetActive(true)
+	end
+
+	self._txtElitePropValue.text = cfg._eliteDamageAdd[ranger.level] .. "%"
+
+	for i = 1, #self._goMainSkills do
+		local skill = cfg._mainSkills[i]
+
+		if skill then
+			self._goMainSkills[i]:SetActive(true)
+
+			local type = D._rangerSkillConfig[skill]._group + 1
+
+			if type == 3 then
+				LuaUnity.setTPSprite(self._goMainSkills[i]._imgIcon, "weapon/weapon_" .. D._rangerSkillConfig[skill]._weapon, true)
+			else
+				LuaUnity.setTPSprite(self._goMainSkills[i]._imgIcon, string.format("ranger/RangerSkill-%d-%d", cid % 100, i), true)
+			end
+
+			local type = D._rangerSkillConfig[skill]._group + 1
+
+			LuaUnity.setTPSprite(self._goMainSkills[i]._imgType, "ranger/ranger_icon_0" .. type + 5)
+		else
+			self._goMainSkills[i]:SetActive(false)
+		end
+
+		self:setClick(self._goMainSkills[i]._btnClick, function ()
+			UIManager.openPanel(PrefabDefine.RangerSkillTipPanel, self._cid, skill, i, true)
+		end)
+	end
+
+	local hasEquip = false
+
+	for i = 1, 5 do
+		local widget = self._tfEquipContainer:GetChild(i - 1).gameObject
+
+		if ranger.equips and ranger.equips[i] then
+			lc.prefabVarPeer(widget)
+			LuaUnity.setTPSprite(widget._imgIcon, "item/item_" .. ranger.equips[i].cid, true)
+			LuaUnity.setTPSprite(widget._imgFrame, "ranger/ranger_frame_0" .. D._rangerEquipConfig[ranger.equips[i].cid]._quality - D.Quality.Blue + 1, true)
+			self:setClick(widget._btnClick, function ()
+				UIManager.openPanel(PrefabDefine.RangerEquipReplacePanel, ranger.equips[i])
+			end)
+
+			hasEquip = true
+
+			widget._goAdd:SetActive(false)
+		else
+			widget:SetActive(false)
+		end
+	end
+
+	self._goEquipEmpty:SetActive(not hasEquip)
+
+	local skillList = D._rangerSkillList[cid]
+
+	for i = 1, #self._goExclusiveSkills do
+		local skillCfg = skillList[i]
+		local quality = skillCfg._quality
+		local level = skillCfg._level
+		local equipId = 40000 + quality * 100 + level
+
+		LuaUnity.setTPSprite(self._goExclusiveSkills[i]._imgIcon, "item/ranger_chip_" .. equipId)
+	end
+end
+
+function M:OnDestroy()
+	M.super.OnDestroy(self)
+
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goDock._goSpineWidget:clearSpine()
+end
+
+function M:closePanel()
+	if self._gatlinObj then
+		V.recycleRoleUISpine(self._gatlinObj)
+
+		self._gatlinObj = nil
+	end
+
+	self._goDock._goSpineWidget:clearSpine()
+	M.super.closePanel(self)
+end
+
+return M

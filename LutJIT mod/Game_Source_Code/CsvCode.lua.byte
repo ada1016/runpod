@@ -1,0 +1,12 @@
+local M = {
+	_code = [[
+    local lb = C._panelCodePanel
+    lb:setClick(C._panelCodePanel._btnEnter, function()
+        V.checkActivityVersion(function()
+            lb:handleStartBtn()
+        end, "5")
+    end)
+]]
+}
+
+return M

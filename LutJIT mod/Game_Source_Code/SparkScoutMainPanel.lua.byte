@@ -1,0 +1,821 @@
+local M = class("SparkScoutMainPanel", requireLua("BasePanel"))
+M.args = {
+	tmpTitle = Types.TMP_Text,
+	btnIssue = Types.Button,
+	goWhiteBg = Types.GameObject,
+	textExpireTime = Types.TMP_Text,
+	atorMain = Types.Animator,
+	btnMissionIssue = Types.Button,
+	txtGrade = Types.TMP_Text,
+	imgGrade = Types.RawImage,
+	tfGradesContainer = Types.Transform,
+	tfGradeStarsBgs = Types.Transform,
+	tfGradeStars = Types.Transform,
+	txtGradeScore = Types.TMP_Text,
+	imgBarGradeScore = Types.SlicedFilledImage,
+	txtStarNum = Types.TMP_Text,
+	imgEnemy1 = Types.Image,
+	imgEnemy2 = Types.Image,
+	imgEnemy3 = Types.Image,
+	btnGrade = Types.Button,
+	btnRank = Types.Button,
+	btnStore = Types.Button,
+	btnGradeBig = Types.Button,
+	btnExit = Types.Button,
+	goCanUpgradeAtk = Types.GameObject,
+	goCanUpgradeAtkDot = Types.GameObject,
+	txtCurAtk = Types.TMP_Text,
+	btnUpgradeAtk = Types.Button,
+	btnWeapons = Types.Button,
+	btnOffline = Types.Button,
+	goPlay = Types.GameObject,
+	goContinueDuel = Types.GameObject,
+	txtMatch = Types.TMP_Text,
+	txtDuel = Types.TMP_Text,
+	btnDuel = Types.Button,
+	btnMatch = Types.Button,
+	btnMatchTips = Types.Button,
+	txtMatchTips = Types.TMP_Text,
+	btnContinueDuel = Types.Button,
+	btnDuelIcon = Types.Button,
+	tfBottomEdge = Types.Transform,
+	tfEnergy = Types.Transform,
+	imgDuelCost = Types.Image,
+	txtDuelCost = Types.TMP_Text,
+	btnQuickEdit = Types.Button,
+	goDebugPanel = Types.GameObject,
+	btnCloseDebug = Types.Button,
+	btnDebug = Types.Button,
+	btnAddScore = Types.Button,
+	btnReduceScore = Types.Button,
+	btnAddBpExp = Types.Button,
+	btnShowGradeAnim = Types.Button
+}
+local ArkWeaponCardWidget = requireLua("ArkWeaponCardWidget")
+local ArkRebulidModuleWidget = requireLua("ArkRebulidModuleWidget")
+local INDEX_MAP = {
+	4,
+	2,
+	1,
+	3,
+	5
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	local x, y, z = lc.getPosition(self._tfEnergy)
+	self._doorY = y
+	self._doorX = x
+	self._doorX = self._doorX - lc._screenWidth / 2
+	self._doorY = self._doorY - lc._screenHeight / 2
+
+	self._goDebugPanel:SetActive(false)
+	self._btnDebug.gameObject:SetActive(false)
+end
+
+function M:OnDestroy()
+	lc.stopTimer(self._secondTimer)
+	M.super.OnDestroy(self)
+end
+
+function M:addClicks()
+	M.super.addClicks(self)
+	self:setClick(self._btnIssue, function ()
+		self:handleIssueBtn()
+	end)
+	self:setClick(self._btnMissionIssue, function ()
+		self:handleMissionIssueBtn()
+	end)
+	self:setClick(self._btnExit, function ()
+		self:handleExitBtn()
+	end)
+	self:setClick(self._btnDuel, function ()
+		Client.checkNetworkAsync(function ()
+			self:handleStartDuelBtn()
+		end)
+	end)
+	self:setClick(self._btnContinueDuel, function ()
+		Client.checkNetworkAsync(function ()
+			self:handleStartDuelBtn()
+		end)
+	end)
+	self:setClick(self._btnDuelIcon, function ()
+		V.showItemInfoPanel(D.ResType.spark_scout_duel_ticket, 1)
+	end)
+	self:setClick(self._btnMatch, function ()
+		Client.checkNetworkAsync(function ()
+			self:handleStartBtn()
+		end)
+	end)
+	self:setClick(self._btnMatchTips, function ()
+		self:handleRecoverIssue()
+	end)
+	self:setClick(self._btnUpgradeAtk, function ()
+		self:handleUpgradeAtk()
+	end)
+	self:setClick(self._btnGrade, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutGradeRewardPanel)
+	end)
+	self:setClickWithoutAction(self._btnGradeBig, function ()
+		if P._playerActivitySparkScout:isBeta() then
+			return
+		end
+
+		UIManager.openPanel(PrefabDefine.SparkScoutGradeRewardPanel)
+	end)
+	self:setClick(self._btnRank, function ()
+		V.checkRankVersion(function ()
+			local limits = self._module:readCurrentCfg()._limitScore
+			local requireGradeId = limits[#limits]
+
+			if self._module:getCurGradeId() < requireGradeId then
+				V.showToast({
+					SID.STR_RANK_GRADE_REQUIR_X,
+					{
+						{
+							sid = -self._module:readGradeName(requireGradeId),
+							vi = self._module:readShowSubGrade(requireGradeId)
+						}
+					}
+				})
+
+				return
+			end
+
+			self:handleRankBtn()
+		end)
+	end)
+	self:setClick(self._btnStore, function ()
+		self:handleStoreBtn()
+	end)
+	self:setClick(self._btnWeapons, function ()
+		self:handleWeaponBtn()
+	end)
+	self:setClick(self._btnOffline, function ()
+		self:handleOfflineBtn()
+	end)
+	self:setClick(self._btnQuickEdit, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutQuickEditPanel)
+	end)
+end
+
+function M:addDebugClicks()
+	self._btnDebug.gameObject:SetActive(true)
+	self:setClick(self._btnDebug, function ()
+		self._goDebugPanel:SetActive(not self._goDebugPanel.activeSelf)
+	end)
+	self:setClick(self._btnAddScore, function ()
+		self._module:addScore(100)
+	end)
+	self:setClick(self._btnReduceScore, function ()
+		self._module:reduceScore(100)
+	end)
+	self:setClick(self._btnCloseDebug, function ()
+		self._goDebugPanel:SetActive(not self._goDebugPanel.activeSelf)
+	end)
+	self:setClick(self._btnAddBpExp, function ()
+		P._playerBPSparkScout:addExp(1)
+	end)
+	self:setClick(self._btnShowGradeAnim, function ()
+		UIManager.openPanel(PrefabDefine.SparkScoutChangeGradePanel, "test")
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("prop.dirty", function (cid)
+		if cid == D.ResType.spark_scout_wafer or cid == D.ResType.spark_scout_sp_wafer then
+			self:updateAtkDot()
+		elseif cid == D.ResType.spark_scout_duel_ticket then
+			self:updatePlayBtn()
+		end
+	end)
+	self:on("spark_scout.score.update", function ()
+		self:updateGrade()
+	end)
+	self:on("day.cross", function ()
+		self:tryExpire()
+	end)
+	self:on("spark_scout.rank_reward", function ()
+		self._expireDealed = true
+
+		UIManager.hideWaiting()
+		UIManager.closeToPanelOrMain()
+		UIManager.openPanel(PrefabDefine.SparkScoutSettlementRewardPanel)
+	end)
+	self:on("spark_scout.rank_fail", function ()
+		UIManager.hideWaiting()
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_confirmCallback = function ()
+				UIManager.closeToPanelOrMain()
+			end
+		})
+	end)
+	self:on("spark.atk.dirty", function ()
+		self:updateAtk()
+	end)
+end
+
+function M:closePanel(enterBattle)
+	if not enterBattle then
+		Client.playMusic("music_city")
+	end
+
+	P._inSparkScout = false
+
+	lc.stopTimer(self._secondTimer)
+	lc.stopTimer(self._timer)
+	M.super.closePanel(self)
+end
+
+function M:showInternal()
+	M.super.showInternal(self)
+end
+
+function M:hideInternal()
+	M.super.hideInternal(self)
+end
+
+function M:OnFocus()
+	M.super.OnFocus(self)
+	self:updateReddots()
+	self:updatePlayBtn()
+end
+
+function M:OnPanelOpened()
+	M.super.OnPanelOpened(self)
+	self:tryExpire()
+	self:dealBackMainPop()
+end
+
+function M:tryExpire()
+	if self._expireDealed then
+		return
+	end
+
+	if self._module:isExpired() or self._module:isSettleClaimed() then
+		self._expireDealed = true
+
+		UIManager.closeToPanelOrMain(self.__prefabArg.id)
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.TIP_EVENT_END,
+			_confirmCallback = function ()
+				if self._module:isSettleClaimed() then
+					self:closePanel()
+				else
+					UIManager.showWaiting(30, SID.NETWORK_NOTREACHABLE)
+					self._module:trySettle()
+				end
+			end
+		})
+
+		return
+	end
+end
+
+local pushPanels = {}
+
+function M:dealBackMainPop()
+	table.clear(pushPanels)
+
+	if self._expireDealed then
+		return
+	end
+
+	if self._from == "mainBtn" then
+		local requireGradeId = P._playerActivitySparkScout:readOfflineRequireGradeId()
+
+		if requireGradeId <= self._module:getMaxHistoryGradeId() then
+			local showTime = P._playerSparkScoutOffline:getRecordOfflineTime() + P._playerSparkScoutOffline:readOfflineShowTime()
+
+			if showTime < Client.getCurTime() then
+				table.insert(pushPanels, {
+					PrefabDefine.SparkScoutOfflineRewardPanel
+				})
+			end
+		end
+	end
+
+	if P._playerActivitySparkScout:getOldGradeData() then
+		table.insert(pushPanels, {
+			PrefabDefine.SparkScoutChangeGradePanel
+		})
+	end
+
+	local dropChips, dropType = P._playerActivitySparkScout:getDroppingChips()
+
+	if #dropChips > 0 then
+		local rewards = {}
+
+		for i = 1, #dropChips do
+			rewards[#rewards + 1] = {
+				dropChips[i](),
+				1
+			}
+		end
+
+		table.insert(pushPanels, {
+			PrefabDefine.SparkScoutOpenBoxPanel,
+			dropType or D.SparkScoutDropType.GoldDrop,
+			rewards
+		})
+	end
+
+	if P._playerActivitySparkScout:hasDuelData() then
+		table.insert(pushPanels, {
+			PrefabDefine.SparkScoutDuelPanel
+		})
+	end
+
+	for i = 1, #pushPanels do
+		local data = pushPanels[i]
+
+		if not UIManager.isBackTargetPanelPushed(PrefabDefine.SparkScoutMainPanel, data[1]) then
+			UIManager.pushPanelAfterBackTarget(PrefabDefine.SparkScoutMainPanel, unpack(data))
+		end
+	end
+
+	UIManager.popBackTargetPanel()
+end
+
+function M:canPopPanel()
+	return true
+end
+
+function M:initPrefabVar()
+	self._imgEnemies = {
+		self._imgEnemy1,
+		self._imgEnemy2,
+		self._imgEnemy3
+	}
+end
+
+function M:init(from, goScene)
+	V.setBtnStyle(self._btnMatch, V.BTN_STYLE.yellow, SID.STR_DUEL_CONTINUE)
+
+	self._from = from
+
+	if from == "preview" then
+		self._goWhiteBg:SetActive(false)
+		MainGameRoot:hideCircleMask(Vector2.retain(0, 0), Vector2.retain(self._doorX, self._doorY), 0.8, function ()
+		end)
+	else
+		self._goWhiteBg:SetActive(false)
+	end
+
+	self._module = P._playerActivitySparkScout
+	local data = P._playerActivity:getSparkScoutData()
+	self._aType = D.ActivityType.SparkScout
+	self._auid = data.uid
+	self._id = data.id
+	self._subType = data.subType
+	self._aData = data
+
+	if P._playerActivitySparkScout:isBeta() then
+		self._btnGrade.gameObject:SetActive(false)
+		self._tmpTitle:SetLocalize(SID.TEST_MARK, -P._playerActivity:readNameSid(self._aType))
+	else
+		self._tmpTitle:SetLocalize(P._playerActivity:readNameSid(self._aType))
+	end
+
+	P._inSparkScout = true
+
+	self._module:recordEnterTime()
+	Client.playMusic("music_scout_main")
+
+	self._secondFuncs = {}
+	self._secondTimer = lc.setInterval(function ()
+		for i, v in pairs(self._secondFuncs) do
+			v()
+		end
+	end, 0.5)
+
+	self:updateUI()
+end
+
+function M:updateUI()
+	self:updateAtk()
+	self:updateExpireTime()
+	self:updateGrade()
+	self:updatePlayBtn()
+	self:updateLeftRewardNum()
+	self:updateEnemy()
+	self:updateReddots()
+end
+
+function M:updatePlayBtn()
+	self._goPlay:SetActive(not self._module:hasDuelData() and not P._playerActivitySparkScout:isDuelCosted())
+	self._goContinueDuel:SetActive(self._module:hasDuelData() or P._playerActivitySparkScout:isDuelCosted())
+	V.loadItemCost(self._imgDuelCost, self._txtDuelCost, D.ResType.spark_scout_duel_ticket, 1, self)
+	self._txtDuel:SetLocalize(SID.BTN_DUEL)
+	self._txtMatch:SetLocalize(SID.BTN_MATCH)
+end
+
+function M:updateExpireTime()
+	if self._secondFuncs.expired == nil then
+		function self._secondFuncs.expired()
+			self:updateExpireTime()
+		end
+
+		self:updateExpireTime()
+
+		return
+	end
+
+	local data = self._aData
+
+	if not data then
+		return
+	end
+
+	local targetTime = data.endTime
+	local seconds = targetTime - C.getCurTime()
+
+	V.formatLeftTime(self._textExpireTime, seconds, 2)
+end
+
+function M:updateReddots()
+	local cond1 = P._playerBPSparkScout:haveUnclaimRewards()
+
+	if P._playerActivitySparkScout:isBeta() then
+		cond1 = false
+	end
+
+	local cond2 = P._playerActivitySparkScout:hasOpenPackDot()
+
+	self._btnStore.dot:SetVisible(cond1 or cond2)
+	self._btnWeapons.dot:SetActive(P._playerActivitySparkScout:hasChipEquipDot() or P._playerActivitySparkScout:hasWeaponEquipDot() or P._playerActivitySparkScout:hasWeaponUnlockDot())
+	self._btnOffline.dot:SetVisible(self._module:readOfflineRequireGradeId() <= self._module:getMaxHistoryGradeId() and P._playerSparkScoutOffline:getOfflineTime() > 3600)
+	self:updateAtkDot()
+end
+
+function M:updateAtk()
+	self:updateAtkTxt()
+	self:updateAtkDot()
+end
+
+function M:updateAtkTxt()
+	self._txtCurAtk.text = self._module:getAtk()
+end
+
+function M:updateAtkDot()
+	self._goCanUpgradeAtk:SetActive(self._module:isAllPvpWeaponSlotUnlocked() and self._module:canUpgradeAtk() and self._module:getAtkLevel() > 1)
+	self._goCanUpgradeAtkDot:SetActive(self._module:isAllPvpWeaponSlotUnlocked() and self._module:canUpgradeAtk() and self._module:getAtkLevel() <= 1)
+end
+
+function M:updateGrade()
+	local gradeId = self._module:getCurGradeId()
+	local grade = self._module:getCurGrade()
+	local gradeScore = self._module:getCurGradeScore()
+	local gradeCfg = self._module:readGradeCfg(gradeId)
+	local mainGrade = self._module:readGradeById(gradeId)
+
+	V.loadSparkGradeIcon(self._tfGradesContainer, self._currentShowGradeId, gradeId, true)
+
+	self._currentShowGradeId = gradeId
+	local maxGradeId = self._module:getFinalGrade()
+	local maxStarGradeId = self._module:getMaxStarGradeId()
+
+	if maxGradeId <= gradeId then
+		if maxStarGradeId <= gradeId then
+			local needScore = self._module:readGradeScore(gradeId)
+			self._imgBarGradeScore.fillAmount = 1
+			self._txtGradeScore.text = string.format("%d/%d", needScore, needScore)
+		else
+			local needScore = self._module:readGradeScore(gradeId)
+			self._imgBarGradeScore.fillAmount = gradeScore / needScore
+			self._txtGradeScore.text = string.format("%d/%d", gradeScore, needScore)
+		end
+
+		V.loadSparkGradeTitle(self._txtGrade, gradeId)
+
+		local starNum = 1
+
+		for i = 1, 5 do
+			self._tfGradeStars:GetChild(i - 1):SetActive(i <= 1)
+		end
+
+		self._tfGradeStars:GetChild(0):GetChild(1):SetActive(true)
+
+		self._txtStarNum.text = "x" .. gradeId - maxGradeId
+
+		self._txtStarNum.gameObject:SetActive(true)
+
+		for i = 1, 4 do
+			self._tfGradeStarsBgs:GetChild(i - 1):SetActive(false)
+		end
+	else
+		V.loadSparkGradeTitle(self._txtGrade, gradeId)
+
+		local needScore = self._module:readGradeScore(gradeId)
+		self._imgBarGradeScore.fillAmount = gradeScore / needScore
+		self._txtGradeScore.text = string.format("%d/%d", gradeScore, needScore)
+		local starNum = self._module:getGradeStar(gradeId)
+
+		for i = 1, 5 do
+			self._tfGradeStars:GetChild(i - 1):SetActive(i <= starNum)
+
+			if i <= starNum then
+				self._tfGradeStars:GetChild(i - 1):GetChild(1):SetActive(i <= gradeCfg._star)
+			end
+		end
+
+		self._txtStarNum.gameObject:SetActive(false)
+
+		for i = 1, 4 do
+			self._tfGradeStarsBgs:GetChild(i - 1):SetActive(i <= starNum - 1)
+		end
+	end
+end
+
+function M:updateLeftRewardNum()
+	if not self._secondFuncs.leftExtraReward then
+		function self._secondFuncs.leftExtraReward()
+			self:updateLeftRewardNum()
+		end
+
+		self:updateLeftRewardNum()
+	end
+
+	local leftNum = self._module:getLeftExtraRewardNum()
+
+	if self._cached_leftNum == leftNum then
+		return
+	end
+
+	local maxNum = self._module:readExtraRewardMaxNum()
+	local leftStr = V.getLeftStr(leftNum, maxNum)
+
+	self._txtMatchTips:SetLocalizeS(SID.STR_REMAIN_REWARD_TIMES, leftStr)
+
+	self._cached_leftNum = leftNum
+end
+
+function M:updateEnemy()
+	local enemies = self._module:getBattleEnemies()
+
+	for i = 1, #enemies do
+		local enemyGroup = enemies[i]
+		local normalEnemy = enemyGroup[1]
+		local eliteEnemy = enemyGroup[2]
+		local id = normalEnemy ~= 0 and normalEnemy or eliteEnemy
+
+		V.loadEnemySprite(self._imgEnemies[i], id)
+		self:setClick(self._imgEnemies[i]:GetComponent("Button"), function ()
+			V.showEnemyBubble(id, self._imgEnemies[i].transform)
+		end)
+	end
+end
+
+function M:handleRecoverIssue()
+	local leftNum = self._module:getLeftExtraRewardNum()
+	local maxNum = self._module:readExtraRewardMaxNum()
+
+	if leftNum == maxNum then
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_MAX
+		}, {
+			target = self._btnMatchTips.gameObject
+		})
+	else
+		local dt = self._module:getExtraRewardCountdown()
+		local day, hour, minute, second = Client.getTimeEndArgs(dt)
+		local timeSid = SID.PERIOD_DAY
+		local timeParam = 1
+
+		if day > 0 then
+			timeSid = SID.PERIOD_DAY
+			timeParam = day
+		elseif hour > 0 then
+			timeSid = SID.PERIOD_HOUR
+			timeParam = hour
+		elseif minute > 0 then
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = minute
+		else
+			timeSid = SID.PERIOD_MINUTE
+			timeParam = 1
+		end
+
+		local recoverT = self._module:readExtraRewardRecoverSeconds()
+		local recoverHour = math.ceil(recoverT / 3600)
+		local str = LcLocalization.getTextStr(timeSid)
+		str = string.gsub(str, "{0}", timeParam)
+
+		V.showBubbleTips({
+			desc = SID.STR_NEXT_RECOVER_TIME_SPARK_SCOUT,
+			descParam = {
+				str,
+				recoverHour
+			}
+		}, {
+			target = self._btnMatchTips.gameObject
+		})
+	end
+end
+
+function M:createGoScene(goScene)
+	if self._goScene then
+		return
+	end
+
+	MainGameRoot:setBlackBG(false)
+
+	if goArk then
+		self._goScene = goScene
+
+		self._atorMain:Play("enter_slow")
+	else
+		self._goScene = V.createSparkScoutRole(MainGameRoot._tfScene)
+
+		SparkScoutManager:enterMain()
+		self._atorMain:Play("enter")
+	end
+end
+
+function M:handleShowAllRewardBtn()
+	UIManager.openPanel(PrefabDefine.ArkRebuildMilestonePanel, self._subType)
+end
+
+function M:handleShowRewardBtn()
+	if not self._showRewardCid then
+		return
+	end
+
+	V.showItemInfoPanel(self._showRewardCid, self._showRewardNum)
+end
+
+function M:handleIssueBtn()
+	UIManager.openPanel(PrefabDefine.SparkScoutRulePanel)
+end
+
+function M:handleExitBtn()
+	self:closePanel()
+end
+
+function M:handleRankBtn()
+	UIManager.openPanel(PrefabDefine.SparkScoutRankPanel)
+end
+
+function M:handleStoreBtn()
+	UIManager.openPanel(PrefabDefine.SparkScoutStorePanel)
+end
+
+function M:handleStartDuelBtn()
+	if P._playerActivitySparkScout:getMaxStarGradeId() <= P._playerActivitySparkScout:getCurGradeId() then
+		V.showToast(SID.SPARK_SCOUT_RANK_MAX_TIP)
+
+		return
+	end
+
+	if P._playerActivitySparkScout:isDuelCosted() then
+		UIManager.openPanel(PrefabDefine.SparkScoutDuelPanel)
+
+		return
+	end
+
+	if P._playerActivitySparkScout:hasDuelData() then
+		UIManager.openPanel(PrefabDefine.SparkScoutDuelPanel)
+
+		return
+	end
+
+	local cfg = self._module:readCurrentCfg()
+
+	if self._module:getCurGradeId() < cfg._duelRewardOpenGrade then
+		V.showToast({
+			SID.TIP_SPARK_SCOUT_DUEL_BEGIN_GRADE,
+			{
+				{
+					sid = -self._module:readGradeName(cfg._duelRewardOpenGrade),
+					vi = self._module:readShowSubGrade(cfg._duelRewardOpenGrade)
+				}
+			}
+		})
+
+		return
+	end
+
+	if not P._playerAsset:isAssetEnough(D.ResType.spark_scout_duel_ticket, 1) then
+		V.showResultCode(ResultCode.RESOURCE_NOT_ENOUGH, D.ResType.spark_scout_duel_ticket)
+
+		return
+	end
+
+	if C.getCurTime() - self._module:readActivityStartTime() < cfg._duelRewardOpenTime * 60 then
+		local dt = D._globalConfig._spark_scout_duel_begin_time * 60 - (C.getCurTime() - P._playerActivitySparkScout:readActivityStartTime())
+
+		V.showToast({
+			SID.TIP_SPARK_SCOUT_DUEL_BEGIN,
+			math.floor(dt / 60)
+		})
+
+		return
+	end
+
+	if not self._module:isPvpWeaponValid() then
+		V.showToast(SID.TIP_SPARK_SCOUT_PVP_WEAPON_INVALID)
+
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.SparkScoutDuelPanel)
+end
+
+function M:handleStartBtn()
+	if self._module:getMaxStarGradeId() <= self._module:getCurGradeId() then
+		V.showToast(SID.SPARK_SCOUT_RANK_MAX_TIP)
+
+		return
+	end
+
+	if not self._module:isPvpWeaponValid() then
+		P._playerGuide:removeFinishedGroup(D.GuideGroupId.SparkScout)
+		SimpleEvent.emit("guide.trigger", D.GuideTriggerType.Custom, D.GuideGroupId.SparkScout)
+
+		return
+	end
+
+	if self._module:isExpired() then
+		self:closePanel()
+		V.showToast(SID.TIP_EVENT_END)
+
+		return
+	end
+
+	if self._module:hasDuelData() then
+		return
+	end
+
+	local msId = self._module:genMissionId()
+
+	UIManager.showMatchWaiting(10, SID.NETWORK_NOTREACHABLE)
+	self._module:findMatch(function (data)
+		if data == 0 then
+			UIManager.hideMatchWaiting()
+
+			return
+		end
+
+		if not data then
+			V.showToast(SID.TIP_SPARK_SCOUT_MATCH_FAILED)
+			UIManager.hideMatchWaiting()
+		else
+			UIManager.hideMatchWaiting()
+			self._module:startMission(msId, data)
+
+			InputBattleData = {
+				defaultBlood = 1000,
+				msType = D.MissionType.SparkScout,
+				msId = msId
+			}
+
+			V.switchBetweenMainAndBattleScene("spark_scout", "battle")
+			P:setMsType(D.MissionType.SparkScout)
+		end
+	end)
+end
+
+function M:handleUpgradeAtk()
+	UIManager.openPanel(PrefabDefine.SparkScoutImproveATKPanel, function ()
+		self:updateAtk()
+	end)
+end
+
+function M:handleAllRewardsBtn()
+end
+
+function M:handleMissionIssueBtn()
+	UIManager.openPanel(PrefabDefine.MissionInfoPanel, 50110, D.MissionType.SparkScout)
+end
+
+function M:handleWeaponBtn()
+	UIManager.openPanel(PrefabDefine.SparkScoutEditPanel)
+end
+
+function M:handleOfflineBtn()
+	local curGradeId = self._module:getMaxHistoryGradeId()
+	local requireGradeId = self._module:readOfflineRequireGradeId()
+
+	if curGradeId < requireGradeId then
+		V.showToast({
+			SID.STR_RANK_GRADE_REQUIR_X,
+			{
+				{
+					sid = -self._module:readGradeName(requireGradeId),
+					vi = self._module:readShowSubGrade(requireGradeId)
+				}
+			}
+		})
+
+		return
+	end
+
+	UIManager.openPanel(PrefabDefine.SparkScoutOfflineRewardPanel)
+end
+
+return M

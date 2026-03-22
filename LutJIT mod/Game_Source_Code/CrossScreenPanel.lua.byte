@@ -1,0 +1,237 @@
+local M = class("CrossScreenPanel", requireLua("BasePanel"))
+M.args = {
+	goBG = Types.GameObject,
+	crossAtor = Types.Animator,
+	goLoadRes = Types.GameObject,
+	loadResBG = Types.Transform,
+	loadResFG = Types.SlicedFilledImage,
+	tmpProgress = Types.TMP_Text
+}
+
+function M:Awake()
+	M.super.Awake(self)
+
+	V._crossingScene = true
+
+	self._goLoadRes:SetActive(false)
+	self._crossAtor:GetComponent("AnimationEventCallback"):AddAnimationEvent(function (param)
+		if param == "show_completed" then
+			self._onCompleted()
+			DOTween.KillAll()
+
+			if self._from == "city" then
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "dome" then
+				UIManager.closePanel(PrefabDefine.DomeHomePanel)
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "ark_rebuild" then
+				UIManager.closePanel(PrefabDefine.ArkRebuildMainPanel)
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "globalDefense" then
+				UIManager.closePanel(PrefabDefine.GlobalDefensePanel)
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "ranger" then
+				UIManager.closePanel(PrefabDefine.CrisisZoneHomePanel)
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "spark_scout" then
+				UIManager.closePanel(PrefabDefine.SparkScoutMainPanel)
+				UIManager.closePanel(PrefabDefine.MainPanel)
+			elseif self._from == "battle" then
+				if P:getLastMsType() == D.MissionType.ArkRebuild then
+					UIManager.closePanel(PrefabDefine.BattlePanelArk)
+				else
+					UIManager.closePanel(PrefabDefine.BattlePanel)
+				end
+			elseif self._from == "ark_rebuild_restart" then
+				UIManager.closePanel(PrefabDefine.BattlePanelArk)
+				SceneHelper:enterTransScene(function ()
+					self:closePanel()
+					UIManager.openPanel(PrefabDefine.BattlePanelArk)
+					LuaHelper.TriggerGC()
+				end, "ark_rebuild")
+			elseif self._from == "main_mission_restart" then
+				UIManager.closePanel(PrefabDefine.BattlePanel)
+				SceneHelper:enterTransScene(function ()
+					self:closePanel()
+					UIManager.openPanel(PrefabDefine.BattlePanel)
+				end, "main_mission")
+			end
+
+			self:startDownload()
+		elseif param == "close_completed" then
+			self._onCompleted()
+
+			V._crossingScene = false
+
+			if self._callback then
+				self._callback()
+			end
+
+			if self._from ~= "battle" and self._from ~= "login" then
+				BattleView:OnSwitchSceneCompleted()
+				BattlePanel:onBattleReady()
+			elseif self._from == "battle" then
+				local main = UIManager.getMainPanel(PrefabDefine.MainPanel)
+
+				if main then
+					main:OnPanelOpenedAfterLoading()
+				end
+			end
+		end
+	end)
+end
+
+function M:addEvents()
+	M.super.addEvents(self)
+	self:on("load.res.call.start", function (isZip)
+		self._goLoadRes:SetActive(true)
+	end)
+	self:on("load.res.call.message", function (msg)
+		if msg ~= nil and msg ~= "" then
+			msg = msg:match("^(.-)%b()")
+
+			self._tmpProgress:SetLocalizeS(SID.LOADING_RES, msg)
+		else
+			self._tmpProgress.text = ""
+		end
+	end)
+	self:on("load.res.call.progress", function (progress)
+		self._loadResFG.fillAmount = progress
+	end)
+	self:on("load.res.call.success", function ()
+		self:onShowComplete()
+	end)
+	self:on("load.res.on.error", function (msgType, extraMsg)
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_confirmCallback = function ()
+				self:startDownload()
+			end
+		})
+	end)
+	self:on("load.res.on.fatal.error", function (msgType)
+		V.showMessageBox({
+			_type = 1,
+			_content = SID.NETWORK_NOTREACHABLE,
+			_confirmCallback = function ()
+				self:startDownload()
+			end
+		})
+	end)
+end
+
+function M:init(from, to, callback)
+	self._from = from
+	self._to = to
+	self._callback = callback
+
+	if to == "battle" then
+		Client.stopMusic()
+		Client.playSound("ui_Play_1")
+	end
+
+	if UIManager.getPanel(PrefabDefine.BattleUpgradePanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleUpgradePanel)
+	end
+
+	if UIManager.getPanel(PrefabDefine.BattleDeathDrawPanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleDeathDrawPanel)
+	end
+
+	if UIManager.getPanel(PrefabDefine.BattleRebornUpgradePanel.id) then
+		UIManager.closePanel(PrefabDefine.BattleRebornUpgradePanel)
+	end
+
+	if from == "login" and to == "city" then
+		self._goBG:SetActive(true)
+	end
+end
+
+function M:playShowAnimation(onCompleted)
+	self._onCompleted = onCompleted
+
+	self._crossAtor:SetBool("Visible", true)
+end
+
+function M:playHideAnimation(onCompleted)
+	self._onCompleted = onCompleted
+
+	self._crossAtor:SetBool("Visible", false)
+end
+
+function M:onShowComplete()
+	self._loadResBG:SetVisible(false)
+
+	if self._to == "battle" then
+		P:saveGameData()
+		MainGameRoot:hideBlackBG()
+
+		if self._from == "ark_rebuild" then
+			Client.playMusic("music_ark_battle")
+		elseif self._from == "spark_scout" then
+			if InputBattleData.duel then
+				Client.playMusic("music_scout_battle_duel")
+			else
+				Client.playMusic("music_scout_battle_match")
+			end
+		else
+			Client.playMusic("music_battle")
+		end
+
+		if InputBattleData then
+			Trace.AF_traceStage("began", InputBattleData.msType, InputBattleData.msId)
+		end
+
+		SceneHelper:City2BattleScene(function ()
+			self:closePanel()
+
+			if self._from == "ark_rebuild" then
+				UIManager.openPanel(PrefabDefine.BattlePanelArk)
+			else
+				UIManager.openPanel(PrefabDefine.BattlePanel)
+			end
+
+			LuaHelper.TriggerGC()
+		end)
+	elseif self._to == "city" then
+		MainGameRoot:showBlackBG()
+		SceneHelper:Battle2CityScene(function ()
+			self:closePanel()
+			UIManager.openPanel(PrefabDefine.MainPanel, "battle")
+			LuaHelper.TriggerGC()
+		end)
+	end
+end
+
+function M:startDownload()
+	self._loadResFG.fillAmount = 0
+	local loadResPanel = self.gameObject.transform:GetComponent("LCLoadResPanel")
+	local curGroup = loadResPanel:GetCurGroup()
+	local minGroup = -1
+
+	if lc._isWebGL and curGroup < 3 then
+		local msId = P._playerMission:getLastMissionIdType()
+		local level = P._playerProfile:getLevel()
+		local payMoney = P._playerStore:getPayMoney()
+		local createDay = P:getCreateDay()
+
+		if payMoney > 0 or createDay >= 3 then
+			minGroup = 3
+		elseif level == 1 then
+			-- Nothing
+		elseif msId <= 10002 and level <= 4 then
+			minGroup = 2
+		else
+			minGroup = 3
+		end
+	end
+
+	if minGroup ~= -1 then
+		loadResPanel:StartLoadRes(minGroup)
+	else
+		self:onShowComplete()
+	end
+end
+
+return M
