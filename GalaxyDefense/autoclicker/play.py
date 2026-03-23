@@ -185,8 +185,9 @@ def process_screen(start_time):
                     points = CLICK_SETS[config["target_sequence"]]
                     abs_x, abs_y = get_abs_point(random.choice(points))
                     pyautogui.click(abs_x, abs_y, duration=0.2)
-                    time.sleep(2)
-                    pyautogui.dragRel(125, 0, duration=1, button='left')
+                    if IS_PVP:
+                        time.sleep(2)
+                        pyautogui.dragRel(125, 0, duration=1, button='left')
                 elif config["action_type"] == "SEQUENCE":
                     for offset in CLICK_SETS[config["target_sequence"]]:
                         abs_x, abs_y = get_abs_point(offset)
