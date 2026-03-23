@@ -339,8 +339,18 @@ const scripts = {
                         return _G.__ORIGINAL_IS_ASSET_ENOUGH(self, rid, num)
                     end
                 end
-
-                -- 3. 強制扣除數值為 0 (increaseAssetNum)
+                -- 3. 強制資產顯示數量 (getAssetNum) - 讓 UI 顯示至少有 3 個
+                _G.__ORIGINAL_GET_ASSET_NUM = _G.__ORIGINAL_GET_ASSET_NUM or AssetM.getAssetNum
+                AssetM.getAssetNum = function(self, rid)
+                    if _G.__FREE_MODE_ENABLED then
+                        -- 如果原本數量大於 3 就回傳原本的，否則強制回傳 3
+                        local realNum = self._props[rid] or 0
+                        return (realNum < 3) and 3 or realNum
+                    else
+                        return _G.__ORIGINAL_GET_ASSET_NUM(self, rid)
+                    end
+                end
+                -- 4. 強制扣除數值為 0 (increaseAssetNum)
                 _G.__ORIGINAL_INCREASE_ASSET = _G.__ORIGINAL_INCREASE_ASSET or AssetM.increaseAssetNum
                 AssetM.increaseAssetNum = function(self, rid, num, logway, isDrop)
                     local finalNum = num
