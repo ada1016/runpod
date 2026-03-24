@@ -529,9 +529,10 @@ function list() {
     console.log("  (b)attlePass             :  🏆 戰令解鎖");  
     console.log("  (lo)ttery                :  🎫 免費抽獎");   
     console.log("-".repeat(50));   
-    console.log("[ 每週活動 ]");     
+    console.log("[ 火種計劃：尖兵 ]");     
     console.log("  (sp)arkScout              :  ⚡ 對決修改"); 
     console.log("  (up)gradeScout            :  ⚡ 升級修改"); 
+    console.log("[ 方舟計劃：重建 ]");        
     console.log("  (uk)upgradeArkRebuild     :  ⚡ 升級Ark修改"); 
     console.log("[ 輔助工具 ]");
     console.log("  s                        : 📊 查看實時監控中心 (Status)");
