@@ -189,6 +189,7 @@ const scripts = {
                 AssetM.decreaseAssetNum = function(self, rid, num, logway)
                     return _G.__ORIGINAL_DECREASE(self, rid, 0, logway)
                 end
+
                 status = "ASSET_OK"
             end
             return (status ~= "" and status or "FAIL")
@@ -313,7 +314,7 @@ const scripts = {
         }
     },
     freeUpgrade: {
-        name: "終極免費模式 (Unlock + Free Upgrade)",
+        name: "(慎用）終極免費模式 (Unlock + Free Upgrade)",
         lua: () => `
             local status = ""
             local ArmoryM = package.loaded["app.gameplay.module.player.core.PlayerArmory"]
@@ -369,6 +370,50 @@ const scripts = {
         `,
         onSuccess: (ret) => { 
             hookStatus.freeUpgrade = ret.includes("ULTIMATE_FREE_OK");
+        }
+    },
+    freeGemWash: {
+        name: "免費洗煉 (Free Gem Wash)",
+        lua: () => `
+            local status = ""
+            local RoleM = package.loaded["app.gameplay.module.player.core.PlayerRole"]
+
+            if RoleM then
+                _G.__ORIGINAL_WASH_GEM = _G.__ORIGINAL_WASH_GEM or RoleM.tryWashGem
+                
+                RoleM.tryWashGem = function(self, cid)
+                    -- 1. 獲取配置資料 (用於生成新寶石)
+                    local gemCfg = D._gemConfig[cid]
+                    if not gemCfg then return nil end
+                    
+                    local quality = gemCfg._quality
+                    local part = gemCfg._part
+
+                    -- 2. 直接跳過 P._playerAsset:getAssetNum 檢查
+                    -- 3. 直接跳過 P._playerAsset:increaseAssetNum 扣除邏輯
+                    
+                    -- 4. 執行核心生成邏輯 (這行不能省，否則拿不到新寶石)
+                    local newGem = self:genWashGem(part, quality, cid)
+
+                    -- 5. 只執行「增加新寶石」的動作，不執行「扣除」
+                    P._playerAsset:increaseAssetNum(newGem, 1, D.LogWay.chip_wash)
+                    
+                    -- 6. 保存與追蹤 (維持遊戲穩定)
+                    P:saveGameData(true)
+                    Trace.traceDesign("ChipRefine:%d", quality)
+
+                    print(string.format("[💎] 寶石洗煉成功! 原 ID: %s -> 新 ID: %s (消耗已繞過)", tostring(cid), tostring(newGem)))
+                    
+                    -- 回傳新生成的寶石 ID 給 UI
+                    return newGem
+                end
+
+                status = "GEM_WASH_HACK_OK"
+            end
+            return (status ~= "" and status or "FAIL")
+        `,
+        onSuccess: (ret) => { 
+            hookStatus.freeGemWash = ret.includes("GEM_WASH_HACK_OK");
         }
     }
 };
