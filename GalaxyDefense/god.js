@@ -610,7 +610,8 @@ function list() {
     console.log("[ 輔助工具 ]");
     console.log("  s                        : 📊 查看實時監控中心 (Status)");
     console.log("  l                        : 📜 顯示此指令清單 (List)");
-    console.log("  h(key,val): ⚡ 以 val 倍率重新執行全部");    
+    console.log("  h(key,val)               : ⚡ 以 val 倍率重新執行全部");    
+    console.log("  d(val)                   : ⚡ 以 val 倍率重新執行damageAmp");  
     console.log("  scan()                   : 🔍 掃描 package.loaded");
     console.log("  findSide()               : ⚔️ 戰鬥數據深度分析");
 
