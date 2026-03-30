@@ -454,6 +454,34 @@ function h(key, val) {
     });
 }
 
+
+function d(val) {
+
+    key = 'damageAmp';
+    const finalVal = (val !== undefined) ? val : 7;
+
+
+    hookStatus.currentMultiplier_damage = finalVal;
+
+    const config = scripts[key];
+    if (!config) return console.log(`[-] Script ${key} not found.`);
+
+
+    const luaCode = config.lua(finalVal);
+
+    console.log(`[*] 正在部署: ${config.name}...${finalVal}`);
+    
+    executeInLua(luaCode, (ret) => {
+        if (ret !== "FAIL") {
+            config.onSuccess(ret);
+            console.log(`[✅] ${config.name} 激活成功`);
+        } else {
+            console.log(`[❌] ${config.name} 激活失敗 (模組未加載)`);
+        }
+    });
+}
+
+
 // 在 Frida 控制台執行，搜索哪個 Config 包含這個名稱
 function findItemIdByName(name) {
     const luaCode = `
