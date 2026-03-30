@@ -454,25 +454,27 @@ function h(key, val) {
     });
 }
 
-
 function d(val) {
-
-    key = 'damageAmp';
+    // 1. Always use const/let to prevent global leaks
+    const key = 'damageAmp'; 
     const finalVal = (val !== undefined) ? val : 7;
 
-
+    // 2. Update status
     hookStatus.currentMultiplier_damage = finalVal;
 
+    // 3. Use local variable for config
     const config = scripts[key];
-    if (!config) return console.log(`[-] Script ${key} not found.`);
+    if (!config) {
+        return console.log(`[-] Script ${key} not found.`);
+    }
 
-
+    // 4. Generate Lua
     const luaCode = config.lua(finalVal);
 
     console.log(`[*] 正在部署: ${config.name}...${finalVal}`);
     
     executeInLua(luaCode, (ret) => {
-        if (ret !== "FAIL") {
+        if (ret !== "FAIL" && ret !== undefined) {
             config.onSuccess(ret);
             console.log(`[✅] ${config.name} 激活成功`);
         } else {
@@ -562,9 +564,9 @@ const shortcuts = {
     's': () => checkCurrentActivationState(),
     'a': () => new_all(7),
     'g': () => h('god'),
-    'd': () => h('damageAmp'),
     'c': () => h('cardRefresh'),
     'F': () => h('assetFree'), 
+    'f': () => h('freeUpgrade'),
     'b': () => h('battlePass'),
     'lo': () => h('lottery'),
     'sp': () => h('sparkScout'),
@@ -596,11 +598,12 @@ function list() {
     console.log(" [ 核心 ]");
     console.log("  a                        :  🚀 戰鬥(🛡️ 無敵 +⚔️ 倍傷+🔄 戰鬥卡刷新, 7x)");
     console.log("       - '(g)od'           :  🛡️ 無敵 (val supported) ");
-    console.log("       - '(d)amageAmp'     :  ⚔️ 純倍傷(val supported)");
+    console.log("       - 'd(val)'          :  ⚔️ 純倍傷(val supported)");
     console.log("       - '(c)ardRefresh'   :  🔄 戰鬥卡刷新");  
     console.log("  asset(F)ree              :  💰 全域 0 消耗");  
-    console.log("  (b)attlePass             :  🏆 戰令解鎖");  
-    console.log("  (lo)ttery                :  🎫 免費抽獎");   
+    console.log("  (f)reeUpgrade            :  💰 升級 0 消耗");  
+
+ 
     console.log("-".repeat(50));   
     console.log("[ 火種計劃：尖兵 ]");     
     console.log("  (sp)arkScout              :  ⚡ 對決修改"); 
@@ -608,10 +611,11 @@ function list() {
     console.log("[ 方舟計劃：重建 ]");        
     console.log("  (uk)upgradeArkRebuild     :  ⚡ 升級Ark修改"); 
     console.log("[ 輔助工具 ]");
+    console.log("  (b)attlePass             :  🏆 戰令解鎖");  
+    console.log("  (lo)ttery                :  🎫 免費抽獎");      
     console.log("  s                        : 📊 查看實時監控中心 (Status)");
     console.log("  l                        : 📜 顯示此指令清單 (List)");
     console.log("  h(key,val)               : ⚡ 以 val 倍率重新執行全部");    
-    console.log("  d(val)                   : ⚡ 以 val 倍率重新執行damageAmp");  
     console.log("  scan()                   : 🔍 掃描 package.loaded");
     console.log("  findSide()               : ⚔️ 戰鬥數據深度分析");
 
