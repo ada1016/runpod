@@ -21,7 +21,8 @@ read -p "Select an option [1-3]: " choice
 case $choice in
     1)
         echo "Executing Hook..."
-        cd ~/Documents/runpod/PlanetDefense && PID=$(pgrep -n "PlanetDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && frida -p $PID -l god.js
+        #cd ~/Documents/runpod/PlanetDefense && PID=$(pgrep -n "PlanetDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && frida -p $PID -l god.js
+        cd ~/Documents/runpod/PlanetDefense && PID=$(pgrep -n "PlanetDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && frida -p $PID -l god.js | tee frida_dump.log
         ;;
     2)
         echo "Executing Auto..."
