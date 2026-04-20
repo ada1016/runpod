@@ -1,1 +1,0 @@
-local Presets,rewards,num,config,placement = ...Presets.GetRandomTechPoint(rewards,num,config,placement)

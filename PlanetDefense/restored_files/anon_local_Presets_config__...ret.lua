@@ -1,1 +1,0 @@
-local Presets, config = ...return Presets.CheckSingleValueCondition(config,'Player','grade',6)

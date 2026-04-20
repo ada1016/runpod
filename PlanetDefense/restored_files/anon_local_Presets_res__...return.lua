@@ -1,1 +1,0 @@
-local Presets, res = ...return Presets.CheckDiamondCarnivalUnlockConditions(config)

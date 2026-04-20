@@ -21,7 +21,9 @@ read -p "Select an option [1-3]: " choice
 case $choice in
     1)
         echo "Executing Hook..."
-        cd ~/Documents/runpod/GalaxyDefense && PID=$(pgrep -n "GalaxyDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && frida -p $PID -l god.js
+        #cd ~/Documents/runpod/GalaxyDefense && PID=$(pgrep -n "GalaxyDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && sudo frida -p $PID -l god.js
+        cd ~/Documents/runpod/GalaxyDefense && PID=$(pgrep -n "GalaxyDefense") &&  sleep 1 && sudo frida -p $PID -l god.js
+        #cd ~/Documents/runpod/GalaxyDefense && PID=$(pgrep -n "GalaxyDefense") && lldb -p $PID --batch -o "process detach" -o "quit" && sleep 1 && frida -p $PID -l bypass_keychain.js
         ;;
     2)
         echo "Executing Auto..."
