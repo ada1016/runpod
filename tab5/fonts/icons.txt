@@ -1,0 +1,21 @@
+# icons.txt
+# format: icon_name codepoint
+
+water_drop E798
+wifi_home F671
+night_shelter F1F1
+ac_unit EB3B
+thermostat_auto F077
+moon_stars F34F
+rotate_auto F417
+energy_savings_leaf EC1A
+light F02A
+light_group_2 FFF76
+toggle_on E9F6
+toggle_off E9F5
+power_settings_new E8AC
+gas_meter EC19
+settings E8B8
+add E145
+remove E15B
+# EOF

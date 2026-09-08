@@ -1,0 +1,38 @@
+---
+hello_world:
+  module: hello
+  class: HelloWorld
+gas_meter:
+  module: gas_meter
+  class: GasMeter
+  user_id: !secret gas_user_id
+  phone_zone: !secret gas_phone_zone
+  phone_number: !secret gas_phone_number
+
+tab5_multi_bridge:
+  module: tab5_bridge_multi
+  class: Tab5MultiBridge
+
+  gas_reading_entity: input_text.gas_meter_reading
+  gas_submit_button: input_button.submit_gas_meter
+  gas_status_entity: sensor.gas_meter_submission_status
+
+  ac_brother: climate.280060372jia_daikin_ge
+  ac_sister: climate.280060372jia_daikin_mei
+  ac_parents: climate.280060372jia_daikin_ba_ma
+  ac_living: climate.living_room_daikin_ke
+
+  light_bedroom_window: light.ftd_cn_1116454231_dsplmp_s_2_light
+  light_living_room: light.ftd_cn_1101584272_dsplmp_s_2_light
+  light_da_head: light.lemesh_cn_1119408926_wy0c15_s_2_light
+  light_da_foot: light.lemesh_cn_1119650058_wy0c15_s_2_light
+  light_da_desk: light.lemesh_cn_1120969258_wy0c15_s_2_light
+  light_am_door: light.lemesh_cn_1119408936_wy0c15_s_2_light
+  light_am_foot: light.lemesh_cn_1119649699_wy0c15_s_2_light
+  light_am_desk: light.lemesh_cn_1119409647_wy0c15_s_2_light
+
+  humidity_all: ""
+  humidity_parents: ""
+  humidity_darren: ""
+  humidity_amber: ""
+

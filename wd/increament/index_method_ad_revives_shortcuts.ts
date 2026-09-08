@@ -38,6 +38,9 @@ const WATCH_INTERVAL_MS = 500;
 const LOAD_RETRY_MS = 500;
 const CHANGE_HP_HOOK_RETRY_MS = 5000;
 const EXTRA_REROLL_RETRY_MS = 3000;
+const AD_REVIVE_RETRY_MS = 3000;
+const AUTO_REROLL_VALUE = 96;
+const AUTO_AD_REVIVE_TIMES = 5;
 const ATTACK_KEY = 1;
 const DEFENCE_KEY = 6;
 const DEFENCE_PERCENT_KEY = 7;
@@ -68,7 +71,7 @@ let changeHpPointerSlot: NativePointer | null = null;
 let changeHpOriginalAddress: NativePointer | null = null;
 let changeHpCallableAddress: NativePointer | null = null;
 let changeHpReplacementAddress: NativePointer | null = null;
-let changeHpOriginal: ChangeHpNativeFunction | null = null;
+// Keep the callback alive for as long as its pointer is installed.
 let changeHpReplacement: NativeCallback<any, any> | null = null;
 let changeHpHookInstalled = false;
 let changeHpHookHits = 0;
@@ -128,21 +131,6 @@ type TickStats = {
     attackChanged: number;
 };
 
-type HeroStatus = {
-    hero: string;
-    className: string;
-    handle: string;
-    healed: boolean;
-    attackBefore: number | null;
-    attackAfter: number | null;
-    attackChanged: boolean;
-    lastAttackChange: {
-        from: number;
-        to: number;
-        at: string;
-    } | null;
-};
-
 type AttackResult = {
     before: number | null;
     after: number | null;
@@ -176,6 +164,9 @@ let levelsTableClass: Il2Cpp.Class | null = null;
 let battleLogicMgrClass: Il2Cpp.Class | null = null;
 let gameAttributeGroupClass: Il2Cpp.Class | null = null;
 let lastAdReviveResult: AdReviveResult | null = null;
+let autoAdRevivePending = false;
+let autoAdReviveNextAttemptAt = 0;
+let autoAdReviveAttempts = 0;
 let extraRerollPending = false;
 let extraRerollNextAttemptAt = 0;
 let extraRerollPatchAttempts = 0;
@@ -192,11 +183,6 @@ let running = false;
 let lastError = "";
 let lastErrorAt = 0;
 let lastStats: TickStats = emptyStats();
-let lastHeroStatuses: HeroStatus[] = [];
-const attackHistory = new Map<
-    string,
-    { from: number; to: number; at: string }
->();
 
 function emptyStats(): TickStats {
     return { battleUis: 0, heroes: 0, healed: 0, attackChanged: 0 };
@@ -583,7 +569,6 @@ function installChangeHpMethodInfoHook(hero: Il2Cpp.Object): boolean {
         changeHpOriginalAddress = pointerInfo.rawPointer;
         changeHpCallableAddress = pointerInfo.callablePointer;
         changeHpReplacementAddress = replacementAddress;
-        changeHpOriginal = original;
         changeHpReplacement = replacement;
         changeHpHookInstalled = true;
         changeHpNextInstallAttemptAt = 0;
@@ -1195,17 +1180,50 @@ function applyPendingExtraReroll(): void {
     }
 }
 
+function applyPendingAutoAdRevive(): void {
+    if (!autoAdRevivePending) {
+        return;
+    }
+
+    const now = Date.now();
+    if (now < autoAdReviveNextAttemptAt) {
+        return;
+    }
+
+    autoAdReviveAttempts++;
+    autoAdReviveNextAttemptAt = now + AD_REVIVE_RETRY_MS;
+    lastAdReviveResult = setAdReviveTimesOnce(AUTO_AD_REVIVE_TIMES);
+
+    if (lastAdReviveResult.managers > 0) {
+        autoAdRevivePending = false;
+        autoAdReviveNextAttemptAt = 0;
+        log(
+            "automatic AdReviveTimes=" + AUTO_AD_REVIVE_TIMES +
+            " applied to " + lastAdReviveResult.managers +
+            " active BattleLogicMgr object(s); changed=" +
+            lastAdReviveResult.changed
+        );
+        return;
+    }
+
+    // A resolved metadata/type error cannot improve by retrying.
+    if (lastAdReviveResult.resolved && lastAdReviveResult.error !== undefined) {
+        autoAdRevivePending = false;
+        autoAdReviveNextAttemptAt = 0;
+        logError("automatic AdReviveTimes", lastAdReviveResult.error);
+    }
+}
+
 function processOnce(): TickStats {
     const stats = emptyStats();
     applyPendingExtraReroll();
+    applyPendingAutoAdRevive();
     const discoverGodHook = settings.godMode && !changeHpHookInstalled;
     if (battleUiClass === null || (!discoverGodHook && !settings.attackEnabled)) {
         return stats;
     }
 
     const increment = attackIncrement();
-    const heroStatuses: HeroStatus[] = [];
-    let heroNumber = 0;
     let battleUis: Il2Cpp.Object[] = [];
     try {
         battleUis = Il2Cpp.gc.choose(battleUiClass);
@@ -1223,11 +1241,9 @@ function processOnce(): TickStats {
         stats.heroes += heroes.length;
 
         for (const hero of heroes) {
-            heroNumber++;
             if (discoverGodHook && !changeHpHookInstalled) {
                 installChangeHpMethodInfoHook(hero);
             }
-            const healed = false;
 
             const attack = settings.attackEnabled
                 ? applyAttack(hero, increment)
@@ -1236,33 +1252,10 @@ function processOnce(): TickStats {
             if (attack.changed) {
                 stats.attackChanged++;
             }
-
-            const handle = hero.handle.toString();
-            if (attack.changed &&
-                attack.before !== null &&
-                attack.after !== null) {
-                attackHistory.set(handle, {
-                    from: attack.before,
-                    to: attack.after,
-                    at: new Date().toISOString()
-                });
-            }
-
-            heroStatuses.push({
-                hero: "hero" + heroNumber,
-                className: hero.class.name,
-                handle,
-                healed,
-                attackBefore: attack.before,
-                attackAfter: attack.after,
-                attackChanged: attack.changed,
-                lastAttackChange: attackHistory.get(handle) ?? null
-            });
         }
     }
 
     lastStats = stats;
-    lastHeroStatuses = heroStatuses;
     // Attack is an exact one-shot update. Keeping it enabled would bring back
     // the expensive gc.choose/dictionary polling loop.
     if (settings.attackEnabled && stats.heroes > 0) {
@@ -1315,7 +1308,10 @@ function startWatcher(): void {
     }
     running = true;
     watcher = setInterval(tick, WATCH_INTERVAL_MS);
-    log("watcher started; mutations are disabled until enabled through RPC");
+    log(
+        "watcher started; automatic reroll=" + AUTO_REROLL_VALUE +
+        " and AdReviveTimes=" + AUTO_AD_REVIVE_TIMES + " scheduled"
+    );
 }
 
 function statusSnapshot(): object {
@@ -1342,6 +1338,8 @@ function statusSnapshot(): object {
             classesResolved:
                 battleLogicMgrClass !== null &&
                 gameAttributeGroupClass !== null,
+            autoPending: autoAdRevivePending,
+            autoAttempts: autoAdReviveAttempts,
             lastResult: lastAdReviveResult === null
                 ? null
                 : {
@@ -1387,6 +1385,9 @@ function bootstrap(): void {
                 bootstrapTimer = null;
             }
             log("resolved " + BATTLE_UI_NAME + " and " + MECHA_NODE_NAME);
+            setRerollCommand(AUTO_REROLL_VALUE);
+            autoAdRevivePending = true;
+            autoAdReviveNextAttemptAt = 0;
             startWatcher();
         });
     };
@@ -1403,16 +1404,56 @@ function setGodModeCommand(enabled: boolean): object {
     return statusSnapshot();
 }
 
-function incrementAttackCommand(value: number): object {
+function incrementAttackCommand(
+    value: number
+): Promise<object> {
     if (!Number.isFinite(value)) {
-        throw new Error("inc(value) requires a finite number");
+        return Promise.reject(
+            new Error("inc(value) requires a finite number")
+        );
     }
 
-    settings.attackEnabled = true;
-    settings.attackValue = Math.max(1, Math.round(value));
-    return statusSnapshot();
-}
+    return new Promise(resolve => {
+        Il2Cpp.perform(() => {
+            if (tickBusy) {
+                resolve({
+                    error: "another IL2CPP operation is running"
+                });
+                return;
+            }
 
+            tickBusy = true;
+
+            try {
+                settings.attackValue = Math.max(
+                    1,
+                    Math.round(value)
+                );
+                settings.attackEnabled = true;
+
+                // Apply ATK/DEF increment immediately.
+                processOnce();
+
+                // Reads and prints updated hero attributes.
+                const result = collectHeroAttributes();
+
+                // Keep the returned result short because the formatted
+                // attributes were already printed by collectHeroAttributes().
+                resolve({
+                    updated: true,
+                    increment: settings.attackValue,
+                    heroes: result.heroes.length
+                });
+            } catch (error) {
+                resolve({
+                    error: String(error)
+                });
+            } finally {
+                tickBusy = false;
+            }
+        });
+    });
+}
 function setAttackCommand(
     enabled: boolean,
     value?: number
@@ -1477,6 +1518,10 @@ function setAdReviveTimesCommand(value = 5): Promise<object> {
             try {
                 const target = Number.isFinite(value) ? value : 5;
                 lastAdReviveResult = setAdReviveTimesOnce(target);
+                if (lastAdReviveResult.managers > 0) {
+                    autoAdRevivePending = false;
+                    autoAdReviveNextAttemptAt = 0;
+                }
                 resolve({
                     ...lastAdReviveResult,
                     entries: lastAdReviveResult.entries.map(
@@ -1491,7 +1536,7 @@ function setAdReviveTimesCommand(value = 5): Promise<object> {
 }
 
 type ShortcutGlobals = typeof globalThis & {
-    inc: (value: number) => object;
+    inc: (value: number) => Promise<object>;
     god: (enabled: boolean) => object;
     reroll: (value: number) => object;
     renew: (value?: number) => Promise<object>;
@@ -1607,6 +1652,8 @@ rpc.exports = {
             classesResolved:
                 battleLogicMgrClass !== null &&
                 gameAttributeGroupClass !== null,
+            autoPending: autoAdRevivePending,
+            autoAttempts: autoAdReviveAttempts,
             lastResult: lastAdReviveResult === null
                 ? null
                 : {
@@ -1632,6 +1679,8 @@ rpc.exports = {
             clearInterval(watcher);
             watcher = null;
         }
+        autoAdRevivePending = false;
+        extraRerollPending = false;
         uninstallChangeHpMethodInfoHook();
         return statusSnapshot();
     },
