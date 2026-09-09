@@ -32,6 +32,7 @@ tab5_multi_bridge:
   light_am_desk: light.lemesh_cn_1119409647_wy0c15_s_2_light
 
   humidity_all: ""
+  humidity_living: ""
   humidity_parents: ""
   humidity_darren: ""
   humidity_amber: ""

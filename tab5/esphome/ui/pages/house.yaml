@@ -1,0 +1,175 @@
+# Active V3 House page behavior.
+# House composition and aggregate membership live on ESPHome.
+
+script:
+  - id: open_house
+    mode: restart
+    then:
+      - lambda: |-
+          id(active_view) = "house";
+          id(settings_open) = false;
+          lv_obj_clear_flag(id(house_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(ac_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(light_grid), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(gas_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(settings_panel), LV_OBJ_FLAG_HIDDEN);
+      - script.execute: render_house_cache
+      - homeassistant.event:
+          event: esphome.tab5_command
+          data:
+            action: "refresh_devices"
+            devices: "ac_living,ac_parents,ac_darren,ac_amber,light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
+
+  - id: render_house_cache
+    mode: restart
+    then:
+      - lambda: |-
+          auto packet_for = [&](const std::string &key) -> std::string {
+            if (key == "ac_living") return id(cache_ac_living);
+            if (key == "ac_parents") return id(cache_ac_parents);
+            if (key == "ac_darren") return id(cache_ac_darren);
+            if (key == "ac_amber") return id(cache_ac_amber);
+            if (key == "light_living_room") return id(cache_light_living_room);
+            if (key == "light_bedroom_window") return id(cache_light_bedroom_window);
+            if (key == "light_da_head") return id(cache_light_da_head);
+            if (key == "light_da_foot") return id(cache_light_da_foot);
+            if (key == "light_da_desk") return id(cache_light_da_desk);
+            if (key == "light_am_door") return id(cache_light_am_door);
+            if (key == "light_am_foot") return id(cache_light_am_foot);
+            if (key == "light_am_desk") return id(cache_light_am_desk);
+            return "";
+          };
+
+          auto split_packet = [&](const std::string &packet) {
+            std::vector<std::string> f;
+            size_t start = 0;
+            while (true) {
+              const size_t p = packet.find('|', start);
+              if (p == std::string::npos) { f.push_back(packet.substr(start)); break; }
+              f.push_back(packet.substr(start, p - start));
+              start = p + 1;
+            }
+            return f;
+          };
+
+          // Theme-aware status colors: accent=ON, muted=OFF, warning=unavailable.
+          static const uint32_t accent_colors[4] = {0x111111,0x684B3B,0x1E5573,0xD2AE8D};
+          static const uint32_t muted_colors[4]  = {0xA8A8A8,0xBFA991,0x9CB9C2,0x62686D};
+          static const uint32_t warn_colors[4]   = {0x777777,0xA46F45,0x8B6D3B,0xB58B63};
+          const int ti = std::max(0, std::min(3, id(theme_index)));
+          const lv_color_t c_on = lv_color_hex(accent_colors[ti]);
+          const lv_color_t c_off = lv_color_hex(muted_colors[ti]);
+          const lv_color_t c_bad = lv_color_hex(warn_colors[ti]);
+
+          struct ACState { bool valid=false; bool available=false; bool on=false; std::string mode="--"; std::string fan="--"; float target=NAN; float current=NAN; };
+          auto ac_state = [&](const std::string &key) {
+            ACState a;
+            const auto f = split_packet(packet_for(key));
+            if (f.size() < 10 || f[0] != "3" || f[1] != "D" || f[3] != "climate") return a;
+            a.valid = true; a.available = f[8] == "1"; a.mode=f[4]; a.fan=f[5]; a.on=a.available && f[4] != "off";
+            sscanf(f[6].c_str(), "%f", &a.target); sscanf(f[7].c_str(), "%f", &a.current);
+            return a;
+          };
+
+          const ACState acs[4] = {ac_state("ac_living"), ac_state("ac_parents"), ac_state("ac_darren"), ac_state("ac_amber")};
+          int available=0, on_count=0, current_count=0, target_count=0;
+          float current_sum=0.0f, target_sum=0.0f;
+          std::string mode="--", fan="--";
+          bool representative_set=false;
+
+          for (const auto &a : acs) {
+            if (!a.available) continue;
+            available++;
+            if (a.on) on_count++;
+            if (!isnan(a.current)) { current_sum += a.current; current_count++; }
+            if (!isnan(a.target)) { target_sum += a.target; target_count++; }
+
+            // House page intentionally never displays MIXED. Before the user
+            // applies a House command, mode/fan are represented by the first
+            // available AC. AUTO/QUIET/POWER commands immediately synchronize
+            // all four ACs to the same setting.
+            if (!representative_set) {
+              mode = a.mode;
+              fan = a.fan;
+              representative_set = true;
+            }
+          }
+
+          char buf[80];
+          if (available == 0) {
+            lv_label_set_text(id(house_ac_mode_label), "UNAVAILABLE -- --");
+            lv_label_set_text(id(house_ac_target_label), "-- °C");
+          } else {
+            snprintf(buf, sizeof(buf), "%s -- %s", mode.c_str(), fan.c_str());
+            lv_label_set_text(id(house_ac_mode_label), buf);
+
+            if (target_count > 0) {
+              // Display/control the average target, rounded to the nearest 0.5 C.
+              float avg_target = target_sum / target_count;
+              avg_target = roundf(avg_target * 2.0f) / 2.0f;
+              avg_target = std::max(18.0f, std::min(30.0f, avg_target));
+              id(house_ac_avg_target) = avg_target;
+              snprintf(buf, sizeof(buf), "%.1f °C", avg_target);
+            } else {
+              snprintf(buf, sizeof(buf), "-- °C");
+            }
+            lv_label_set_text(id(house_ac_target_label), buf);
+          }
+          snprintf(buf, sizeof(buf), "%d/4", available);
+          lv_label_set_text(id(house_ac_count_label), buf);
+          if (current_count > 0) snprintf(buf, sizeof(buf), "%.1f°", current_sum/current_count); else snprintf(buf, sizeof(buf), "--°");
+          lv_label_set_text(id(house_ac_room_temp_label), buf);
+
+          // Whole-house light_group state.
+          const std::string all_lights = "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk";
+          auto light_summary = [&](const std::string &csv, bool &have, bool &all_available, bool &any_on, int &avg_bri) {
+            have=false; all_available=true; any_on=false; int total=0,count=0;
+            size_t start=0;
+            while (start <= csv.size()) {
+              const size_t comma=csv.find(',',start);
+              const std::string key=csv.substr(start, comma==std::string::npos ? std::string::npos : comma-start);
+              if (!key.empty()) {
+                const auto f=split_packet(packet_for(key));
+                if (f.size() >= 8 && f[0]=="3" && f[1]=="D" && f[3]=="light") {
+                  have=true; if (f[4]=="1") any_on=true; if (f[6]!="1") all_available=false;
+                  int b=0; if (sscanf(f[5].c_str(), "%d", &b)==1) { total += std::max(0,std::min(100,b)); count++; }
+                } else all_available=false;
+              }
+              if (comma==std::string::npos) break; start=comma+1;
+            }
+            avg_bri = count ? total/count : 0;
+          };
+
+          bool have=false, all_available=true, any_on=false; int avg_bri=0;
+          light_summary(all_lights, have, all_available, any_on, avg_bri);
+          id(syncing_ui)=true;
+          if (any_on) lv_obj_add_state(id(house_light_switch), LV_STATE_CHECKED); else lv_obj_clear_state(id(house_light_switch), LV_STATE_CHECKED);
+          lv_slider_set_value(id(house_light_slider), avg_bri, LV_ANIM_OFF);
+          // Aggregate controls must remain actionable even when one member is
+          // temporarily unavailable. AppDaemon will still send the command to
+          // every currently mapped HA entity; unavailable members can recover
+          // independently. Only disable before we have any light state at all.
+          if (have) {
+            lv_obj_clear_state(id(house_light_switch), LV_STATE_DISABLED);
+            lv_obj_clear_state(id(house_light_slider), LV_STATE_DISABLED);
+          } else {
+            lv_obj_add_state(id(house_light_switch), LV_STATE_DISABLED);
+            lv_obj_add_state(id(house_light_slider), LV_STATE_DISABLED);
+          }
+          id(syncing_ui)=false;
+
+          auto set_ac_dot = [&](lv_obj_t *dot, const ACState &a) {
+            lv_obj_set_style_text_color(dot, !a.available ? c_bad : (a.on ? c_on : c_off), LV_PART_MAIN);
+          };
+          auto set_light_dot = [&](lv_obj_t *dot, const std::string &csv) {
+            bool h=false, av=true, on=false; int bri=0; light_summary(csv,h,av,on,bri);
+            lv_obj_set_style_text_color(dot, (!h || !av) ? c_bad : (on ? c_on : c_off), LV_PART_MAIN);
+          };
+          set_ac_dot(id(house_living_ac_dot), acs[0]);
+          set_ac_dot(id(house_parents_ac_dot), acs[1]);
+          set_ac_dot(id(house_darren_ac_dot), acs[2]);
+          set_ac_dot(id(house_amber_ac_dot), acs[3]);
+          set_light_dot(id(house_living_light_dot), "light_living_room");
+          set_light_dot(id(house_parents_light_dot), "light_bedroom_window");
+          set_light_dot(id(house_darren_light_dot), "light_da_head,light_da_foot,light_da_desk");
+          set_light_dot(id(house_amber_light_dot), "light_am_door,light_am_foot,light_am_desk");

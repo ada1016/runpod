@@ -1,154 +1,316 @@
 import appdaemon.plugins.hass.hassapi as hass
 
-class Tab5MultiBridge(hass.Hass):
-    def initialize(self):
-        self.active_tab = "all"
 
+class Tab5MultiBridge(hass.Hass):
+    """
+    Tab5 V3 thin bridge.
+
+    ESPHome owns:
+      - pages / navigation
+      - room layout
+      - room slot names/types
+      - room group membership
+      - local UI rendering
+      - local UI state cache
+
+    AppDaemon owns only:
+      - logical device key -> HA entity_id mapping
+      - generic HA service calls
+      - normalized device-state packets
+      - gas transport
+      - Xiaomi manual recovery
+    """
+
+    BRIDGE_ENTITY = "sensor.tab5_ui_bridge"
+    PROTOCOL_VERSION = "3"
+
+    def initialize(self):
         self.gas_reading_entity = self.args.get(
             "gas_reading_entity",
-            "input_text.gas_meter_reading"
+            "input_text.gas_meter_reading",
         )
         self.gas_submit_button = self.args.get(
             "gas_submit_button",
-            "input_button.submit_gas_meter"
+            "input_button.submit_gas_meter",
         )
         self.gas_status_entity = self.args.get(
             "gas_status_entity",
-            "sensor.gas_meter_submission_status"
+            "sensor.gas_meter_submission_status",
         )
 
-        self.ac = {
-            "brother": self.args["ac_brother"],
-            "sister": self.args["ac_sister"],
-            "parents": self.args["ac_parents"],
-            "living": self.args["ac_living"],
-        }
-        self.light = {
-            "bedroom_window": self.args["light_bedroom_window"],
-            "living_room": self.args["light_living_room"],
-            "da_head": self.args["light_da_head"],
-            "da_foot": self.args["light_da_foot"],
-            "da_desk": self.args["light_da_desk"],
-            "am_door": self.args["light_am_door"],
-            "am_foot": self.args["light_am_foot"],
-            "am_desk": self.args["light_am_desk"],
+        # Logical key -> HA entity_id.
+        # This is intentionally the only device abstraction in Python.
+        self.devices = {
+            "ac_darren": self.args["ac_brother"],
+            "ac_amber": self.args["ac_sister"],
+            "ac_parents": self.args["ac_parents"],
+            "ac_living": self.args["ac_living"],
+
+            "light_bedroom_window": self.args["light_bedroom_window"],
+            "light_living_room": self.args["light_living_room"],
+            "light_da_head": self.args["light_da_head"],
+            "light_da_foot": self.args["light_da_foot"],
+            "light_da_desk": self.args["light_da_desk"],
+            "light_am_door": self.args["light_am_door"],
+            "light_am_foot": self.args["light_am_foot"],
+            "light_am_desk": self.args["light_am_desk"],
         }
 
-        # Xiaomi Home manual recovery support.
-        # All monitored physical light entities are checked for unavailable state.
-        self.xiaomi_light_entities = list(self.light.values())
+        # Optional environmental sensors.
+        optional = {
+            "humidity_living": self.args.get("humidity_living", ""),
+            "humidity_parents": self.args.get("humidity_parents", ""),
+            "humidity_darren": self.args.get("humidity_darren", ""),
+            "humidity_amber": self.args.get("humidity_amber", ""),
+        }
+        for key, entity in optional.items():
+            if entity:
+                self.devices[key] = entity
+
+        self.reverse_devices = {
+            entity_id: logical_key
+            for logical_key, entity_id in self.devices.items()
+            if entity_id
+        }
+
+        self.xiaomi_light_keys = [
+            "light_bedroom_window",
+            "light_living_room",
+            "light_da_head",
+            "light_da_foot",
+            "light_da_desk",
+            "light_am_door",
+            "light_am_foot",
+            "light_am_desk",
+        ]
+
         self.xiaomi_reload_entity = self.args.get(
             "xiaomi_reload_entity",
-            self.light["da_head"]
+            self.devices["light_da_head"],
         )
         self.xiaomi_reload_in_progress = False
-
-        da = [self.light["da_head"], self.light["da_foot"], self.light["da_desk"]]
-        am = [self.light["am_door"], self.light["am_foot"], self.light["am_desk"]]
-        all_lights = da + am + [self.light["bedroom_window"], self.light["living_room"]]
-
-        self.tabs = {
-            "all": {
-                "acs": [self.ac["brother"], self.ac["sister"], self.ac["parents"], self.ac["living"]],
-                "slots": [
-                    {"name":"全", "type":"light_group", "entities":all_lights},
-                    {"name":"宸", "type":"light_group", "entities":da},
-                    {"name":"芹", "type":"light_group", "entities":am},
-                    {"name":"", "type":"none", "entities":[]},
-                ],
-            },
-            "parents": {
-                "acs": [self.ac["parents"]],
-                "slots": [
-                    {"name":"窗邊", "type":"light", "entities":[self.light["bedroom_window"]]},
-                    {"name":"客廳", "type":"light", "entities":[self.light["living_room"]]},
-                    {"name":"", "type":"none", "entities":[]},
-                    {"name":"", "type":"none", "entities":[]},
-                ],
-            },
-            "darren": {
-                "acs": [self.ac["brother"]],
-                "slots": [
-                    {"name":"床頭", "type":"light", "entities":[self.light["da_head"]]},
-                    {"name":"床尾", "type":"light", "entities":[self.light["da_foot"]]},
-                    {"name":"桌", "type":"light", "entities":[self.light["da_desk"]]},
-                    {"name":"全", "type":"light_group", "entities":da},
-                ],
-            },
-            "amber": {
-                "acs": [self.ac["sister"]],
-                "slots": [
-                    {"name":"門口", "type":"light", "entities":[self.light["am_door"]]},
-                    {"name":"床尾", "type":"light", "entities":[self.light["am_foot"]]},
-                    {"name":"桌", "type":"light", "entities":[self.light["am_desk"]]},
-                    {"name":"全", "type":"light_group", "entities":am},
-                ],
-            },
-            "gas": {"acs": [], "slots": [{"name":"","type":"none","entities":[]} for _ in range(4)]},
-        }
-
-        self.humidity = {
-            "all": self.args.get("humidity_all", ""),
-            "parents": self.args.get("humidity_parents", ""),
-            "darren": self.args.get("humidity_darren", ""),
-            "amber": self.args.get("humidity_amber", ""),
-        }
+        self._seq = 0
 
         self.listen_event(self._command, "esphome.tab5_command")
 
-        watched = set()
-        for tab in self.tabs.values():
-            watched.update(tab["acs"])
-            for slot in tab["slots"]:
-                watched.update(slot["entities"])
-        watched.update(v for v in self.humidity.values() if v)
-        watched.add(self.gas_status_entity)
+        for entity_id in self.reverse_devices:
+            self.listen_state(
+                self._device_changed,
+                entity_id,
+                attribute="all",
+            )
 
-        for entity in watched:
-            self.listen_state(self._changed, entity, attribute="all")
-
-        self.run_in(self._publish_timer, 1)
-
-    def _press_gas_submit(self, kwargs):
-        reading = kwargs.get("reading", "")
-
-        self.log(
-            f"Pressing gas-meter Submit for reading {reading}"
+        self.listen_state(
+            self._gas_changed,
+            self.gas_status_entity,
+            attribute="all",
         )
 
-        self.call_service(
-            "input_button/press",
-            entity_id=self.gas_submit_button,
-        )
+        self.run_in(self._bootstrap_publish, 1)
 
-    def _bridge_field(self, value):
-        """
-        Keep the one-state bridge safe for pipe-delimited parsing.
-        """
+        self.log("Tab5 V3 thin bridge READY")
+        self.log("Room/page/group definitions are local on ESPHome.")
+
+    # -----------------------------------------------------------------
+    # Transport
+    # -----------------------------------------------------------------
+    def _next_seq(self):
+        self._seq += 1
+        return str(self._seq)
+
+    def _field(self, value, max_len=72):
         if value is None:
             return ""
+        value = (
+            str(value)
+            .replace("|", "/")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .strip()
+        )
+        return value[:max_len]
 
-        value = str(value)
-        value = value.replace("|", "/")
-        value = value.replace("\r", " ")
-        value = value.replace("\n", " ")
-        return value.strip()
+    def _set_bridge(self, fields):
+        payload = "|".join(
+            [self.PROTOCOL_VERSION] + list(fields) + [self._next_seq()]
+        )
 
+        # HA state is intentionally kept compact.
+        if len(payload) > 250:
+            self.log(
+                f"Bridge packet too long ({len(payload)}); truncating",
+                level="WARNING",
+            )
+            payload = payload[:250]
+
+        self.set_state(
+            self.BRIDGE_ENTITY,
+            state=payload,
+            attributes={
+                "friendly_name": "Tab5 UI Bridge",
+                "icon": "mdi:tablet-dashboard",
+                "protocol": "Tab5 V3 Local UI Thin Bridge",
+            },
+        )
+
+    def _bootstrap_publish(self, kwargs):
+        delay = 0.0
+        for key in self.devices:
+            self.run_in(
+                self._publish_device_timer,
+                delay,
+                device_key=key,
+            )
+            delay += 0.10
+
+        self.run_in(self._publish_recovery_timer, delay + 0.10)
+        self.run_in(self._publish_gas_timer, delay + 0.20)
+
+    def _publish_device_timer(self, kwargs):
+        self._publish_device(kwargs["device_key"])
+
+    def _publish_recovery_timer(self, kwargs):
+        self._publish_recovery()
+
+    def _publish_gas_timer(self, kwargs):
+        self._publish_gas()
+
+    # -----------------------------------------------------------------
+    # Logical device state -> normalized packet
+    # -----------------------------------------------------------------
+    def _publish_device(self, device_key):
+        entity_id = self.devices.get(device_key)
+        if not entity_id:
+            return
+
+        obj = self.get_state(entity_id, attribute="all") or {}
+        state = str(obj.get("state", "unknown"))
+        attrs = obj.get("attributes", {}) or {}
+
+        available = (
+            "0"
+            if state in ("unknown", "unavailable", "none", "None")
+            else "1"
+        )
+
+        if entity_id.startswith("climate."):
+            fan = self._field(attrs.get("fan_mode") or "--", 16)
+
+            target = "--"
+            current = "--"
+
+            try:
+                if attrs.get("temperature") is not None:
+                    target = f'{float(attrs["temperature"]):.1f}'
+            except (TypeError, ValueError):
+                pass
+
+            try:
+                if attrs.get("current_temperature") is not None:
+                    current = f'{float(attrs["current_temperature"]):.1f}'
+            except (TypeError, ValueError):
+                pass
+
+            self._set_bridge(
+                [
+                    "D",
+                    device_key,
+                    "climate",
+                    self._field(state, 16),
+                    fan,
+                    target,
+                    current,
+                    available,
+                ]
+            )
+            return
+
+        if entity_id.startswith("light."):
+            is_on = state == "on"
+
+            brightness = attrs.get("brightness")
+            if brightness is not None:
+                try:
+                    pct = round(float(brightness) * 100.0 / 255.0)
+                except (TypeError, ValueError):
+                    pct = 100 if is_on else 0
+            else:
+                pct = 100 if is_on else 0
+
+            pct = max(0, min(100, pct))
+
+            self._set_bridge(
+                [
+                    "D",
+                    device_key,
+                    "light",
+                    "1" if is_on else "0",
+                    str(pct),
+                    available,
+                ]
+            )
+            return
+
+        # Optional generic numeric/environment sensor.
+        self._set_bridge(
+            [
+                "D",
+                device_key,
+                "sensor",
+                self._field(state, 24),
+                available,
+            ]
+        )
+
+    def _device_changed(self, entity, attribute, old, new, kwargs):
+        device_key = self.reverse_devices.get(entity)
+        if device_key:
+            self._publish_device(device_key)
+
+        if device_key in self.xiaomi_light_keys:
+            self.run_in(self._publish_recovery_timer, 0.15)
+
+    # -----------------------------------------------------------------
+    # Gas / recovery transport
+    # -----------------------------------------------------------------
+    def _publish_gas(self):
+        obj = self.get_state(self.gas_status_entity, attribute="all") or {}
+        status = self._field(obj.get("state", "ready"), 16)
+        attrs = obj.get("attributes", {}) or {}
+
+        self._set_bridge(
+            [
+                "G",
+                status,
+                self._field(attrs.get("message", "Ready"), 72),
+                self._field(attrs.get("reading", ""), 8),
+                self._field(attrs.get("company_date", ""), 32),
+                self._field(attrs.get("company_reading", ""), 8),
+                "1" if attrs.get("confirmation", False) else "0",
+                "1" if attrs.get("history_contains_reading", False) else "0",
+            ]
+        )
+
+    def _gas_changed(self, entity, attribute, old, new, kwargs):
+        self._publish_gas()
 
     def _xiaomi_recovery_snapshot(self):
         unavailable = []
 
-        for entity in self.xiaomi_light_entities:
-            state = self.get_state(entity)
+        for key in self.xiaomi_light_keys:
+            entity_id = self.devices.get(key)
+            if not entity_id:
+                continue
 
+            state = self.get_state(entity_id)
             if state in (None, "unknown", "unavailable"):
-                unavailable.append(entity)
+                unavailable.append(key)
 
         if self.xiaomi_reload_in_progress:
             return (
                 len(unavailable),
                 "reloading",
-                "Reload requested... waiting for Xiaomi Home to reconnect devices."
+                "Reload requested... waiting for Xiaomi Home to reconnect devices.",
             )
 
         if unavailable:
@@ -157,266 +319,109 @@ class Tab5MultiBridge(hass.Hass):
             return (
                 count,
                 "needs_reload",
-                f"{count} {noun} unavailable detected. Suggest click Reload to regain full control."
+                f"{count} {noun} unavailable detected. Suggest click Reload to regain full control.",
             )
 
         return (
             0,
             "ok",
-            "All monitored devices available. Full control is ready."
+            "All monitored devices available. Full control is ready.",
+        )
+
+    def _publish_recovery(self):
+        count, state, message = self._xiaomi_recovery_snapshot()
+        self._set_bridge(
+            [
+                "X",
+                str(count),
+                state,
+                self._field(message, 110),
+            ]
+        )
+
+    # -----------------------------------------------------------------
+    # Generic command helpers
+    # -----------------------------------------------------------------
+    def _resolve_device(self, device_key):
+        entity_id = self.devices.get(str(device_key).strip())
+        if not entity_id:
+            self.log(
+                f"Unknown logical device key: {device_key}",
+                level="WARNING",
+            )
+        return entity_id
+
+    def _resolve_device_list(self, raw):
+        result = []
+        seen = set()
+
+        for key in str(raw or "").split(","):
+            key = key.strip()
+            if not key or key in seen:
+                continue
+
+            entity_id = self._resolve_device(key)
+            if entity_id:
+                result.append((key, entity_id))
+                seen.add(key)
+
+        return result
+
+    def _press_gas_submit(self, kwargs):
+        reading = kwargs.get("reading", "")
+        self.log(f"Pressing gas-meter Submit for reading {reading}")
+        self.call_service(
+            "input_button/press",
+            entity_id=self.gas_submit_button,
         )
 
     def _finish_xiaomi_reload_check(self, kwargs):
         self.xiaomi_reload_in_progress = False
-        self._publish()
+        self._publish_recovery()
+        self._bootstrap_publish({})
 
-    def _publish_timer(self, kwargs):
-        self._publish()
+    # -----------------------------------------------------------------
+    # Commands generated by ESPHome YAML
+    # -----------------------------------------------------------------
+    def _command(self, event_name, data, kwargs):
+        action = str(data.get("action", "")).strip()
 
-    def _changed(self, entity, attribute, old, new, kwargs):
-        self._publish()
+        if action == "refresh_all":
+            self._bootstrap_publish({})
+            return
 
-    def _ac_snapshot(self, entities):
-        if not entities:
-            return ("", "", "", "")
-        snapshots=[]
-        for e in entities:
-            s=self.get_state(e, attribute="all") or {}
-            snapshots.append((s.get("state","unknown"), s.get("attributes",{}) or {}))
-        if len(snapshots)==1:
-            state,a=snapshots[0]
-            return (str(state), str(a.get("fan_mode") or "--"),
-                    "--" if a.get("temperature") is None else f'{float(a["temperature"]):.1f}',
-                    "--" if a.get("current_temperature") is None else f'{float(a["current_temperature"]):.1f}')
-        states=[s for s,_ in snapshots]
-        mode="off" if all(s=="off" for s in states) else ("cool" if all(s=="cool" for s in states) else "mixed")
-        fans=[a.get("fan_mode") or "--" for _,a in snapshots]
-        fan=fans[0] if all(f==fans[0] for f in fans) else "Mixed"
-        t=[a.get("temperature") for _,a in snapshots if a.get("temperature") is not None]
-        r=[a.get("current_temperature") for _,a in snapshots if a.get("current_temperature") is not None]
-        return (mode, fan, "--" if not t else f'{sum(map(float,t))/len(t):.1f}', "--" if not r else f'{sum(map(float,r))/len(r):.1f}')
-
-    def _light_snapshot(self, entities):
-        if not entities: return ("0","0")
-        ons=[]; br=[]
-        for e in entities:
-            s=self.get_state(e, attribute="all") or {}
-            on=s.get("state")=="on"; a=s.get("attributes",{}) or {}; b=a.get("brightness")
-            ons.append(on)
-            br.append(round(float(b)*100/255) if b is not None else (100 if on else 0))
-        return ("1" if any(ons) else "0", str(max(0,min(100,round(sum(br)/len(br))))))
-
-    def _publish(self):
-        tab = self.tabs[self.active_tab]
-
-        # -----------------------------------------------------
-        # GAS TAB
-        #
-        # Fields 0..21 remain compatible with the normal room
-        # renderer. Fields 22..28 carry gas status:
-        #
-        # 22 status
-        # 23 message
-        # 24 submitted reading
-        # 25 company date
-        # 26 company reading
-        # 27 confirmation bool
-        # 28 history contains reading bool
-        # -----------------------------------------------------
-        if self.active_tab == "gas":
-            status_obj = (
-                self.get_state(
-                    self.gas_status_entity,
-                    attribute="all"
-                )
-                or {}
-            )
-
-            status = self._bridge_field(
-                status_obj.get("state", "ready")
-            )
-
-            attrs = (
-                status_obj.get("attributes", {})
-                or {}
-            )
-
-            message = self._bridge_field(
-                attrs.get("message", "Ready")
-            )
-
-            reading = self._bridge_field(
-                attrs.get("reading", "")
-            )
-
-            company_date = self._bridge_field(
-                attrs.get("company_date", "")
-            )
-
-            company_reading = self._bridge_field(
-                attrs.get("company_reading", "")
-            )
-
-            confirmation = (
-                "1"
-                if attrs.get("confirmation", False)
-                else "0"
-            )
-
-            history_ok = (
-                "1"
-                if attrs.get(
-                    "history_contains_reading",
-                    False
-                )
-                else "0"
-            )
-
-            fields = [
-                "gas", "", "", "", "", "",
-            ]
-
-            for _ in range(4):
-                fields += ["", "none", "0", "0"]
-
-            unavailable_count, recovery_state, recovery_message = (
-                self._xiaomi_recovery_snapshot()
-            )
-
-            fields += [
-                status,
-                message,
-                reading,
-                company_date,
-                company_reading,
-                confirmation,
-                history_ok,
-                str(unavailable_count),
-                recovery_state,
-                self._bridge_field(recovery_message),
-            ]
-
-            return self._set_bridge(
-                "|".join(fields)
-            )
-
-        mode, fan, target, room = self._ac_snapshot(
-            tab["acs"]
-        )
-
-        h = "--"
-        he = self.humidity.get(
-            self.active_tab,
-            ""
-        )
-
-        if he:
-            try:
-                h = (
-                    f'{float(self.get_state(he)):.0f}'
-                )
-            except Exception:
-                pass
-
-        fields = [
-            self.active_tab,
-            mode,
-            fan,
-            target,
-            room,
-            h
-        ]
-
-        for slot in tab["slots"]:
-            on, bri = self._light_snapshot(
-                slot["entities"]
-            )
-
-            fields += [
-                slot["name"],
-                slot["type"],
-                on,
-                bri
-            ]
-
-        # Keep one fixed payload shape for ESPHome.
-        # Fields 22..28 are gas-reserved. Fields 29..31 are always
-        # Xiaomi recovery status for the Settings page.
-        unavailable_count, recovery_state, recovery_message = (
-            self._xiaomi_recovery_snapshot()
-        )
-
-        fields += [
-            "", "", "", "", "", "", "",
-            str(unavailable_count),
-            recovery_state,
-            self._bridge_field(recovery_message),
-        ]
-
-        self._set_bridge(
-            "|".join(fields)
-        )
-
-    def _set_bridge(self,payload):
-        self.set_state("sensor.tab5_ui_bridge", state=payload,
-                       attributes={"friendly_name":"Tab5 UI Bridge","icon":"mdi:tablet-dashboard"})
-
-    def _command(self,event_name,data,kwargs):
-        action=str(data.get("action",""))
-        if action=="open_tab":
-            tab=str(data.get("tab","all"))
-            if tab in self.tabs:
-                self.active_tab=tab; self._publish()
+        if action == "refresh_devices":
+            for key, _entity in self._resolve_device_list(
+                data.get("devices", "")
+            ):
+                self._publish_device(key)
             return
 
         if action == "reload_xiaomi":
             if self.xiaomi_reload_in_progress:
-                self.log(
-                    "Xiaomi Home reload ignored: reload already in progress",
-                    level="WARNING"
-                )
                 return
 
             self.xiaomi_reload_in_progress = True
-            self.log(
-                "Manual Xiaomi Home config-entry reload requested from Tab5"
-            )
-            self._publish()
+            self._publish_recovery()
 
+            self.log("Manual Xiaomi Home config-entry reload requested from Tab5")
             self.call_service(
                 "homeassistant/reload_config_entry",
                 entity_id=self.xiaomi_reload_entity,
             )
-
-            # Give the integration time to reconnect, then publish the
-            # actual unavailable/available result. No automatic retry.
-            self.run_in(
-                self._finish_xiaomi_reload_check,
-                8
-            )
+            self.run_in(self._finish_xiaomi_reload_check, 8)
             return
 
+        # -------------------------------------------------------------
+        # Gas stays standalone.
+        # -------------------------------------------------------------
         if action == "gas_submit":
-            reading = str(
-                data.get("value", "")
-            ).strip()
+            reading = str(data.get("value", "")).strip()
 
-            # Second layer of double-submit protection.
-            current_status = self.get_state(
-                self.gas_status_entity
-            )
-
-            if current_status == "submitting":
-                self.log(
-                    "Gas submission ignored: backend is already submitting",
-                    level="WARNING"
-                )
+            if self.get_state(self.gas_status_entity) == "submitting":
                 return
 
-            if (
-                not reading.isdigit()
-                or len(reading) > 4
-            ):
+            if not reading.isdigit() or len(reading) > 4:
                 self.log(
                     f"Rejected invalid gas meter reading: {reading}",
                     level="WARNING",
@@ -425,66 +430,245 @@ class Tab5MultiBridge(hass.Hass):
 
             reading = reading.zfill(4)
 
-            self.log(
-                f"Gas meter submission requested: {reading}"
-            )
-
-            # STEP 1: write the reading first.
             self.call_service(
                 "input_text/set_value",
                 entity_id=self.gas_reading_entity,
                 value=reading,
             )
-
-            # STEP 2: trigger the backend only after HA has had
-            # time to commit the input_text state.
             self.run_in(
                 self._press_gas_submit,
                 0.5,
                 reading=reading,
             )
-
             return
 
-        tab=self.tabs[self.active_tab]; acs=tab["acs"]
-        if action=="ac_temp_delta" and acs:
-            try: delta=float(data.get("value",0))
-            except: return
-            targets=[]
-            for e in acs:
-                try: targets.append(float(self.get_state(e,attribute="temperature")))
-                except: pass
-            current=sum(targets)/len(targets) if targets else 26.0
-            new=max(18.0,min(30.0,current+delta))
-            for e in acs: self.call_service("climate/set_temperature", entity_id=e, temperature=new)
-        elif action=="ac_fan_auto" and acs:
-            for e in acs: self.call_service("climate/set_fan_mode", entity_id=e, fan_mode="Auto")
-        elif action=="ac_fan_quiet" and acs:
-            for e in acs: self.call_service("climate/set_fan_mode", entity_id=e, fan_mode="Quiet")
-        elif action=="ac_power_toggle" and acs:
-            all_on=all(self.get_state(e)!="off" for e in acs)
-            if all_on:
-                for e in acs: self.call_service("climate/turn_off", entity_id=e)
-            else:
-                for e in acs:
-                    self.call_service("climate/set_temperature", entity_id=e, temperature=26.0, hvac_mode="cool")
-                    self.call_service("climate/set_fan_mode", entity_id=e, fan_mode="Auto")
-        elif action.startswith("slot_"):
-            try: idx=int(data.get("slot",-1))
-            except: return
-            if not (0<=idx<4): return
-            entities=tab["slots"][idx]["entities"]
-            if not entities: return
-            if action=="slot_power":
-                service="light/turn_on" if str(data.get("value","")).lower()=="on" else "light/turn_off"
-                self.call_service(service, entity_id=entities)
-            elif action=="slot_brightness":
-                try: pct=max(0,min(100,int(float(data.get("value",0)))))
-                except: return
-                self.call_service("light/turn_on", entity_id=entities, brightness_pct=pct)
-            elif action=="slot_cct":
-                try: k=int(float(data.get("value",0)))
-                except: return
-                self.call_service("light/turn_on", entity_id=entities, color_temp_kelvin=k)
-        self.run_in(self._publish_timer,1)
+        # -------------------------------------------------------------
+        # AC: ESPHome may supply one logical key (device) or a CSV list
+        # (devices). This keeps room and whole-house AC UI on the same
+        # generic command path; group membership remains in ESPHome.
+        # -------------------------------------------------------------
+        if action.startswith("ac_"):
+            raw_devices = data.get("devices", "") or data.get("device", "")
+            resolved = self._resolve_device_list(raw_devices)
+            if not resolved:
+                return
 
+            if action == "ac_temp_delta":
+                try:
+                    delta = float(data.get("value", 0))
+                except (TypeError, ValueError):
+                    return
+
+                for key, entity_id in resolved:
+                    try:
+                        current = float(self.get_state(entity_id, attribute="temperature"))
+                    except (TypeError, ValueError):
+                        current = 26.0
+                    self.call_service(
+                        "climate/set_temperature",
+                        entity_id=entity_id,
+                        temperature=max(18.0, min(30.0, current + delta)),
+                    )
+
+            elif action == "ac_set_temperature":
+                try:
+                    target = float(data.get("value", 26.0))
+                except (TypeError, ValueError):
+                    return
+
+                target = max(18.0, min(30.0, target))
+                self.call_service(
+                    "climate/set_temperature",
+                    entity_id=[entity_id for _key, entity_id in resolved],
+                    temperature=target,
+                )
+
+            elif action == "ac_fan_auto":
+                self.call_service(
+                    "climate/set_fan_mode",
+                    entity_id=[entity_id for _key, entity_id in resolved],
+                    fan_mode="Auto",
+                )
+
+            elif action == "ac_fan_quiet":
+                self.call_service(
+                    "climate/set_fan_mode",
+                    entity_id=[entity_id for _key, entity_id in resolved],
+                    fan_mode="Quiet",
+                )
+
+            elif action == "ac_power_toggle":
+                any_on = any(
+                    self.get_state(entity_id) != "off"
+                    for _key, entity_id in resolved
+                )
+                if any_on:
+                    self.call_service(
+                        "climate/turn_off",
+                        entity_id=[entity_id for _key, entity_id in resolved],
+                    )
+                else:
+                    for _key, entity_id in resolved:
+                        self.call_service(
+                            "climate/set_temperature",
+                            entity_id=entity_id,
+                            temperature=26.0,
+                            hvac_mode="cool",
+                        )
+                        self.call_service(
+                            "climate/set_fan_mode",
+                            entity_id=entity_id,
+                            fan_mode="Auto",
+                        )
+
+            for key, _entity in resolved:
+                self.run_in(
+                    self._publish_device_timer,
+                    0.5,
+                    device_key=key,
+                )
+            return
+
+        # -------------------------------------------------------------
+        # Light commands: ESPHome supplies one or several logical keys.
+        # Group membership is NOT stored in Python.
+        # -------------------------------------------------------------
+        if action.startswith("light_"):
+            resolved = self._resolve_device_list(data.get("devices", ""))
+            if not resolved:
+                return
+
+            entity_ids = [entity_id for _key, entity_id in resolved]
+
+            if action == "light_power":
+                service = (
+                    "light/turn_on"
+                    if str(data.get("value", "")).lower() == "on"
+                    else "light/turn_off"
+                )
+                self.call_service(service, entity_id=entity_ids)
+
+            elif action == "light_brightness":
+                try:
+                    pct = int(float(data.get("value", 0)))
+                except (TypeError, ValueError):
+                    return
+
+                self.call_service(
+                    "light/turn_on",
+                    entity_id=entity_ids,
+                    brightness_pct=max(0, min(100, pct)),
+                )
+
+            elif action == "light_cct":
+                try:
+                    kelvin = int(float(data.get("value", 0)))
+                except (TypeError, ValueError):
+                    return
+
+                self.call_service(
+                    "light/turn_on",
+                    entity_id=entity_ids,
+                    color_temp_kelvin=kelvin,
+                )
+
+            elif action == "light_group_toggle":
+                any_on = any(
+                    self.get_state(entity_id) == "on"
+                    for entity_id in entity_ids
+                )
+                self.call_service(
+                    "light/turn_off" if any_on else "light/turn_on",
+                    entity_id=entity_ids,
+                )
+
+            for key, _entity in resolved:
+                self.run_in(
+                    self._publish_device_timer,
+                    0.5,
+                    device_key=key,
+                )
+            return
+
+        # -------------------------------------------------------------
+        # Aggregate AC group. Membership comes from ESPHome command.
+        # -------------------------------------------------------------
+        if action == "ac_group_toggle":
+            resolved = self._resolve_device_list(data.get("devices", ""))
+            if not resolved:
+                return
+
+            any_on = any(
+                self.get_state(entity_id) != "off"
+                for _key, entity_id in resolved
+            )
+
+            for key, entity_id in resolved:
+                if any_on:
+                    self.call_service(
+                        "climate/turn_off",
+                        entity_id=entity_id,
+                    )
+                else:
+                    self.call_service(
+                        "climate/set_temperature",
+                        entity_id=entity_id,
+                        temperature=26.0,
+                        hvac_mode="cool",
+                    )
+                    self.call_service(
+                        "climate/set_fan_mode",
+                        entity_id=entity_id,
+                        fan_mode="Auto",
+                    )
+
+                self.run_in(
+                    self._publish_device_timer,
+                    0.5,
+                    device_key=key,
+                )
+            return
+
+        # -------------------------------------------------------------
+        # House ALL OFF. ESPHome supplies both groups.
+        # -------------------------------------------------------------
+        if action == "all_off":
+            ac_devices = self._resolve_device_list(
+                data.get("ac_devices", "")
+            )
+            light_devices = self._resolve_device_list(
+                data.get("light_devices", "")
+            )
+
+            for key, entity_id in ac_devices:
+                self.call_service(
+                    "climate/turn_off",
+                    entity_id=entity_id,
+                )
+                self.run_in(
+                    self._publish_device_timer,
+                    0.5,
+                    device_key=key,
+                )
+
+            if light_devices:
+                self.call_service(
+                    "light/turn_off",
+                    entity_id=[
+                        entity_id
+                        for _key, entity_id in light_devices
+                    ],
+                )
+
+                for key, _entity_id in light_devices:
+                    self.run_in(
+                        self._publish_device_timer,
+                        0.5,
+                        device_key=key,
+                    )
+            return
+
+        self.log(
+            f"Unknown Tab5 V3 action: {action}",
+            level="WARNING",
+        )

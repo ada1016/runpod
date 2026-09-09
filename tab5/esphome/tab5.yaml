@@ -1,0 +1,3125 @@
+# ============================================================
+# M5Stack Tab5 - V3 Local UI / Thin AppDaemon Bridge
+# First tab only, based on the user's Figma layout.
+#
+# Architecture:
+#   Tab5 -> ONE Home Assistant event stream (esphome.tab5_command)
+#   AppDaemon -> controls real HA devices
+#   AppDaemon -> ONE aggregate state entity:
+#                sensor.tab5_first_tab_bridge
+#   Tab5 -> ONE HA text_sensor listener for the entire first tab
+#
+# This intentionally avoids one ESPHome listener per device.
+#
+# FONT FILE REQUIRED LOCALLY:
+#   fonts/fa-solid-900.ttf
+# Use the free Font Awesome Solid TTF you already have.
+# ============================================================
+
+packages:
+  living_room_ui: !include ui/rooms/living_room.yaml
+  parents_room_ui: !include ui/rooms/parents_room.yaml
+  darren_room_ui: !include ui/rooms/darren_room.yaml
+  amber_room_ui: !include ui/rooms/amber_room.yaml
+  house_page_ui: !include ui/pages/house.yaml
+
+esphome:
+  name: tab5
+  friendly_name: M5Stack Tab5
+  on_boot:
+    - priority: -100
+      then:
+        - logger.log:
+            level: INFO
+            tag: ui
+            format: "BUILD MARKER: TAB5_V3_LOCAL_UI_THIN_BRIDGE"
+        - delay: 2s
+        - script.execute:
+            id: apply_theme
+            theme: !lambda 'return id(theme_index);'
+        - script.execute: open_house
+        - homeassistant.event:
+            event: esphome.tab5_command
+            data:
+              action: "refresh_all"
+
+esp32:
+  variant: esp32p4
+  flash_size: 16MB
+  engineering_sample: true
+  cpu_frequency: 360MHz
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: true
+
+esp32_hosted:
+  variant: esp32c6
+  active_high: true
+  clk_pin: GPIO12
+  cmd_pin: GPIO13
+  d0_pin: GPIO11
+  d1_pin: GPIO10
+  d2_pin: GPIO9
+  d3_pin: GPIO8
+  reset_pin: GPIO15
+  slot: 1
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+
+psram:
+  mode: hex
+  speed: 200MHz
+
+i2c:
+  - id: bsp_bus
+    sda: GPIO31
+    scl: GPIO32
+    frequency: 400kHz
+    scan: true
+
+pi4ioe5v6408:
+  - id: pi4ioe1
+    address: 0x43
+  - id: pi4ioe2
+    address: 0x44
+
+switch:
+  - platform: gpio
+    id: wifi_power
+    name: "WiFi Power"
+    pin:
+      pi4ioe5v6408: pi4ioe2
+      number: 0
+    restore_mode: ALWAYS_ON
+
+  - platform: gpio
+    id: charge_enable
+    pin:
+      pi4ioe5v6408: pi4ioe2
+      number: 7
+    restore_mode: ALWAYS_ON
+    internal: true
+
+  - platform: gpio
+    id: tab5_poweroff_pulse
+    pin:
+      pi4ioe5v6408: pi4ioe2
+      number: 4
+    restore_mode: ALWAYS_OFF
+    internal: true
+
+binary_sensor:
+  - platform: gpio
+    id: charging
+    name: "Tab5 Charging Status"
+    pin:
+      pi4ioe5v6408: pi4ioe2
+      number: 6
+      mode: INPUT_PULLDOWN
+    on_press:
+      - component.update: battery_percent
+    on_release:
+      - component.update: battery_percent
+    on_state:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: charging
+            then:
+              - lvgl.widget.show: battery_charging_anim
+              - lvgl.widget.hide: battery_level_image
+            else:
+              - lvgl.widget.hide: battery_charging_anim
+              - lvgl.widget.show: battery_level_image
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+
+ota:
+  - platform: esphome
+
+esp_ldo:
+  - id: display_ldo
+    voltage: 2.5V
+    channel: 3
+
+display:
+  - platform: mipi_dsi
+    id: tab5_display
+    model: M5Stack-Tab5
+    dimensions:
+      width: 720
+      height: 1280
+    reset_pin:
+      pi4ioe5v6408: pi4ioe1
+      number: 4
+    show_test_card: false
+
+touchscreen:
+  - platform: gt911
+    id: tab5_touch
+    i2c_id: bsp_bus
+    interrupt_pin: GPIO23
+    reset_pin:
+      pi4ioe5v6408: pi4ioe1
+      number: 5
+    update_interval: never
+    calibration:
+      x_min: 0
+      x_max: 720
+      y_min: 0
+      y_max: 1280
+    on_release:
+      - if:
+          condition:
+            lvgl.is_paused:
+          then:
+            - lvgl.resume:
+            - lvgl.widget.redraw:
+      - light.turn_on:
+          id: display_backlight
+          brightness: 100%
+          transition_length: 0s
+
+# ============================================================
+# FONTS
+# ============================================================
+# ============================================================
+# TOP TAB ARTWORK - preserve original PNG colors
+# Files are relative to this YAML as requested.
+# ============================================================
+image:
+  - file: "assets/DaYong.png"
+    id: img_dayong
+    type: RGB565
+    transparency: alpha_channel
+    resize: 104x104
+
+  - file: "assets/all.png"
+    id: img_tab_all
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  - file: "assets/livingroom.png"
+    id: img_tab_living
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  - file: "assets/papamama.png"
+    id: img_tab_papamama
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  - file: "assets/darren.png"
+    id: img_tab_darren
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  - file: "assets/amber.png"
+    id: img_tab_amber
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  - file: "assets/gas.png"
+    id: img_tab_gas
+    type: RGB565
+    transparency: alpha_channel
+    resize: 84x84
+
+  # Battery level frames used for the charging animation.
+  # These are generated directly from MDI by ESPHome; no local image files required.
+  - file: "mdi:battery-outline"
+    id: batt_empty
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-10"
+    id: batt_10
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-20"
+    id: batt_20
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-30"
+    id: batt_30
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-40"
+    id: batt_40
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-50"
+    id: batt_50
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-60"
+    id: batt_60
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-70"
+    id: batt_70
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-80"
+    id: batt_80
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery-90"
+    id: batt_90
+    type: BINARY
+    resize: 40x40
+  - file: "mdi:battery"
+    id: batt_full
+    type: BINARY
+    resize: 40x40
+
+font:
+  # UI text / numbers
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_16
+    size: 16
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_18
+    size: 18
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_22
+    size: 22
+    glyphs: "0123456789.-°"
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_26
+    size: 26
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_32
+    size: 32
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_36
+    size: 36
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_72
+    size: 72
+    glyphs: "0123456789.-°C "
+
+  # Traditional Chinese
+  - file: "gfonts://Noto Sans TC"
+    id: cn_24
+    size: 24
+    glyphs: ["大","勇","全","爹","娘","宸","芹","瓦","斯","床","頭","尾","桌","窗","邊","門","口","客","廳","A","C","L","I","G","H","T","O","N","F","S","Y","U","V","B","E","R",":"," ","-","●","燈"]
+
+  - file: "gfonts://Noto Sans TC"
+    id: cn_42
+    size: 42
+    glyphs: ["大","勇","全","爹","娘","宸","芹","瓦","斯","床","頭","尾","桌","窗","邊","門","口","客","廳","燈"]
+
+  - file: "gfonts://Noto Sans TC"
+    id: cn_52
+    size: 52
+    glyphs: ["大","勇","全","爹","娘","宸","芹","瓦","斯","床","頭","尾","桌","窗","邊","門","口","客","廳"]
+
+  # Tab5 custom icon font.
+  # File: /config/esphome/fonts/tab5_icons.ttf
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_24
+    size: 24
+    glyphs:
+      - "\U0000E798"  # droplet
+      - "\U0000F1F1"  # indoor temperature
+      - "\U0000EB3B"  # ac_unit
+      - "\U0000F02A"  # light
+
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_42
+    size: 42
+    glyphs:
+      - "\U0000E798"  # droplet
+      - "\U0000F1F1"  # indoor temperature
+      - "\U0000E8AC"  # power-off
+      - "\U0000F02A"  # lightbulb
+      - "\U0000EC1A"  #  quiet
+
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_64
+    size: 64
+    glyphs:
+      - "\U0000E798"  # droplet
+      - "\U0000F1F1"  # indoor temperature
+      - "\U0000E8AC"  # power-off
+      - "\U0000F02A"  # light
+      - "\U000FFF76"  # light_group_2
+      - "\U0000EC19"  # gas_meter
+      - "\U0000EB3B"  # ac_unit
+      - "\U0000E8B8"  # settings
+      - "\U0000F671"  # wifi_home / Xiaomi Home reload
+      - "\U0000EC1A"  # quiet
+      - "\U0000E145"  # Plus
+      - "\U0000E15B"  # Minus
+
+  # Tab5 custom icon font - Auto symbol
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_brands_64
+    size: 64
+    glyphs:
+      - "\U0000F417" # Auto
+
+  # Tab navigation icon size
+  - file: "fonts/tab5_icons.ttf"
+    id: icon_nav_84
+    size: 84
+    glyphs:
+      - "\U0000E8B8"  # settings
+
+  # Extra-large Font Awesome controls for AC temperature +/-
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_104
+    size: 104
+    glyphs:
+      - "\U0000E145"  # Plus
+      - "\U0000E15B"  # Minus
+
+  # Giant whole-house master power-off icon
+  - file: "fonts/tab5_icons.ttf"
+    id: fa_power_160
+    size: 160
+    glyphs:
+      - "\U0000E8AC"  # power-off
+
+# ============================================================
+# LOCAL STATE
+# ============================================================
+globals:
+  # Prevent AppDaemon -> UI synchronization from emitting commands back.
+  - id: syncing_ui
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # Whole-house AC target shown/controlled on House page.
+  # Updated from the average of available AC target temperatures.
+  - id: house_ac_avg_target
+    type: float
+    restore_value: no
+    initial_value: '26.0'
+
+  - id: gas_pin
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: gas_submitting
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: last_gas_message
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: gas_log_buffer
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  # Runtime theme selection. Theme 0 is the current mono palette.
+  - id: theme_index
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: theme_bg
+    type: uint32_t
+    restore_value: no
+    initial_value: '0xECECEA'
+
+  - id: theme_selected
+    type: uint32_t
+    restore_value: no
+    initial_value: '0xD8D8D8'
+
+  - id: settings_open
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: active_view
+    type: std::string
+    restore_value: no
+    initial_value: '"house"'
+
+  - id: active_room
+    type: std::string
+    restore_value: no
+    initial_value: '"living"'
+
+  # Active room definition populated locally by room YAML packages.
+  - id: active_ac_device
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: active_humidity_device
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: slot0_local_name
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: slot0_local_type
+    type: std::string
+    restore_value: no
+    initial_value: '"none"'
+  - id: slot0_local_devices
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: slot1_local_name
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: slot1_local_type
+    type: std::string
+    restore_value: no
+    initial_value: '"none"'
+  - id: slot1_local_devices
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: slot2_local_name
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: slot2_local_type
+    type: std::string
+    restore_value: no
+    initial_value: '"none"'
+  - id: slot2_local_devices
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: slot3_local_name
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: slot3_local_type
+    type: std::string
+    restore_value: no
+    initial_value: '"none"'
+  - id: slot3_local_devices
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  # Per-device state caches. UI never depends on a network round trip to exist.
+  - id: cache_ac_living
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_parents
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_darren
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_amber
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: cache_light_living_room
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_bedroom_window
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_da_head
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_da_foot
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_da_desk
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_am_door
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_am_foot
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_light_am_desk
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: cache_humidity_living
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_humidity_parents
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_humidity_darren
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_humidity_amber
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+# ============================================================
+# APPDAEMON V3 THIN DEVICE BRIDGE
+# ONE HA listener only: sensor.tab5_ui_bridge
+# ============================================================
+text_sensor:
+  - platform: homeassistant
+    id: ui_bridge
+    entity_id: sensor.tab5_ui_bridge
+    on_value:
+      then:
+        - lambda: |-
+            std::string packet = x;
+            std::vector<std::string> f;
+            size_t start = 0;
+
+            while (true) {
+              const size_t p = packet.find('|', start);
+              if (p == std::string::npos) {
+                f.push_back(packet.substr(start));
+                break;
+              }
+              f.push_back(packet.substr(start, p - start));
+              start = p + 1;
+            }
+
+            if (f.size() < 3 || f[0] != "3") {
+              ESP_LOGW("ui_bridge", "Ignoring non-V3 packet: %s", packet.c_str());
+              return;
+            }
+
+            const std::string kind = f[1];
+
+            if (kind == "D") {
+              if (f.size() < 7) return;
+              const std::string key = f[2];
+
+              if (key == "ac_living") id(cache_ac_living) = packet;
+              else if (key == "ac_parents") id(cache_ac_parents) = packet;
+              else if (key == "ac_darren") id(cache_ac_darren) = packet;
+              else if (key == "ac_amber") id(cache_ac_amber) = packet;
+
+              else if (key == "light_living_room") id(cache_light_living_room) = packet;
+              else if (key == "light_bedroom_window") id(cache_light_bedroom_window) = packet;
+              else if (key == "light_da_head") id(cache_light_da_head) = packet;
+              else if (key == "light_da_foot") id(cache_light_da_foot) = packet;
+              else if (key == "light_da_desk") id(cache_light_da_desk) = packet;
+              else if (key == "light_am_door") id(cache_light_am_door) = packet;
+              else if (key == "light_am_foot") id(cache_light_am_foot) = packet;
+              else if (key == "light_am_desk") id(cache_light_am_desk) = packet;
+
+              else if (key == "humidity_living") id(cache_humidity_living) = packet;
+              else if (key == "humidity_parents") id(cache_humidity_parents) = packet;
+              else if (key == "humidity_darren") id(cache_humidity_darren) = packet;
+              else if (key == "humidity_amber") id(cache_humidity_amber) = packet;
+
+              if (id(active_view) == "room") {
+                id(render_active_room).execute();
+              } else if (id(active_view) == "house") {
+                // State update only: repaint locally.
+                // Do NOT call open_house() here because open_house()
+                // sends refresh_devices and would create a feedback loop.
+                id(render_house_cache).execute();
+              }
+              return;
+            }
+
+            if (kind == "G") {
+              if (f.size() < 10) return;
+
+              const std::string gas_status = f[2];
+              const std::string gas_message = f[3];
+              const std::string gas_reading = f[4];
+              const std::string company_date = f[5];
+              const std::string company_reading = f[6];
+              const bool confirmation = (f[7] == "1");
+              const bool history_ok = (f[8] == "1");
+
+              id(gas_submitting) = (gas_status == "submitting");
+
+              if (id(gas_submitting)) {
+                lv_obj_add_state(id(gas_submit_button), LV_STATE_DISABLED);
+              } else {
+                lv_obj_clear_state(id(gas_submit_button), LV_STATE_DISABLED);
+              }
+
+              lv_label_set_text(
+                id(gas_status_label),
+                gas_status.empty() ? "READY" : gas_status.c_str()
+              );
+
+              if (!gas_message.empty() && gas_message != id(last_gas_message)) {
+                id(last_gas_message) = gas_message;
+
+                if (!id(gas_log_buffer).empty()) {
+                  id(gas_log_buffer) += "\n";
+                }
+                id(gas_log_buffer) += gas_message;
+
+                int lines = 1;
+                for (char c : id(gas_log_buffer)) {
+                  if (c == '\n') lines++;
+                }
+
+                while (lines > 4) {
+                  const size_t pos = id(gas_log_buffer).find('\n');
+                  if (pos == std::string::npos) break;
+                  id(gas_log_buffer).erase(0, pos + 1);
+                  lines--;
+                }
+
+                lv_label_set_text(
+                  id(gas_log_label),
+                  id(gas_log_buffer).c_str()
+                );
+              }
+
+              char result[192];
+
+              if (gas_status == "success") {
+                snprintf(
+                  result,
+                  sizeof(result),
+                  "Reading: %s\nCompany: %s\nDate: %s\nConfirm: %s  History: %s",
+                  gas_reading.c_str(),
+                  company_reading.empty() ? "--" : company_reading.c_str(),
+                  company_date.empty() ? "--" : company_date.c_str(),
+                  confirmation ? "YES" : "NO",
+                  history_ok ? "YES" : "NO"
+                );
+              } else if (
+                gas_status == "failed"
+                || gas_status == "error"
+                || gas_status == "invalid"
+              ) {
+                snprintf(
+                  result,
+                  sizeof(result),
+                  "Reading: %s\nResult: %s\n%s",
+                  gas_reading.empty() ? "--" : gas_reading.c_str(),
+                  gas_status.c_str(),
+                  gas_message.c_str()
+                );
+              } else if (gas_status == "submitting") {
+                snprintf(
+                  result,
+                  sizeof(result),
+                  "Reading: %s\nSubmission in progress...",
+                  gas_reading.empty() ? "--" : gas_reading.c_str()
+                );
+              } else {
+                snprintf(
+                  result,
+                  sizeof(result),
+                  "Ready for meter reading"
+                );
+              }
+
+              lv_label_set_text(id(gas_result_label), result);
+              return;
+            }
+
+            if (kind == "X") {
+              if (f.size() < 6) return;
+
+              const std::string recovery_state = f[3];
+              const std::string recovery_message = f[4];
+
+              lv_label_set_text(
+                id(device_recovery_message),
+                recovery_message.empty()
+                  ? "Checking Xiaomi Home device availability..."
+                  : recovery_message.c_str()
+              );
+
+              if (recovery_state == "reloading") {
+                lv_obj_add_state(id(xiaomi_reload_button), LV_STATE_DISABLED);
+              } else {
+                lv_obj_clear_state(id(xiaomi_reload_button), LV_STATE_DISABLED);
+              }
+              return;
+            }
+
+# ============================================================
+# LOCAL BATTERY
+# ============================================================
+sensor:
+  - platform: ina226
+    address: 0x41
+    i2c_id: bsp_bus
+    adc_averaging: 16
+    max_current: 8.192A
+    shunt_resistance: 0.005ohm
+    update_interval: 10s
+
+    bus_voltage:
+      id: battery_voltage
+      name: "Tab5 Battery Voltage"
+
+    current:
+      id: battery_current
+      name: "Tab5 Battery Current"
+
+  - platform: template
+    id: battery_percent
+    name: "Tab5 Battery Percentage"
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      const float v = id(battery_voltage).state;
+      if (isnan(v) || v < 5.0f) return 0.0f;
+      if (v <= 6.0f) return 0.0f;
+      if (v >= 8.4f) return 100.0f;
+      return ((v - 6.0f) / 2.4f) * 100.0f;
+    on_value:
+      then:
+        - lvgl.image.update:
+            id: battery_level_image
+            src: !lambda |-
+              if (x >= 95) return id(batt_full);
+              if (x >= 85) return id(batt_90);
+              if (x >= 75) return id(batt_80);
+              if (x >= 65) return id(batt_70);
+              if (x >= 55) return id(batt_60);
+              if (x >= 45) return id(batt_50);
+              if (x >= 35) return id(batt_40);
+              if (x >= 25) return id(batt_30);
+              if (x >= 15) return id(batt_20);
+              if (x >= 5) return id(batt_10);
+              return id(batt_empty);
+        - lvgl.label.update:
+            id: battery_percent_label
+            text: !lambda |-
+              static char buf[8];
+              snprintf(buf, sizeof(buf), "%.0f%%", x);
+              return buf;
+
+# ============================================================
+# TAB5 HARDWARE OFF
+# ============================================================
+script:
+  - id: tab5_hardware_power_off
+    mode: single
+    then:
+      - light.turn_off:
+          id: display_backlight
+          transition_length: 100ms
+      - delay: 150ms
+      - switch.turn_on: tab5_poweroff_pulse
+      - delay: 100ms
+      - switch.turn_off: tab5_poweroff_pulse
+      - delay: 100ms
+      - switch.turn_on: tab5_poweroff_pulse
+      - delay: 100ms
+      - switch.turn_off: tab5_poweroff_pulse
+      - delay: 100ms
+      - switch.turn_on: tab5_poweroff_pulse
+      - delay: 100ms
+      - switch.turn_off: tab5_poweroff_pulse
+
+  # ----------------------------------------------------------
+  # V3 GENERIC ROOM RENDERER
+  #
+  # The room YAML package has already populated the local
+  # active_* and slot*_local_* definitions before this runs.
+  # Network state is optional; missing state shows SYNCING but
+  # the correct room UI/layout still renders immediately.
+  # ----------------------------------------------------------
+  - id: render_active_room
+    mode: restart
+    then:
+      - lambda: |-
+          id(active_view) = "room";
+          id(settings_open) = false;
+
+          lv_obj_add_flag(id(house_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(gas_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_add_flag(id(settings_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_clear_flag(id(ac_panel), LV_OBJ_FLAG_HIDDEN);
+          lv_obj_clear_flag(id(light_grid), LV_OBJ_FLAG_HIDDEN);
+
+          auto packet_for = [&](const std::string &key) -> std::string {
+            if (key == "ac_living") return id(cache_ac_living);
+            if (key == "ac_parents") return id(cache_ac_parents);
+            if (key == "ac_darren") return id(cache_ac_darren);
+            if (key == "ac_amber") return id(cache_ac_amber);
+
+            if (key == "light_living_room") return id(cache_light_living_room);
+            if (key == "light_bedroom_window") return id(cache_light_bedroom_window);
+            if (key == "light_da_head") return id(cache_light_da_head);
+            if (key == "light_da_foot") return id(cache_light_da_foot);
+            if (key == "light_da_desk") return id(cache_light_da_desk);
+            if (key == "light_am_door") return id(cache_light_am_door);
+            if (key == "light_am_foot") return id(cache_light_am_foot);
+            if (key == "light_am_desk") return id(cache_light_am_desk);
+
+            if (key == "humidity_living") return id(cache_humidity_living);
+            if (key == "humidity_parents") return id(cache_humidity_parents);
+            if (key == "humidity_darren") return id(cache_humidity_darren);
+            if (key == "humidity_amber") return id(cache_humidity_amber);
+            return "";
+          };
+
+          auto split_packet = [&](const std::string &packet) {
+            std::vector<std::string> f;
+            size_t start = 0;
+            while (true) {
+              const size_t p = packet.find('|', start);
+              if (p == std::string::npos) {
+                f.push_back(packet.substr(start));
+                break;
+              }
+              f.push_back(packet.substr(start, p - start));
+              start = p + 1;
+            }
+            return f;
+          };
+
+          // ---------------- AC ----------------
+          const std::string ac_packet = packet_for(id(active_ac_device));
+          char buf[72];
+
+          if (ac_packet.empty()) {
+            lv_label_set_text(id(ac_mode_label), "SYNCING -- --");
+            lv_label_set_text(id(ac_target_label), "-- °C");
+            lv_label_set_text(id(room_temp_label), "--°");
+          } else {
+            const auto ac = split_packet(ac_packet);
+
+            if (
+              ac.size() >= 10
+              && ac[0] == "3"
+              && ac[1] == "D"
+              && ac[3] == "climate"
+            ) {
+              if (ac[8] == "1") {
+                snprintf(
+                  buf,
+                  sizeof(buf),
+                  "%s -- %s",
+                  ac[4].c_str(),
+                  ac[5].c_str()
+                );
+              } else {
+                snprintf(
+                  buf,
+                  sizeof(buf),
+                  "UNAVAILABLE -- %s",
+                  ac[5].c_str()
+                );
+              }
+              lv_label_set_text(id(ac_mode_label), buf);
+
+              snprintf(buf, sizeof(buf), "%s °C", ac[6].c_str());
+              lv_label_set_text(id(ac_target_label), buf);
+
+              snprintf(buf, sizeof(buf), "%s°", ac[7].c_str());
+              lv_label_set_text(id(room_temp_label), buf);
+            }
+          }
+
+          // ---------------- Humidity ----------------
+          const std::string humidity_packet = packet_for(
+            id(active_humidity_device)
+          );
+
+          if (humidity_packet.empty()) {
+            lv_label_set_text(id(humidity_label), "--%");
+          } else {
+            const auto h = split_packet(humidity_packet);
+            if (
+              h.size() >= 7
+              && h[0] == "3"
+              && h[1] == "D"
+              && h[3] == "sensor"
+              && h[5] == "1"
+            ) {
+              snprintf(buf, sizeof(buf), "%s%%", h[4].c_str());
+              lv_label_set_text(id(humidity_label), buf);
+            } else {
+              lv_label_set_text(id(humidity_label), "--%");
+            }
+          }
+
+          // ---------------- Lights ----------------
+          id(syncing_ui) = true;
+
+          auto render_slot = [&](
+            lv_obj_t *card,
+            lv_obj_t *icon_label,
+            lv_obj_t *name_label,
+            lv_obj_t *sw,
+            lv_obj_t *slider,
+            const std::string &name,
+            const std::string &type,
+            const std::string &devices
+          ) {
+            if (type.empty() || type == "none") {
+              lv_obj_add_flag(card, LV_OBJ_FLAG_HIDDEN);
+              return;
+            }
+
+            // Layout/name/type are local, therefore render immediately.
+            lv_obj_clear_flag(card, LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(name_label, name.c_str());
+
+            if (type == "light_group") {
+              lv_label_set_text(icon_label, "\U000FFF76");
+            } else {
+              lv_label_set_text(icon_label, "\U0000F02A");
+            }
+
+            bool have_state = false;
+            bool any_on = false;
+            bool all_available = true;
+            int brightness_total = 0;
+            int brightness_count = 0;
+
+            size_t csv_start = 0;
+            while (csv_start <= devices.size()) {
+              const size_t comma = devices.find(',', csv_start);
+              const std::string key = devices.substr(
+                csv_start,
+                comma == std::string::npos
+                  ? std::string::npos
+                  : comma - csv_start
+              );
+
+              if (!key.empty()) {
+                const std::string packet = packet_for(key);
+
+                if (packet.empty()) {
+                  all_available = false;
+                } else {
+                  const auto lf = split_packet(packet);
+
+                  if (
+                    lf.size() >= 8
+                    && lf[0] == "3"
+                    && lf[1] == "D"
+                    && lf[3] == "light"
+                  ) {
+                    have_state = true;
+
+                    if (lf[4] == "1") {
+                      any_on = true;
+                    }
+
+                    if (lf[6] != "1") {
+                      all_available = false;
+                    }
+
+                    int bri = 0;
+                    if (sscanf(lf[5].c_str(), "%d", &bri) == 1) {
+                      bri = std::max(0, std::min(100, bri));
+                      brightness_total += bri;
+                      brightness_count++;
+                    }
+                  } else {
+                    all_available = false;
+                  }
+                }
+              }
+
+              if (comma == std::string::npos) break;
+              csv_start = comma + 1;
+            }
+
+            if (any_on) {
+              lv_obj_add_state(sw, LV_STATE_CHECKED);
+            } else {
+              lv_obj_clear_state(sw, LV_STATE_CHECKED);
+            }
+
+            const int bri = (
+              brightness_count > 0
+                ? brightness_total / brightness_count
+                : 0
+            );
+            lv_slider_set_value(slider, bri, LV_ANIM_OFF);
+
+            if (have_state && all_available) {
+              lv_obj_clear_state(sw, LV_STATE_DISABLED);
+              lv_obj_clear_state(slider, LV_STATE_DISABLED);
+            } else {
+              // Correct local card stays visible; control waits for state.
+              lv_obj_add_state(sw, LV_STATE_DISABLED);
+              lv_obj_add_state(slider, LV_STATE_DISABLED);
+            }
+          };
+
+          render_slot(
+            id(slot0_card),
+            id(slot0_icon),
+            id(slot0_name),
+            id(slot0_switch),
+            id(slot0_slider),
+            id(slot0_local_name),
+            id(slot0_local_type),
+            id(slot0_local_devices)
+          );
+
+          render_slot(
+            id(slot1_card),
+            id(slot1_icon),
+            id(slot1_name),
+            id(slot1_switch),
+            id(slot1_slider),
+            id(slot1_local_name),
+            id(slot1_local_type),
+            id(slot1_local_devices)
+          );
+
+          render_slot(
+            id(slot2_card),
+            id(slot2_icon),
+            id(slot2_name),
+            id(slot2_switch),
+            id(slot2_slider),
+            id(slot2_local_name),
+            id(slot2_local_type),
+            id(slot2_local_devices)
+          );
+
+          render_slot(
+            id(slot3_card),
+            id(slot3_icon),
+            id(slot3_name),
+            id(slot3_switch),
+            id(slot3_slider),
+            id(slot3_local_name),
+            id(slot3_local_type),
+            id(slot3_local_devices)
+          );
+
+          id(syncing_ui) = false;
+
+  # ----------------------------------------------------------
+  # Runtime theme engine
+  #
+  # Theme 0 = MONO (exact colors from the original YAML)
+  # Theme 1 = WARM
+  # Theme 2 = OCEAN
+  # Theme 3 = DARK
+  #
+  # It walks the complete LVGL object tree and remaps every
+  # background, border and text color that belongs to the
+  # original 16-color palette. PNG artwork is intentionally
+  # untouched.
+  # ----------------------------------------------------------
+  - id: apply_theme
+    mode: restart
+    parameters:
+      theme: int
+    then:
+      - lambda: |-
+          int t = theme;
+          if (t < 0 || t > 3) t = 0;
+
+          static const uint32_t palette[4][16] = {
+            // MONO - exact colors already used by this YAML
+            {
+              0x111111, 0x222222, 0x333333, 0x444444,
+              0x555555, 0x6F6F6F, 0x777777, 0x949494,
+              0xBEBEBE, 0xC8C8C8, 0xD8D8D8, 0xE7E7E4,
+              0xE7E7E7, 0xECECEA, 0xF5F5F2, 0xF7F7F4
+            },
+
+            // WARM - parchment / amber / brown
+            {
+              0x3B2A21, 0x51392D, 0x684B3B, 0x7B5C49,
+              0x8C6B56, 0xA77B5D, 0x9A7966, 0xB99577,
+              0xD2B69A, 0xDEC3A8, 0xE8D4BE, 0xF1E2D2,
+              0xF3E4D5, 0xF7EFE6, 0xFCF7F1, 0xFFFAF5
+            },
+
+            // OCEAN - cool blue / cyan
+            {
+              0x102A43, 0x173F5F, 0x1E5573, 0x2C6784,
+              0x3A7994, 0x4F91A7, 0x5D8EA3, 0x79AFC0,
+              0xA4CBD6, 0xB5D8E1, 0xCBE5EA, 0xDCEFF2,
+              0xE2F2F4, 0xEAF6F8, 0xF3FAFB, 0xF8FDFD
+            },
+
+            // DARK - graphite with warm CCT accents
+            {
+              0xF2F4F5, 0xD9DDE0, 0xC0C7CC, 0xAAB3BA,
+              0x929DA5, 0x9A6B47, 0x7F8A92, 0xB7865E,
+              0xD2AE8D, 0x4A4F53, 0x34383B, 0x2B2E31,
+              0xE2C7AD, 0x17191B, 0x222529, 0xF8F8F8
+            }
+          };
+
+          const int old_t = id(theme_index);
+          const uint32_t *oldp = palette[(old_t >= 0 && old_t <= 3) ? old_t : 0];
+          const uint32_t *newp = palette[t];
+
+          auto remap = [&](lv_color_t c) -> lv_color_t {
+            for (int i = 0; i < 16; i++) {
+              if (lv_color_eq(c, lv_color_hex(oldp[i]))) {
+                return lv_color_hex(newp[i]);
+              }
+            }
+            return c;
+          };
+
+          // Iterative traversal avoids recursion depth concerns.
+          std::vector<lv_obj_t *> stack;
+          // mono_home is an ESPHome LvPageType wrapper, not lv_obj_t*.
+          // Start from the first real top-level LVGL object instead.
+          stack.push_back(lv_screen_active());
+
+          while (!stack.empty()) {
+            lv_obj_t *obj = stack.back();
+            stack.pop_back();
+
+            const lv_part_t parts[] = {
+              LV_PART_MAIN,
+              LV_PART_INDICATOR,
+              LV_PART_KNOB
+            };
+
+            for (lv_part_t part : parts) {
+              const lv_color_t bg = lv_obj_get_style_bg_color(obj, part);
+              const lv_color_t border = lv_obj_get_style_border_color(obj, part);
+              const lv_color_t txt = lv_obj_get_style_text_color(obj, part);
+
+              lv_obj_set_style_bg_color(obj, remap(bg), part);
+              lv_obj_set_style_border_color(obj, remap(border), part);
+              lv_obj_set_style_text_color(obj, remap(txt), part);
+            }
+
+            const uint32_t child_count = lv_obj_get_child_count(obj);
+            for (uint32_t i = 0; i < child_count; i++) {
+              lv_obj_t *child = lv_obj_get_child(obj, i);
+              if (child != nullptr) stack.push_back(child);
+            }
+          }
+
+          id(theme_index) = t;
+          id(theme_bg) = newp[13];       // original 0xECECEA
+          id(theme_selected) = newp[10]; // original 0xD8D8D8
+
+          const char *name = "MONO";
+          if (t == 1) name = "WARM";
+          else if (t == 2) name = "OCEAN";
+          else if (t == 3) name = "DARK";
+
+          lv_label_set_text(id(current_theme_label), name);
+
+          // Dedicated theme-aware icon role.
+          // Font-based functional icons follow the theme; PNG navigation
+          // artwork and battery images intentionally retain their originals.
+          static const uint32_t icon_colors[4] = {
+            0x111111,  // MONO
+            0x684B3B,  // WARM
+            0x1E5573,  // OCEAN
+            0xF2F4F5   // DARK
+          };
+          const lv_color_t icon_color = lv_color_hex(icon_colors[t]);
+
+          lv_obj_set_style_text_color(id(settings_nav_icon),   icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(settings_title_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(settings_reload_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_unit_icon),        icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_plus_icon),        icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_minus_icon),       icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(humidity_icon),       icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(room_temp_icon),      icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_auto_icon),        icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_quiet_icon),       icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(ac_power_icon),       icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(slot0_icon),          icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(slot1_icon),          icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(slot2_icon),          icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(slot3_icon),          icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(gas_meter_icon),      icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_unit_icon),  icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_plus_icon),  icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_minus_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_count_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_room_temp_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_auto_icon),  icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_quiet_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_ac_power_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_light_icon),    icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_all_off_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_living_ac_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_living_light_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_parents_ac_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_parents_light_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_darren_ac_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_darren_light_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_amber_ac_icon), icon_color, LV_PART_MAIN);
+          lv_obj_set_style_text_color(id(house_amber_light_icon), icon_color, LV_PART_MAIN);
+
+          // ---------------------------------------------------
+          // THEME-AWARE LVGL SWITCHES
+          //
+          // LVGL has its own checked-state indicator style. If we
+          // only remap the base object colors, the built-in checked
+          // style can remain blue. Explicitly style MAIN, KNOB and
+          // the CHECKED INDICATOR for every switch used by this UI.
+          // ---------------------------------------------------
+          static const uint32_t switch_off_colors[4] = {
+            0xC8C8C8,  // MONO
+            0xDEC3A8,  // WARM
+            0xB5D8E1,  // OCEAN
+            0x4A4F53   // DARK
+          };
+
+          static const uint32_t switch_on_colors[4] = {
+            0x111111,  // MONO
+            0x684B3B,  // WARM
+            0x1E5573,  // OCEAN
+            0xD2AE8D   // DARK
+          };
+
+          static const uint32_t switch_knob_colors[4] = {
+            0xF7F7F4,  // MONO
+            0xFFFAF5,  // WARM
+            0xF8FDFD,  // OCEAN
+            0xF8F8F8   // DARK
+          };
+
+          const lv_color_t switch_off =
+              lv_color_hex(switch_off_colors[t]);
+          const lv_color_t switch_on =
+              lv_color_hex(switch_on_colors[t]);
+          const lv_color_t switch_knob =
+              lv_color_hex(switch_knob_colors[t]);
+
+          auto theme_switch = [&](lv_obj_t *sw) {
+            // OFF track
+            lv_obj_set_style_bg_color(
+              sw,
+              switch_off,
+              LV_PART_MAIN | LV_STATE_DEFAULT
+            );
+
+            // ON track/indicator. Explicit LV_STATE_CHECKED is what
+            // prevents LVGL's default blue checked color from winning.
+            lv_obj_set_style_bg_color(
+              sw,
+              switch_on,
+              LV_PART_INDICATOR | LV_STATE_CHECKED
+            );
+
+            // Also set the base indicator for consistency while LVGL
+            // transitions between states.
+            lv_obj_set_style_bg_color(
+              sw,
+              switch_on,
+              LV_PART_INDICATOR | LV_STATE_DEFAULT
+            );
+
+            // Knob in both OFF and ON states.
+            lv_obj_set_style_bg_color(
+              sw,
+              switch_knob,
+              LV_PART_KNOB | LV_STATE_DEFAULT
+            );
+            lv_obj_set_style_bg_color(
+              sw,
+              switch_knob,
+              LV_PART_KNOB | LV_STATE_CHECKED
+            );
+
+            lv_obj_invalidate(sw);
+          };
+
+          theme_switch(id(slot0_switch));
+          theme_switch(id(slot1_switch));
+          theme_switch(id(slot2_switch));
+          theme_switch(id(slot3_switch));
+          theme_switch(id(house_light_switch));
+
+          // ---------------------------------------------------
+          // THEME-AWARE LVGL SLIDERS
+          //
+          // MAIN      = unfilled track
+          // INDICATOR = filled/value portion
+          // KNOB      = draggable handle
+          // ---------------------------------------------------
+          static const uint32_t slider_track_colors[4] = {
+            0xD8D8D8,  // MONO
+            0xE8D4BE,  // WARM
+            0xCBE5EA,  // OCEAN
+            0x4A4F53   // DARK
+          };
+
+          static const uint32_t slider_fill_colors[4] = {
+            0x111111,  // MONO
+            0x684B3B,  // WARM
+            0x1E5573,  // OCEAN
+            0xD2AE8D   // DARK
+          };
+
+          static const uint32_t slider_knob_colors[4] = {
+            0x111111,  // MONO
+            0x684B3B,  // WARM
+            0x1E5573,  // OCEAN
+            0xD2AE8D   // DARK
+          };
+
+          const lv_color_t slider_track =
+              lv_color_hex(slider_track_colors[t]);
+          const lv_color_t slider_fill =
+              lv_color_hex(slider_fill_colors[t]);
+          const lv_color_t slider_knob =
+              lv_color_hex(slider_knob_colors[t]);
+
+          auto theme_slider = [&](lv_obj_t *slider) {
+            lv_obj_set_style_bg_color(
+              slider,
+              slider_track,
+              LV_PART_MAIN | LV_STATE_DEFAULT
+            );
+            lv_obj_set_style_bg_color(
+              slider,
+              slider_fill,
+              LV_PART_INDICATOR | LV_STATE_DEFAULT
+            );
+            lv_obj_set_style_bg_color(
+              slider,
+              slider_knob,
+              LV_PART_KNOB | LV_STATE_DEFAULT
+            );
+            lv_obj_invalidate(slider);
+          };
+
+          theme_slider(id(slot0_slider));
+          theme_slider(id(slot1_slider));
+          theme_slider(id(slot2_slider));
+          theme_slider(id(slot3_slider));
+          theme_slider(id(house_light_slider));
+
+          // Keep a clear selection indicator on the four theme buttons.
+          lv_obj_set_style_border_width(id(theme_mono_button),  t == 0 ? 5 : 2, LV_PART_MAIN);
+          lv_obj_set_style_border_width(id(theme_warm_button),  t == 1 ? 5 : 2, LV_PART_MAIN);
+          lv_obj_set_style_border_width(id(theme_ocean_button), t == 2 ? 5 : 2, LV_PART_MAIN);
+          lv_obj_set_style_border_width(id(theme_dark_button),  t == 3 ? 5 : 2, LV_PART_MAIN);
+
+          // Re-assert the currently selected top tab.
+          const lv_color_t normal = lv_color_hex(id(theme_bg));
+          const lv_color_t selected = lv_color_hex(id(theme_selected));
+
+          lv_obj_set_style_bg_color(id(tab_all_button),      normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_living_button),   normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_parents_button),  normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_darren_button),   normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_amber_button),    normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_gas_button),      normal, LV_PART_MAIN);
+          lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+
+          if (id(active_view) == "settings") {
+            lv_obj_set_style_bg_color(id(tab_settings_button), selected, LV_PART_MAIN);
+          } else if (id(active_view) == "gas") {
+            lv_obj_set_style_bg_color(id(tab_gas_button), selected, LV_PART_MAIN);
+          } else if (id(active_view) == "house") {
+            lv_obj_set_style_bg_color(id(tab_all_button), selected, LV_PART_MAIN);
+          } else if (id(active_view) == "room") {
+            if (id(active_room) == "living") {
+              lv_obj_set_style_bg_color(id(tab_living_button), selected, LV_PART_MAIN);
+            } else if (id(active_room) == "parents") {
+              lv_obj_set_style_bg_color(id(tab_parents_button), selected, LV_PART_MAIN);
+            } else if (id(active_room) == "darren") {
+              lv_obj_set_style_bg_color(id(tab_darren_button), selected, LV_PART_MAIN);
+            } else if (id(active_room) == "amber") {
+              lv_obj_set_style_bg_color(id(tab_amber_button), selected, LV_PART_MAIN);
+            }
+          }
+
+          lv_obj_invalidate(lv_screen_active());
+
+# ============================================================
+# LVGL - PORTRAIT 720 x 1280
+#
+# Deliberately monochrome/e-paper visual language:
+# background  : off-white
+# primary     : black
+# secondary   : medium gray
+# controls    : light gray
+#
+# The actual Tab5 remains an LCD; this is an e-paper-style theme.
+# ============================================================
+
+lvgl:
+  displays:
+    - tab5_display
+  rotation: 0
+  disp_bg_color: 0xECECEA
+  disp_bg_opa: COVER
+  default_font: montserrat_18
+  touchscreens:
+    - touchscreen_id: tab5_touch
+
+  on_idle:
+    - timeout: 20s
+      then:
+        - light.turn_on:
+            id: display_backlight
+            brightness: 20%
+            transition_length: 400ms
+    - timeout: 60s
+      then:
+        - light.turn_off:
+            id: display_backlight
+            transition_length: 400ms
+        - lvgl.pause:
+
+  style_definitions:
+    - id: mono_panel
+      bg_color: 0xECECEA
+      bg_opa: COVER
+      border_color: 0x333333
+      border_width: 3
+      radius: 8
+      pad_all: 0
+    - id: mono_button
+      bg_color: 0xECECEA
+      bg_opa: COVER
+      border_color: 0x222222
+      border_width: 2
+      radius: 8
+      shadow_opa: TRANSP
+      text_color: 0x111111
+    - id: keypad_button
+      bg_color: 0xF5F5F2
+      bg_opa: COVER
+      border_color: 0x222222
+      border_width: 2
+      radius: 10
+      shadow_opa: TRANSP
+      text_color: 0x111111
+
+  pages:
+    - id: mono_home
+      bg_color: 0xECECEA
+      bg_opa: COVER
+      widgets:
+        - image: { x: 12, y: 14, src: img_dayong }
+
+        - button:
+            id: tab_all_button
+            x: 116
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            bg_color: 0xD8D8D8
+            widgets: [ { image: { align: CENTER, src: img_tab_all } } ]
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+
+                    // Navigation action: restore House panel visibility,
+                    // render cached values immediately, then request one
+                    // asynchronous refresh from AppDaemon.
+                    id(open_house).execute();
+        - button:
+            id: tab_living_button
+            x: 200
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets:
+              - image:
+                  align: CENTER
+                  src: img_tab_living
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+                    id(open_room_living).execute();
+        - button:
+            id: tab_parents_button
+            x: 284
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets: [ { image: { align: CENTER, src: img_tab_papamama } } ]
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+                    id(open_room_parents).execute();
+        - button:
+            id: tab_darren_button
+            x: 368
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets: [ { image: { align: CENTER, src: img_tab_darren } } ]
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+                    id(open_room_darren).execute();
+        - button:
+            id: tab_amber_button
+            x: 452
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets: [ { image: { align: CENTER, src: img_tab_amber } } ]
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+                    id(open_room_amber).execute();
+        - button:
+            id: tab_gas_button
+            x: 536
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets: [ { image: { align: CENTER, src: img_tab_gas } } ]
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), selected, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), normal, LV_PART_MAIN);
+                    id(active_view) = "gas";
+                    id(settings_open) = false;
+                    lv_obj_add_flag(id(house_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(ac_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(light_grid), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(settings_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_clear_flag(id(gas_panel), LV_OBJ_FLAG_HIDDEN);
+        - button:
+            id: tab_settings_button
+            x: 620
+            y: 10
+            width: 84
+            height: 112
+            styles: mono_button
+            widgets:
+              - label:
+                  id: settings_nav_icon
+                  align: CENTER
+                  text: "\U0000E8B8"
+                  text_font: icon_nav_84
+                  text_color: 0x111111
+            on_click:
+              - lambda: |-
+                    const lv_color_t normal = lv_color_hex(id(theme_bg));
+                    const lv_color_t selected = lv_color_hex(id(theme_selected));
+                    lv_obj_set_style_bg_color(id(tab_all_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_living_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_parents_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_darren_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_amber_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_gas_button), normal, LV_PART_MAIN);
+                    lv_obj_set_style_bg_color(id(tab_settings_button), selected, LV_PART_MAIN);
+                    id(active_view) = "settings";
+                    id(settings_open) = true;
+                    lv_obj_add_flag(id(house_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(ac_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(light_grid), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_add_flag(id(gas_panel), LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_clear_flag(id(settings_panel), LV_OBJ_FLAG_HIDDEN);
+
+        # Local battery indicator - bottom-right, outside all panels/cells.
+        - image:
+            id: battery_level_image
+            x: 656
+            y: 1210
+            src: batt_empty
+        - animimg:
+            id: battery_charging_anim
+            x: 656
+            y: 1210
+            src: [batt_empty, batt_10, batt_20, batt_30, batt_40, batt_50, batt_60, batt_70, batt_80, batt_90, batt_full]
+            duration: 1200ms
+            repeat_count: forever
+            hidden: true
+        - label:
+            id: battery_percent_label
+            x: 585
+            y: 1219
+            width: 68
+            text: "--%"
+            text_font: montserrat_16
+            text_color: 0x111111
+            text_align: RIGHT
+
+        - obj:
+            id: house_panel
+            x: 34
+            y: 150
+            width: 652
+            height: 985
+            bg_opa: TRANSP
+            border_opa: TRANSP
+            pad_all: 0
+            widgets:
+              # ======================================================
+              # TOP ROW — WHOLE-HOUSE AC
+              # Same control language as the room AC card; the only
+              # difference is that ESPHome supplies four logical keys.
+              # ======================================================
+              - obj:
+                  id: house_ac_card
+                  x: 0
+                  y: 0
+                  width: 652
+                  height: 345
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: house_ac_unit_icon, x: 18, y: 16, text: "\U0000EB3B", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: house_ac_mode_label, x: 305, y: 50, text: "SYNCING -- --", text_font: montserrat_16, text_color: 0x555555 }
+                    - label: { id: house_ac_target_label, x: 160, y: 82, width: 360, text: "-- °C", text_font: montserrat_72, text_color: 0x777777, text_align: CENTER }
+                    - button:
+                        x: 8
+                        y: 36
+                        width: 145
+                        height: 140
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        widgets: [ { label: { id: house_ac_plus_icon, align: CENTER, text: "\U0000E145", text_font: fa_104, text_color: 0x111111 } } ]
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "ac_set_temperature"
+                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                                value: "{{ value }}"
+                              variables:
+                                value: !lambda |-
+                                  const float next = std::max(18.0f, std::min(30.0f, id(house_ac_avg_target) + 0.5f));
+                                  return str_sprintf("%.1f", next);
+                    - button:
+                        x: 8
+                        y: 180
+                        width: 145
+                        height: 140
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        widgets: [ { label: { id: house_ac_minus_icon, align: CENTER, text: "\U0000E15B", text_font: fa_104, text_color: 0x111111 } } ]
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "ac_set_temperature"
+                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                                value: "{{ value }}"
+                              variables:
+                                value: !lambda |-
+                                  const float next = std::max(18.0f, std::min(30.0f, id(house_ac_avg_target) - 0.5f));
+                                  return str_sprintf("%.1f", next);
+                    - label: { id: house_ac_count_icon, x: 530, y: 45, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_ac_count_label, x: 560, y: 45, width: 65, text: "0/4", text_font: montserrat_22, text_color: 0x444444 }
+                    - label: { id: house_ac_room_temp_icon, x: 530, y: 75, text: "\U0000F1F1", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_ac_room_temp_label, x: 560, y: 75, width: 70, text: "--°", text_font: montserrat_22, text_color: 0x444444 }
+                    - button:
+                        x: 160
+                        y: 238
+                        width: 115
+                        height: 88
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        widgets: [ { label: { id: house_ac_auto_icon, align: CENTER, text: "\U0000F417", text_font: fa_brands_64, text_color: 0x111111 } } ]
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data:
+                                action: "ac_fan_auto"
+                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                    - button:
+                        x: 290
+                        y: 238
+                        width: 115
+                        height: 88
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        widgets: [ { label: { id: house_ac_quiet_icon, align: CENTER, text: "\U0000EC1A", text_font: fa_64, text_color: 0x111111 } } ]
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data:
+                                action: "ac_fan_quiet"
+                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                    - button:
+                        x: 425
+                        y: 228
+                        width: 120
+                        height: 105
+                        bg_opa: TRANSP
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        widgets: [ { label: { id: house_ac_power_icon, align: CENTER, text: "\U0000E8AC", text_font: fa_64, text_color: 0x111111 } } ]
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data:
+                                action: "ac_power_toggle"
+                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+
+              # ======================================================
+              # MIDDLE LEFT — ALL HOUSE LIGHTS (light_group)
+              # ======================================================
+              - obj:
+                  id: house_light_card
+                  x: 0
+                  y: 365
+                  width: 321
+                  height: 300
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: house_light_icon, x: 10, y: 10, text: "\U000FFF76", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: house_light_name, x: 88, y: 24, text: "全燈", text_font: cn_42, text_color: 0x111111 }
+                    - switch:
+                        id: house_light_switch
+                        x: 205
+                        y: 26
+                        width: 96
+                        height: 54
+                        bg_color: 0xC8C8C8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
+                        on_value:
+                          - if:
+                              condition:
+                                lambda: 'return !id(syncing_ui);'
+                              then:
+                                - homeassistant.event:
+                                    event: esphome.tab5_command
+                                    data_template:
+                                      action: "light_power"
+                                      devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
+                                      value: "{{ value }}"
+                                    variables:
+                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                    - button:
+                        x: 26
+                        y: 118
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x6F6F6F
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "2700" }
+                    - button:
+                        x: 96
+                        y: 118
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x949494
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "3500" }
+                    - button:
+                        x: 166
+                        y: 118
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xBEBEBE
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "4500" }
+                    - button:
+                        x: 236
+                        y: 118
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xE7E7E7
+                        border_color: 0x555555
+                        border_width: 1
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "6500" }
+                    - slider:
+                        id: house_light_slider
+                        x: 28
+                        y: 215
+                        width: 264
+                        height: 34
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0xD8D8D8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_release:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_brightness"
+                                devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
+                                value: "{{ value }}"
+                              variables:
+                                value: !lambda 'return (int) x;'
+
+              # MIDDLE RIGHT — MASTER ALL OFF
+              - button:
+                  id: house_all_off_button
+                  x: 331
+                  y: 365
+                  width: 321
+                  height: 300
+                  styles: mono_button
+                  widgets:
+                    - label:
+                        id: house_all_off_icon
+                        align: CENTER
+                        text: "\U0000E8AC"
+                        text_font: fa_power_160
+                        text_color: 0x111111
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data:
+                          action: "all_off"
+                          ac_devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                          light_devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
+
+              # ======================================================
+              # BOTTOM ROW — STATUS ONLY, NEVER ACTIONABLE
+              # ======================================================
+              - obj:
+                  x: 0
+                  y: 685
+                  width: 157
+                  height: 230
+                  styles: mono_panel
+                  widgets:
+                    - label: { x: 0, y: 20, width: 157, text: "客廳", text_font: cn_24, text_align: CENTER, text_color: 0x111111 }
+                    - label: { id: house_living_ac_icon, x: 30, y: 78, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_living_ac_dot, x: 92, y: 75, text: "●", text_font: cn_24, text_color: 0x777777 }
+                    - label: { id: house_living_light_icon, x: 30, y: 140, text: "\U0000F02A", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_living_light_dot, x: 92, y: 137, text: "●", text_font: cn_24, text_color: 0x777777 }
+              - obj:
+                  x: 165
+                  y: 685
+                  width: 157
+                  height: 230
+                  styles: mono_panel
+                  widgets:
+                    - label: { x: 0, y: 20, width: 157, text: "爹娘", text_font: cn_24, text_align: CENTER, text_color: 0x111111 }
+                    - label: { id: house_parents_ac_icon, x: 30, y: 78, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_parents_ac_dot, x: 92, y: 75, text: "●", text_font: cn_24, text_color: 0x777777 }
+                    - label: { id: house_parents_light_icon, x: 30, y: 140, text: "\U0000F02A", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_parents_light_dot, x: 92, y: 137, text: "●", text_font: cn_24, text_color: 0x777777 }
+              - obj:
+                  x: 330
+                  y: 685
+                  width: 157
+                  height: 230
+                  styles: mono_panel
+                  widgets:
+                    - label: { x: 0, y: 20, width: 157, text: "宸", text_font: cn_24, text_align: CENTER, text_color: 0x111111 }
+                    - label: { id: house_darren_ac_icon, x: 30, y: 78, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_darren_ac_dot, x: 92, y: 75, text: "●", text_font: cn_24, text_color: 0x777777 }
+                    - label: { id: house_darren_light_icon, x: 30, y: 140, text: "\U0000F02A", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_darren_light_dot, x: 92, y: 137, text: "●", text_font: cn_24, text_color: 0x777777 }
+              - obj:
+                  x: 495
+                  y: 685
+                  width: 157
+                  height: 230
+                  styles: mono_panel
+                  widgets:
+                    - label: { x: 0, y: 20, width: 157, text: "芹", text_font: cn_24, text_align: CENTER, text_color: 0x111111 }
+                    - label: { id: house_amber_ac_icon, x: 30, y: 78, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_amber_ac_dot, x: 92, y: 75, text: "●", text_font: cn_24, text_color: 0x777777 }
+                    - label: { id: house_amber_light_icon, x: 30, y: 140, text: "\U0000F02A", text_font: fa_24, text_color: 0x111111 }
+                    - label: { id: house_amber_light_dot, x: 92, y: 137, text: "●", text_font: cn_24, text_color: 0x777777 }
+        - obj:
+            id: ac_panel
+            x: 34
+            y: 150
+            width: 652
+            height: 345
+            styles: mono_panel
+            hidden: true
+            widgets:
+              - label: { id: ac_unit_icon, x: 18, y: 16, text: "\U0000EB3B", text_font: fa_64, text_color: 0x111111 }
+              - label: { id: ac_mode_label, x: 305, y: 50, text: "OFF -- Auto", text_font: montserrat_16, text_color: 0x555555 }
+              - label: { id: ac_target_label, x: 160, y: 82, width: 360, text: "26.0° C", text_font: montserrat_72, text_color: 0x777777, text_align: CENTER }
+              - button:
+                  x: 8
+                  y: 36
+                  width: 145
+                  height: 140
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets: [ { label: { id: ac_plus_icon, align: CENTER, text: "\U0000E145", text_font: fa_104, text_color: 0x111111 } } ]
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data_template:
+                          action: "ac_temp_delta"
+                          device: "{{ device }}"
+                          value: "0.5"
+                        variables:
+                          device: !lambda 'return id(active_ac_device);' 
+              - button:
+                  x: 8
+                  y: 180
+                  width: 145
+                  height: 140
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets: [ { label: { id: ac_minus_icon, align: CENTER, text: "\U0000E15B", text_font: fa_104, text_color: 0x111111 } } ]
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data_template:
+                          action: "ac_temp_delta"
+                          device: "{{ device }}"
+                          value: "-0.5"
+                        variables:
+                          device: !lambda 'return id(active_ac_device);' 
+              - label: { id: humidity_icon, x: 530, y: 45, text: "\U0000E798", text_font: fa_24, text_color: 0x111111 }
+              - label: { id: humidity_label, x: 560, y: 45, width: 65, text: "--%", text_font: montserrat_22, text_color: 0x444444 }
+              - label: { id: room_temp_icon, x: 530, y: 75, text: "\U0000F1F1", text_font: fa_24, text_color: 0x111111 }
+              - label: { id: room_temp_label, x: 560, y: 75, width: 70, text: "--°", text_font: montserrat_22, text_color: 0x444444 }
+              - button:
+                  x: 160
+                  y: 238
+                  width: 115
+                  height: 88
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets: [ { label: { id: ac_auto_icon, align: CENTER, text: "\U0000F417", text_font: fa_brands_64, text_color: 0x111111 } } ]
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data_template:
+                          action: "ac_fan_auto"
+                          device: "{{ device }}"
+                        variables:
+                          device: !lambda 'return id(active_ac_device);' 
+              - button:
+                  x: 290
+                  y: 238
+                  width: 115
+                  height: 88
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets: [ { label: { id: ac_quiet_icon, align: CENTER, text: "\U0000EC1A", text_font: fa_64, text_color: 0x111111 } } ]
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data_template:
+                          action: "ac_fan_quiet"
+                          device: "{{ device }}"
+                        variables:
+                          device: !lambda 'return id(active_ac_device);' 
+              - button:
+                  x: 425
+                  y: 228
+                  width: 120
+                  height: 105
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  widgets: [ { label: { id: ac_power_icon, align: CENTER, text: "\U0000E8AC", text_font: fa_64, text_color: 0x111111 } } ]
+                  on_click:
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data_template:
+                          action: "ac_power_toggle"
+                          device: "{{ device }}"
+                        variables:
+                          device: !lambda 'return id(active_ac_device);' 
+
+        - obj:
+            id: light_grid
+            x: 34
+            y: 515
+            width: 652
+            height: 620
+            bg_opa: TRANSP
+            hidden: true
+            border_opa: TRANSP
+            pad_all: 0
+            widgets:
+              - obj:
+                  id: slot0_card
+                  x: 0
+                  y: 0
+                  width: 321
+                  height: 303
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: slot0_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: slot0_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
+                    - switch:
+                        id: slot0_switch
+                        x: 205
+                        y: 26
+                        width: 96
+                        height: 54
+                        bg_color: 0xC8C8C8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
+                        on_value:
+                          - if:
+                              condition:
+                                lambda: 'return !id(syncing_ui);'
+                              then:
+                                - homeassistant.event:
+                                    event: esphome.tab5_command
+                                    data_template:
+                                      action: "light_power"
+                                      devices: "{{ devices }}"
+                                      value: "{{ value }}"
+                                    variables:
+                                      devices: !lambda 'return id(slot0_local_devices);'
+                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                    - button:
+                        x: 26
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x6F6F6F
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "2700"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                    - button:
+                        x: 96
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x949494
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "3500"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                    - button:
+                        x: 166
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xBEBEBE
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "4500"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                    - button:
+                        x: 236
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xE7E7E7
+                        border_color: 0x555555
+                        border_width: 1
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "6500"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                    - slider:
+                        id: slot0_slider
+                        x: 28
+                        y: 220
+                        width: 264
+                        height: 34
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0xD8D8D8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_release:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_brightness"
+                                devices: "{{ devices }}"
+                                value: "{{ value }}"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                                value: !lambda 'return (int) x;'
+              - obj:
+                  id: slot1_card
+                  x: 331
+                  y: 0
+                  width: 321
+                  height: 303
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: slot1_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: slot1_name, x: 88, y: 24, text: "床頭", text_font: cn_42, text_color: 0x111111 }
+                    - switch:
+                        id: slot1_switch
+                        x: 205
+                        y: 26
+                        width: 96
+                        height: 54
+                        bg_color: 0xC8C8C8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
+                        on_value:
+                          - if:
+                              condition:
+                                lambda: 'return !id(syncing_ui);'
+                              then:
+                                - homeassistant.event:
+                                    event: esphome.tab5_command
+                                    data_template:
+                                      action: "light_power"
+                                      devices: "{{ devices }}"
+                                      value: "{{ value }}"
+                                    variables:
+                                      devices: !lambda 'return id(slot1_local_devices);'
+                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                    - button:
+                        x: 26
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x6F6F6F
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "2700"
+                              variables:
+                                devices: !lambda 'return id(slot1_local_devices);'
+                    - button:
+                        x: 96
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x949494
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "3500"
+                              variables:
+                                devices: !lambda 'return id(slot1_local_devices);'
+                    - button:
+                        x: 166
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xBEBEBE
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "4500"
+                              variables:
+                                devices: !lambda 'return id(slot1_local_devices);'
+                    - button:
+                        x: 236
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xE7E7E7
+                        border_color: 0x555555
+                        border_width: 1
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "6500"
+                              variables:
+                                devices: !lambda 'return id(slot1_local_devices);'
+                    - slider:
+                        id: slot1_slider
+                        x: 28
+                        y: 220
+                        width: 264
+                        height: 34
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0xD8D8D8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_release:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_brightness"
+                                devices: "{{ devices }}"
+                                value: "{{ value }}"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                                value: !lambda 'return (int) x;'
+              - obj:
+                  id: slot2_card
+                  x: 0
+                  y: 313
+                  width: 321
+                  height: 303
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: slot2_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: slot2_name, x: 88, y: 24, text: "床尾", text_font: cn_42, text_color: 0x111111 }
+                    - switch:
+                        id: slot2_switch
+                        x: 205
+                        y: 26
+                        width: 96
+                        height: 54
+                        bg_color: 0xC8C8C8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
+                        on_value:
+                          - if:
+                              condition:
+                                lambda: 'return !id(syncing_ui);'
+                              then:
+                                - homeassistant.event:
+                                    event: esphome.tab5_command
+                                    data_template:
+                                      action: "light_power"
+                                      devices: "{{ devices }}"
+                                      value: "{{ value }}"
+                                    variables:
+                                      devices: !lambda 'return id(slot2_local_devices);'
+                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                    - button:
+                        x: 26
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x6F6F6F
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "2700"
+                              variables:
+                                devices: !lambda 'return id(slot2_local_devices);'
+                    - button:
+                        x: 96
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x949494
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "3500"
+                              variables:
+                                devices: !lambda 'return id(slot2_local_devices);'
+                    - button:
+                        x: 166
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xBEBEBE
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "4500"
+                              variables:
+                                devices: !lambda 'return id(slot2_local_devices);'
+                    - button:
+                        x: 236
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xE7E7E7
+                        border_color: 0x555555
+                        border_width: 1
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "6500"
+                              variables:
+                                devices: !lambda 'return id(slot2_local_devices);'
+                    - slider:
+                        id: slot2_slider
+                        x: 28
+                        y: 220
+                        width: 264
+                        height: 34
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0xD8D8D8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_release:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_brightness"
+                                devices: "{{ devices }}"
+                                value: "{{ value }}"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                                value: !lambda 'return (int) x;'
+              - obj:
+                  id: slot3_card
+                  x: 331
+                  y: 313
+                  width: 321
+                  height: 303
+                  styles: mono_panel
+                  widgets:
+                    - label: { id: slot3_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
+                    - label: { id: slot3_name, x: 88, y: 24, text: "桌", text_font: cn_42, text_color: 0x111111 }
+                    - switch:
+                        id: slot3_switch
+                        x: 205
+                        y: 26
+                        width: 96
+                        height: 54
+                        bg_color: 0xC8C8C8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
+                        on_value:
+                          - if:
+                              condition:
+                                lambda: 'return !id(syncing_ui);'
+                              then:
+                                - homeassistant.event:
+                                    event: esphome.tab5_command
+                                    data_template:
+                                      action: "light_power"
+                                      devices: "{{ devices }}"
+                                      value: "{{ value }}"
+                                    variables:
+                                      devices: !lambda 'return id(slot3_local_devices);'
+                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                    - button:
+                        x: 26
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x6F6F6F
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "2700"
+                              variables:
+                                devices: !lambda 'return id(slot3_local_devices);'
+                    - button:
+                        x: 96
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0x949494
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "3500"
+                              variables:
+                                devices: !lambda 'return id(slot3_local_devices);'
+                    - button:
+                        x: 166
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xBEBEBE
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "4500"
+                              variables:
+                                devices: !lambda 'return id(slot3_local_devices);'
+                    - button:
+                        x: 236
+                        y: 125
+                        width: 58
+                        height: 58
+                        radius: 29
+                        bg_color: 0xE7E7E7
+                        border_color: 0x555555
+                        border_width: 1
+                        shadow_opa: TRANSP
+                        on_click:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_cct"
+                                devices: "{{ devices }}"
+                                value: "6500"
+                              variables:
+                                devices: !lambda 'return id(slot3_local_devices);'
+                    - slider:
+                        id: slot3_slider
+                        x: 28
+                        y: 220
+                        width: 264
+                        height: 34
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0xD8D8D8
+                        indicator: { bg_color: 0x111111, bg_opa: COVER }
+                        knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_release:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "light_brightness"
+                                devices: "{{ devices }}"
+                                value: "{{ value }}"
+                              variables:
+                                devices: !lambda 'return id(slot0_local_devices);'
+                                value: !lambda 'return (int) x;'
+
+
+        - obj:
+            id: settings_panel
+            x: 34
+            y: 150
+            width: 652
+            height: 985
+            styles: mono_panel
+            hidden: true
+            widgets:
+
+              - label:
+                  id: settings_title_icon
+                  x: 20
+                  y: 15
+                  text: "\U0000E8B8"
+                  text_font: fa_64
+                  text_color: 0x111111
+
+              - label:
+                  x: 100
+                  y: 28
+                  text: "THEME"
+                  text_font: montserrat_32
+                  text_color: 0x111111
+
+              - label:
+                  x: 410
+                  y: 34
+                  text: "ACTIVE:"
+                  text_font: montserrat_18
+                  text_color: 0x555555
+
+              - label:
+                  id: current_theme_label
+                  x: 505
+                  y: 30
+                  width: 120
+                  text: "MONO"
+                  text_font: montserrat_22
+                  text_color: 0x111111
+                  text_align: RIGHT
+
+              - button:
+                  id: theme_mono_button
+                  x: 55
+                  y: 150
+                  width: 250
+                  height: 150
+                  styles: mono_button
+                  border_width: 5
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "MONO"
+                        text_font: montserrat_32
+                        text_color: 0x111111
+                  on_click:
+                    - script.execute:
+                        id: apply_theme
+                        theme: 0
+
+              - button:
+                  id: theme_warm_button
+                  x: 345
+                  y: 150
+                  width: 250
+                  height: 150
+                  styles: mono_button
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "WARM"
+                        text_font: montserrat_32
+                        text_color: 0x111111
+                  on_click:
+                    - script.execute:
+                        id: apply_theme
+                        theme: 1
+
+              - button:
+                  id: theme_ocean_button
+                  x: 55
+                  y: 340
+                  width: 250
+                  height: 150
+                  styles: mono_button
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "OCEAN"
+                        text_font: montserrat_32
+                        text_color: 0x111111
+                  on_click:
+                    - script.execute:
+                        id: apply_theme
+                        theme: 2
+
+              - button:
+                  id: theme_dark_button
+                  x: 345
+                  y: 340
+                  width: 250
+                  height: 150
+                  styles: mono_button
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "DARK"
+                        text_font: montserrat_32
+                        text_color: 0x111111
+                  on_click:
+                    - script.execute:
+                        id: apply_theme
+                        theme: 3
+
+              - label:
+                  x: 55
+                  y: 555
+                  width: 540
+                  text: "Themes are applied locally on Tab5.\nNo AppDaemon change or firmware rebuild is needed to switch between these four installed palettes."
+                  text_font: montserrat_18
+                  text_color: 0x555555
+                  long_mode: WRAP
+
+              # ------------------------------------------------
+              # Xiaomi Home manual recovery
+              # Left: wifi_home reload button
+              # Right: live availability / recovery message
+              # ------------------------------------------------
+              - label:
+                  x: 55
+                  y: 665
+                  text: "DEVICE RECOVERY"
+                  text_font: montserrat_22
+                  text_color: 0x555555
+
+              - button:
+                  id: xiaomi_reload_button
+                  x: 55
+                  y: 710
+                  width: 150
+                  height: 150
+                  styles: mono_button
+                  widgets:
+                    - label:
+                        id: settings_reload_icon
+                        align: CENTER
+                        text: "\U0000F671"
+                        text_font: fa_64
+                        text_color: 0x111111
+                  on_click:
+                    - lambda: |-
+                        lv_label_set_text(
+                          id(device_recovery_message),
+                          "Reload requested... waiting for Xiaomi Home to reconnect devices."
+                        );
+                    - homeassistant.event:
+                        event: esphome.tab5_command
+                        data:
+                          action: "reload_xiaomi"
+
+              - obj:
+                  x: 230
+                  y: 710
+                  width: 365
+                  height: 150
+                  bg_opa: TRANSP
+                  border_color: 0x555555
+                  border_width: 2
+                  radius: 8
+                  pad_all: 14
+                  widgets:
+                    - label:
+                        id: device_recovery_message
+                        x: 0
+                        y: 0
+                        width: 335
+                        height: 120
+                        text: "Checking Xiaomi Home device availability..."
+                        text_font: montserrat_18
+                        text_color: 0x111111
+                        long_mode: WRAP
+
+        - obj:
+            id: gas_panel
+            x: 34
+            y: 150
+            width: 652
+            height: 985
+            styles: mono_panel
+            hidden: true
+            widgets:
+
+              - label:
+                  id: gas_meter_icon
+                  x: 20
+                  y: 15
+                  text: "\U0000EC19"
+                  text_font: fa_64
+                  text_color: 0x111111
+
+              # ------------------------------------------------
+              # Meter digits
+              # ------------------------------------------------
+              - obj:
+                  x: 60
+                  y: 75
+                  width: 532
+                  height: 105
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  widgets:
+                    - label:
+                        id: gas_pin_label
+                        align: CENTER
+                        text: "_  _  _  _"
+                        text_font: montserrat_72
+                        text_color: 0x111111
+
+              # ------------------------------------------------
+              # Numeric keypad
+              # ------------------------------------------------
+              - button:
+                  x: 90
+                  y: 205
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "1", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "1"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 260
+                  y: 205
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "2", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "2"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 430
+                  y: 205
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "3", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "3"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 90
+                  y: 298
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "4", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "4"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 260
+                  y: 298
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "5", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "5"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 430
+                  y: 298
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "6", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "6"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 90
+                  y: 391
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "7", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "7"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 260
+                  y: 391
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "8", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "8"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 430
+                  y: 391
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "9", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "9"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 90
+                  y: 484
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "CLR", text_font: montserrat_22 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting)) { id(gas_pin).clear(); lv_label_set_text(id(gas_pin_label), "_  _  _  _"); }'
+
+              - button:
+                  x: 260
+                  y: 484
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "0", text_font: montserrat_36 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && id(gas_pin).size() < 4) { id(gas_pin) += "0"; lv_label_set_text(id(gas_pin_label), id(gas_pin).c_str()); }'
+
+              - button:
+                  x: 430
+                  y: 484
+                  width: 130
+                  height: 78
+                  styles: keypad_button
+                  widgets:
+                    - label: { align: CENTER, text: "DEL", text_font: montserrat_22 }
+                  on_click:
+                    - lambda: 'if (!id(gas_submitting) && !id(gas_pin).empty()) { id(gas_pin).pop_back(); lv_label_set_text(id(gas_pin_label), id(gas_pin).empty() ? "_  _  _  _" : id(gas_pin).c_str()); }'
+
+              # ------------------------------------------------
+              # Real submission button
+              # 1..4 digits are accepted; backend zero-pads.
+              # ------------------------------------------------
+              - button:
+                  id: gas_submit_button
+                  x: 160
+                  y: 585
+                  width: 330
+                  height: 90
+                  styles: keypad_button
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "SUBMIT"
+                        text_font: montserrat_32
+                  on_click:
+                    - if:
+                        condition:
+                          lambda: 'return !id(gas_submitting) && !id(gas_pin).empty() && id(gas_pin).size() <= 4;'
+                        then:
+                          - homeassistant.event:
+                              event: esphome.tab5_command
+                              data_template:
+                                action: "gas_submit"
+                                value: "{{ pin }}"
+                              variables:
+                                pin: !lambda 'return id(gas_pin);'
+
+              # ------------------------------------------------
+              # Bottom submission console
+              # ------------------------------------------------
+              - obj:
+                  x: 25
+                  y: 700
+                  width: 602
+                  height: 255
+                  bg_color: 0xF5F5F2
+                  bg_opa: COVER
+                  border_color: 0x333333
+                  border_width: 2
+                  radius: 8
+                  pad_all: 12
+                  widgets:
+
+                    - label:
+                        x: 0
+                        y: 0
+                        text: "SUBMISSION STATUS"
+                        text_font: montserrat_18
+                        text_color: 0x555555
+
+                    - label:
+                        id: gas_status_label
+                        x: 0
+                        y: 28
+                        width: 250
+                        text: "ready"
+                        text_font: montserrat_26
+                        text_color: 0x111111
+
+                    - label:
+                        id: gas_result_label
+                        x: 275
+                        y: 8
+                        width: 295
+                        height: 112
+                        text: "Ready for meter reading"
+                        text_font: montserrat_16
+                        text_color: 0x222222
+                        long_mode: WRAP
+
+                    - obj:
+                        x: 0
+                        y: 125
+                        width: 570
+                        height: 102
+                        bg_color: 0xE7E7E4
+                        bg_opa: COVER
+                        border_opa: TRANSP
+                        radius: 4
+                        pad_all: 8
+                        widgets:
+                          - label:
+                              id: gas_log_label
+                              x: 0
+                              y: 0
+                              width: 552
+                              height: 86
+                              text: "Backend ready"
+                              text_font: montserrat_16
+                              text_color: 0x333333
+                              long_mode: WRAP
+
+# ============================================================
+# LCD BACKLIGHT
+# ============================================================
+output:
+  - platform: ledc
+    id: backlight_pwm
+    pin: GPIO22
+    frequency: 1000Hz
+
+light:
+  - platform: monochromatic
+    id: display_backlight
+    name: "Tab5 Display Backlight"
+    output: backlight_pwm
+    restore_mode: ALWAYS_ON

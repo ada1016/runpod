@@ -1,0 +1,29 @@
+# Active V3 room definition.
+# UI structure/group membership lives on Tab5, not AppDaemon.
+script:
+  - id: open_room_darren
+    mode: restart
+    then:
+      - lambda: |-
+          id(active_view) = "room";
+          id(active_room) = "darren";
+          id(active_ac_device) = "ac_darren";
+          id(active_humidity_device) = "humidity_darren";
+          id(slot0_local_name) = "床頭";
+          id(slot0_local_type) = "light";
+          id(slot0_local_devices) = "light_da_head";
+          id(slot1_local_name) = "床尾";
+          id(slot1_local_type) = "light";
+          id(slot1_local_devices) = "light_da_foot";
+          id(slot2_local_name) = "桌";
+          id(slot2_local_type) = "light";
+          id(slot2_local_devices) = "light_da_desk";
+          id(slot3_local_name) = "全";
+          id(slot3_local_type) = "light_group";
+          id(slot3_local_devices) = "light_da_head,light_da_foot,light_da_desk";
+      - script.execute: render_active_room
+      - homeassistant.event:
+          event: esphome.tab5_command
+          data:
+            action: "refresh_devices"
+            devices: "ac_darren,humidity_darren,light_da_head,light_da_foot,light_da_desk"

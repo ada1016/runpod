@@ -1,0 +1,5 @@
+Canonical V2 gas backend
+Source: user-supplied gas_meter(4).py
+Line count: 1040
+SHA256: 8c7bd3cbe508c66b6f2fa23bbd7fea08e254647a8c5cdae8cba5ea9fe010dc7c
+This file is carried into the complete V2 package without redesign changes.
