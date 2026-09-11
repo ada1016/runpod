@@ -75,24 +75,13 @@ script:
           int available=0, on_count=0, current_count=0, target_count=0;
           float current_sum=0.0f, target_sum=0.0f;
           std::string mode="--", fan="--";
-          bool representative_set=false;
-
+          bool first=true;
           for (const auto &a : acs) {
             if (!a.available) continue;
-            available++;
-            if (a.on) on_count++;
+            available++; if (a.on) on_count++;
             if (!isnan(a.current)) { current_sum += a.current; current_count++; }
             if (!isnan(a.target)) { target_sum += a.target; target_count++; }
-
-            // House page intentionally never displays MIXED. Before the user
-            // applies a House command, mode/fan are represented by the first
-            // available AC. AUTO/QUIET/POWER commands immediately synchronize
-            // all four ACs to the same setting.
-            if (!representative_set) {
-              mode = a.mode;
-              fan = a.fan;
-              representative_set = true;
-            }
+            if (first) { mode=a.mode; fan=a.fan; first=false; }
           }
 
           char buf[80];
@@ -102,12 +91,9 @@ script:
           } else {
             snprintf(buf, sizeof(buf), "%s -- %s", mode.c_str(), fan.c_str());
             lv_label_set_text(id(house_ac_mode_label), buf);
-
             if (target_count > 0) {
-              // Display/control the average target, rounded to the nearest 0.5 C.
               float avg_target = target_sum / target_count;
               avg_target = roundf(avg_target * 2.0f) / 2.0f;
-              avg_target = std::max(18.0f, std::min(30.0f, avg_target));
               id(house_ac_avg_target) = avg_target;
               snprintf(buf, sizeof(buf), "%.1f °C", avg_target);
             } else {
@@ -145,17 +131,8 @@ script:
           id(syncing_ui)=true;
           if (any_on) lv_obj_add_state(id(house_light_switch), LV_STATE_CHECKED); else lv_obj_clear_state(id(house_light_switch), LV_STATE_CHECKED);
           lv_slider_set_value(id(house_light_slider), avg_bri, LV_ANIM_OFF);
-          // Aggregate controls must remain actionable even when one member is
-          // temporarily unavailable. AppDaemon will still send the command to
-          // every currently mapped HA entity; unavailable members can recover
-          // independently. Only disable before we have any light state at all.
-          if (have) {
-            lv_obj_clear_state(id(house_light_switch), LV_STATE_DISABLED);
-            lv_obj_clear_state(id(house_light_slider), LV_STATE_DISABLED);
-          } else {
-            lv_obj_add_state(id(house_light_switch), LV_STATE_DISABLED);
-            lv_obj_add_state(id(house_light_slider), LV_STATE_DISABLED);
-          }
+          if (have) { lv_obj_clear_state(id(house_light_switch), LV_STATE_DISABLED); lv_obj_clear_state(id(house_light_slider), LV_STATE_DISABLED); }
+          else { lv_obj_add_state(id(house_light_switch), LV_STATE_DISABLED); lv_obj_add_state(id(house_light_slider), LV_STATE_DISABLED); }
           id(syncing_ui)=false;
 
           auto set_ac_dot = [&](lv_obj_t *dot, const ACState &a) {

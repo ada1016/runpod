@@ -1,1 +1,103 @@
-# Shared AC UI/behavior currently lives once in ../../tab5.yaml.
+obj:
+  id: ac_panel
+  x: 34
+  y: 150
+  width: 652
+  height: 345
+  styles: mono_panel
+  hidden: true
+  widgets:
+    - label: { id: ac_unit_icon, x: 18, y: 16, text: "\U0000EB3B", text_font: fa_64, text_color: 0x111111 }
+    - label: { id: ac_mode_label, x: 160, y: 50, width: 360, text: "OFF -- Auto -- --°C -- --%", text_font: montserrat_16, text_color: 0x555555, text_align: CENTER }
+    - label: { id: ac_target_label, x: 160, y: 82, width: 360, text: "26.0° C", text_font: montserrat_72, text_color: 0x777777, text_align: CENTER }
+    - button:
+        x: 8
+        y: 36
+        width: 145
+        height: 140
+        bg_opa: TRANSP
+        border_opa: TRANSP
+        shadow_opa: TRANSP
+        widgets: [ { label: { id: ac_plus_icon, align: CENTER, text: "\U0000E145", text_font: fa_104, text_color: 0x111111 } } ]
+        on_click:
+          - homeassistant.event:
+              event: esphome.tab5_command
+              data_template:
+                action: "ac_temp_delta"
+                device: "{{ device }}"
+                value: "0.5"
+              variables:
+                device: !lambda 'return id(active_ac_device);' 
+    - button:
+        x: 8
+        y: 180
+        width: 145
+        height: 140
+        bg_opa: TRANSP
+        border_opa: TRANSP
+        shadow_opa: TRANSP
+        widgets: [ { label: { id: ac_minus_icon, align: CENTER, text: "\U0000E15B", text_font: fa_104, text_color: 0x111111 } } ]
+        on_click:
+          - homeassistant.event:
+              event: esphome.tab5_command
+              data_template:
+                action: "ac_temp_delta"
+                device: "{{ device }}"
+                value: "-0.5"
+              variables:
+                device: !lambda 'return id(active_ac_device);' 
+    - label: { id: humidity_icon, x: 530, y: 45, text: "\U0000E798", text_font: fa_24, text_color: 0x111111 }
+    - label: { id: humidity_label, x: 560, y: 45, width: 65, text: "--%", text_font: montserrat_22, text_color: 0x444444 }
+    - label: { id: room_temp_icon, x: 530, y: 75, text: "\U0000F1F1", text_font: fa_24, text_color: 0x111111 }
+    - label: { id: room_temp_label, x: 560, y: 75, width: 70, text: "--°", text_font: montserrat_22, text_color: 0x444444 }
+    - button:
+        x: 160
+        y: 238
+        width: 115
+        height: 88
+        bg_opa: TRANSP
+        border_opa: TRANSP
+        shadow_opa: TRANSP
+        widgets: [ { label: { id: ac_auto_icon, align: CENTER, text: "\U0000F417", text_font: fa_brands_64, text_color: 0x111111 } } ]
+        on_click:
+          - homeassistant.event:
+              event: esphome.tab5_command
+              data_template:
+                action: "ac_fan_auto"
+                device: "{{ device }}"
+              variables:
+                device: !lambda 'return id(active_ac_device);' 
+    - button:
+        x: 290
+        y: 238
+        width: 115
+        height: 88
+        bg_opa: TRANSP
+        border_opa: TRANSP
+        shadow_opa: TRANSP
+        widgets: [ { label: { id: ac_quiet_icon, align: CENTER, text: "\U0000EC1A", text_font: fa_64, text_color: 0x111111 } } ]
+        on_click:
+          - homeassistant.event:
+              event: esphome.tab5_command
+              data_template:
+                action: "ac_fan_quiet"
+                device: "{{ device }}"
+              variables:
+                device: !lambda 'return id(active_ac_device);' 
+    - button:
+        x: 425
+        y: 228
+        width: 120
+        height: 105
+        bg_opa: TRANSP
+        border_opa: TRANSP
+        shadow_opa: TRANSP
+        widgets: [ { label: { id: ac_power_icon, align: CENTER, text: "\U0000E8AC", text_font: fa_64, text_color: 0x111111 } } ]
+        on_click:
+          - homeassistant.event:
+              event: esphome.tab5_command
+              data_template:
+                action: "ac_power_toggle"
+                device: "{{ device }}"
+              variables:
+                device: !lambda 'return id(active_ac_device);'

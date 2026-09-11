@@ -9,6 +9,8 @@ script:
           id(active_room) = "living";
           id(active_ac_device) = "ac_living";
           id(active_humidity_device) = "humidity_living";
+          id(active_temperature_device) = "temperature_living";
+          id(active_ac_humidity_device) = "ac_humidity_living";
           id(slot0_local_name) = "客廳";
           id(slot0_local_type) = "light";
           id(slot0_local_devices) = "light_living_room";
@@ -26,4 +28,4 @@ script:
           event: esphome.tab5_command
           data:
             action: "refresh_devices"
-            devices: "ac_living,humidity_living,light_living_room"
+            devices: "ac_living,humidity_living,temperature_living,ac_humidity_living,light_living_room"

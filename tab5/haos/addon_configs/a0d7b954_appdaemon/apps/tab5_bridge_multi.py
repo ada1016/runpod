@@ -57,11 +57,24 @@ class Tab5MultiBridge(hass.Hass):
         }
 
         # Optional environmental sensors.
+        # Room temperature/humidity come from Xiaomi sensors.
+        # Daikin humidity is shown in the room AC status line.
         optional = {
+            "temperature_living": self.args.get("temperature_living", ""),
             "humidity_living": self.args.get("humidity_living", ""),
+            "ac_humidity_living": self.args.get("ac_humidity_living", ""),
+
+            "temperature_parents": self.args.get("temperature_parents", ""),
             "humidity_parents": self.args.get("humidity_parents", ""),
+            "ac_humidity_parents": self.args.get("ac_humidity_parents", ""),
+
+            "temperature_darren": self.args.get("temperature_darren", ""),
             "humidity_darren": self.args.get("humidity_darren", ""),
+            "ac_humidity_darren": self.args.get("ac_humidity_darren", ""),
+
+            "temperature_amber": self.args.get("temperature_amber", ""),
             "humidity_amber": self.args.get("humidity_amber", ""),
+            "ac_humidity_amber": self.args.get("ac_humidity_amber", ""),
         }
         for key, entity in optional.items():
             if entity:

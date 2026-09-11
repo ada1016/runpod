@@ -382,6 +382,7 @@ font:
     size: 84
     glyphs:
       - "\U0000E8B8"  # settings
+      - "\U0000F671"  # wifi_home / ALL
 
   # Extra-large Font Awesome controls for AC temperature +/-
   - file: "fonts/tab5_icons.ttf"
@@ -391,7 +392,6 @@ font:
       - "\U0000E145"  # Plus
       - "\U0000E15B"  # Minus
 
-  # Giant whole-house master power-off icon
   - file: "fonts/tab5_icons.ttf"
     id: fa_power_160
     size: 160
@@ -409,7 +409,6 @@ globals:
     initial_value: 'false'
 
   # Whole-house AC target shown/controlled on House page.
-  # Updated from the average of available AC target temperatures.
   - id: house_ac_avg_target
     type: float
     restore_value: no
@@ -473,6 +472,16 @@ globals:
     initial_value: '""'
 
   - id: active_humidity_device
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: active_temperature_device
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: active_ac_humidity_device
     type: std::string
     restore_value: no
     initial_value: '""'
@@ -597,6 +606,40 @@ globals:
     restore_value: no
     initial_value: '""'
 
+  - id: cache_temperature_living
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_temperature_parents
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_temperature_darren
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_temperature_amber
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+  - id: cache_ac_humidity_living
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_humidity_parents
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_humidity_darren
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: cache_ac_humidity_amber
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
 # ============================================================
 # APPDAEMON V3 THIN DEVICE BRIDGE
 # ONE HA listener only: sensor.tab5_ui_bridge
@@ -651,6 +694,16 @@ text_sensor:
               else if (key == "humidity_parents") id(cache_humidity_parents) = packet;
               else if (key == "humidity_darren") id(cache_humidity_darren) = packet;
               else if (key == "humidity_amber") id(cache_humidity_amber) = packet;
+
+              else if (key == "temperature_living") id(cache_temperature_living) = packet;
+              else if (key == "temperature_parents") id(cache_temperature_parents) = packet;
+              else if (key == "temperature_darren") id(cache_temperature_darren) = packet;
+              else if (key == "temperature_amber") id(cache_temperature_amber) = packet;
+
+              else if (key == "ac_humidity_living") id(cache_ac_humidity_living) = packet;
+              else if (key == "ac_humidity_parents") id(cache_ac_humidity_parents) = packet;
+              else if (key == "ac_humidity_darren") id(cache_ac_humidity_darren) = packet;
+              else if (key == "ac_humidity_amber") id(cache_ac_humidity_amber) = packet;
 
               if (id(active_view) == "room") {
                 id(render_active_room).execute();
@@ -897,6 +950,16 @@ script:
             if (key == "humidity_parents") return id(cache_humidity_parents);
             if (key == "humidity_darren") return id(cache_humidity_darren);
             if (key == "humidity_amber") return id(cache_humidity_amber);
+
+            if (key == "temperature_living") return id(cache_temperature_living);
+            if (key == "temperature_parents") return id(cache_temperature_parents);
+            if (key == "temperature_darren") return id(cache_temperature_darren);
+            if (key == "temperature_amber") return id(cache_temperature_amber);
+
+            if (key == "ac_humidity_living") return id(cache_ac_humidity_living);
+            if (key == "ac_humidity_parents") return id(cache_ac_humidity_parents);
+            if (key == "ac_humidity_darren") return id(cache_ac_humidity_darren);
+            if (key == "ac_humidity_amber") return id(cache_ac_humidity_amber);
             return "";
           };
 
@@ -917,12 +980,28 @@ script:
 
           // ---------------- AC ----------------
           const std::string ac_packet = packet_for(id(active_ac_device));
-          char buf[72];
+          const std::string ac_humidity_packet = packet_for(
+            id(active_ac_humidity_device)
+          );
+          char buf[96];
+
+          std::string ac_humidity = "--";
+          if (!ac_humidity_packet.empty()) {
+            const auto ah = split_packet(ac_humidity_packet);
+            if (
+              ah.size() >= 7
+              && ah[0] == "3"
+              && ah[1] == "D"
+              && ah[3] == "sensor"
+              && ah[5] == "1"
+            ) {
+              ac_humidity = ah[4];
+            }
+          }
 
           if (ac_packet.empty()) {
-            lv_label_set_text(id(ac_mode_label), "SYNCING -- --");
+            lv_label_set_text(id(ac_mode_label), "SYNCING -- -- --°C --%");
             lv_label_set_text(id(ac_target_label), "-- °C");
-            lv_label_set_text(id(room_temp_label), "--°");
           } else {
             const auto ac = split_packet(ac_packet);
 
@@ -936,29 +1015,53 @@ script:
                 snprintf(
                   buf,
                   sizeof(buf),
-                  "%s -- %s",
+                  "%s -- %s -- %s°C -- %s%%",
                   ac[4].c_str(),
-                  ac[5].c_str()
+                  ac[5].c_str(),
+                  ac[7].c_str(),
+                  ac_humidity.c_str()
                 );
               } else {
                 snprintf(
                   buf,
                   sizeof(buf),
-                  "UNAVAILABLE -- %s",
-                  ac[5].c_str()
+                  "UNAVAILABLE -- %s -- %s°C -- %s%%",
+                  ac[5].c_str(),
+                  ac[7].c_str(),
+                  ac_humidity.c_str()
                 );
               }
               lv_label_set_text(id(ac_mode_label), buf);
 
               snprintf(buf, sizeof(buf), "%s °C", ac[6].c_str());
               lv_label_set_text(id(ac_target_label), buf);
-
-              snprintf(buf, sizeof(buf), "%s°", ac[7].c_str());
-              lv_label_set_text(id(room_temp_label), buf);
             }
           }
 
-          // ---------------- Humidity ----------------
+          // ---------------- Xiaomi room temperature ----------------
+          const std::string temperature_packet = packet_for(
+            id(active_temperature_device)
+          );
+
+          if (temperature_packet.empty()) {
+            lv_label_set_text(id(room_temp_label), "--°");
+          } else {
+            const auto temp = split_packet(temperature_packet);
+            if (
+              temp.size() >= 7
+              && temp[0] == "3"
+              && temp[1] == "D"
+              && temp[3] == "sensor"
+              && temp[5] == "1"
+            ) {
+              snprintf(buf, sizeof(buf), "%s°", temp[4].c_str());
+              lv_label_set_text(id(room_temp_label), buf);
+            } else {
+              lv_label_set_text(id(room_temp_label), "--°");
+            }
+          }
+
+          // ---------------- Xiaomi room humidity ----------------
           const std::string humidity_packet = packet_for(
             id(active_humidity_device)
           );
@@ -1548,7 +1651,12 @@ lvgl:
             height: 112
             styles: mono_button
             bg_color: 0xD8D8D8
-            widgets: [ { image: { align: CENTER, src: img_tab_all } } ]
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "\U0000F671"
+                  text_font: icon_nav_84
+                  text_color: 0xD94236
             on_click:
               - lambda: |-
                     const lv_color_t normal = lv_color_hex(id(theme_bg));
@@ -2031,635 +2139,8 @@ lvgl:
                     - label: { id: house_amber_ac_dot, x: 92, y: 75, text: "●", text_font: cn_24, text_color: 0x777777 }
                     - label: { id: house_amber_light_icon, x: 30, y: 140, text: "\U0000F02A", text_font: fa_24, text_color: 0x111111 }
                     - label: { id: house_amber_light_dot, x: 92, y: 137, text: "●", text_font: cn_24, text_color: 0x777777 }
-        - obj:
-            id: ac_panel
-            x: 34
-            y: 150
-            width: 652
-            height: 345
-            styles: mono_panel
-            hidden: true
-            widgets:
-              - label: { id: ac_unit_icon, x: 18, y: 16, text: "\U0000EB3B", text_font: fa_64, text_color: 0x111111 }
-              - label: { id: ac_mode_label, x: 305, y: 50, text: "OFF -- Auto", text_font: montserrat_16, text_color: 0x555555 }
-              - label: { id: ac_target_label, x: 160, y: 82, width: 360, text: "26.0° C", text_font: montserrat_72, text_color: 0x777777, text_align: CENTER }
-              - button:
-                  x: 8
-                  y: 36
-                  width: 145
-                  height: 140
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  shadow_opa: TRANSP
-                  widgets: [ { label: { id: ac_plus_icon, align: CENTER, text: "\U0000E145", text_font: fa_104, text_color: 0x111111 } } ]
-                  on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data_template:
-                          action: "ac_temp_delta"
-                          device: "{{ device }}"
-                          value: "0.5"
-                        variables:
-                          device: !lambda 'return id(active_ac_device);' 
-              - button:
-                  x: 8
-                  y: 180
-                  width: 145
-                  height: 140
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  shadow_opa: TRANSP
-                  widgets: [ { label: { id: ac_minus_icon, align: CENTER, text: "\U0000E15B", text_font: fa_104, text_color: 0x111111 } } ]
-                  on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data_template:
-                          action: "ac_temp_delta"
-                          device: "{{ device }}"
-                          value: "-0.5"
-                        variables:
-                          device: !lambda 'return id(active_ac_device);' 
-              - label: { id: humidity_icon, x: 530, y: 45, text: "\U0000E798", text_font: fa_24, text_color: 0x111111 }
-              - label: { id: humidity_label, x: 560, y: 45, width: 65, text: "--%", text_font: montserrat_22, text_color: 0x444444 }
-              - label: { id: room_temp_icon, x: 530, y: 75, text: "\U0000F1F1", text_font: fa_24, text_color: 0x111111 }
-              - label: { id: room_temp_label, x: 560, y: 75, width: 70, text: "--°", text_font: montserrat_22, text_color: 0x444444 }
-              - button:
-                  x: 160
-                  y: 238
-                  width: 115
-                  height: 88
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  shadow_opa: TRANSP
-                  widgets: [ { label: { id: ac_auto_icon, align: CENTER, text: "\U0000F417", text_font: fa_brands_64, text_color: 0x111111 } } ]
-                  on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data_template:
-                          action: "ac_fan_auto"
-                          device: "{{ device }}"
-                        variables:
-                          device: !lambda 'return id(active_ac_device);' 
-              - button:
-                  x: 290
-                  y: 238
-                  width: 115
-                  height: 88
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  shadow_opa: TRANSP
-                  widgets: [ { label: { id: ac_quiet_icon, align: CENTER, text: "\U0000EC1A", text_font: fa_64, text_color: 0x111111 } } ]
-                  on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data_template:
-                          action: "ac_fan_quiet"
-                          device: "{{ device }}"
-                        variables:
-                          device: !lambda 'return id(active_ac_device);' 
-              - button:
-                  x: 425
-                  y: 228
-                  width: 120
-                  height: 105
-                  bg_opa: TRANSP
-                  border_opa: TRANSP
-                  shadow_opa: TRANSP
-                  widgets: [ { label: { id: ac_power_icon, align: CENTER, text: "\U0000E8AC", text_font: fa_64, text_color: 0x111111 } } ]
-                  on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data_template:
-                          action: "ac_power_toggle"
-                          device: "{{ device }}"
-                        variables:
-                          device: !lambda 'return id(active_ac_device);' 
-
-        - obj:
-            id: light_grid
-            x: 34
-            y: 515
-            width: 652
-            height: 620
-            bg_opa: TRANSP
-            hidden: true
-            border_opa: TRANSP
-            pad_all: 0
-            widgets:
-              - obj:
-                  id: slot0_card
-                  x: 0
-                  y: 0
-                  width: 321
-                  height: 303
-                  styles: mono_panel
-                  widgets:
-                    - label: { id: slot0_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-                    - label: { id: slot0_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
-                    - switch:
-                        id: slot0_switch
-                        x: 205
-                        y: 26
-                        width: 96
-                        height: 54
-                        bg_color: 0xC8C8C8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
-                        on_value:
-                          - if:
-                              condition:
-                                lambda: 'return !id(syncing_ui);'
-                              then:
-                                - homeassistant.event:
-                                    event: esphome.tab5_command
-                                    data_template:
-                                      action: "light_power"
-                                      devices: "{{ devices }}"
-                                      value: "{{ value }}"
-                                    variables:
-                                      devices: !lambda 'return id(slot0_local_devices);'
-                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
-                    - button:
-                        x: 26
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x6F6F6F
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "2700"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                    - button:
-                        x: 96
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x949494
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "3500"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                    - button:
-                        x: 166
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xBEBEBE
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "4500"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                    - button:
-                        x: 236
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xE7E7E7
-                        border_color: 0x555555
-                        border_width: 1
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "6500"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                    - slider:
-                        id: slot0_slider
-                        x: 28
-                        y: 220
-                        width: 264
-                        height: 34
-                        min_value: 0
-                        max_value: 100
-                        value: 50
-                        bg_color: 0xD8D8D8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0x111111, bg_opa: COVER }
-                        on_release:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_brightness"
-                                devices: "{{ devices }}"
-                                value: "{{ value }}"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                                value: !lambda 'return (int) x;'
-              - obj:
-                  id: slot1_card
-                  x: 331
-                  y: 0
-                  width: 321
-                  height: 303
-                  styles: mono_panel
-                  widgets:
-                    - label: { id: slot1_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-                    - label: { id: slot1_name, x: 88, y: 24, text: "床頭", text_font: cn_42, text_color: 0x111111 }
-                    - switch:
-                        id: slot1_switch
-                        x: 205
-                        y: 26
-                        width: 96
-                        height: 54
-                        bg_color: 0xC8C8C8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
-                        on_value:
-                          - if:
-                              condition:
-                                lambda: 'return !id(syncing_ui);'
-                              then:
-                                - homeassistant.event:
-                                    event: esphome.tab5_command
-                                    data_template:
-                                      action: "light_power"
-                                      devices: "{{ devices }}"
-                                      value: "{{ value }}"
-                                    variables:
-                                      devices: !lambda 'return id(slot1_local_devices);'
-                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
-                    - button:
-                        x: 26
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x6F6F6F
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "2700"
-                              variables:
-                                devices: !lambda 'return id(slot1_local_devices);'
-                    - button:
-                        x: 96
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x949494
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "3500"
-                              variables:
-                                devices: !lambda 'return id(slot1_local_devices);'
-                    - button:
-                        x: 166
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xBEBEBE
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "4500"
-                              variables:
-                                devices: !lambda 'return id(slot1_local_devices);'
-                    - button:
-                        x: 236
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xE7E7E7
-                        border_color: 0x555555
-                        border_width: 1
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "6500"
-                              variables:
-                                devices: !lambda 'return id(slot1_local_devices);'
-                    - slider:
-                        id: slot1_slider
-                        x: 28
-                        y: 220
-                        width: 264
-                        height: 34
-                        min_value: 0
-                        max_value: 100
-                        value: 50
-                        bg_color: 0xD8D8D8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0x111111, bg_opa: COVER }
-                        on_release:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_brightness"
-                                devices: "{{ devices }}"
-                                value: "{{ value }}"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                                value: !lambda 'return (int) x;'
-              - obj:
-                  id: slot2_card
-                  x: 0
-                  y: 313
-                  width: 321
-                  height: 303
-                  styles: mono_panel
-                  widgets:
-                    - label: { id: slot2_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-                    - label: { id: slot2_name, x: 88, y: 24, text: "床尾", text_font: cn_42, text_color: 0x111111 }
-                    - switch:
-                        id: slot2_switch
-                        x: 205
-                        y: 26
-                        width: 96
-                        height: 54
-                        bg_color: 0xC8C8C8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
-                        on_value:
-                          - if:
-                              condition:
-                                lambda: 'return !id(syncing_ui);'
-                              then:
-                                - homeassistant.event:
-                                    event: esphome.tab5_command
-                                    data_template:
-                                      action: "light_power"
-                                      devices: "{{ devices }}"
-                                      value: "{{ value }}"
-                                    variables:
-                                      devices: !lambda 'return id(slot2_local_devices);'
-                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
-                    - button:
-                        x: 26
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x6F6F6F
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "2700"
-                              variables:
-                                devices: !lambda 'return id(slot2_local_devices);'
-                    - button:
-                        x: 96
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x949494
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "3500"
-                              variables:
-                                devices: !lambda 'return id(slot2_local_devices);'
-                    - button:
-                        x: 166
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xBEBEBE
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "4500"
-                              variables:
-                                devices: !lambda 'return id(slot2_local_devices);'
-                    - button:
-                        x: 236
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xE7E7E7
-                        border_color: 0x555555
-                        border_width: 1
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "6500"
-                              variables:
-                                devices: !lambda 'return id(slot2_local_devices);'
-                    - slider:
-                        id: slot2_slider
-                        x: 28
-                        y: 220
-                        width: 264
-                        height: 34
-                        min_value: 0
-                        max_value: 100
-                        value: 50
-                        bg_color: 0xD8D8D8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0x111111, bg_opa: COVER }
-                        on_release:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_brightness"
-                                devices: "{{ devices }}"
-                                value: "{{ value }}"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                                value: !lambda 'return (int) x;'
-              - obj:
-                  id: slot3_card
-                  x: 331
-                  y: 313
-                  width: 321
-                  height: 303
-                  styles: mono_panel
-                  widgets:
-                    - label: { id: slot3_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-                    - label: { id: slot3_name, x: 88, y: 24, text: "桌", text_font: cn_42, text_color: 0x111111 }
-                    - switch:
-                        id: slot3_switch
-                        x: 205
-                        y: 26
-                        width: 96
-                        height: 54
-                        bg_color: 0xC8C8C8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0xF7F7F4, bg_opa: COVER }
-                        on_value:
-                          - if:
-                              condition:
-                                lambda: 'return !id(syncing_ui);'
-                              then:
-                                - homeassistant.event:
-                                    event: esphome.tab5_command
-                                    data_template:
-                                      action: "light_power"
-                                      devices: "{{ devices }}"
-                                      value: "{{ value }}"
-                                    variables:
-                                      devices: !lambda 'return id(slot3_local_devices);'
-                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
-                    - button:
-                        x: 26
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x6F6F6F
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "2700"
-                              variables:
-                                devices: !lambda 'return id(slot3_local_devices);'
-                    - button:
-                        x: 96
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0x949494
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "3500"
-                              variables:
-                                devices: !lambda 'return id(slot3_local_devices);'
-                    - button:
-                        x: 166
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xBEBEBE
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "4500"
-                              variables:
-                                devices: !lambda 'return id(slot3_local_devices);'
-                    - button:
-                        x: 236
-                        y: 125
-                        width: 58
-                        height: 58
-                        radius: 29
-                        bg_color: 0xE7E7E7
-                        border_color: 0x555555
-                        border_width: 1
-                        shadow_opa: TRANSP
-                        on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_cct"
-                                devices: "{{ devices }}"
-                                value: "6500"
-                              variables:
-                                devices: !lambda 'return id(slot3_local_devices);'
-                    - slider:
-                        id: slot3_slider
-                        x: 28
-                        y: 220
-                        width: 264
-                        height: 34
-                        min_value: 0
-                        max_value: 100
-                        value: 50
-                        bg_color: 0xD8D8D8
-                        indicator: { bg_color: 0x111111, bg_opa: COVER }
-                        knob: { bg_color: 0x111111, bg_opa: COVER }
-                        on_release:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_brightness"
-                                devices: "{{ devices }}"
-                                value: "{{ value }}"
-                              variables:
-                                devices: !lambda 'return id(slot0_local_devices);'
-                                value: !lambda 'return (int) x;'
-
-
+        - !include ui/devices/ac.yaml
+        - !include ui/devices/light.yaml
         - obj:
             id: settings_panel
             x: 34

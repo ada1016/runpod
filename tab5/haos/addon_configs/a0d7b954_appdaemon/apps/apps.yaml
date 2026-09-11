@@ -32,8 +32,20 @@ tab5_multi_bridge:
   light_am_desk: light.lemesh_cn_1119409647_wy0c15_s_2_light
 
   humidity_all: ""
-  humidity_living: ""
-  humidity_parents: ""
-  humidity_darren: ""
-  humidity_amber: ""
+
+  temperature_living: sensor.xiaomi_sg_blt_1_1q77vf2ed4g01_minigl_temperature_p_2_1001
+  humidity_living: sensor.xiaomi_sg_blt_1_1q77vf2ed4g01_minigl_relative_humidity_p_2_1002
+  ac_humidity_living: sensor.living_room_daikin_ke_target_humidity
+
+  temperature_parents: sensor.xiaomi_sg_blt_1_1q78027a54g03_minigl_temperature_p_2_1001
+  humidity_parents: sensor.xiaomi_sg_blt_1_1q78027a54g03_minigl_relative_humidity_p_2_1002
+  ac_humidity_parents: sensor.280060372jia_daikin_ba_ma_target_humidity
+
+  temperature_darren: sensor.xiaomi_sg_blt_1_1q780gjkh4g00_minigl_temperature_p_2_1001
+  humidity_darren: sensor.xiaomi_sg_blt_1_1q780gjkh4g00_minigl_relative_humidity_p_2_1002
+  ac_humidity_darren: sensor.280060372jia_daikin_ge_target_humidity
+
+  temperature_amber: sensor.xiaomi_sg_blt_1_1q780s5a14o00_minigl_temperature_p_2_1001
+  humidity_amber: sensor.xiaomi_sg_blt_1_1q780s5a14o00_minigl_relative_humidity_p_2_1002
+  ac_humidity_amber: sensor.280060372jia_daikin_mei_target_humidity
 

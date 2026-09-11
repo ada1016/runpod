@@ -1,0 +1,8 @@
+Restored latest fixes:
+- House average target: PASS
+- House no MIXED: PASS
+- House absolute +/-: PASS
+- Big ALL OFF U+E8AC 160px: PASS
+- ALL nav wifi_home fixed red: PASS
+- Room AC status centered: PASS
+- Latest Xiaomi/Daikin room sensors retained: PASS

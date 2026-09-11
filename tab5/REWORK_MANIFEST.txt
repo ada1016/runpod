@@ -1,0 +1,14 @@
+Reworked from user-provided tab5(2).zip baseline.
+Scope: restore phase-1 AC/light split + room-only Xiaomi temp/humidity + Daikin humidity status.
+ALL/House page unchanged.
+
+Intentionally changed source files:
+- esphome/tab5.yaml
+- esphome/ui/devices/light.yaml
+- esphome/ui/devices/ac.yaml
+- esphome/ui/rooms/living_room.yaml
+- esphome/ui/rooms/parents_room.yaml
+- esphome/ui/rooms/darren_room.yaml
+- esphome/ui/rooms/amber_room.yaml
+- haos/addon_configs/a0d7b954_appdaemon/apps/apps.yaml
+- haos/addon_configs/a0d7b954_appdaemon/apps/tab5_bridge_multi.py
