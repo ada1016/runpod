@@ -24,10 +24,9 @@ if git diff --cached --quiet; then
 fi
 
 echo
-read -r -p "Commit message [Update Tab5]: " MESSAGE
-MESSAGE=${MESSAGE:-"Update Tab5"}
 
-git commit -m "$MESSAGE"
+MESSAGE="Tab5 update $(date '+%Y-%m-%d %H:%M:%S')"
+git commit -m "$MESSAGE" -- tab5/
 
 echo
 echo "=== Pushing to GitHub ==="
