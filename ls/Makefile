@@ -101,15 +101,14 @@ git-pull:
 	git -C "$(GIT_ROOT)" pull --ff-only
 
 git-push:
-	@test -n "$(MSG)" || { \
-		echo '[-] Commit message required.'; \
-		echo 'Usage: make git-push MSG="Update Legend Summoner hook"'; \
-		exit 1; \
-	}
-	git -C "$(GIT_ROOT)" add -- "$(CURDIR)"
-	@test -n "$$(git -C "$(GIT_ROOT)" diff --cached --name-only -- "$(CURDIR)")" || { \
-		echo "[*] No ls project changes to commit."; \
+	@set -e; \
+	FOLDER_NAME="$(notdir $(CURDIR))"; \
+	MESSAGE="$$FOLDER_NAME update $$(date '+%Y-%m-%d %H:%M:%S')"; \
+	echo "[+] Commit message: $$MESSAGE"; \
+	git -C "$(GIT_ROOT)" add -- "$(CURDIR)"; \
+	if git -C "$(GIT_ROOT)" diff --cached --quiet -- "$(CURDIR)"; then \
+		echo "[*] No changes under $$FOLDER_NAME to commit."; \
 		exit 0; \
-	}
-	git -C "$(GIT_ROOT)" commit -m "$(MSG)" -- "$(CURDIR)"
+	fi; \
+	git -C "$(GIT_ROOT)" commit -m "$$MESSAGE" -- "$(CURDIR)"; \
 	git -C "$(GIT_ROOT)" push
