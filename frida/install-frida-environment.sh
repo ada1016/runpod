@@ -46,4 +46,4 @@ chmod +x "$SCRIPT_DIR/build.sh" "$SCRIPT_DIR/hook.sh" "$0" 2>/dev/null || true
 
 echo "[+] Environment ready"
 echo "[+] Build: $SCRIPT_DIR/build.sh <project> <source.ts>"
-echo "[+] Hook:  $SCRIPT_DIR/hook.sh <process-name-or-pid> <script.js>"
+echo "[+] Hook:  $SCRIPT_DIR/hook.sh <script.js>"

@@ -65,21 +65,30 @@ PY
 )"
 
 PROCESS_LIST="$("$FRIDA_PS")"
-MATCHES="$(printf '%s\n' "$PROCESS_LIST" | awk -v candidates="$CANDIDATES" '
-    BEGIN {
-        count=split(candidates, wanted, "\n")
-    }
-    $1 ~ /^[0-9]+$/ {
-        pid=$1
-        name=$0
-        sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", name)
-        for (priority=1; priority<=count; priority++) {
-            if (name == wanted[priority]) {
-                print priority "\t" pid "\t" name
-            }
-        }
-    }
-' | sort -n -k1,1 -k2,2)"
+MATCHES="$(printf '%s\n' "$PROCESS_LIST" |
+    "$PYTHON" -c '
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    names = json.load(stream)["process_names"]
+
+priority = {name: index for index, name in enumerate(names)}
+matches = []
+
+for line in sys.stdin:
+    match = re.match(r"^\s*(\d+)\s+(.+?)\s*$", line)
+    if not match:
+        continue
+    pid = int(match.group(1))
+    name = match.group(2)
+    if name in priority:
+        matches.append((priority[name], pid, name))
+
+for _, pid, name in sorted(matches):
+    print(f"{pid}\t{name}")
+' "$HOOK_CONFIG")"
 
 if [[ -z "$MATCHES" ]]; then
     echo "[-] No running process matched names from: $HOOK_CONFIG" >&2
@@ -91,10 +100,10 @@ fi
 
 echo "[+] Matching processes:"
 printf '%s\n' "$MATCHES" |
-    awk -F '\t' '{ printf "    PID %-8s %s\n", $2, $3 }'
+    awk -F '\t' '{ printf "    PID %-8s %s\n", $1, $2 }'
 
-PID="$(printf '%s\n' "$MATCHES" | awk -F '\t' 'NR == 1 { print $2 }')"
-PROCESS_NAME="$(printf '%s\n' "$MATCHES" | awk -F '\t' 'NR == 1 { print $3 }')"
+PID="$(printf '%s\n' "$MATCHES" | awk -F '\t' 'NR == 1 { print $1 }')"
+PROCESS_NAME="$(printf '%s\n' "$MATCHES" | awk -F '\t' 'NR == 1 { print $2 }')"
 
 FRIDA_ARGS=(-p "$PID" -l "$SCRIPT_ABS")
 DEFAULT_HOOKS=()

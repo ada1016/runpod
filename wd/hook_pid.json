@@ -1,0 +1,9 @@
+{
+  "process_names": [
+    "胡鬧地牢",
+    "WittleDefender"
+  ],
+  "default_hook": [
+    "reroll(96)"
+  ]
+}

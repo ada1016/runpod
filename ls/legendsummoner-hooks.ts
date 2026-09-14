@@ -10,7 +10,16 @@ type MultiplierState = {
     combat: number;
 };
 
-const multipliers: MultiplierState = { exp: 1, combat: 1 };
+type ADMockState = {
+    enabled: boolean;
+    count: number;
+};
+
+// Startup defaults. RPC/REPL calls update this shared state immediately, so
+// later inc(...) and addExp(...) calls always override these values.
+const multipliers: MultiplierState = { exp: 2, combat: 8 };
+// LOCAL TEST ENVIRONMENT ONLY: mock five available AD rewards.
+const adMockState: ADMockState = { enabled: true, count: 5 };
 
 let ready = false;
 let projectileIsAllyOffset: number | null = null;
@@ -25,6 +34,44 @@ function combatMultiplier(value: number): number {
     if (!Number.isInteger(value) || value < 1 || value > 20)
         throw new Error("combat multiplier must be an integer from 1 to 20");
     return value;
+}
+
+function adMockCount(value: number): number {
+    if (!Number.isInteger(value) || value < 0 || value > 99)
+        throw new Error("AD mock count must be an integer from 0 to 99");
+    return value;
+}
+
+function replaceIntGetter(method: any, mockedValue: () => number): void {
+    const original: any = new NativeFunction(method.virtualAddress, "int", ["pointer"]);
+    const replacement = new NativeCallback(
+        (self: NativePointer): number =>
+            adMockState.enabled ? mockedValue() : original(self),
+        "int",
+        ["pointer"]
+    );
+    Interceptor.replace(method.virtualAddress, replacement);
+}
+
+function replaceBoolGetter(method: any, mockedValue: () => boolean): void {
+    const original: any = new NativeFunction(method.virtualAddress, "bool", ["pointer"]);
+    const replacement = new NativeCallback(
+        (self: NativePointer): number =>
+            adMockState.enabled ? (mockedValue() ? 1 : 0) : Number(original(self)),
+        "bool",
+        ["pointer"]
+    );
+    Interceptor.replace(method.virtualAddress, replacement);
+}
+
+function installADMockHooks(image: any): void {
+    const ticket = image.class("LS.Database.BoADTicket");
+    replaceIntGetter(selectMethod(ticket, "get_RewardCount", []), () => 0);
+    replaceIntGetter(selectMethod(ticket, "get_MaxRewardCount", []), () => adMockState.count);
+    replaceIntGetter(selectMethod(ticket, "GetRemainRewardCount", []), () => adMockState.count);
+    replaceIntGetter(selectMethod(ticket, "GetRemainWatchCount", []), () => adMockState.count);
+    replaceBoolGetter(selectMethod(ticket, "IsEnable", []), () => adMockState.count > 0);
+    console.log(`[+] LOCAL AD mock installed: ${adMockState.count} available`);
 }
 
 function selectMethod(klass: any, name: string,
@@ -88,6 +135,8 @@ function findProjectileIsAllyOffset(image: any): number | null {
 function installHooks(): void {
     const image = Il2Cpp.domain.assembly("Assembly-CSharp").image;
 
+    installADMockHooks(image);
+
     const hitProcess = image.class("LS.HitProcessSystem");
     const calcDamage = selectMethod(hitProcess, "CalcDamage", [
         "Unity.Entities.SystemState&",
@@ -141,6 +190,8 @@ function installHooks(): void {
     ready = true;
     console.log(`[+] CalcDamage hooked at ${calcDamage.virtualAddress}`);
     console.log(`[+] Summoner.AddExp(uint) hooked at ${addExp.virtualAddress}`);
+    console.log(`[+] startup combat: outgoing x${multipliers.combat}, incoming /${multipliers.combat}`);
+    console.log(`[+] startup EXP multiplier: x${multipliers.exp}`);
 }
 
 const api = {
@@ -156,18 +207,29 @@ const api = {
         return { ...multipliers };
     },
 
+    adMock(value: number): ADMockState {
+        const count = adMockCount(value);
+        adMockState.count = count;
+        adMockState.enabled = count > 0;
+        console.log(adMockState.enabled
+            ? `[+] LOCAL AD mock: ${count} available`
+            : "[+] LOCAL AD mock disabled; original ticket values active");
+        return { ...adMockState };
+    },
+
     status(): object {
         return {
             ready,
             ...multipliers,
-            projectileIsAllyOffset
+            projectileIsAllyOffset,
+            adMock: { ...adMockState }
         };
     }
 };
 
 rpc.exports = api;
 
-// Also make addExp(2) / inc(2) directly callable in Frida's REPL.
+// Also make addExp(2), inc(2) and adMock(5) callable in Frida's REPL.
 Object.assign(globalThis, api);
 
 Il2Cpp.perform(installHooks);
