@@ -61,6 +61,20 @@ The final agent therefore uses three deliberately different mechanisms:
 There is no `ChangeHp` native hook, no continuous hero watcher, and no periodic
 combat mutation loop in the current source.
 
+The decisive static-analysis breakthrough came before any of those hook-design
+choices: the downloaded DLL AssetBundle was not a canonical UnityFS image at
+offset zero. It contained a duplicated UnityFS prefix/load-offset wrapper. The
+bundle had to be normalized at its verified second UnityFS header before an
+asset extractor could recover a DLL that ILSpy could read. This repair step is
+easy to misremember as “shifting the DLL,” but the corrected description is:
+
+```text
+repair the duplicated outer UnityFS wrapper
+    -> extract the raw DLL byte asset
+        -> validate the managed PE
+            -> open the real HotFixBattle method bodies in ILSpy
+```
+
 ## How the real gameplay code was uncovered
 
 ### Initial clue: native inspection did not explain the managed logic
@@ -100,6 +114,147 @@ because Unity reads the Addressables bundle and loads the managed bytes into
 memory; it does not have to keep a standalone `HotFixBattle.dll` open as a
 mapped file.
 
+### Breakthrough: the duplicated UnityFS load-offset wrapper
+
+The first extracted `hotfixbattle.dll.bytes_*.bundle` looked like a UnityFS
+bundle, but ordinary extraction failed. Passing material obtained from the
+unrepaired container onward did not produce an assembly ILSpy could load. The
+failure initially looked like DLL encryption, corruption, or an incompatible
+ILSpy build.
+
+Binary inspection exposed the actual problem:
+
+```bash
+grep -abo "UnityFS" hotfixbattle.active.bundle
+```
+
+For the recovered HotFixBattle bundle, the output was:
+
+```text
+0:UnityFS
+320:UnityFS
+```
+
+Hex offset `320` is `0x140`. More importantly, the first 320 bytes were an
+**exact duplicate** of the next 320 bytes:
+
+```text
+bytes [0x000:0x140] == bytes [0x140:0x280]
+```
+
+The real canonical UnityFS image began at the second header, offset `0x140`.
+The game passed a load offset to Unity's bundle loader, so the prefixed form was
+valid for the game but confusing to tools that assumed the UnityFS container
+began at byte zero and that its declared size reached the physical end of the
+file.
+
+An earlier related HotFix bundle used the same scheme with a 128-byte
+(`0x80`) duplicated prefix. Therefore, **320 is build/file-specific and must
+not be hard-coded as a universal HybridCLR rule**.
+
+#### Prove duplication before removing bytes
+
+The second `UnityFS` occurrence provides a candidate offset `N`; it is not by
+itself permission to trim. Verify the repeated ranges exactly:
+
+```bash
+N=320
+cmp -n "$N" \
+  <(dd if=hotfixbattle.active.bundle bs=1 count="$N" 2>/dev/null) \
+  <(dd if=hotfixbattle.active.bundle bs=1 skip="$N" count="$N" 2>/dev/null)
+```
+
+Equivalent Python validation is clearer and avoids relying on shell process
+substitution:
+
+```python
+from pathlib import Path
+
+path = Path("hotfixbattle.active.bundle")
+data = path.read_bytes()
+offsets = []
+start = 0
+while True:
+    found = data.find(b"UnityFS\x00", start)
+    if found < 0:
+        break
+    offsets.append(found)
+    start = found + 1
+
+print("UnityFS offsets:", [hex(x) for x in offsets])
+N = offsets[1]
+assert N > 0
+assert data[:N] == data[N:2 * N], "prefix is not an exact duplicate"
+print("verified duplicated prefix length:", N, hex(N))
+```
+
+The strongest structural test is to parse each candidate UnityFS header's
+declared file size and select the candidate for which:
+
+```text
+candidate_offset + declared_UnityFS_size == physical_file_size
+```
+
+That is the rule later implemented in the local `unityfs_tool.py`: scan for
+embedded `UnityFS\0` candidates and choose the image whose declared size ends
+exactly at EOF. This is safer than selecting the second signature blindly.
+
+#### Normalize the bundle
+
+After the exact 320-byte duplication was established, either command produced
+the canonical inner bundle:
+
+```bash
+tail -c +321 hotfixbattle.active.bundle > hotfixbattle.inner.bundle
+```
+
+or:
+
+```bash
+dd if=hotfixbattle.active.bundle \
+   of=hotfixbattle.inner.bundle \
+   bs=1 skip=320 status=none
+```
+
+`tail -c` uses a one-based starting byte, hence `+321` to discard bytes 0–319.
+The equivalent earlier 128-byte case used `tail -c +129`.
+
+The normalized `.inner.bundle`, not the outer wrapped file, was then opened in
+AssetRipper/another compatible Unity bundle extractor. The workflow was:
+
+```text
+hotfixbattle.active.bundle
+  -> verify duplicate prefix at 0x140
+  -> strip first 320 bytes
+  -> hotfixbattle.inner.bundle
+  -> AssetRipper: Export All Files
+  -> HotFixBattle.dll.bytes
+  -> preserve raw bytes / copy or rename to HotFixBattle.dll
+  -> verify MZ + PE/CLI structure
+  -> ILSpy
+```
+
+Only after this normalization and raw-asset extraction did ILSpy expose the
+real HybridCLR CIL bodies. That changed the investigation from guessing native
+hooks to reading the actual gameplay control flow.
+
+#### Why this lesson generalizes
+
+When an asset extractor or ILSpy rejects a promising artifact, do not jump
+straight to “encrypted” or “bad decryption.” Check container boundaries first:
+
+- repeated file signatures;
+- duplicated prefix blocks;
+- embedded container headers at nonzero offsets;
+- declared size versus physical size;
+- alignment/padding expected by the game's loader;
+- whether an extractor exported a raw asset or a converted representation; and
+- whether the payload begins with a valid `MZ` and points to `PE\0\0`.
+
+Repair the **container layer** before diagnosing the **managed assembly layer**.
+Keep the original wrapped file unchanged, record the detected offset, and hash
+both wrapped and normalized artifacts.
+
 ### What “decrypted DLL” means here
 
 Two different protection layers must not be confused:
@@ -107,9 +262,11 @@ Two different protection layers must not be confused:
 1. The application/IPA must be available in a form whose packaged resources can
    be inspected. A decrypted IPA or an already decrypted PlayCover installation
    satisfies that part.
-2. `HotFixBattle.dll` is then recovered from a Unity Addressables/UnityFS bundle.
-   The resulting payload is a normal managed PE/CLI assembly and can be opened
-   in ILSpy.
+2. The game's noncanonical duplicated UnityFS load-offset wrapper must be
+   detected, proven, and normalized.
+3. `HotFixBattle.dll` is then recovered as a raw byte asset from the canonical
+   inner UnityFS bundle. The resulting payload is a normal managed PE/CLI
+   assembly and can be opened in ILSpy.
 
 The recovered file was identified as:
 
@@ -122,13 +279,17 @@ The practical recovery workflow used during this investigation was:
 1. list the IPA or installed application resources and locate
    `hotfixbattle.dll.bytes_*.bundle`;
 2. preserve an untouched copy and hash it;
-3. parse/extract the UnityFS/AssetBundle payload (a small local UnityFS utility
-   was used during the investigation; AssetStudio or another compatible Unity
-   bundle extractor can serve the same role);
-4. identify the embedded byte asset containing the managed PE image;
-5. verify the extracted bytes with `file`, a PE/.NET parser, and a SHA-256 hash;
-6. open the recovered DLL in ILSpy and export/decompile the project;
-7. correlate the decompiled types with live metadata through
+3. search for all `UnityFS\0` signatures and inspect their offsets;
+4. verify that the candidate prefix is an exact duplicate and that the inner
+   header's declared size terminates at physical EOF;
+5. strip the verified 320-byte (`0x140`) wrapper for this exact HotFixBattle
+   artifact, producing a canonical inner bundle;
+6. parse/extract the inner UnityFS/AssetBundle payload (the local
+   `unityfs_tool.py` or AssetRipper was used during the investigation);
+7. export the embedded DLL byte asset in raw form;
+8. verify `MZ`, `PE\0\0`, CLI/.NET metadata, file type, size, and SHA-256 hash;
+9. open the recovered DLL in ILSpy and export/decompile the project;
+10. correlate the decompiled types with live metadata through
    `frida-il2cpp-bridge`.
 
 The supplied `wd.zip` is the resulting decompiled HotFixBattle source tree. It
@@ -175,7 +336,9 @@ output as authoritative:
 | --- | --- |
 | Decrypted IPA or PlayCover app | Inspectable game binary and Addressables assets |
 | ZIP/file/hash utilities | Located bundles and preserved build identity |
-| UnityFS/AssetBundle extraction | Recovered `HotFixBattle.dll` bytes |
+| `grep -abo`, hex comparison, `cmp`/Python | Found and proved the duplicated UnityFS prefix |
+| `tail`/`dd` or offset-aware `unityfs_tool.py` | Normalized the wrapped bundle at verified offset `0x140` |
+| AssetRipper/UnityFS extraction | Exported raw `HotFixBattle.dll.bytes` from the inner bundle |
 | ILSpy exported project | Real HybridCLR C# bodies, field names, call graphs, and “Used By” references |
 | IDA Pro | Native/dylib behavior and executable-address inspection |
 | `dnfile`/PE inspection | Confirmed and inspected managed assembly structure |
@@ -658,6 +821,8 @@ itself is not explicitly present in a protobuf request.
 | Replace `AddRevive()`/`OnReviveFinish()` | UI freeze or zero hits | mutate authoritative revive state instead |
 | Assume Crusade uses normal `extraReroll` | no effect | use active manager `ReRandomSkillNum` and Type 18 |
 | Assume a class literally named Crusade manager exists | no active manager found | discriminate live `BattleLogicMgr.StartData.Type` |
+| Feed the duplicated-prefix bundle directly to standard tools | extractor/ILSpy pipeline reported unreadable or invalid output | locate both UnityFS headers, prove duplicated prefix, normalize at the verified load offset |
+| Treat any second `UnityFS` string as a trim point | possible destructive false positive | require exact prefix duplication and declared-size-to-EOF validation |
 | Patch/repack hotfix bundle statically | installed bundle rejected/ineffective | Addressables CRC/catalog/signing and load-source selection matter |
 | Force miss behavior without camp filtering | uncertain side effects/no effect | hit/evasion applies to both camps and has multiple paths |
 
@@ -672,31 +837,37 @@ Before using or extending this agent against an update:
    current TypeScript.
 2. Confirm which Addressables catalog/bundle is actually loaded; downloaded
    content may override packaged content.
-3. Extract the matching `HotFix.dll` and `HotFixBattle.dll` again.
-4. Open both in ILSpy and export a fresh project.
-5. Diff class names, field names, enum numeric values, and method signatures.
-6. Confirm `HotFix` and `HotFixBattle` assembly names in the live domain.
-7. Confirm the `BattleMainUI -> _mechaSkillNode -> _myCamp -> _heroList` graph
+3. Scan each candidate bundle for repeated `UnityFS\0` headers. Do not assume
+   the old 128- or 320-byte load offset still applies.
+4. Verify exact prefix duplication and the inner header's declared size before
+   producing a normalized bundle.
+5. Extract the matching `HotFix.dll` and `HotFixBattle.dll` as raw byte assets.
+6. Confirm `MZ`, `PE\0\0`, and CLI metadata before opening either file in
+   ILSpy.
+7. Open both in ILSpy and export a fresh project.
+8. Diff class names, field names, enum numeric values, and method signatures.
+9. Confirm `HotFix` and `HotFixBattle` assembly names in the live domain.
+10. Confirm the `BattleMainUI -> _mechaSkillNode -> _myCamp -> _heroList` graph
    in each supported battle mode.
-8. Confirm `GetRoleAttr`, `AttributeMap`, `get_Item`, and `set_Item` metadata.
-9. Revalidate attribute keys 1, 5, 6, 7, 11, 47, and 151 from the new
+11. Confirm `GetRoleAttr`, `AttributeMap`, `get_Item`, and `set_Item` metadata.
+12. Revalidate attribute keys 1, 5, 6, 7, 11, 47, and 151 from the new
    `RoleAttributeType` and calculation code.
-10. Revalidate `ObfuscatedInt` and `ObfuscatedLong` field layouts and signed XOR
+13. Revalidate `ObfuscatedInt` and `ObfuscatedLong` field layouts and signed XOR
     semantics.
-11. Revalidate `BattleType.Crusade` numeric value before using `creroll`.
-12. Revalidate `GameApp.get_NetWork` and every selected `Send` overload before
+14. Revalidate `BattleType.Crusade` numeric value before using `creroll`.
+15. Revalidate `GameApp.get_NetWork` and every selected `Send` overload before
     enabling `traceend`.
-13. Inspect candidate native addresses for executable protection, duplicate
+16. Inspect candidate native addresses for executable protection, duplicate
     addresses, module ownership, and actual runtime hits.
-14. Start with `read()` and tracing only; compare output to visible game state.
-15. Apply one low-value mutation once and verify both the immediate value and
+17. Start with `read()` and tracing only; compare output to visible game state.
+18. Apply one low-value mutation once and verify both the immediate value and
     battle lifecycle.
-16. Test `god()` followed promptly by `god(false)` before testing timed mode.
-17. Confirm every pinned reference is released before detach/reload.
-18. Capture end-request diagnostics for every battle mode being studied.
-19. Treat zero hook hits as evidence against the proposed call path, not as
+19. Test `god()` followed promptly by `god(false)` before testing timed mode.
+20. Confirm every pinned reference is released before detach/reload.
+21. Capture end-request diagnostics for every battle mode being studied.
+22. Treat zero hook hits as evidence against the proposed call path, not as
     proof that the callback code is correct but unlucky.
-20. Recompile with the exact local Frida TypeScript toolchain and resolve all
+23. Recompile with the exact local Frida TypeScript toolchain and resolve all
     type errors before attaching.
 
 ## Recommended next investigations
@@ -764,40 +935,50 @@ remain attached with a lower risk of accidentally changing battle state.
 1. The app is IL2CPP, but core game rules are runtime-loaded HybridCLR hotfix
    assemblies.
 2. The hotfix assemblies were located inside Unity Addressables DLL bundles,
-   extracted as managed PE files, and decompiled with ILSpy.
-3. Decompiled bodies established exact types, field ownership, sign
+   but the first HotFixBattle bundle was not directly tool-readable because a
+   duplicated UnityFS prefix placed the real image at load offset `0x140`.
+3. Exact byte comparison and declared-size validation proved the wrapper;
+   removing the first 320 bytes exposed the canonical inner UnityFS image.
+4. AssetRipper/raw extraction then recovered a valid managed PE, and ILSpy
+   finally exposed the real CIL method bodies.
+5. Decompiled bodies established exact types, field ownership, sign
    conventions, enum values, and call flow.
-4. Live bridge metadata connected those static names to the running process.
-5. HybridCLR virtual addresses proved non-unique, so executable pointers alone
+6. Live bridge metadata connected those static names to the running process.
+7. HybridCLR virtual addresses proved non-unique, so executable pointers alone
    were rejected as method identity.
-6. Exact MethodInfo invocation preserved normal managed dictionary behavior
+8. Exact MethodInfo invocation preserved normal managed dictionary behavior
    without hooking shared generic bodies.
-7. Current objects are rediscovered per command to avoid stale cross-battle
+9. Current objects are rediscovered per command to avoid stale cross-battle
    pointers.
-8. Simple authoritative state is mutated once rather than enforced by polling.
-9. Obfuscated inline values are decoded/updated through their metadata-defined
+10. Simple authoritative state is mutated once rather than enforced by polling.
+11. Obfuscated inline values are decoded/updated through their metadata-defined
    fields and verified, never guessed by raw offset.
-10. Invincibility is modeled as one owned contribution, allowing normal game
+12. Invincibility is modeled as one owned contribution, allowing normal game
     buffs to coexist and enabling an exact inverse operation.
-11. A native interceptor is retained only for the ordinary AOT network boundary
+13. A native interceptor is retained only for the ordinary AOT network boundary
     where runtime hits validated the approach.
-12. Startup policy is kept in configuration, while TypeScript stays neutral on
+14. Startup policy is kept in configuration, while TypeScript stays neutral on
     load.
-13. Submitted result data and replay commands remain separate from local state;
+15. Submitted result data and replay commands remain separate from local state;
     any future change must consider both consistency surfaces.
 
 ## Handoff rule for another AI
 
-When continuing this project, treat this README, the matching recovered DLLs,
-the fresh ILSpy export, and the current TypeScript as one evidence set. Do not
-generate a new hook solely from a method name or `virtualAddress`. First state:
+When continuing this project, treat this README, the original wrapped bundle,
+its recorded load offset, the normalized inner bundle, the matching recovered
+DLLs, the fresh ILSpy export, and the current TypeScript as one evidence set.
+Do not generate a new hook solely from a method name or `virtualAddress`. First
+state:
 
-1. whether the target lives in AOT IL2CPP or a HybridCLR hot-update assembly;
-2. whether the desired behavior is better represented by stable mutable state;
-3. the exact declaring class, signature, parameter types, and field layout;
-4. whether the candidate native address is unique and actually hit;
-5. the object-discovery and lifecycle strategy;
-6. the rollback/ownership strategy; and
-7. what result, statistics, replay, or network data can expose the change.
+1. whether the code-bearing bundle has a canonical header at offset zero or a
+   proven nonzero load-offset wrapper;
+2. whether the extracted payload is a structurally valid PE/CLI assembly;
+3. whether the target lives in AOT IL2CPP or a HybridCLR hot-update assembly;
+4. whether the desired behavior is better represented by stable mutable state;
+5. the exact declaring class, signature, parameter types, and field layout;
+6. whether the candidate native address is unique and actually hit;
+7. the object-discovery and lifecycle strategy;
+8. the rollback/ownership strategy; and
+9. what result, statistics, replay, or network data can expose the change.
 
 Only after those questions are answered should the agent be modified.
