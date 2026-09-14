@@ -1,6 +1,8 @@
 PROJECT := ls
 AGENT := legendsummoner
 
+.DEFAULT_GOAL := help
+
 RUNPOD_ROOT := $(abspath $(CURDIR)/..)
 FRIDA_DIR := $(RUNPOD_ROOT)/frida
 TOOLS_ROOT ?= $(HOME)/Documents/frida-js-tools
@@ -18,17 +20,22 @@ FRIDA_PS := $(TOOLS_ROOT)/python-env/bin/frida-ps
 COMPILER := $(TOOLS_ROOT)/node_modules/.bin/frida-compile
 IL2CPP_BRIDGE := $(TOOLS_ROOT)/node_modules/frida-il2cpp-bridge
 
-.PHONY: all setup ensure-env check build hook run rebuild clean
+.PHONY: help all setup ensure-env check build hook run rebuild clean \
+	git-status git-pull git-push
 
-# Plain "make" verifies the environment and builds only when required.
-all: build
+help: ## Show all available Make commands
+	@awk 'BEGIN {FS = ":.*## "; printf "\nAvailable commands:\n\n"} \
+		/^[A-Za-z0-9_-]+:.*## / {printf "  %-15s %s\n", $$1, $$2}' \
+		"$(firstword $(MAKEFILE_LIST))"
+	@echo
 
-# Force installation/update of the shared environment.
-setup:
+all: build ## Build the agent when required
+
+setup: ## Install or update the shared Frida environment
 	"$(INSTALLER)"
 
 # Automatically install only when a required shared component is missing.
-ensure-env:
+ensure-env: ## Check and repair the shared Frida environment
 	@if [ ! -x "$(FRIDA)" ] || \
 	    [ ! -x "$(FRIDA_PS)" ] || \
 	    [ ! -x "$(COMPILER)" ] || \
@@ -39,7 +46,7 @@ ensure-env:
 		echo "[+] Shared Frida environment is ready"; \
 	fi
 
-check:
+check: ## Validate project files and central scripts
 	@test -f "$(TS_FILE)" || { \
 		echo "[-] TypeScript source not found: $(TS_FILE)"; \
 		exit 1; \
@@ -61,11 +68,11 @@ check:
 $(JS_FILE): $(TS_FILE)
 	"$(BUILD_SCRIPT)" "$(PROJECT)" "$(TS_FILE)"
 
-build: ensure-env check $(JS_FILE)
+build: ensure-env check $(JS_FILE) ## Build the JavaScript agent when required
 	@echo "[+] Agent ready: $(JS_FILE)"
 
 # Attach using the existing compiled JavaScript.
-hook: ensure-env check
+hook: ensure-env check ## Hook using the existing JavaScript agent
 	@test -f "$(JS_FILE)" || { \
 		echo "[-] Compiled agent not found: $(JS_FILE)"; \
 		echo "[*] Run: make build"; \
@@ -74,25 +81,23 @@ hook: ensure-env check
 	"$(HOOK_SCRIPT)" "$(JS_FILE)"
 
 # Build when needed, then attach and execute hook_pid.json default_hook.
-run: build
+run: build ## Build when required, then hook the game
 	"$(HOOK_SCRIPT)" "$(JS_FILE)"
 
 # Force regeneration of the compiled JavaScript.
-rebuild: clean build
+rebuild: clean build ## Force a clean rebuild
 
 # Remove only the generated JavaScript agent.
-clean:
+clean: ## Remove the generated JavaScript agent
 	@rm -f "$(JS_FILE)"
 	@echo "[+] Removed generated agent: $(JS_FILE)"
 
-.PHONY: git-status git-pull git-push
-
 GIT_ROOT := $(RUNPOD_ROOT)
 
-git-status:
+git-status: ## Show Git changes under this project
 	git -C "$(GIT_ROOT)" status --short -- "$(CURDIR)"
 
-git-pull:
+git-pull: ## Pull repository updates using fast-forward only
 	@test -z "$$(git -C "$(GIT_ROOT)" status --porcelain)" || { \
 		echo "[-] Working tree contains uncommitted changes."; \
 		echo "[*] Commit or stash them before pulling."; \
@@ -100,7 +105,7 @@ git-pull:
 	}
 	git -C "$(GIT_ROOT)" pull --ff-only
 
-git-push:
+git-push: ## Commit this project with an automatic message and push
 	@set -e; \
 	FOLDER_NAME="$(notdir $(CURDIR))"; \
 	MESSAGE="$$FOLDER_NAME update $$(date '+%Y-%m-%d %H:%M:%S')"; \
