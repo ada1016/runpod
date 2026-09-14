@@ -1,0 +1,10 @@
+{
+  "process_names": [
+    "小兵立大功",
+    "LegendSummoner"
+  ],
+  "default_hook": [
+    "inc(8)",
+    "addExp(2)"
+  ]
+}

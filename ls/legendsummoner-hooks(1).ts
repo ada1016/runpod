@@ -56,8 +56,8 @@ function replaceIntGetter(method: any, mockedValue: () => number): void {
 function replaceBoolGetter(method: any, mockedValue: () => boolean): void {
     const original: any = new NativeFunction(method.virtualAddress, "bool", ["pointer"]);
     const replacement = new NativeCallback(
-        (self: NativePointer): boolean =>
-            adMockState.enabled ? mockedValue() : original(self),
+        (self: NativePointer): number =>
+            adMockState.enabled ? (mockedValue() ? 1 : 0) : Number(original(self)),
         "bool",
         ["pointer"]
     );
