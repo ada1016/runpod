@@ -1,0 +1,69 @@
+{
+  "release": "all-rooms",
+  "esphome": "2026.8.2",
+  "esp_idf": "5.5.5",
+  "config_hash": "0x8d72b220",
+  "hardware_tested": true,
+  "flashed": true,
+  "startup_fix": "CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192",
+  "artifacts": {
+    "firmware.ota.bin": {
+      "bytes": 1515280,
+      "sha256": "a29b17dca7835b232491242ca2844c13b313fc904f2e9460141c5a6ea41f493b"
+    },
+    "firmware.factory.bin": {
+      "bytes": 1580816,
+      "sha256": "00de9398d3016c71ec374c0534de82bfe0252459e6306839dcd0a2c6487bb871"
+    }
+  },
+  "source_sha256": {
+    "esphome/ui_feedback.h": "8c6fde655664ac4877620d9b53fb34c5b8cf2021a420f2328e15e4bf7789f988",
+    "esphome/ui_state.h": "bbda84980dc0fb87784bd94fdfd40efe9e52ec918c73e5c76fd2fe3ccb55500e",
+    "esphome/tab5-v4-lab.yaml": "1f4ddd9fdf90eaa774d86ec191ec58ad27674b2db19756496960e2d89613178c",
+    "esphome/.gitignore": "1d39f8763e3549ca282df291ba64913071cbea2479cefcb872b4fc1402b2c18e",
+    "esphome/secrets.example.yaml": "449bbb9056b706cd3d830ed95c67729990e3194e1ebcedc42a96e49144c79f23",
+    "esphome/ui/v4_interaction.yaml": "516598f226c1768aca49c9198cc9f6a3b37111f56c629c1e279f956bb6c75e3b",
+    "esphome/ui/theme.yaml": "237138ca0a25b9142e1f67ce4a052c10c0d4a418297bdd6d287d31c48e00b0a7",
+    "esphome/ui/navigation.yaml": "d42dd93bd70dc44ad56682bd0f6ff526cf4a9d691424a8d49063742cbb81044b",
+    "esphome/ui/root.yaml": "8ba5254d215383d5857f1de2d28c2a8dd9815e1a9aa53baa88212be605b48438",
+    "esphome/ui/settings/settings_page.yaml": "62e289d9aa89491934ec9ced402258df7d442bc841610ac9cd817af7a70c3e24",
+    "esphome/ui/actions/all_ac.yaml": "8354187d89e8240879217bef25197d97ad0b4203dc9f741e8528805de38c2cbe",
+    "esphome/ui/actions/house_all_off.yaml": "1f5c9ce4f928c6b51b7a3b9905c22173e75cadb2cdc3062f74021ae19a8c6d94",
+    "esphome/ui/actions/room_all_lights.yaml": "03512d328084a65a579200eef88c016170f4d9f6512ca9c808c54feceee35319",
+    "esphome/ui/rooms/darren_room.yaml": "c84fe27d281e29612b3066a94561e353a156f736f732d50d177699d138dc520c",
+    "esphome/ui/rooms/parents_room.yaml": "eed9ac45c3e17a50c2d3401083868249cd29c739d96662645d69a034dd7609b1",
+    "esphome/ui/rooms/living_room.yaml": "b4743112bdd07053a2f57064eae4e68983b6fa2899fe2830f6a2c4e4bbb13ad6",
+    "esphome/ui/rooms/amber_room.yaml": "bc6279761d1babf98a77e410d4da913e4f68d1e2b14a95a3f8e5bbcb9516a685",
+    "esphome/ui/pages/house.yaml": "f9c716c3cde28f532b792b321b5f785976927006b1f017b343af7b13f2747a92",
+    "esphome/ui/apps/gas/gas_page.yaml": "3352aba83f197c4f2026865c5d173e723ab71004d4b36bf318d6f5d5c6346220",
+    "esphome/ui/devices/ac.yaml": "38ce24782c60422af8f27089fa683189d987edabb0a1cce0f0f019d89c81fcab",
+    "esphome/ui/devices/light.yaml": "7d35e6871b737143fa38b5b441aa63565a1a94b8df1533e622d75ee48a2e1805",
+    "esphome/bridge/connection.yaml": "0af720508bd655a1962e28f4a020de602b1e3b55c6b538be8a7d5a576df3b31a",
+    "esphome/bridge/device_state.yaml": "b9a0daf70a52e569ee6ac15bc78dc144b3aa8c85d567e9c27a355e96b4af4cb4",
+    "esphome/bridge/gas_bridge.yaml": "0f4bb4519881d04fac8ed507b3b6256a6a8c8554d25167ddd6466f4210268766",
+    "esphome/bridge/device_command.yaml": "38759c22f8f6566bda91e066a2be7e5c90b8cf3be4255f4e67c454551f27f6a7",
+    "esphome/bridge/v4_subscriptions.yaml": "dd8f21a2265225756787fe403aaff2d74457f5e9cfa7b4cf0bd11e6d2712d094",
+    "esphome/fonts/Material_Symbols_Rounded_tab5.ttf": "6d0185e6b2a6c333991eecf7e9331f0d329eded06cab1a26bc5cedca82cc3975",
+    "esphome/fonts/preview.html": "d3671e65554fd610a53458f0b52b585c3430611912d306a358110dc6a7af1a69",
+    "esphome/fonts/MaterialSymbolsRounded-VariableFont_FILL,GRAD,opsz,wght.ttf": "9560ae33d01aed26393556c62e8de5d207991197978f96dd6354de83ec08a293",
+    "esphome/fonts/build_icon.sh": "57050f7ced82b4185c3acb3b7eceb75962eae60b008ada673b5551ad9f17c8fc",
+    "esphome/fonts/icons.txt": "791fbea73eda6277dfcb5f363277aaf9238796d9b0b2d77e0375724f7fef10c0",
+    "esphome/fonts/tab5_icons.ttf": "6b0ada1f024b53c6cabb2b9e45cc3c388a0f2390951663f3cdf0592f0d7322d5",
+    "esphome/assets/papamama.png": "14baed6723d7fbe022e5275d02e5fcb77e59e166c63e78a6a8fa81ad5bf28f77",
+    "esphome/assets/all.png": "81ca9f6851442d89cc088188d9bd8a5a6804de6ffeb38f825738a97e83e15b98",
+    "esphome/assets/amber.png": "737b75a04bd0ab46f7924bddd521053c635accdbc78a7725a36050b4ce8ede2b",
+    "esphome/assets/gas.png": "92d61a211cd45d1559e2c7ba49e64a5ef622e5707a7bb90e48fef5c7558d00a0",
+    "esphome/assets/darren.png": "0e21af81ca53aa938c912484d922fae20f556079172d81deed256616c6039a94",
+    "esphome/assets/DaYong.png": "9d24276519596bb1f6d00f38c69903e0d549c3ee7af34cf8590bd7edf645f9b1",
+    "esphome/assets/livingroom.png": "d47fd92ce59b579fdc62771e5317e9febe9d0839cf10a33e062cb2bb1bd49371",
+    "appdaemon/tab5_bridge_v4.py": "47f2adea201855729bc672a766ca63aa4001ca8cdcac9a9974538a45ee15fc14",
+    "appdaemon/gas_meter.py": "8c7bd3cbe508c66b6f2fa23bbd7fea08e254647a8c5cdae8cba5ea9fe010dc7c",
+    "appdaemon/apps.yaml": "239f0a45d3ed41436c4357ee12c8361dd77b6c6695603a75a204c6e414ce0ae1"
+  },
+  "hardware_validation_scope": "OTA upload, ALL_ROOMS build marker, successful boot after 60 seconds, and HA V4 state reception; physical control/UX acceptance remains pending",
+  "hardware_validation_logs": [
+    "docs/ota-all-rooms-upload.log",
+    "docs/usb-all-rooms-validation.log"
+  ],
+  "rollback_backup": "Private archive outside this repository: ~/Documents/tab5-backups/"
+}

@@ -1,0 +1,13 @@
+# Local environments and generated builds
+.venv/
+**/.esphome/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+# Private configuration and device images (images embed Wi-Fi credentials)
+**/secrets.yaml
+.env
+firmware/*.bin
+firmware/*.elf
+# Raw logs may contain local device details
+*.log

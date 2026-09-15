@@ -1,34 +1,52 @@
-# Tab5 V2 Local-First Redesign
+# Tab5 V4 — Home Assistant dashboard
 
-Built from the user-supplied baseline:
-- tab5_mono(8).yaml
-- tab5_bridge_multi(4).py
-- apps(4).yaml
-- gas_meter(4).py (canonical 1040-line gas backend)
+Current all-room firmware for M5Stack Tab5: 客廳、爹娘、宸、芹、全部. Built with ESPHome 2026.8.2 / ESP-IDF 5.5.5. Installed and verified through USB logs: `TAB5_V4_ALL_ROOMS`, successful boot after 60 seconds, and HA state reception. Physical device and UX acceptance remains a manual check.
 
-## Important
-`appdaemon/gas_meter.py` is copied byte-for-byte from the supplied baseline.
+## Project layout
 
-## Main V2 changes
-- Navigation renders locally on Tab5.
-- Living Room is a normal Room.
-- Room state is cached locally.
-- No `open_tab` dependency.
-- Missing cache shows SYNCING instead of stale previous-room data.
-- AppDaemon publishes keyed Room/House/Gas/Recovery packets through the existing single `sensor.tab5_ui_bridge`.
-- Room commands carry explicit `room`.
-- House is an aggregate page with ALL OFF / ALL LIGHTS / ALL AC.
-- Room slot 4 is a virtual all-lights collection.
-- Gas remains a standalone workflow.
+- `esphome/`: YAML, C++ state/feedback code, assets and fonts. Entry point: `tab5-v4-lab.yaml`.
+- `appdaemon/`: V4 bridge, merge-only `apps.yaml`, and unchanged gas backend reference.
+- `tests/`: offline state, group, bridge and wiring tests.
+- `tools/build-requirements.lock`: pinned Python build dependencies.
+- `firmware/`: release manifest; compiled images remain local and are excluded from Git because they contain credentials.
+- `docs/`: behavior, installation and validation notes.
 
-## Conservative migration
-The 2,000+ line working LVGL frontend remains in `esphome/tab5.yaml` for this first V2 baseline. The requested modular directories are included as responsibility boundaries, not as active ESPHome packages yet.
+## Build and install
 
-Keep your existing:
-- assets/DaYong.png
-- assets/all.png
-- assets/papamama.png
-- assets/darren.png
-- assets/amber.png
-- assets/gas.png
-- fonts/tab5_icons.ttf
+Run from this `tab5` directory. On a fresh checkout:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -r tools/build-requirements.lock
+cp esphome/secrets.example.yaml esphome/secrets.yaml
+```
+
+Fill in `esphome/secrets.yaml` locally. Then build and install:
+
+```bash
+.venv/bin/esphome run esphome/tab5-v4-lab.yaml --device 192.168.68.16
+```
+
+`run` builds before uploading. To install the already-built local release without rebuilding:
+
+```bash
+.venv/bin/esphome upload esphome/tab5-v4-lab.yaml --device 192.168.68.16 --file firmware/firmware.ota.bin
+```
+
+Read device logs:
+
+```bash
+.venv/bin/esphome logs esphome/tab5-v4-lab.yaml --device 192.168.68.16
+```
+
+See [installation](docs/INSTALL.md), [room interactions](docs/ALL_ROOMS.md) and [validation](docs/VALIDATION.md).
+
+## AppDaemon
+
+The installed V4 bridge already works with this release. For a fresh installation, copy `appdaemon/tab5_bridge_v4.py` into the HA AppDaemon apps directory, then merge the `tab5_v4_bridge:` block from `appdaemon/apps.yaml` into the existing configuration. Preserve other app entries. `gas_meter.py` is an unchanged reference, not a request to register another gas app. Entity IDs in `apps.yaml` are specific to this home.
+
+## Preservation and Git
+
+The pre-cleanup source, older versions, private configuration and firmware are archived outside the repository in `~/Documents/tab5-backups/`. Only the current source is maintained here. The device identity remains `tab5-v4-lab` for compatibility.
+
+Real secrets, firmware binaries, virtual environments, build caches and raw logs are excluded from Git. Source cleanup does not alter the running Tab5.

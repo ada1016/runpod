@@ -1,29 +1,26 @@
 # Validation
 
-- `gas_meter.py` preserved byte-for-byte: **PASS**
-- `gas_meter.py` SHA256: `8c7bd3cbe508c66b6f2fa23bbd7fea08e254647a8c5cdae8cba5ea9fe010dc7c`
-- `tab5_bridge_multi.py` Python AST parse: **PASS**
-- `gas_meter.py` Python AST parse: **PASS**
-- `apps.yaml` structural YAML parse: **PASS**
-- `esphome/tab5.yaml` structural YAML parse: **PASS**
-- No AppDaemon self.active_tab state: **PASS**
-- No Tab5 open_tab action: **PASS**
-- Living Room local tab exists: **PASS**
-- House aggregate page exists: **PASS**
-- All four local room caches exist: **PASS**
-- Explicit room command routing exists: **PASS**
-- No std::stoi: **PASS**
-- Exception-free brightness parsing: **PASS**
-- All 16 CCT controls route room explicitly: **PASS**
+## Installed release
 
-ESPHome/ESP-IDF compilation is not available in this environment.
-Run the first compile on the user's ESPHome 2026.8 installation.
+- ESPHome 2026.8.2 / ESP-IDF 5.5.5; config hash `0x8d72b220`.
+- Build marker `TAB5_V4_ALL_ROOMS`.
+- OTA successful; USB confirms successful boot after 60 seconds and ongoing HA V4 state reception.
+- Physical device actions and full UX acceptance remain manual.
+- Raw build/USB logs are retained locally and in the private backup, excluded from Git.
 
-## Gas LVGL ID correction
+## Offline checks
 
-- Reused existing `gas_result_label`: **PASS**
-- Removed undefined `gas_result_reading_label`: **PASS**
-- Removed undefined `gas_result_date_label`: **PASS**
-- Removed undefined `gas_result_company_reading_label`: **PASS**
-- Removed undefined `gas_result_confirm_label`: **PASS**
-- Canonical 1040-line `gas_meter.py` unchanged: **PASS**
+Run from the root:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+c++ -std=c++17 tests/test_state.cpp -o /tmp/tab5-test-state && /tmp/tab5-test-state
+c++ -std=c++17 tests/test_groups.cpp -o /tmp/tab5-test-groups && /tmp/tab5-test-groups
+.venv/bin/esphome config esphome/tab5-v4-lab.yaml
+```
+
+Tests cover ordering, freshness, timeout, confirmation, partial groups, overlapping commands, independent temperature debounce, sliders, reconnect and bridge behavior. The gas backend is checked against its original SHA-256, avoiding a duplicate source tree.
+
+## Startup fix
+
+USB reproduced `esp_task_stack_is_sane_cache_disabled()` during NVS initialization. The default main task stack was allocated in ESP32-P4 SPM, which this flash safety check does not accept. `CONFIG_ESP_MAIN_TASK_STACK_SIZE: "8192"` prevents that allocation. Flash safety assertions and OTA rollback stay enabled. Both the Living Room and all-room releases subsequently booted successfully.

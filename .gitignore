@@ -16,3 +16,10 @@
 **/.DS_Store
 .vscode/
 ._*
+
+# Embedded firmware: local toolchains, caches and private configuration
+**/.venv/
+**/.esphome/
+**/.pio/
+**/.pio-core/
+**/secrets.yaml

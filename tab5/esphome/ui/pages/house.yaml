@@ -6,6 +6,7 @@ script:
     mode: restart
     then:
       - lambda: |-
+          tab5_v4::state().drags.clear();
           id(active_view) = "house";
           id(settings_open) = false;
           lv_obj_clear_flag(id(house_panel), LV_OBJ_FLAG_HIDDEN);
@@ -15,7 +16,7 @@ script:
           lv_obj_add_flag(id(settings_panel), LV_OBJ_FLAG_HIDDEN);
       - script.execute: render_house_cache
       - homeassistant.event:
-          event: esphome.tab5_command
+          event: esphome.tab5_v4_command
           data:
             action: "refresh_devices"
             devices: "ac_living,ac_parents,ac_darren,ac_amber,light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
@@ -66,7 +67,7 @@ script:
             ACState a;
             const auto f = split_packet(packet_for(key));
             if (f.size() < 10 || f[0] != "3" || f[1] != "D" || f[3] != "climate") return a;
-            a.valid = true; a.available = f[8] == "1"; a.mode=f[4]; a.fan=f[5]; a.on=a.available && f[4] != "off";
+            a.valid = true; a.available = tab5_v4::state().ready(key,millis()); a.mode=f[4]; a.fan=f[5]; a.on=a.available && f[4] != "off";
             sscanf(f[6].c_str(), "%f", &a.target); sscanf(f[7].c_str(), "%f", &a.current);
             return a;
           };
@@ -82,6 +83,7 @@ script:
             if (!isnan(a.current)) { current_sum += a.current; current_count++; }
             if (!isnan(a.target)) { target_sum += a.target; target_count++; }
             if (first) { mode=a.mode; fan=a.fan; first=false; }
+            else {if(mode!=a.mode) mode="MIXED";if(fan!=a.fan) fan="MIXED";}
           }
 
           char buf[80];
@@ -129,8 +131,11 @@ script:
           bool have=false, all_available=true, any_on=false; int avg_bri=0;
           light_summary(all_lights, have, all_available, any_on, avg_bri);
           id(syncing_ui)=true;
+          const auto interaction=tab5_v4::state().summary(all_lights,millis());
+          if (!interaction.dragging && !interaction.pending) {
           if (any_on) lv_obj_add_state(id(house_light_switch), LV_STATE_CHECKED); else lv_obj_clear_state(id(house_light_switch), LV_STATE_CHECKED);
           lv_slider_set_value(id(house_light_slider), avg_bri, LV_ANIM_OFF);
+          }
           if (have) { lv_obj_clear_state(id(house_light_switch), LV_STATE_DISABLED); lv_obj_clear_state(id(house_light_slider), LV_STATE_DISABLED); }
           else { lv_obj_add_state(id(house_light_switch), LV_STATE_DISABLED); lv_obj_add_state(id(house_light_slider), LV_STATE_DISABLED); }
           id(syncing_ui)=false;
@@ -150,3 +155,5 @@ script:
           set_light_dot(id(house_parents_light_dot), "light_bedroom_window");
           set_light_dot(id(house_darren_light_dot), "light_da_head,light_da_foot,light_da_desk");
           set_light_dot(id(house_amber_light_dot), "light_am_door,light_am_foot,light_am_desk");
+
+      - script.execute: v4_feedback

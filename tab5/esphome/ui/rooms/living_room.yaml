@@ -5,6 +5,7 @@ script:
     mode: restart
     then:
       - lambda: |-
+          tab5_v4::state().drags.clear();
           id(active_view) = "room";
           id(active_room) = "living";
           id(active_ac_device) = "ac_living";
@@ -25,7 +26,7 @@ script:
           id(slot3_local_devices) = "";
       - script.execute: render_active_room
       - homeassistant.event:
-          event: esphome.tab5_command
+          event: esphome.tab5_v4_command
           data:
             action: "refresh_devices"
             devices: "ac_living,humidity_living,temperature_living,ac_humidity_living,light_living_room"

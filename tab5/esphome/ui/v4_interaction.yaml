@@ -1,0 +1,136 @@
+globals:
+  - id: v4_outgoing
+    type: bool
+    initial_value: 'false'
+  - id: v4_action
+    type: std::string
+  - id: v4_value
+    type: std::string
+  - id: v4_device
+    type: std::string
+
+interval:
+  - interval: 100ms
+    then:
+      - if:
+          condition:
+            api.connected:
+              state_subscription_only: true
+          then:
+            - lambda: |-
+                if (!tab5_v4::state().online) id(v4_resync).execute();
+                tab5_v4::state().connection(true, millis());
+          else:
+            - lambda: 'tab5_v4::state().connection(false, millis());'
+      - lambda: |-
+          auto &s=tab5_v4::state();s.tick(millis());
+          tab5_v4::Command command;
+          id(v4_outgoing)=s.next_command(millis(),command);
+          if(id(v4_outgoing)) {
+            id(v4_action)=command.action;id(v4_value)=command.value;id(v4_device)=command.key;
+          }
+      - if:
+          condition:
+            lambda: 'return id(v4_outgoing);'
+          then:
+            - homeassistant.event:
+                event: esphome.tab5_v4_command
+                data_template:
+                  action: "{{ action }}"
+                  device: "{{ device }}"
+                  devices: "{{ device }}"
+                  value: "{{ value }}"
+                variables:
+                  action: !lambda 'return id(v4_action);'
+                  device: !lambda 'return id(v4_device);'
+                  value: !lambda 'return id(v4_value);'
+  - interval: 250ms
+    then:
+      - script.execute: v4_feedback
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            api.connected:
+              state_subscription_only: true
+          then:
+            - script.execute: v4_resync
+
+script:
+  - id: v4_resync
+    mode: restart
+    then:
+      - delay: 1s
+      - homeassistant.event:
+          event: esphome.tab5_v4_command
+          data:
+            action: refresh_all
+
+  - id: v4_command
+    mode: queued
+    parameters:
+      action: string
+      device: string
+      value: string
+    then:
+      - lambda: 'tab5_v4::state().submit(device,action,value,millis());'
+      - script.execute: v4_feedback
+
+  - id: v4_feedback
+    mode: restart
+    then:
+      - lambda: |-
+          if(id(active_view)!="room" && id(active_view)!="house") return;
+          auto &s=tab5_v4::state();const auto now=millis();
+          const int theme=std::max(0,std::min(3,id(theme_index)));
+          static const uint32_t muted_colors[]={0x555555,0x8C6B56,0x3A7994,0x929DA5};
+          static const uint32_t accent_colors[]={0x1E5573,0x684B3B,0x1E5573,0x8AC8F0};
+          const uint32_t muted=muted_colors[theme],accent=accent_colors[theme];
+          const uint32_t waiting=theme==3?0xEBC17B:0xA56A00;
+          id(syncing_ui)=true;
+          if(id(active_view)=="room") {
+            tab5_v4::ac_feedback(s,id(active_ac_device),id(ac_target_label),id(v4_ac_feedback),
+              id(v4_ac_plus),id(v4_ac_minus),id(v4_ac_auto),id(v4_ac_quiet),id(v4_ac_power),
+              id(ac_power_icon),now,muted,waiting,accent);
+            tab5_v4::light_feedback(s,id(slot0_local_devices),id(slot0_switch),id(slot0_slider),
+              id(v4_light_feedback_0),{id(v4_cct_0_2700),id(v4_cct_0_3500),id(v4_cct_0_4500),id(v4_cct_0_6500)},
+              now,muted,waiting);
+            tab5_v4::light_feedback(s,id(slot1_local_devices),id(slot1_switch),id(slot1_slider),
+              id(v4_light_feedback_1),{id(v4_cct_1_2700),id(v4_cct_1_3500),id(v4_cct_1_4500),id(v4_cct_1_6500)},
+              now,muted,waiting);
+            tab5_v4::light_feedback(s,id(slot2_local_devices),id(slot2_switch),id(slot2_slider),
+              id(v4_light_feedback_2),{id(v4_cct_2_2700),id(v4_cct_2_3500),id(v4_cct_2_4500),id(v4_cct_2_6500)},
+              now,muted,waiting);
+            tab5_v4::light_feedback(s,id(slot3_local_devices),id(slot3_switch),id(slot3_slider),
+              id(v4_light_feedback_3),{id(v4_cct_3_2700),id(v4_cct_3_3500),id(v4_cct_3_4500),id(v4_cct_3_6500)},
+              now,muted,waiting);
+          } else {
+            tab5_v4::ac_feedback(s,tab5_v4::ALL_AC,id(house_ac_target_label),id(v4_house_ac_feedback),
+              id(v4_house_ac_plus),id(v4_house_ac_minus),id(v4_house_ac_auto),id(v4_house_ac_quiet),id(v4_house_ac_power),
+              id(house_ac_power_icon),now,muted,waiting,accent);
+            tab5_v4::light_feedback(s,tab5_v4::ALL_LIGHTS,id(house_light_switch),id(house_light_slider),
+              id(v4_house_light_feedback),{id(v4_house_cct_2700),id(v4_house_cct_3500),id(v4_house_cct_4500),id(v4_house_cct_6500)},
+              now,muted,waiting);
+            const auto all=tab5_v4::ALL_AC+","+tab5_v4::ALL_LIGHTS;
+            tab5_v4::disabled(id(house_all_off_button),!s.can_submit(all,now));
+            tab5_v4::text(id(v4_house_off_feedback),s.group_status(all,now));
+            lv_obj_set_style_text_color(id(v4_house_off_feedback),lv_color_hex(s.summary(all,now).pending?waiting:muted),LV_PART_MAIN);
+            // Availability dots are refreshed even if a disconnect produces no new packets.
+            {auto sum=s.summary("ac_living",now);
+              lv_obj_set_style_text_color(id(house_living_ac_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("light_living_room",now);
+              lv_obj_set_style_text_color(id(house_living_light_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("ac_parents",now);
+              lv_obj_set_style_text_color(id(house_parents_ac_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("light_bedroom_window",now);
+              lv_obj_set_style_text_color(id(house_parents_light_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("ac_darren",now);
+              lv_obj_set_style_text_color(id(house_darren_ac_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("light_da_head,light_da_foot,light_da_desk",now);
+              lv_obj_set_style_text_color(id(house_darren_light_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("ac_amber",now);
+              lv_obj_set_style_text_color(id(house_amber_ac_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+            {auto sum=s.summary("light_am_door,light_am_foot,light_am_desk",now);
+              lv_obj_set_style_text_color(id(house_amber_light_dot),lv_color_hex(sum.pending?waiting:sum.ready!=sum.total?waiting:sum.on?accent:muted),LV_PART_MAIN);}
+          }
+          id(syncing_ui)=false;

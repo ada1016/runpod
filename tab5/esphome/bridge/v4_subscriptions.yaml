@@ -1,0 +1,157 @@
+text_sensor:
+  - platform: homeassistant
+    id: v4_state_ac_living
+    entity_id: sensor.tab5_v4_ac_living
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_parents
+    entity_id: sensor.tab5_v4_ac_parents
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_darren
+    entity_id: sensor.tab5_v4_ac_darren
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_amber
+    entity_id: sensor.tab5_v4_ac_amber
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_living_room
+    entity_id: sensor.tab5_v4_light_living_room
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_bedroom_window
+    entity_id: sensor.tab5_v4_light_bedroom_window
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_da_head
+    entity_id: sensor.tab5_v4_light_da_head
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_da_foot
+    entity_id: sensor.tab5_v4_light_da_foot
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_da_desk
+    entity_id: sensor.tab5_v4_light_da_desk
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_am_door
+    entity_id: sensor.tab5_v4_light_am_door
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_am_foot
+    entity_id: sensor.tab5_v4_light_am_foot
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_light_am_desk
+    entity_id: sensor.tab5_v4_light_am_desk
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_temperature_living
+    entity_id: sensor.tab5_v4_temperature_living
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_temperature_parents
+    entity_id: sensor.tab5_v4_temperature_parents
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_temperature_darren
+    entity_id: sensor.tab5_v4_temperature_darren
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_temperature_amber
+    entity_id: sensor.tab5_v4_temperature_amber
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_humidity_living
+    entity_id: sensor.tab5_v4_humidity_living
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_humidity_parents
+    entity_id: sensor.tab5_v4_humidity_parents
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_humidity_darren
+    entity_id: sensor.tab5_v4_humidity_darren
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_humidity_amber
+    entity_id: sensor.tab5_v4_humidity_amber
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_humidity_living
+    entity_id: sensor.tab5_v4_ac_humidity_living
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_humidity_parents
+    entity_id: sensor.tab5_v4_ac_humidity_parents
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_humidity_darren
+    entity_id: sensor.tab5_v4_ac_humidity_darren
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_ac_humidity_amber
+    entity_id: sensor.tab5_v4_ac_humidity_amber
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_gas
+    entity_id: sensor.tab5_v4_gas
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'
+  - platform: homeassistant
+    id: v4_state_recovery
+    entity_id: sensor.tab5_v4_recovery
+    internal: true
+    on_value:
+      - lambda: 'id(ui_bridge).publish_state(x);'

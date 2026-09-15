@@ -1,9 +1,11 @@
+import uuid
+
 import appdaemon.plugins.hass.hassapi as hass
 
 
-class Tab5MultiBridge(hass.Hass):
+class Tab5V4Bridge(hass.Hass):
     """
-    Tab5 V3 thin bridge.
+    Tab5 V4 experimental thin bridge.
 
     ESPHome owns:
       - pages / navigation
@@ -21,7 +23,7 @@ class Tab5MultiBridge(hass.Hass):
       - Xiaomi manual recovery
     """
 
-    BRIDGE_ENTITY = "sensor.tab5_ui_bridge"
+    BRIDGE_ENTITY = "sensor.tab5_v4_bridge"
     PROTOCOL_VERSION = "3"
 
     def initialize(self):
@@ -103,8 +105,9 @@ class Tab5MultiBridge(hass.Hass):
         )
         self.xiaomi_reload_in_progress = False
         self._seq = 0
+        self._session = uuid.uuid4().hex[:12]
 
-        self.listen_event(self._command, "esphome.tab5_command")
+        self.listen_event(self._command, "esphome.tab5_v4_command")
 
         for entity_id in self.reverse_devices:
             self.listen_state(
@@ -120,8 +123,9 @@ class Tab5MultiBridge(hass.Hass):
         )
 
         self.run_in(self._bootstrap_publish, 1)
+        self.run_every(self._bootstrap_publish, "now+30", 30)
 
-        self.log("Tab5 V3 thin bridge READY")
+        self.log("Tab5 V4 experimental thin bridge READY")
         self.log("Room/page/group definitions are local on ESPHome.")
 
     # -----------------------------------------------------------------
@@ -145,7 +149,7 @@ class Tab5MultiBridge(hass.Hass):
 
     def _set_bridge(self, fields):
         payload = "|".join(
-            [self.PROTOCOL_VERSION] + list(fields) + [self._next_seq()]
+            [self.PROTOCOL_VERSION] + list(fields) + ([self._session] if fields[0] == "D" else []) + [self._next_seq()]
         )
 
         # HA state is intentionally kept compact.
@@ -157,12 +161,13 @@ class Tab5MultiBridge(hass.Hass):
             payload = payload[:250]
 
         self.set_state(
-            self.BRIDGE_ENTITY,
+            ("sensor.tab5_v4_" + fields[1]) if fields[0] == "D" else
+            ("sensor.tab5_v4_gas" if fields[0] == "G" else "sensor.tab5_v4_recovery"),
             state=payload,
             attributes={
                 "friendly_name": "Tab5 UI Bridge",
                 "icon": "mdi:tablet-dashboard",
-                "protocol": "Tab5 V3 Local UI Thin Bridge",
+                "protocol": "Tab5 V4 experimental Local UI Thin Bridge",
             },
         )
 
@@ -260,6 +265,7 @@ class Tab5MultiBridge(hass.Hass):
                     "1" if is_on else "0",
                     str(pct),
                     available,
+                    str(attrs.get("color_temp_kelvin") or "--"),
                 ]
             )
             return
@@ -460,7 +466,7 @@ class Tab5MultiBridge(hass.Hass):
         # (devices). This keeps room and whole-house AC UI on the same
         # generic command path; group membership remains in ESPHome.
         # -------------------------------------------------------------
-        if action.startswith("ac_"):
+        if action.startswith("ac_") and action != "ac_group_toggle":
             raw_devices = data.get("devices", "") or data.get("device", "")
             resolved = self._resolve_device_list(raw_devices)
             if not resolved:
@@ -510,9 +516,17 @@ class Tab5MultiBridge(hass.Hass):
                     fan_mode="Quiet",
                 )
 
+            elif action == "ac_power":
+                if str(data.get("value")) == "off":
+                    self.call_service("climate/turn_off", entity_id=[e for _k, e in resolved])
+                elif str(data.get("value")) == "on":
+                    self.call_service("climate/set_hvac_mode", entity_id=[e for _k, e in resolved], hvac_mode="cool")
+                else:
+                    return
+
             elif action == "ac_power_toggle":
                 any_on = any(
-                    self.get_state(entity_id) != "off"
+                    self.get_state(entity_id) not in (None, "off", "unknown", "unavailable")
                     for _key, entity_id in resolved
                 )
                 if any_on:
@@ -612,7 +626,7 @@ class Tab5MultiBridge(hass.Hass):
                 return
 
             any_on = any(
-                self.get_state(entity_id) != "off"
+                self.get_state(entity_id) not in (None, "off", "unknown", "unavailable")
                 for _key, entity_id in resolved
             )
 
@@ -682,6 +696,6 @@ class Tab5MultiBridge(hass.Hass):
             return
 
         self.log(
-            f"Unknown Tab5 V3 action: {action}",
+            f"Unknown Tab5 V4 experimental action: {action}",
             level="WARNING",
         )

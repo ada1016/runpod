@@ -1,17 +1,7 @@
----
-hello_world:
-  module: hello
-  class: HelloWorld
-gas_meter:
-  module: gas_meter
-  class: GasMeter
-  user_id: !secret gas_user_id
-  phone_zone: !secret gas_phone_zone
-  phone_number: !secret gas_phone_number
-
-tab5_multi_bridge:
-  module: tab5_bridge_multi
-  class: Tab5MultiBridge
+# Merge this single app entry into existing apps.yaml. Do not replace other apps.
+tab5_v4_bridge:
+  module: tab5_bridge_v4
+  class: Tab5V4Bridge
 
   gas_reading_entity: input_text.gas_meter_reading
   gas_submit_button: input_button.submit_gas_meter

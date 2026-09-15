@@ -17,6 +17,7 @@ obj:
         height: 303
         styles: mono_panel
         widgets:
+          - label: { id: v4_light_feedback_0, x: 10, y: 188, width: 300, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
           - label: { id: slot0_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
           - label: { id: slot0_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
           - switch:
@@ -33,16 +34,15 @@ obj:
                     condition:
                       lambda: 'return !id(syncing_ui);'
                     then:
-                      - homeassistant.event:
-                          event: esphome.tab5_command
-                          data_template:
-                            action: "light_power"
-                            devices: "{{ devices }}"
-                            value: "{{ value }}"
-                          variables:
-                            devices: !lambda 'return id(slot0_local_devices);'
-                            value: !lambda 'return x ? std::string("on") : std::string("off");'
+                      - script.execute:
+                          id: v4_command
+                          action: light_power
+                          device: !lambda 'return id(slot0_local_devices);'
+                          value: !lambda 'return x ? std::string("on") : std::string("off");'
+
           - button:
+              id: v4_cct_0_2700
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 26
               y: 125
               width: 58
@@ -52,15 +52,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "2700"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot0_local_devices);'
+                    value: "2700"
+
           - button:
+              id: v4_cct_0_3500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 96
               y: 125
               width: 58
@@ -70,15 +70,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "3500"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot0_local_devices);'
+                    value: "3500"
+
           - button:
+              id: v4_cct_0_4500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 166
               y: 125
               width: 58
@@ -88,15 +88,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "4500"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot0_local_devices);'
+                    value: "4500"
+
           - button:
+              id: v4_cct_0_6500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 236
               y: 125
               width: 58
@@ -107,14 +107,12 @@ obj:
               border_width: 1
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "6500"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot0_local_devices);'
+                    value: "6500"
+
           - slider:
               id: slot0_slider
               x: 28
@@ -127,16 +125,16 @@ obj:
               bg_color: 0xD8D8D8
               indicator: { bg_color: 0x111111, bg_opa: COVER }
               knob: { bg_color: 0x111111, bg_opa: COVER }
+              on_press:
+                - lambda: |-
+                    tab5_v4::state().start_drag(id(slot0_local_devices),millis());
               on_release:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_brightness"
-                      devices: "{{ devices }}"
-                      value: "{{ value }}"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
-                      value: !lambda 'return (int) x;'
+                - lambda: 'tab5_v4::state().end_drag(id(slot0_local_devices));'
+                - script.execute:
+                    id: v4_command
+                    action: light_brightness
+                    device: !lambda 'return id(slot0_local_devices);'
+                    value: !lambda 'return std::to_string((int) x);'
     - obj:
         id: slot1_card
         x: 331
@@ -145,8 +143,9 @@ obj:
         height: 303
         styles: mono_panel
         widgets:
+          - label: { id: v4_light_feedback_1, x: 10, y: 188, width: 300, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
           - label: { id: slot1_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-          - label: { id: slot1_name, x: 88, y: 24, text: "床頭", text_font: cn_42, text_color: 0x111111 }
+          - label: { id: slot1_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
           - switch:
               id: slot1_switch
               x: 205
@@ -161,16 +160,15 @@ obj:
                     condition:
                       lambda: 'return !id(syncing_ui);'
                     then:
-                      - homeassistant.event:
-                          event: esphome.tab5_command
-                          data_template:
-                            action: "light_power"
-                            devices: "{{ devices }}"
-                            value: "{{ value }}"
-                          variables:
-                            devices: !lambda 'return id(slot1_local_devices);'
-                            value: !lambda 'return x ? std::string("on") : std::string("off");'
+                      - script.execute:
+                          id: v4_command
+                          action: light_power
+                          device: !lambda 'return id(slot1_local_devices);'
+                          value: !lambda 'return x ? std::string("on") : std::string("off");'
+
           - button:
+              id: v4_cct_1_2700
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 26
               y: 125
               width: 58
@@ -180,15 +178,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "2700"
-                    variables:
-                      devices: !lambda 'return id(slot1_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot1_local_devices);'
+                    value: "2700"
+
           - button:
+              id: v4_cct_1_3500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 96
               y: 125
               width: 58
@@ -198,15 +196,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "3500"
-                    variables:
-                      devices: !lambda 'return id(slot1_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot1_local_devices);'
+                    value: "3500"
+
           - button:
+              id: v4_cct_1_4500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 166
               y: 125
               width: 58
@@ -216,15 +214,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "4500"
-                    variables:
-                      devices: !lambda 'return id(slot1_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot1_local_devices);'
+                    value: "4500"
+
           - button:
+              id: v4_cct_1_6500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 236
               y: 125
               width: 58
@@ -235,14 +233,12 @@ obj:
               border_width: 1
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "6500"
-                    variables:
-                      devices: !lambda 'return id(slot1_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot1_local_devices);'
+                    value: "6500"
+
           - slider:
               id: slot1_slider
               x: 28
@@ -255,16 +251,16 @@ obj:
               bg_color: 0xD8D8D8
               indicator: { bg_color: 0x111111, bg_opa: COVER }
               knob: { bg_color: 0x111111, bg_opa: COVER }
+              on_press:
+                - lambda: |-
+                    tab5_v4::state().start_drag(id(slot1_local_devices),millis());
               on_release:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_brightness"
-                      devices: "{{ devices }}"
-                      value: "{{ value }}"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
-                      value: !lambda 'return (int) x;'
+                - lambda: 'tab5_v4::state().end_drag(id(slot1_local_devices));'
+                - script.execute:
+                    id: v4_command
+                    action: light_brightness
+                    device: !lambda 'return id(slot1_local_devices);'
+                    value: !lambda 'return std::to_string((int) x);'
     - obj:
         id: slot2_card
         x: 0
@@ -273,8 +269,9 @@ obj:
         height: 303
         styles: mono_panel
         widgets:
+          - label: { id: v4_light_feedback_2, x: 10, y: 188, width: 300, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
           - label: { id: slot2_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-          - label: { id: slot2_name, x: 88, y: 24, text: "床尾", text_font: cn_42, text_color: 0x111111 }
+          - label: { id: slot2_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
           - switch:
               id: slot2_switch
               x: 205
@@ -289,16 +286,15 @@ obj:
                     condition:
                       lambda: 'return !id(syncing_ui);'
                     then:
-                      - homeassistant.event:
-                          event: esphome.tab5_command
-                          data_template:
-                            action: "light_power"
-                            devices: "{{ devices }}"
-                            value: "{{ value }}"
-                          variables:
-                            devices: !lambda 'return id(slot2_local_devices);'
-                            value: !lambda 'return x ? std::string("on") : std::string("off");'
+                      - script.execute:
+                          id: v4_command
+                          action: light_power
+                          device: !lambda 'return id(slot2_local_devices);'
+                          value: !lambda 'return x ? std::string("on") : std::string("off");'
+
           - button:
+              id: v4_cct_2_2700
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 26
               y: 125
               width: 58
@@ -308,15 +304,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "2700"
-                    variables:
-                      devices: !lambda 'return id(slot2_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot2_local_devices);'
+                    value: "2700"
+
           - button:
+              id: v4_cct_2_3500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 96
               y: 125
               width: 58
@@ -326,15 +322,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "3500"
-                    variables:
-                      devices: !lambda 'return id(slot2_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot2_local_devices);'
+                    value: "3500"
+
           - button:
+              id: v4_cct_2_4500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 166
               y: 125
               width: 58
@@ -344,15 +340,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "4500"
-                    variables:
-                      devices: !lambda 'return id(slot2_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot2_local_devices);'
+                    value: "4500"
+
           - button:
+              id: v4_cct_2_6500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 236
               y: 125
               width: 58
@@ -363,14 +359,12 @@ obj:
               border_width: 1
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "6500"
-                    variables:
-                      devices: !lambda 'return id(slot2_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot2_local_devices);'
+                    value: "6500"
+
           - slider:
               id: slot2_slider
               x: 28
@@ -383,16 +377,16 @@ obj:
               bg_color: 0xD8D8D8
               indicator: { bg_color: 0x111111, bg_opa: COVER }
               knob: { bg_color: 0x111111, bg_opa: COVER }
+              on_press:
+                - lambda: |-
+                    tab5_v4::state().start_drag(id(slot2_local_devices),millis());
               on_release:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_brightness"
-                      devices: "{{ devices }}"
-                      value: "{{ value }}"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
-                      value: !lambda 'return (int) x;'
+                - lambda: 'tab5_v4::state().end_drag(id(slot2_local_devices));'
+                - script.execute:
+                    id: v4_command
+                    action: light_brightness
+                    device: !lambda 'return id(slot2_local_devices);'
+                    value: !lambda 'return std::to_string((int) x);'
     - obj:
         id: slot3_card
         x: 331
@@ -401,8 +395,9 @@ obj:
         height: 303
         styles: mono_panel
         widgets:
+          - label: { id: v4_light_feedback_3, x: 10, y: 188, width: 300, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
           - label: { id: slot3_icon, x: 10, y: 10, text: "\U0000F02A", text_font: fa_64, text_color: 0x111111 }
-          - label: { id: slot3_name, x: 88, y: 24, text: "桌", text_font: cn_42, text_color: 0x111111 }
+          - label: { id: slot3_name, x: 88, y: 24, text: "全", text_font: cn_42, text_color: 0x111111 }
           - switch:
               id: slot3_switch
               x: 205
@@ -417,16 +412,15 @@ obj:
                     condition:
                       lambda: 'return !id(syncing_ui);'
                     then:
-                      - homeassistant.event:
-                          event: esphome.tab5_command
-                          data_template:
-                            action: "light_power"
-                            devices: "{{ devices }}"
-                            value: "{{ value }}"
-                          variables:
-                            devices: !lambda 'return id(slot3_local_devices);'
-                            value: !lambda 'return x ? std::string("on") : std::string("off");'
+                      - script.execute:
+                          id: v4_command
+                          action: light_power
+                          device: !lambda 'return id(slot3_local_devices);'
+                          value: !lambda 'return x ? std::string("on") : std::string("off");'
+
           - button:
+              id: v4_cct_3_2700
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 26
               y: 125
               width: 58
@@ -436,15 +430,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "2700"
-                    variables:
-                      devices: !lambda 'return id(slot3_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot3_local_devices);'
+                    value: "2700"
+
           - button:
+              id: v4_cct_3_3500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 96
               y: 125
               width: 58
@@ -454,15 +448,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "3500"
-                    variables:
-                      devices: !lambda 'return id(slot3_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot3_local_devices);'
+                    value: "3500"
+
           - button:
+              id: v4_cct_3_4500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 166
               y: 125
               width: 58
@@ -472,15 +466,15 @@ obj:
               border_opa: TRANSP
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "4500"
-                    variables:
-                      devices: !lambda 'return id(slot3_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot3_local_devices);'
+                    value: "4500"
+
           - button:
+              id: v4_cct_3_6500
+              pressed: { border_color: 0x1E5573, border_width: 4, border_opa: COVER }
               x: 236
               y: 125
               width: 58
@@ -491,14 +485,12 @@ obj:
               border_width: 1
               shadow_opa: TRANSP
               on_click:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_cct"
-                      devices: "{{ devices }}"
-                      value: "6500"
-                    variables:
-                      devices: !lambda 'return id(slot3_local_devices);'
+                - script.execute:
+                    id: v4_command
+                    action: light_cct
+                    device: !lambda 'return id(slot3_local_devices);'
+                    value: "6500"
+
           - slider:
               id: slot3_slider
               x: 28
@@ -511,13 +503,13 @@ obj:
               bg_color: 0xD8D8D8
               indicator: { bg_color: 0x111111, bg_opa: COVER }
               knob: { bg_color: 0x111111, bg_opa: COVER }
+              on_press:
+                - lambda: |-
+                    tab5_v4::state().start_drag(id(slot3_local_devices),millis());
               on_release:
-                - homeassistant.event:
-                    event: esphome.tab5_command
-                    data_template:
-                      action: "light_brightness"
-                      devices: "{{ devices }}"
-                      value: "{{ value }}"
-                    variables:
-                      devices: !lambda 'return id(slot0_local_devices);'
-                      value: !lambda 'return (int) x;'
+                - lambda: 'tab5_v4::state().end_drag(id(slot3_local_devices));'
+                - script.execute:
+                    id: v4_command
+                    action: light_brightness
+                    device: !lambda 'return id(slot3_local_devices);'
+                    value: !lambda 'return std::to_string((int) x);'

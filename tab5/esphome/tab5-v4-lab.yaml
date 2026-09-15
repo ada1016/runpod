@@ -1,22 +1,11 @@
-# ============================================================
-# M5Stack Tab5 - V3 Local UI / Thin AppDaemon Bridge
-# First tab only, based on the user's Figma layout.
-#
-# Architecture:
-#   Tab5 -> ONE Home Assistant event stream (esphome.tab5_command)
-#   AppDaemon -> controls real HA devices
-#   AppDaemon -> ONE aggregate state entity:
-#                sensor.tab5_first_tab_bridge
-#   Tab5 -> ONE HA text_sensor listener for the entire first tab
-#
-# This intentionally avoids one ESPHome listener per device.
-#
-# FONT FILE REQUIRED LOCALLY:
-#   fonts/fa-solid-900.ttf
-# Use the free Font Awesome Solid TTF you already have.
-# ============================================================
+# Tab5 V4 experimental firmware — Living Room interaction pilot.
+# Separate device identity, command event, and retained per-device sensors.
+# Hardware and existing pages are based on the preserved V3 source.
+# See ../../docs/CHANGES.md and INSTALL_AND_ROLLBACK.md before deployment.
 
 packages:
+  v4_subscriptions: !include bridge/v4_subscriptions.yaml
+  v4_interaction: !include ui/v4_interaction.yaml
   living_room_ui: !include ui/rooms/living_room.yaml
   parents_room_ui: !include ui/rooms/parents_room.yaml
   darren_room_ui: !include ui/rooms/darren_room.yaml
@@ -24,22 +13,25 @@ packages:
   house_page_ui: !include ui/pages/house.yaml
 
 esphome:
-  name: tab5
-  friendly_name: M5Stack Tab5
+  includes:
+    - ui_state.h
+    - ui_feedback.h
+  name: tab5-v4-lab
+  friendly_name: Tab5 V4 Lab
   on_boot:
     - priority: -100
       then:
         - logger.log:
             level: INFO
             tag: ui
-            format: "BUILD MARKER: TAB5_V3_LOCAL_UI_THIN_BRIDGE"
+            format: "BUILD MARKER: TAB5_V4_ALL_ROOMS"
         - delay: 2s
         - script.execute:
             id: apply_theme
             theme: !lambda 'return id(theme_index);'
         - script.execute: open_house
         - homeassistant.event:
-            event: esphome.tab5_command
+            event: esphome.tab5_v4_command
             data:
               action: "refresh_all"
 
@@ -50,6 +42,10 @@ esp32:
   cpu_frequency: 360MHz
   framework:
     type: esp-idf
+    sdkconfig_options:
+      # ESP32-P4 SPM is only 8 KiB. Keep the IDF main task out of SPM:
+      # NVS startup maps flash, whose cache-safety check excludes SPM stacks.
+      CONFIG_ESP_MAIN_TASK_STACK_SIZE: "8192"
     advanced:
       enable_idf_experimental_features: true
 
@@ -641,13 +637,13 @@ globals:
     initial_value: '""'
 
 # ============================================================
-# APPDAEMON V3 THIN DEVICE BRIDGE
-# ONE HA listener only: sensor.tab5_ui_bridge
+# APPDAEMON V4 DEVICE PACKET PARSER
+# Per-device HA subscriptions are in bridge/v4_subscriptions.yaml
 # ============================================================
 text_sensor:
-  - platform: homeassistant
+  - platform: template
     id: ui_bridge
-    entity_id: sensor.tab5_ui_bridge
+    internal: true
     on_value:
       then:
         - lambda: |-
@@ -675,6 +671,7 @@ text_sensor:
             if (kind == "D") {
               if (f.size() < 7) return;
               const std::string key = f[2];
+              if (!tab5_v4::state().receive(packet, millis())) return;
 
               if (key == "ac_living") id(cache_ac_living) = packet;
               else if (key == "ac_parents") id(cache_ac_parents) = packet;
@@ -705,7 +702,13 @@ text_sensor:
               else if (key == "ac_humidity_darren") id(cache_ac_humidity_darren) = packet;
               else if (key == "ac_humidity_amber") id(cache_ac_humidity_amber) = packet;
 
-              if (id(active_view) == "room") {
+              if (id(active_view) == "room" &&
+                  (key == id(active_ac_device) || key == id(active_temperature_device) ||
+                   key == id(active_humidity_device) || key == id(active_ac_humidity_device) ||
+                   ("," + id(slot0_local_devices) + ",").find("," + key + ",") != std::string::npos ||
+                   ("," + id(slot1_local_devices) + ",").find("," + key + ",") != std::string::npos ||
+                   ("," + id(slot2_local_devices) + ",").find("," + key + ",") != std::string::npos ||
+                   ("," + id(slot3_local_devices) + ",").find("," + key + ",") != std::string::npos)) {
                 id(render_active_room).execute();
               } else if (id(active_view) == "house") {
                 // State update only: repaint locally.
@@ -1168,6 +1171,9 @@ script:
               csv_start = comma + 1;
             }
 
+            const auto interaction = tab5_v4::state().summary(devices,millis());
+            const bool protect = interaction.dragging || interaction.pending;
+            if (!protect) {
             if (any_on) {
               lv_obj_add_state(sw, LV_STATE_CHECKED);
             } else {
@@ -1180,6 +1186,7 @@ script:
                 : 0
             );
             lv_slider_set_value(slider, bri, LV_ANIM_OFF);
+            }
 
             if (have_state && all_available) {
               lv_obj_clear_state(sw, LV_STATE_DISABLED);
@@ -1236,6 +1243,7 @@ script:
           );
 
           id(syncing_ui) = false;
+      - script.execute: v4_feedback
 
   # ----------------------------------------------------------
   # Runtime theme engine
@@ -1862,10 +1870,13 @@ lvgl:
                   height: 345
                   styles: mono_panel
                   widgets:
+                    - label: { id: v4_house_ac_feedback, x: 155, y: 190, width: 390, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
                     - label: { id: house_ac_unit_icon, x: 18, y: 16, text: "\U0000EB3B", text_font: fa_64, text_color: 0x111111 }
                     - label: { id: house_ac_mode_label, x: 305, y: 50, text: "SYNCING -- --", text_font: montserrat_16, text_color: 0x555555 }
                     - label: { id: house_ac_target_label, x: 160, y: 82, width: 360, text: "-- °C", text_font: montserrat_72, text_color: 0x777777, text_align: CENTER }
                     - button:
+                        id: v4_house_ac_plus
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 8
                         y: 36
                         width: 145
@@ -1875,17 +1886,14 @@ lvgl:
                         shadow_opa: TRANSP
                         widgets: [ { label: { id: house_ac_plus_icon, align: CENTER, text: "\U0000E145", text_font: fa_104, text_color: 0x111111 } } ]
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "ac_set_temperature"
-                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
-                                value: "{{ value }}"
-                              variables:
-                                value: !lambda |-
-                                  const float next = std::max(18.0f, std::min(30.0f, id(house_ac_avg_target) + 0.5f));
-                                  return str_sprintf("%.1f", next);
+                          - script.execute:
+                              id: v4_command
+                              action: ac_temp_delta
+                              device: !lambda 'return tab5_v4::ALL_AC;'
+                              value: "0.5"
                     - button:
+                        id: v4_house_ac_minus
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 8
                         y: 180
                         width: 145
@@ -1895,21 +1903,18 @@ lvgl:
                         shadow_opa: TRANSP
                         widgets: [ { label: { id: house_ac_minus_icon, align: CENTER, text: "\U0000E15B", text_font: fa_104, text_color: 0x111111 } } ]
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "ac_set_temperature"
-                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
-                                value: "{{ value }}"
-                              variables:
-                                value: !lambda |-
-                                  const float next = std::max(18.0f, std::min(30.0f, id(house_ac_avg_target) - 0.5f));
-                                  return str_sprintf("%.1f", next);
+                          - script.execute:
+                              id: v4_command
+                              action: ac_temp_delta
+                              device: !lambda 'return tab5_v4::ALL_AC;'
+                              value: "-0.5"
                     - label: { id: house_ac_count_icon, x: 530, y: 45, text: "\U0000EB3B", text_font: fa_24, text_color: 0x111111 }
                     - label: { id: house_ac_count_label, x: 560, y: 45, width: 65, text: "0/4", text_font: montserrat_22, text_color: 0x444444 }
                     - label: { id: house_ac_room_temp_icon, x: 530, y: 75, text: "\U0000F1F1", text_font: fa_24, text_color: 0x111111 }
                     - label: { id: house_ac_room_temp_label, x: 560, y: 75, width: 70, text: "--°", text_font: montserrat_22, text_color: 0x444444 }
                     - button:
+                        id: v4_house_ac_auto
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 160
                         y: 238
                         width: 115
@@ -1919,12 +1924,14 @@ lvgl:
                         shadow_opa: TRANSP
                         widgets: [ { label: { id: house_ac_auto_icon, align: CENTER, text: "\U0000F417", text_font: fa_brands_64, text_color: 0x111111 } } ]
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data:
-                                action: "ac_fan_auto"
-                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                          - script.execute:
+                              id: v4_command
+                              action: ac_fan_auto
+                              device: !lambda 'return tab5_v4::ALL_AC;'
+                              value: ""
                     - button:
+                        id: v4_house_ac_quiet
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 290
                         y: 238
                         width: 115
@@ -1934,12 +1941,14 @@ lvgl:
                         shadow_opa: TRANSP
                         widgets: [ { label: { id: house_ac_quiet_icon, align: CENTER, text: "\U0000EC1A", text_font: fa_64, text_color: 0x111111 } } ]
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data:
-                                action: "ac_fan_quiet"
-                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
+                          - script.execute:
+                              id: v4_command
+                              action: ac_fan_quiet
+                              device: !lambda 'return tab5_v4::ALL_AC;'
+                              value: ""
                     - button:
+                        id: v4_house_ac_power
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 425
                         y: 228
                         width: 120
@@ -1949,12 +1958,11 @@ lvgl:
                         shadow_opa: TRANSP
                         widgets: [ { label: { id: house_ac_power_icon, align: CENTER, text: "\U0000E8AC", text_font: fa_64, text_color: 0x111111 } } ]
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data:
-                                action: "ac_power_toggle"
-                                devices: "ac_living,ac_parents,ac_darren,ac_amber"
-
+                          - script.execute:
+                              id: v4_command
+                              action: ac_power_toggle
+                              device: !lambda 'return tab5_v4::ALL_AC;'
+                              value: ""
               # ======================================================
               # MIDDLE LEFT — ALL HOUSE LIGHTS (light_group)
               # ======================================================
@@ -1966,6 +1974,7 @@ lvgl:
                   height: 300
                   styles: mono_panel
                   widgets:
+                    - label: { id: v4_house_light_feedback, x: 10, y: 183, width: 300, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
                     - label: { id: house_light_icon, x: 10, y: 10, text: "\U000FFF76", text_font: fa_64, text_color: 0x111111 }
                     - label: { id: house_light_name, x: 88, y: 24, text: "全燈", text_font: cn_42, text_color: 0x111111 }
                     - switch:
@@ -1982,15 +1991,14 @@ lvgl:
                               condition:
                                 lambda: 'return !id(syncing_ui);'
                               then:
-                                - homeassistant.event:
-                                    event: esphome.tab5_command
-                                    data_template:
-                                      action: "light_power"
-                                      devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
-                                      value: "{{ value }}"
-                                    variables:
-                                      value: !lambda 'return x ? std::string("on") : std::string("off");'
+                                - script.execute:
+                                    id: v4_command
+                                    action: light_power
+                                    device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                                    value: !lambda 'return x ? std::string("on") : std::string("off");'
                     - button:
+                        id: v4_house_cct_2700
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 26
                         y: 118
                         width: 58
@@ -2000,10 +2008,14 @@ lvgl:
                         border_opa: TRANSP
                         shadow_opa: TRANSP
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "2700" }
+                          - script.execute:
+                              id: v4_command
+                              action: light_cct
+                              device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                              value: "2700"
                     - button:
+                        id: v4_house_cct_3500
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 96
                         y: 118
                         width: 58
@@ -2013,10 +2025,14 @@ lvgl:
                         border_opa: TRANSP
                         shadow_opa: TRANSP
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "3500" }
+                          - script.execute:
+                              id: v4_command
+                              action: light_cct
+                              device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                              value: "3500"
                     - button:
+                        id: v4_house_cct_4500
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 166
                         y: 118
                         width: 58
@@ -2026,10 +2042,14 @@ lvgl:
                         border_opa: TRANSP
                         shadow_opa: TRANSP
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "4500" }
+                          - script.execute:
+                              id: v4_command
+                              action: light_cct
+                              device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                              value: "4500"
                     - button:
+                        id: v4_house_cct_6500
+                        pressed: { bg_color: 0xA8BCC8, bg_opa: COVER, border_color: 0x1E5573, border_width: 3, border_opa: COVER }
                         x: 236
                         y: 118
                         width: 58
@@ -2040,9 +2060,11 @@ lvgl:
                         border_width: 1
                         shadow_opa: TRANSP
                         on_click:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data: { action: "light_cct", devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk", value: "6500" }
+                          - script.execute:
+                              id: v4_command
+                              action: light_cct
+                              device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                              value: "6500"
                     - slider:
                         id: house_light_slider
                         x: 28
@@ -2055,25 +2077,26 @@ lvgl:
                         bg_color: 0xD8D8D8
                         indicator: { bg_color: 0x111111, bg_opa: COVER }
                         knob: { bg_color: 0x111111, bg_opa: COVER }
+                        on_press:
+                          - lambda: 'tab5_v4::state().start_drag(tab5_v4::ALL_LIGHTS,millis());'
                         on_release:
-                          - homeassistant.event:
-                              event: esphome.tab5_command
-                              data_template:
-                                action: "light_brightness"
-                                devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
-                                value: "{{ value }}"
-                              variables:
-                                value: !lambda 'return (int) x;'
-
+                          - lambda: 'tab5_v4::state().end_drag(tab5_v4::ALL_LIGHTS);'
+                          - script.execute:
+                              id: v4_command
+                              action: light_brightness
+                              device: !lambda 'return tab5_v4::ALL_LIGHTS;'
+                              value: !lambda 'return std::to_string((int)x);'
               # MIDDLE RIGHT — MASTER ALL OFF
               - button:
                   id: house_all_off_button
+                  pressed: { bg_color: 0xA8BCC8 }
                   x: 331
                   y: 365
                   width: 321
                   height: 300
                   styles: mono_button
                   widgets:
+                    - label: { id: v4_house_off_feedback, x: 10, y: 253, width: 295, height: 25, text: "", text_font: montserrat_16, text_align: CENTER }
                     - label:
                         id: house_all_off_icon
                         align: CENTER
@@ -2081,13 +2104,11 @@ lvgl:
                         text_font: fa_power_160
                         text_color: 0x111111
                   on_click:
-                    - homeassistant.event:
-                        event: esphome.tab5_command
-                        data:
-                          action: "all_off"
-                          ac_devices: "ac_living,ac_parents,ac_darren,ac_amber"
-                          light_devices: "light_living_room,light_bedroom_window,light_da_head,light_da_foot,light_da_desk,light_am_door,light_am_foot,light_am_desk"
-
+                    - script.execute:
+                        id: v4_command
+                        action: all_off
+                        device: !lambda 'return tab5_v4::ALL_AC + "," + tab5_v4::ALL_LIGHTS;'
+                        value: "off"
               # ======================================================
               # BOTTOM ROW — STATUS ONLY, NEVER ACTIONABLE
               # ======================================================
@@ -2298,7 +2319,7 @@ lvgl:
                           "Reload requested... waiting for Xiaomi Home to reconnect devices."
                         );
                     - homeassistant.event:
-                        event: esphome.tab5_command
+                        event: esphome.tab5_v4_command
                         data:
                           action: "reload_xiaomi"
 
@@ -2517,7 +2538,7 @@ lvgl:
                           lambda: 'return !id(gas_submitting) && !id(gas_pin).empty() && id(gas_pin).size() <= 4;'
                         then:
                           - homeassistant.event:
-                              event: esphome.tab5_command
+                              event: esphome.tab5_v4_command
                               data_template:
                                 action: "gas_submit"
                                 value: "{{ pin }}"
